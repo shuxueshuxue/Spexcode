@@ -17,7 +17,14 @@ function fail(message) {
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { cwd: options.cwd || repo, env: options.env, encoding: 'utf8', stdio: options.stdio || 'inherit' })
+  const executable = process.platform === 'win32' && (command === 'npm' || command.endsWith('electron-builder')) ? `${command}.cmd` : command
+  const result = spawnSync(executable, args, {
+    cwd: options.cwd || repo,
+    env: options.env,
+    encoding: 'utf8',
+    stdio: options.stdio || 'inherit',
+    shell: executable.endsWith('.cmd'),
+  })
   if (result.error) fail(`${command} failed to start: ${result.error.message}`)
   if (result.status !== 0) fail(`${command} ${args.join(' ')} failed (${result.status})`)
   return result
@@ -46,7 +53,14 @@ function pack(entry, destination) {
 
 function extract(tarball, destination) {
   mkdirSync(destination, { recursive: true })
-  run('tar', ['-xzf', tarball, '-C', destination, '--strip-components=1'])
+  const tarPath = process.platform === 'win32'
+    ? (value) => {
+      const result = spawnSync('cygpath', ['-u', value], { encoding: 'utf8' })
+      if (result.status !== 0) fail(`cygpath failed for ${value}`)
+      return result.stdout.trim()
+    }
+    : (value) => value
+  run('tar', ['-xzf', tarPath(tarball), '-C', tarPath(destination), '--strip-components=1'])
 }
 
 function stampPackage(path, commit) {

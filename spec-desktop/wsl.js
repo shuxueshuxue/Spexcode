@@ -95,11 +95,12 @@ function readWslHostRecord(distro, { probe = process.env.SPEXCODE_DESKTOP_WSL_PR
   })
 }
 
-function bootstrapCommand(distro, scriptPath = resolve(__dirname, 'wsl-bootstrap.sh'), bundleDir = process.env.SPEXCODE_DESKTOP_BUNDLE_DIR || '') {
+function bootstrapCommand(distro, scriptPath = resolve(__dirname, 'wsl-bootstrap.sh'), bundleDir = process.env.SPEXCODE_DESKTOP_BUNDLE_DIR || '', projectRoot = process.env.SPEXCODE_WSL_PROJECT_ROOT || '') {
   const wslScriptPath = windowsPathToWsl(scriptPath)
   const script = `sed 's/\\r$//' ${shellQuote(wslScriptPath)} > /tmp/spexcode-wsl-bootstrap.sh && bash /tmp/spexcode-wsl-bootstrap.sh`
-  const bundle = bundleDir ? `SPEXCODE_BUNDLE_DIR=${shellQuote(windowsPathToWsl(bundleDir))} ` : ''
-  return { file: process.env.SPEXCODE_DESKTOP_WSL_PROBE || DEFAULT_PROBE, args: ['-d', distro, '--', 'bash', '-lc', `${bundle}${script}`] }
+  const bundle = bundleDir ? `export SPEXCODE_BUNDLE_DIR=${shellQuote(windowsPathToWsl(bundleDir))}; ` : ''
+  const project = projectRoot ? `export SPEXCODE_PROJECT_ROOT=${shellQuote(windowsPathToWsl(projectRoot))}; ` : ''
+  return { file: process.env.SPEXCODE_DESKTOP_WSL_PROBE || DEFAULT_PROBE, args: ['-d', distro, '--', 'bash', '-lc', `${bundle}${project}${script}`] }
 }
 
 function windowsPathToWsl(value) {

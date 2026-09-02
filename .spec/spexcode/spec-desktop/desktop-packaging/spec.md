@@ -54,3 +54,8 @@ authentication result without softening a failure.
 Electron remains outside the root workspaces; `npm run desktop:install` is the only installation path for its
 toolchain. The pack command writes artifacts and its README under `/home/jeffry/spex-evidence/<lane>/` (or
 `SPEXCODE_EVIDENCE_DIR`), never into the repository.
+
+On Windows, the same pack driver selects the NSIS target and adapts npm's `.cmd` shims and Git-Bash path
+translation without changing the staged package set. The Windows installer is unsigned and per-user
+(`perMachine: false`). The WSL bootstrap script is shipped as an unpacked resource beside `app.asar` so
+`wsl.exe` can read it through `/mnt/c/...`; the packaged bootstrap must never address a path inside `app.asar`.

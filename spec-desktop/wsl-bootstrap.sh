@@ -59,6 +59,9 @@ npm install --global --force "${tarballs[@]}"
 
 if command -v spex >/dev/null 2>&1; then
   say 'Running the real spex doctor; its output is the final bootstrap step.'
+  if [[ -n "${SPEXCODE_PROJECT_ROOT:-}" && -d "$SPEXCODE_PROJECT_ROOT" ]]; then
+    cd "$SPEXCODE_PROJECT_ROOT"
+  fi
   spex doctor
 else
   say 'spex is not on PATH after installation.'

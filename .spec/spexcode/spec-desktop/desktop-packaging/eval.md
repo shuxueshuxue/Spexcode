@@ -63,6 +63,14 @@ scenarios:
       `spctl --assess` refuses it with the recorded text; preserve the codesign and xattr dump as Tier 2
       distribution evidence.
     related: [spec-desktop/electron-builder.config.cjs]
+  - name: packaged-deep-link-windows
+    tags: [desktop]
+    description: >-
+      Install the unsigned per-user NSIS package on Windows, verify its HKCU spexcode:// registration,
+      then run `start spexcode://p/<projectId>/#/settings` while the packaged app is already running.
+    expected: >-
+      The existing packaged window remains the only window, is focused, and navigates from the hub to the
+      requested project address without launching a second shell.
 ---
 # eval.md - desktop-packaging
 
@@ -82,3 +90,12 @@ The macOS phase adds these scenarios:
   through the plain `claude` launcher using the Aqua-domain keychain; failures are findings against the claim.
 - `gatekeeper-quarantine`: the quarantined ad-hoc app still launches while `spctl --assess` refuses it with the
   recorded text; preserve the codesign and quarantine dump as Tier 2 distribution evidence.
+
+Windows SmartScreen is an explicitly unmeasured Tier 2 gap for this phase: the unsigned-installer warning
+requires an interactive Windows desktop session and cannot be driven or observed from the SSH-only machine
+access used for the reproducible package run. No SmartScreen reading is filed until that interactive path is
+available.
+
+The installed app's Windows deep-link, picker, and post-quit backend readings remain deferred in this SSH-only
+run because the non-interactive session loses the renderer context for those callbacks. The refusal contract
+itself is already measured under [[desktop-windows-wsl]]; only the installed app's picker path is unmeasured.

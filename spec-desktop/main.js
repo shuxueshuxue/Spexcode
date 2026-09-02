@@ -15,6 +15,7 @@ const SPEX_ENTRY = process.env.SPEXCODE_DESKTOP_ENTRY || (PACKAGED_BUNDLE
   ? resolve(PACKAGED_BUNDLE, 'bin', 'spex.mjs')
   : resolve(__dirname, '..', 'bin', 'spex.mjs'))
 const BUNDLE_DIR = process.env.SPEXCODE_DESKTOP_BUNDLE_DIR || (PACKAGED_BUNDLE ? resolve(PACKAGED_BUNDLE, 'tarballs') : '')
+const BOOTSTRAP_SCRIPT = PACKAGED_BUNDLE ? resolve(process.resourcesPath, 'wsl-bootstrap.sh') : undefined
 const NODE_ENTRY = resolve(__dirname, 'node-entry.mjs')
 const PROJECT_CWD = process.env.SPEXCODE_DESKTOP_CWD || process.cwd()
 const BOOT_TIMEOUT_MS = 30_000
@@ -181,7 +182,7 @@ function showFirstRunPage(message = '') {
 }
 
 function runBootstrap(distro, win) {
-  const command = wsl.bootstrapCommand(distro, undefined, BUNDLE_DIR)
+  const command = wsl.bootstrapCommand(distro, BOOTSTRAP_SCRIPT, BUNDLE_DIR)
   const child = wsl.runWsl(distro, command.args.slice(3), {
     probe: command.file,
     env: { ...process.env, SPEXCODE_PROJECT_ROOT: process.env.SPEXCODE_WSL_PROJECT_ROOT || '' },

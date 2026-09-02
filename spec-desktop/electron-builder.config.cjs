@@ -17,6 +17,7 @@ module.exports = {
   files: ['**/*', '!node_modules/**'],
   npmRebuild: false,
   extraResources: [
+    { from: path.join(__dirname, 'wsl-bootstrap.sh'), to: 'wsl-bootstrap.sh' },
     { from: bundleDir, to: 'spexcode', filter: ['**/*', '!node_modules/**/*'] },
     { from: path.join(bundleDir, 'node_modules'), to: 'spexcode/node_modules', filter: ['**/*'] },
   ],
@@ -31,6 +32,7 @@ module.exports = {
   },
   mac: { target: ['dmg'] },
   win: { target: ['nsis'] },
+  nsis: { perMachine: false },
   // node-entry.mjs relies on ELECTRON_RUN_AS_NODE for CLI self-spawns.
   electronFuses: { runAsNode: true },
   publish: null,

@@ -38,7 +38,7 @@ function parseWslList(value) {
 
 function detectWsl({ probe = DEFAULT_PROBE } = {}) {
   probe = process.env.SPEXCODE_DESKTOP_WSL_PROBE || probe
-  const file = /\.js$/i.test(probe) ? process.execPath : probe
+  const file = /\.js$/i.test(probe) ? (process.env.SPEXCODE_DESKTOP_WSL_NODE || 'node') : probe
   const args = /\.js$/i.test(probe) ? [probe, '-l', '-v'] : ['-l', '-v']
   return new Promise((resolveResult, rejectResult) => {
     execFile(file, args, { encoding: 'buffer', windowsHide: true }, (error, stdout, stderr) => {

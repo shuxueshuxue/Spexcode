@@ -16,7 +16,7 @@ related:
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/layout-overlay.api.test.ts
-  - spexcode.json
+  - .spec/spexcode.json
   - packages/spec-core/templates/spexcode.json
   - .nvmrc
 ---
@@ -40,17 +40,17 @@ its source of truth**, and how to enumerate the other checkouts — and exposes 
 result at `GET /api/settings` (its `layout` half). Everything downstream consumes the resolved layout, never a hardcoded path or
 branch name.
 
-Policy is read from an optional `spexcode.json` at the repo root; absent, the defaults are our
+Policy is read from an optional `.spec/spexcode.json`; absent, the defaults are our
 convention:
 
 ```json
 { "main": "/elsewhere", "mainBranch": "staging", "branchPrefix": "node/" }
 ```
 
-The same `spexcode.json` (read through `readConfig`) is also where adjacent project policy is DECLARED rather
+The same `.spec/spexcode.json` (read through `readConfig`) is also where adjacent project policy is DECLARED rather
 than baked in — including the `harnesses` delivery-target set [[harness-select]] owns (which harnesses `spex
 materialize` delivers into; default = every native harness). Layout resolution doesn't consume it, but it rides
-the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
+the same committed-config-with-a-`.spec/spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
 The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
 budgets, and [[file-attach]]'s one `uploads` policy: attachment limit, chunk size, batch concurrency, request
 timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and eval-evidence ceiling.
@@ -60,12 +60,15 @@ runtime validation because layout only transports that adjacent policy.
 and `spex init` both read it, then the former overlays the resolved project/local `uploads` object and validates
 every field loudly. Thus a pre-existing project may
 omit the section and still receive the portable defaults, while one host can override only (for example) its
-chunk size in gitignored `spexcode.local.json`; no upload-only configuration reader or environment-variable
+chunk size in gitignored `.spec/spexcode.local.json`; no upload-only configuration reader or environment-variable
 shadow path exists. Machine-local overrides tune one host without committing its capacity profile, while
 malformed values fail loud rather than silently disabling governance.
 
-The config read is the ONE fail-loud seam here (`readJsonConfig`): an **absent** file is the legitimate
-default (yields `{}`), but a **present-but-malformed** one is a user error we never swallow — a JSON typo
+The config read is the ONE fail-loud seam here (`readJsonConfig`): `.spec/spexcode.json` is preferred, then
+`.spec/spexcode.local.json`; an absent pair is the legitimate default. For one migration release, a config found
+only at the repository root is accepted as a compatibility fallback and emits a loud stderr notice directing the
+operator to move it into `.spec/`. The fallback is intentionally temporary and does not change precedence: when
+both locations exist, `.spec/` wins. A **present-but-malformed** one is a user error we never swallow — a JSON typo
 would otherwise silently drop every tuned setting the file holds (layout, launchers, and the lint budgets
 [[spec-lint]]'s `loadConfig` reads through the same helper) and revert to defaults with no diagnostic. It
 fails LOUD instead, naming the file and the parse error, so the author sees exactly what broke.
@@ -162,8 +165,8 @@ get no system prompt — so portability is only real when the config root travel
 
 The reproducibility contract is concrete: `.nvmrc` pins Node (22) and both package-locks are tracked, so
 installs are deterministic. Machine-local artifacts never enter the tree: a host-specific launcher `cmd`
-lives in the gitignored `spexcode.local.json`'s `sessions.launchers` entry (`readConfig` overlays it on
-committed `spexcode.json`; no env override — [[launcher-select]]), so a host-specific launcher path has a
+lives in the gitignored `.spec/spexcode.local.json`'s `sessions.launchers` entry (`readConfig` overlays it on
+committed `.spec/spexcode.json`; no env override — [[launcher-select]]), so a host-specific launcher path has a
 *durable* home surviving restarts,
 never committed. (The old HOST-personal render vote that lived in this overlay is retired with the whole
 axis — [[residence]]: materialized artifacts are never tracked, and a lingering `render`/`private` field is ignored

@@ -19,7 +19,7 @@ and every "this repo's forge" consumer — the resident cache, the board/issues 
 
 **Resolution ladder, most explicit first:**
 
-- `forge.host` in `spexcode.json` / `spexcode.local.json` (local wins, same layering as every other
+- `forge.host` in `.spec/spexcode.json` / `.spec/spexcode.local.json` (local wins, same layering as every other
   setting; documented in `spex guide settings`). The escape hatch for a domain the heuristic misreads.
 - the **origin remote's hostname** (`git remote get-url origin`, both URL and scp-like shapes): a
   github domain → `github`, bitbucket → `bitbucket`, and **any other resolvable host → `gitlab`** —

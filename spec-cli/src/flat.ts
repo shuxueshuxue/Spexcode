@@ -404,8 +404,8 @@ export async function flatNew(
   })()
   if (outputInsideSource) throw new Error(`spex flat: ${out} is inside ${local}; Flatcode's output must stay beside the source repository`)
   const repo = local ?? join(out, 'repo')
-  const configPath = join(repo, 'spexcode.json')
-  const initialized = Boolean(local && existsSync(join(repo, '.spec')) && existsSync(configPath))
+  const configFile = join(repo, '.spec', 'spexcode.json')
+  const initialized = Boolean(local && existsSync(join(repo, '.spec')) && existsSync(configFile))
   if (local && existsSync(out)) {
     const previous = join(out, 'flat.json')
     const recorded = existsSync(previous) ? JSON.parse(readFileSync(previous, 'utf8')) as { repo?: unknown } : null
@@ -415,7 +415,7 @@ export async function flatNew(
 
   // An existing SpexCode project names its own local launcher. A new local repository and a remote conversion
   // inherit the launch boundary from the calling directory, whose configuration is the only one available yet.
-  const launcherRoot = local && existsSync(configPath) ? local : process.cwd()
+  const launcherRoot = local && existsSync(configFile) ? local : process.cwd()
   const { harness, cmd, name: launcherName, harnessId } = options.launcher
     ? resolveTurnHarness(options.launcher, launcherRoot)
     : await choose(launcherRoot)
@@ -445,8 +445,9 @@ export async function flatNew(
   // adopter merely because Flatcode has not run there: preserve those choices exactly and let the gate tell
   // the agent what remains. Every other target receives the ordinary adoption seed before its first turn.
   const writeConfig = (chosen: FlatProfile) => {
-    const existing = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
-    writeFileSync(configPath, `${JSON.stringify({
+    const existing = existsSync(configFile) ? JSON.parse(readFileSync(configFile, 'utf8')) : {}
+    mkdirSync(dirname(configFile), { recursive: true })
+    writeFileSync(configFile, `${JSON.stringify({
       ...existing,
       // Name the graph after the repository it reads, not after Flatcode's checkout directory — otherwise every
       // flat in the world renders under the title "repo".
@@ -469,13 +470,13 @@ export async function flatNew(
     // seeds the selected harness plus its matching named launcher. Writing a partial config first made init
     // preserve that file, leaving the clone with a harness target but no launcher profile for the agent it used.
     writeConfig(proposed)
-    await commit(repo, 'flatcode: profile and seed .spec', ['.spec', 'spexcode.json'])
+    await commit(repo, 'flatcode: profile and seed .spec', ['.spec'])
     gate = await gateOf(repo)
     profile = confirmProfile(proposed, gate.sourceFiles)
     const dropped = proposed.governedRoots.filter((root) => !profile.governedRoots.includes(root))
     if (dropped.length) {
       writeConfig(profile)
-      await commit(repo, `flatcode: narrow governed roots to ${profile.governedRoots.join(', ')}`, ['spexcode.json'])
+      await commit(repo, `flatcode: narrow governed roots to ${profile.governedRoots.join(', ')}`, ['.spec/spexcode.json'])
       gate = await gateOf(repo)
       log(`dropped ${dropped.join(', ')} — lint's source policy governs nothing there`)
     }

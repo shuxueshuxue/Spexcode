@@ -39,7 +39,7 @@ M0 的 G.1 L09 写着「本仓库没有 production importer……external ZSwarm
 
 | 事实 | 证据 |
 |---|---|
-| z-code 声明的主干是 `zcode-spec` | `/home/jeffry/zcode` 的 `spexcode.json` → `"mainBranch": "zcode-spec"` |
+| z-code 声明的主干是 `zcode-spec` | `/home/jeffry/zcode` 的 `.spec/spexcode.json` → `"mainBranch": "zcode-spec"` |
 | 本机有它，作为远程跟踪引用 | `refs/remotes/origin/zcode-spec` @ `7a6db2350`（2026-08-15） |
 | origin 指向 mbp 的权威 checkout | `ssh://mbp-tail/Users/jeffryglm/Codebase/temp/z-code` |
 | **主干上没有任何 swarm 源文件** | `git ls-tree -r origin/zcode-spec \| grep -i swarm` → **0** |
@@ -86,10 +86,10 @@ M0 的 G.1 L09 写着「本仓库没有 production importer……external ZSwarm
 
 ## 2.3 两条实测事实改变了"在 z-code 里开 session"的做法，以及一条属于对方的规则
 
-**事实一：`spexcode.json` 不在被迁移的那条分支上。** 逐条查过：`b9b3fa701`（swarm）**没有**、
+**事实一：`.spec/spexcode.json` 不在被迁移的那条分支上。** 逐条查过：`b9b3fa701`（swarm）**没有**、
 `origin/zcode-spec`（主干）**没有**、只有 `codex/swarm-worktree-isolation` 有。swarm 分支上的 `.spec` 只有 **4 个节点**。
 也就是说 **z-code 的 SpexCode 采用本身是分支局部的，而且不在主干上**。
-在一条没有 `spexcode.json`、没有后端、只有 4 个节点的分支上强行 `spex session new`，
+在一条没有 `.spec/spexcode.json`、没有后端、只有 4 个节点的分支上强行 `spex session new`，
 拿到的不会是"一个 z-code session"，只会是一个看起来像的东西。
 
 **因此做法调整（记录为偏离，不是便利）**：独立工作副本用 **clone** —— `/home/jeffry/zcode-m5`，

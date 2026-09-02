@@ -117,7 +117,7 @@ export function retiredAxisNotice(cfg: { render?: string; private?: boolean }): 
     `spexcode: the render vote is retired — ${field} is ignored. Materialized artifacts are never tracked:\n` +
     `  tree-local ignore rules live in a filtered working .gitignore, and a host-tracked contract is covered by the\n` +
     `  clean/smudge filter, and a clone without spex runs \`spex materialize\` in its setup step. Remove the\n` +
-    `  field from spexcode.json / spexcode.local.json to retire this notice (see \`spex guide footprint\`).`,
+    `  field from .spec/spexcode.json / .spec/spexcode.local.json to retire this notice (see \`spex guide footprint\`).`,
   )
 }
 
@@ -348,7 +348,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   // own hand-written prose is not folded in — repo-local notes belong in the harness file's own
   // block-outside region (untracked, per-clone), and anything that must reach EVERY agent is a plugin node.
   const contract = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean).join('\n\n')
-  // WHICH harnesses to deliver into ([[harness-select]]): this tree's explicit spexcode.json `harnesses` set.
+  // WHICH harnesses to deliver into ([[harness-select]]): this tree's explicit .spec/spexcode.json `harnesses` set.
   // resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
   const cfg = readConfig(proj)
   const targets = resolveHarnessTargets(cfg.harnesses)
@@ -535,7 +535,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     ...[...new Set(HARNESSES.filter((h) => h.shimScope === 'project' && existsSync(h.shimFile(proj)) &&
       readFileSync(h.shimFile(proj), 'utf8').includes('dispatch.sh')).map((h) => relative(mc, h.shimFile(proj))))]
       .filter((p) => !p.startsWith('..')),
-    'spexcode.local.json', '.worktrees/', '.session',
+    '.spec/spexcode.local.json', '.worktrees/', '.session',
   ]
   const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
   // Contract residence stays a live fact. Selection-dependent untracked products are ignored by this tree's

@@ -33,7 +33,7 @@ function fixture(
   git('config', 'user.name', 'Test')
   mkdirSync(join(root, '.spec/project'), { recursive: true })
   writeFileSync(join(root, '.spec/project/spec.md'), `---\ntitle: project\n---\n${specBody}`)
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ lint, ...extraConfig }) + '\n')
+  writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({ lint, ...extraConfig }) + '\n')
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), content)
@@ -86,12 +86,12 @@ test('fresh Python repo treats every tracked regular text file as source without
     'assets/logo.svg': '<svg/>\n',
     'assets/blob.dat': new Uint8Array([1, 0, 2, 3]),
     '.plugins/note.txt': 'SpexCode-owned plugin data\n',
-    'spexcode.local.json': '{}\n',
+    '.spec/spexcode.local.json': '{}\n',
   }, { governedRoots: ['.'] }, { 'src/untracked.py': 'VALUE = 1\n' })
   assert.equal(code, 0, out)
   for (const included of ['src/app.py', 'src/pkg/util.py', 'vendor/dependency.py', 'generated/models.py', 'build/output.py', 'docs/example.py', 'README.md', 'pyproject.toml', 'assets/logo.svg'])
     assert.match(out, new RegExp(`coverage: no spec governs: ${included.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), `${included} is tracked text and must be source: ${out}`)
-  for (const excluded of ['untracked.py', 'test_helper.py', 'util_test.py', 'conftest.py', 'blob.dat', '.plugins/note.txt', 'spexcode.local.json', 'spexcode.json', '.spec/project/spec.md'])
+  for (const excluded of ['untracked.py', 'test_helper.py', 'util_test.py', 'conftest.py', 'blob.dat', '.plugins/note.txt', '.spec/spexcode.local.json', '.spec/spexcode.json', '.spec/project/spec.md'])
     assert.ok(!out.includes(`no spec governs: ${excluded}`), `${excluded} must stay outside the candidate set: ${out}`)
   assert.ok(!out.includes('governing NOTHING'), out)
 })

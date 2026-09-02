@@ -56,7 +56,7 @@ try {
   mkdirSync(join(project, 'src'), { recursive: true })
   writeFileSync(join(project, '.spec', 'fixture', 'spec.md'), '---\ntitle: fixture\nstatus: active\ncode:\n  - src/fixture.js\n---\n\n# fixture\n\nGoverned fixture.\n')
   writeFileSync(join(project, 'src', 'fixture.js'), 'export function first() {\n  return 1\n}\n\nexport function second() {\n  return 2\n}\n')
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }, null, 2))
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }, null, 2))
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project })
   execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project })

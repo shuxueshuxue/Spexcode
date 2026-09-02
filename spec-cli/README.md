@@ -31,7 +31,7 @@ Adopt it in your project — `spex init` is **additive**, it never restructures 
 cd ~/my-app
 spex init --harness claude  # seed .spec/, starter config, hooks, and the agent contract
 # 1. edit .spec/project/spec.md to describe your project
-# 2. point spexcode.json's  lint.governedRoots  at your real source dir(s)
+# 2. point .spec/spexcode.json's  lint.governedRoots  at your real source dir(s)
 spex spec lint         # the "coverage" warnings are your adoption TODO list
 ```
 

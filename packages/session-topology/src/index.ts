@@ -53,6 +53,7 @@ export interface SessionTopology {
   ): TopologyEdge
   parents(sessionId: string, relationType?: string, tx?: ProtocolTransaction): TopologyEdge[]
   children(sessionId: string, relationType?: string, tx?: ProtocolTransaction): TopologyEdge[]
+  descendants(sessionId: string, relationType?: string, tx?: ProtocolTransaction): string[]
   subscriptions(sessionId: string, tx?: ProtocolTransaction): TopologyEdge[]
   recipients(subjectSessionId: string, tx?: ProtocolTransaction): string[]
 }
@@ -292,6 +293,27 @@ export function openTopology(protocol: SessionProtocol): SessionTopology {
     },
     children(sessionId, relationType, tx) {
       return queryEdges(sessionId, relationType, tx, 'from')
+    },
+    descendants(sessionId, relationType, tx) {
+      requireSessionId(sessionId)
+      if (relationType !== undefined) requireRelationType(relationType)
+      return withRead(tx, active => {
+        const relation = relationType === undefined ? '' : ' AND edge.relation_type=?'
+        const params = relationType === undefined ? [sessionId] : [sessionId, relationType]
+        return active.query(
+          `WITH RECURSIVE reachable(session_id) AS (
+             SELECT ?
+             UNION
+             SELECT edge.to_session_id
+             FROM topology_edges AS edge INDEXED BY topology_active_edge
+             JOIN reachable ON edge.from_session_id=reachable.session_id
+             WHERE edge.removed_at_ms IS NULL${relation}
+           )
+           SELECT session_id FROM reachable WHERE session_id<>? ORDER BY session_id`,
+          ...params,
+          sessionId,
+        ).map(row => String(row.session_id))
+      })
     },
     subscriptions(sessionId, tx) {
       return queryEdges(sessionId, undefined, tx, 'from')

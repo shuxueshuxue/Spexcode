@@ -85,8 +85,8 @@ test('real backend resumes a configured large attachment and promotes only the c
       retryLimit: LOCAL_RETRY_LIMIT,
       retryDelayMs: LOCAL_RETRY_DELAY_MS,
     }
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'], uploads: { maxBytes: portableMaxBytes } }) + '\n')
-    writeFileSync(join(project, '.gitignore'), 'spexcode.local.json\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'], uploads: { maxBytes: portableMaxBytes } }) + '\n')
+    writeFileSync(join(project, '.gitignore'), '.spec/spexcode.local.json\n')
     git(project, 'init', '-q', '-b', 'main')
     git(project, 'config', 'user.email', 'uploads@example.test')
     git(project, 'config', 'user.name', 'uploads test')
@@ -94,7 +94,7 @@ test('real backend resumes a configured large attachment and promotes only the c
     git(project, 'commit', '-qm', 'fixture')
     // The backend must read this machine-local section through the existing one-level config overlay, not a
     // separate upload configuration path. Omitted fields continue to come from the shipped template.
-    writeFileSync(join(project, 'spexcode.local.json'), JSON.stringify({ uploads: {
+    writeFileSync(join(project, '.spec/spexcode.local.json'), JSON.stringify({ uploads: {
       chunkBytes: LOCAL_CHUNK_BYTES,
       concurrency: LOCAL_CONCURRENCY,
       requestTimeoutMs: LOCAL_REQUEST_TIMEOUT_MS,

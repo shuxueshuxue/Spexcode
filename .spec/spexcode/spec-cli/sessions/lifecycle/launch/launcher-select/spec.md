@@ -24,7 +24,7 @@ related:
 How a worker is brought up has TWO facts: WHICH harness ([[harness-adapter]] — claude / codex / opencode / pi)
 and WHICH command actually launches it (a login `reclaude`, an API-key `claude-glm`, a bespoke wrapper). A
 launcher fuses those two into ONE named profile, so the human picks a single thing per session and the
-harness rides along for free. Every launcher is a NAMED entry in `spexcode.json` / `spexcode.local.json`'s
+harness rides along for free. Every launcher is a NAMED entry in `.spec/spexcode.json` / `.spec/spexcode.local.json`'s
 `sessions.launchers` map — a `{ harness?, cmd }` pair keyed by a portable name the human chooses
 (`claude-glm`, `reclaude`, …); `harness` defaults to `claude`. `claude` and `codex` are NOT a special
 built-in tier resolved from an env var or a `claudeCmd`/`codexCmd` config field: [[spex-init]] SEEDS each selected
@@ -33,7 +33,7 @@ harness as an ordinary named launcher. Interactive harnesses preserve their norm
 runtime is the deliberate exception and seeds `opencode --auto`, because a terminal-free run cannot stop for
 an interactive permission prompt. After seeding, every entry is edited, renamed, or removed like any other
 launcher. A project that intentionally wants another auth wrapper (reclaude) or automatic-permission command
-declares it as an explicit launcher choice in `spexcode.json` or the gitignored `spexcode.local.json`; clean
+declares it as an explicit launcher choice in `.spec/spexcode.json` or the gitignored `.spec/spexcode.local.json`; clean
 init never grants those permissions silently. There is NO runtime env or harness-specific branch that rewrites
 a launcher's command. The complete
 launcher registry therefore lists exactly the config's real launchers, and two names can never resolve to the
@@ -45,17 +45,17 @@ The old free-standing harness pick is gone.
 
 `sessions.defaultLauncher` names the profile a session with no explicit choice uses; it is required for any
 no-choice create. Omitting it is a configuration error for those create paths, reported with the repair: write
-`sessions.defaultLauncher` in `spexcode.json` or `spexcode.local.json`. There is no ambient fallback to a
+`sessions.defaultLauncher` in `.spec/spexcode.json` or `.spec/spexcode.local.json`. There is no ambient fallback to a
 `claude` launcher — `claude` is just another configured name, so a default (like every launcher name) must
 resolve to a real `sessions.launchers` entry or fail loud, never silently choosing an auth/config-dir path the
-human did not name. Host-specific absolute commands belong in the gitignored `spexcode.local.json`, never in
+human did not name. Host-specific absolute commands belong in the gitignored `.spec/spexcode.local.json`, never in
 the committed file — a launcher name is portable, its `cmd` is a machine fact.
 
 **Selection at create time.** `spex session new "…" --launcher <name>` picks it on the CLI (threaded through
 `createSession`/`newSession` and the `POST /api/sessions` body); the dashboard New-Session form shows a
 launcher **pop-out picker** sourced from `GET /api/settings` — a clean pill button wearing the selected
-launcher's harness vendor mark + name (no caret, no label; its tooltip names `spexcode.json` /
-`spexcode.local.json` as where launchers change) that opens a **viewport-centred pop-out card** over a light
+launcher's harness vendor mark + name (no caret, no label; its tooltip names `.spec/spexcode.json` /
+`.spec/spexcode.local.json` as where launchers change) that opens a **viewport-centred pop-out card** over a light
 backdrop (not an anchored dropdown). The card contains **one row per dashboard-visible launcher**: its harness
 glyph + name and its complete `cmd` as read-only display text. The **entire row is ONE pick target**: a click anywhere on it —
 the `cmd` line included — picks the launcher and closes the pop. The `cmd` never behaves as a surface of
@@ -123,7 +123,7 @@ default config root from its own environment, so a session launched under a wrap
 dir (claude-glm's `CLAUDE_CONFIG_DIR=~/.claude-glm`) wrote its conversation where the backend never looked, and
 its timeline read "0 turns" off a loud not-found. The env lives inside an opaque wrapper script, so there is no
 honest way to parse it out — the launcher entry therefore declares it: an optional `configDir` beside `cmd`
-(same file, same host-specific nature — a machine path belongs in spexcode.local.json). Creation pins the
+(same file, same host-specific nature — a machine path belongs in .spec/spexcode.local.json). Creation pins the
 resolved value on the record (`launchConfigDir`, exactly as `launchCmd` is pinned), and [[session-transcript]]'s
 resolver reads through it: pinned dir first, else the launcher NAME resolved against live config (so records
 predating the field self-heal the moment the config declares one), else the harness default root. The

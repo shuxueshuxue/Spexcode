@@ -92,7 +92,7 @@ function adoptionMainBranch(dir: string): string {
     const branch = execFileSync(gitBinary(process.env), ['-C', dirname(common), 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
     if (branch) return branch
   } catch { /* render the one product-level repair below */ }
-  const error = new Error('cannot determine the source-of-truth branch at adoption — check out the trunk in the root checkout, or set "mainBranch" in spexcode.json before re-running `spex init`')
+  const error = new Error('cannot determine the source-of-truth branch at adoption — check out the trunk in the root checkout, or set "mainBranch" in .spec/spexcode.json before re-running `spex init`')
   error.name = 'ConfigError'
   throw error
 }
@@ -100,7 +100,7 @@ function adoptionMainBranch(dir: string): string {
 export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
 
-  // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target spexcode.json's
+  // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target .spec/spexcode.json's
   // `preset` field, else the lean `default`. Validated loudly against the chain (an unknown name would
   // otherwise seed silently). A non-default tier stacks its template package on top of the default set below.
   const selected = (presetArg ?? '').trim() || (readConfig(targetDir).preset ?? '').trim() || 'default'
@@ -122,14 +122,14 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   }
 
   // the harness DELIVERY TARGET set ([[harness-select]]) is a REQUIRED, explicit choice — `--harness <ids>`
-  // stamps it into spexcode.json; absent the flag, a pre-existing explicit `harnesses` field IS the choice.
+  // stamps it into .spec/spexcode.json; absent the flag, a pre-existing explicit `harnesses` field IS the choice.
   // Neither → abort BEFORE writing anything: with many harnesses, a silent "deliver to all" would litter the
   // adopter's tree (and global tool configs) with artifacts for harnesses they never installed. Legality
   // (unknown ids, plugin exclusivity, empty set) fails loud here too, not as a soft materialize warning.
   const flagRaw = (harnessArg ?? '').trim() ? parseHarnessFlag(harnessArg!.trim()) : null
   const chosenHarnesses = flagRaw ?? readConfig(targetDir).harnesses ?? null
   if (chosenHarnesses === null) {
-    console.error(`spex init: --harness is required — name the harness(es) this repo delivers into, e.g. \`spex init --harness claude\`. Known native ids: ${NATIVE_HARNESS_IDS.join(', ')} (comma-separate several; a plugin bundle: --harness plugin:<folder>). Use --harness none to adopt the spec tree and its lint WITHOUT writing into any agent's config. A pre-existing spexcode.json "harnesses" field also satisfies this.`)
+    console.error(`spex init: --harness is required — name the harness(es) this repo delivers into, e.g. \`spex init --harness claude\`. Known native ids: ${NATIVE_HARNESS_IDS.join(', ')} (comma-separate several; a plugin bundle: --harness plugin:<folder>). Use --harness none to adopt the spec tree and its lint WITHOUT writing into any agent's config. A pre-existing .spec/spexcode.json "harnesses" field also satisfies this.`)
     process.exit(1)
   }
   let selectedNativeEvents: ReadonlySet<string> | null = null
@@ -168,15 +168,17 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     }
   }
 
-  // 1b. plant a starter spexcode.json (the lint/layout knob) carrying the CHOSEN `harnesses` set. The
+  // 1b. plant a starter .spec/spexcode.json (the lint/layout knob) carrying the CHOSEN `harnesses` set. The
   // template ships launchers for every native harness; seeding keeps only the SELECTED ones (a launcher for
   // a tool the adopter didn't pick is exactly the litter --harness exists to prevent) — a plugin-only
   // selection keeps them all, since the bundle serves the HOST agent while dispatched sessions still need a
   // launcher. The success message reports values read back from the planted file, never restated literals.
-  const cfgDest = join(targetDir, 'spexcode.json')
+  const cfgDest = join(targetDir, '.spec', 'spexcode.json')
+  const legacyCfg = join(targetDir, 'spexcode.json')
+  const existingCfg = existsSync(cfgDest) ? cfgDest : legacyCfg
   const nativeChosen = (chosenHarnesses as unknown[]).filter((m): m is string => typeof m === 'string')
-  if (existsSync(cfgDest)) {
-    const cfg = (readJsonConfig(cfgDest) ?? {}) as Record<string, unknown>
+  if (existsSync(existingCfg)) {
+    const cfg = (readJsonConfig(existingCfg) ?? {}) as Record<string, unknown>
     const stampedBranch = typeof cfg.mainBranch !== 'string' || !cfg.mainBranch.trim()
     if (stampedBranch) cfg.mainBranch = adoptionMainBranch(targetDir)
     if (flagRaw) cfg.harnesses = flagRaw
@@ -185,9 +187,9 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
       console.log(`✓ stamped ${[
         flagRaw ? `"harnesses": ${JSON.stringify(flagRaw)}` : '',
         stampedBranch ? `"mainBranch": ${JSON.stringify(cfg.mainBranch)}` : '',
-      ].filter(Boolean).join(' and ')} into the existing spexcode.json (other fields untouched)`)
+      ].filter(Boolean).join(' and ')} into the existing .spec/spexcode.json (other fields untouched)`)
     } else {
-      console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
+      console.warn(`• .spec/spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
     }
   } else {
     const cfg = (readJsonConfig(templateConfigPath) ?? {}) as Record<string, any>
@@ -201,7 +203,16 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     }
     writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
     const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
-    console.log(`✓ planted spexcode.json — mainBranch ${JSON.stringify(cfg.mainBranch)}, harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
+    console.log(`✓ planted .spec/spexcode.json — mainBranch ${JSON.stringify(cfg.mainBranch)}, harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
+  }
+
+  // The host-local overlay is part of the adopted layout and must never become force-add bait.
+  const ignoreFile = join(targetDir, '.gitignore')
+  const ignoreLine = '.spec/spexcode.local.json'
+  const ignoreText = existsSync(ignoreFile) ? readFileSync(ignoreFile, 'utf8') : ''
+  if (!ignoreText.split(/\r?\n/).includes(ignoreLine)) {
+    writeFileSync(ignoreFile, `${ignoreText}${ignoreText && !ignoreText.endsWith('\n') ? '\n' : ''}${ignoreLine}\n`)
+    console.log(`✓ ignored ${ignoreLine}`)
   }
 
   // 2. install the git hooks. Unknown existing hooks are user-owned and stay byte-identical. An exact
@@ -261,10 +272,10 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   const rootsNow = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
   console.log(`
 Next steps:
-  1. The seeded .spec/ tree and spexcode.json are project source of truth: add and commit them. Generated
+  1. The seeded .spec/ tree and .spec/spexcode.json are project source of truth: add and commit them. Generated
      harness artifacts are machine-local and can stay untracked.
   2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  3. lint.governedRoots in spexcode.json (currently ${rootsNow}) names what \`spex spec lint\` governs —
+  3. lint.governedRoots in .spec/spexcode.json (currently ${rootsNow}) names what \`spex spec lint\` governs —
      ["."] governs the whole git-tracked tree (tests excluded); narrow it to explicit source roots
      when you want a curated graph.
   4. Start the backend and open the dashboard:

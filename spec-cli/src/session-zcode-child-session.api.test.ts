@@ -57,7 +57,7 @@ test('ZCode child identity is durable, exact, and collision-safe in the graph pr
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['zcode'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['zcode'] }) + '\n')
     git(project, 'init', '-q', '-b', 'main')
     git(project, 'config', 'user.email', 'zcode-link@example.test')
     git(project, 'config', 'user.name', 'ZCode link fixture')

@@ -7,7 +7,7 @@ scenarios:
       read GET /api/issues: the stores list offers the `github` forge store and, once the resident cache
       warms, real `github#N` issues appear in the merged list — unchanged pre-seam behaviour. Then make
       the resolved host gitlab (a gitlab-form remote, or `{"forge":{"host":"gitlab"}}` in
-      spexcode.local.json), restart, and read the SAME surfaces: /api/issues answers 200 (the gitlab
+      .spec/spexcode.local.json), restart, and read the SAME surfaces: /api/issues answers 200 (the gitlab
       forge store is offered now that its driver is registered, but an unreachable/untokened gitlab
       yields an EMPTY forge slice — local threads intact, no `github#N` leak, no error) and /api/graph
       answers 200. Also probe

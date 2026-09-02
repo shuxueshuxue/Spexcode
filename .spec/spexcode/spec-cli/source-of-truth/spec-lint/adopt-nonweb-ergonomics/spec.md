@@ -31,7 +31,7 @@ The [[spec-lint]] coverage/config seam supplies one source set to spec coverage 
 - **Tracked text is authoritative.** Omitted includes mean every tracked current regular text file under
   `governedRoots`; no built-in language, directory, basename, extension, generated, or minified vocabulary
   decides relevance. Binary/non-regular/missing worktree entries cannot be source. SpexCode subtracts only
-  data it owns: `.spec/**`, `.plugins/**`, `spexcode.json`, and `spexcode.local.json`.
+  data it owns: `.spec/**`, `.plugins/**`, `.spec/spexcode.json`, and `.spec/spexcode.local.json`.
 - **Policy is data.** `lint.sourceIncludeGlobs` optionally selects a subset; `lint.sourceExcludeGlobs` and
   `lint.testGlobs` subtract from it. Each list is ordinary repo-relative globs, and a slash-less glob means
   the basename at any depth. An explicit empty include list intentionally selects nothing.

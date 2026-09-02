@@ -27,7 +27,7 @@ rather than to how large the repository is.
 ## one gate, not a second definition
 
 **A file appears here exactly when `isSourceFile` would let `/api/source` open it** — the same predicate,
-compiled from the same `spexcode.json` policy, that [[spec-lint]]'s coverage walk uses. This is the same
+compiled from the same `.spec/spexcode.json` policy, that [[spec-lint]]'s coverage walk uses. This is the same
 invariant [[source-read]] states, and it matters more on the listing side than on the read side: a row the
 reader clicks and gets a 404 from is worse than a row that was never drawn. Two predicates that agree today
 are two predicates free to disagree tomorrow, which is precisely how a panel ends up advertising something

@@ -39,7 +39,7 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   hook source**: `scripts/install-hooks.sh` (the monorepo's `npm run hooks`) installs the very same
   files, so the two paths can't drift (see [[main-guard]]). They ship inside the package so a relocated
   install still carries them.
-- **A starter `spexcode.json`** — `templates/spexcode.json` copied to `<dir>/spexcode.json`. Without it
+- **A starter `.spec/spexcode.json`** — `templates/spexcode.json` copied to `<dir>/.spec/spexcode.json`. Without it
   an adopter inherits SpexCode's own [[spec-lint]] defaults, whose `governedRoots` name *this* repo's
   dirs; absent in the adopter's tree, lint would silently govern nothing and read falsely-clean. The
   starter ships `governedRoots: ["."]` — the zero-config safe default: `.` governs the *whole* project,
@@ -53,11 +53,14 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   `opencode --auto`, so that exact command is its seed rather than a plain command that would reopen the TUI.
   Thus session-create works out of the box without seeding launchers for tools the adopter never picked.
   The template is also the one numeric-default source for the `uploads` transfer policy; its portable values
-  can be committed as-is or locally overridden through the normal `spexcode.local.json` overlay, never through
+  can be committed as-is or locally overridden through the normal `.spec/spexcode.local.json` overlay, never through
   an upload-specific config file.
   Adoption also records the root checkout's current branch as `mainBranch`: this is the one moment detection is
   authoritative. Later ordinary `git switch` operations cannot redefine a feature branch as trunk. A re-init
   preserves an explicit value and fills a missing one without changing the surrounding config.
+
+Init also ensures `.gitignore` contains `.spec/spexcode.local.json`; an existing ignore file is appended to,
+never replaced. The local overlay remains machine-only while the committed `.spec/spexcode.json` stays tracked.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
@@ -67,7 +70,7 @@ rule: materialize returns a receipt of the contract, shim, skill/agent, plugin, 
 adapters actually asserted, and init renders that receipt. A Claude-only init therefore cannot claim AGENTS,
 Codex shims, or Codex trust; a Codex-only init cannot claim CLAUDE or Claude shims.
 
-The seeded `.spec/` tree and `spexcode.json` are project source of truth, so init names them as files to add
+The seeded `.spec/` tree and `.spec/spexcode.json` are project source of truth, so init names them as files to add
 and commit. Generated harness files such as `.codex/`, `.claude/`, and `AGENTS.md` are machine-local and
 remain untracked. Until the project data is tracked, the existing `spex spec lint` gate reports an integrity
 error rather than treating the untracked seed as a clean graph; it gives the ordinary Git repair command and
@@ -81,7 +84,7 @@ the per-clone exclude without touching the host's `.gitignore`. A lingering `ren
 pre-existing config is ignored with a loud non-fatal notice; nothing about it is ever fatal to adoption.
 
 **The harness delivery choice is REQUIRED, up front.** `--harness <id[,id]|plugin:<folder>|none>` names which
-harnesses [[harness-select]] delivers into; init stamps it into `spexcode.json` as the persistent `harnesses`
+harnesses [[harness-select]] delivers into; init stamps it into `.spec/spexcode.json` as the persistent `harnesses`
 field (an explicit `--harness` on a re-init restamps that field of an existing config; the same write also
 fills a missing stable `mainBranch`, preserving every other field). A pre-existing explicit field satisfies
 the requirement without the flag. Neither → init aborts
@@ -91,7 +94,7 @@ for CLIs they never installed. An ILLEGAL set (unknown id, plugin paired with a 
 landing folder) fails just as loud, up front — never a soft "materialize skipped" warning.
 
 REQUIRED means *stated*, not *non-empty*. `--harness none` stamps the empty set: adoption seeds the spec
-tree, plants `spexcode.json`, installs the git hooks, and writes NOTHING into any agent's config. That is the
+tree, plants `.spec/spexcode.json`, installs the git hooks, and writes NOTHING into any agent's config. That is the
 L0-only posture — the spec asset and its lint, adopted by a repo whose agent SpexCode does not adapt, or by
 one that wants the data and none of the wiring — and refusing it would make "choose a vendor's harness" the
 price of admission to a layer that has no vendor in it. It is not the same as a MISSING field: `[]` is a

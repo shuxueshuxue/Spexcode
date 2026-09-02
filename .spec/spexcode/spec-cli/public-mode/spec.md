@@ -81,7 +81,7 @@ terminal socket is gated by the same secret with no query-token hack. With no pa
 absent — no `/login`, no cookie check — and every request is served straight through.
 
 **The certificate is a resolved value, never hardcoded.** Precedence: `--tls-cert/--tls-key` flags >
-`SPEXCODE_TLS_CERT`/`SPEXCODE_TLS_KEY` env > `spexcode.json` `serve.public.tls` > a self-signed default,
+`SPEXCODE_TLS_CERT`/`SPEXCODE_TLS_KEY` env > `.spec/spexcode.json` `serve.public.tls` > a self-signed default,
 generated once and cached so each visitor accepts it only once. Point it at a real cert and the same
 gateway is warning-free HTTPS. `--http` drops TLS entirely — loud-warned, because the password then
 crosses the network in clear and secure-context features break. Web PKI won't issue a browser-trusted
@@ -89,7 +89,7 @@ cert for a bare IP, so the self-signed default costs one "proceed" click per vis
 needing no domain, and a default, not a requirement.
 
 **Secrets stay out of the repo; failures are loud.** The password comes only from the flag or env, never
-the committable `spexcode.json`; config holds cert file *paths*, the key file lives outside git. A cert
+the committable `.spec/spexcode.json`; config holds cert file *paths*, the key file lives outside git. A cert
 file that does not exist is a named error pointing at the repair, never a silent fallback to insecure
 serving.
 

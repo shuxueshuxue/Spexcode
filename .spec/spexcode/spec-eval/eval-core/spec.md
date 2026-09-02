@@ -56,7 +56,7 @@ The surface mirrors the code-drift report:
   carries the scenario's **tags**, so a reader (and [[eval-proactive]]'s Stop nudge) sees the gap's SURFACE —
   e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.
   A completed scan exits zero regardless of findings. `--changed` first prints the scope it actually
-  established: the resolved merge base, changed-path count, and the exact current-worktree `spexcode.json`
+  established: the resolved merge base, changed-path count, and the exact current-worktree `.spec/spexcode.json`
   path (or `defaults`). The changed-path set is the union of the merge-base diff (both endpoints of a
   rename/copy) and untracked files. Failure to resolve the base or read either changed-path set is a command
   failure, not an empty scope: it exits non-zero and never prints a zero-finding summary.

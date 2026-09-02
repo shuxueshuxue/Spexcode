@@ -94,7 +94,7 @@ worker sent to clean that session can match its own worktree — and the slug ke
 so a CJK prompt survives as the readable name its author typed (git refs take unicode; transliteration
 would trade that for a dependency and a name nobody wrote). Worst case the slug falls back to `session`,
 kept unique by the session short-id suffix. Worktree
-prep also copies the machine-local `spexcode.local.json` snapshot from the main checkout into every fresh
+prep also copies the machine-local `.spec/spexcode.local.json` snapshot from the main checkout into every fresh
 session worktree — the one source git cannot deliver, since the tracked spec data arrives by checkout and
 the materialized artifacts by re-materialize (the transport-by-kind policy and its helper module belong
 to [[residence]];

@@ -210,9 +210,9 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
     body: `Usage: spex init [dir=cwd] --harness <id[,id]|plugin:<folder>> [--preset default]
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plugins plugins), plants
-spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
+.spec/spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). --harness is REQUIRED — the explicit choice of which harnesses materialize delivers into
-(stamped as spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
+(stamped as .spec/spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
 field satisfies it; --harness none delivers into NO harness (spec tree + lint + git hooks only, nothing
 written into any agent's config). Additive: it never replaces a file you own — where a harness discovers its
 hooks in your own config (.claude/settings.json, …) only SpexCode's entries are merged in and out, and a
@@ -229,7 +229,7 @@ a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex
 The base operation of HARNESS ADAPTATION: one pass renders the spec tree's surface nodes into the
 artifacts each selected harness auto-discovers — the managed <!-- spexcode --> block of
 CLAUDE.md/AGENTS.md, the .claude/.codex shims, the skills/agents — and prints the content hash.
-The outputs are derived and never tracked: to change one, edit its source (.plugins, spexcode.json)
+The outputs are derived and never tracked: to change one, edit its source (.plugins, .spec/spexcode.json)
 and re-materialize — never the artifact. Not a one-time setup: it anchors on git-native events
 (init · this verb · session-worktree creation · the pre-commit/post-checkout/post-merge hooks) —
 run it by hand after a toolchain update, or in the setup step of any clone that has no spex-planted
@@ -306,7 +306,7 @@ landed on a host can be checked against what was built.`,
 
 Removes all SpexCode-derived wiring and project-local state: contract blocks, harness shims,
 generated skills/agents, plugin bundles, trust/filter/exclude entries, and the global per-project
-store. Your tracked intent (.spec including .plugins, plus spexcode.json) and surrounding user prose
+store. Your tracked intent (.spec including .plugins, plus .spec/spexcode.json) and surrounding user prose
 are preserved. Git hooks remain unless --hooks; that flag removes only unmodified canonical copies.`,
     see: 'spex init (re-adopt later — your tracked intent survives)',
   },
@@ -343,7 +343,7 @@ Admin surface (hub-authorized: implicit from loopback until an admin password is
 sessions): GET /projects (the validated list + gating state) · GET /projects/stream (SSE) ·
 GET /projects/browse?path=… (read-only host folder picker) · POST /projects {root, initGit?, init?}
 (explicit setup, then register) · GET|PUT /projects/<id>/config (raw portable
-spexcode.json, revision-guarded) · POST /projects/<id>/init|doctor|serve
+.spec/spexcode.json, revision-guarded) · POST /projects/<id>/init|doctor|serve
 (run the real \`spex init\`/\`spex doctor\`, or start an offline project's backend, detached — a
 backend never depends on this gateway staying up) · PUT|DELETE /projects/admin-password and
 /projects/<id>/password (the gates). A gated project answers /p/<id>/login with the designed page.
@@ -505,7 +505,7 @@ not only bugs; --store <host> opens straight on the forge. \`reply\` and \`close
 issue's store — one verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one
 recorded action. \`links\` is the read-only forge trace: which open forge issues/PRs serve which
 spec node (--pending narrows to threads still awaiting an eval). The issues workflow's
-on/off switch is the \`issues.enabled\` key in spexcode.json (no CLI toggle verb — edit the JSON;
+on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle verb — edit the JSON;
 \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex evidence put (stash evidence bytes)',
@@ -539,11 +539,11 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · .spec/spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
        spex guide eval       the eval.md scenario format + how loss is measured and filed
-       spex guide settings   every spexcode.json / spexcode.local.json field, and which file it belongs in
+       spex guide settings   every .spec/spexcode.json / .spec/spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help

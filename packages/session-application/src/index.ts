@@ -4,6 +4,7 @@ import type {
   ProtocolTransaction,
   SessionProtocol,
 } from '@spexcode/session-protocol'
+import { payloadHash } from '@spexcode/session-protocol'
 import type { SessionTopology, TopologyEdge } from '@spexcode/session-topology'
 
 export interface NotificationResult {
@@ -13,6 +14,7 @@ export interface NotificationResult {
 }
 
 export interface SessionApplication {
+  broadcast(senderSessionId: string, recipients: readonly string[], message: MessageInput): Record<string, string>
   notifyRecipients(subjectSessionId: string, message: MessageInput): NotificationResult
   attachAndNotify(
     fromSessionId: string,
@@ -60,6 +62,21 @@ export function openSessionApplication(
   }
 
   return {
+    broadcast(senderSessionId, recipients, message) {
+      const unique = [...new Set(recipients)]
+      return protocol.withTransaction(tx => Object.fromEntries(unique.map(recipient => {
+        const hash = Buffer.from(payloadHash({
+          protocolVersion: message.protocolVersion ?? 1,
+          targetSessionId: recipient,
+          senderSessionId,
+          kind: message.kind,
+          headers: message.headers,
+          body: message.body,
+        })).toString('hex')
+        const queued = tx.enqueue(recipient, { ...message, senderSessionId, idempotencyKey: `${senderSessionId}:${hash}:${recipient}` })
+        return [recipient, queued.messageId]
+      })))
+    },
     notifyRecipients(subjectSessionId, message) {
       return protocol.withTransaction(tx => run(subjectSessionId, message, null, tx))
     },

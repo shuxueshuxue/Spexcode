@@ -33,7 +33,7 @@ scenarios:
       session whose scope is EMPTY (0 commits ahead, 0 dirty) and for one carrying a ten-file commit. Then,
       inside one live backend, move the served checkout's state and re-read the review after each move: an
       untracked file created, the same file removed, a real HEAD advance committed while the backend runs, a
-      dirty rename of an anchored unit, and a malformed `spexcode.json`. Compare every `gates.lint` with
+      dirty rename of an anchored unit, and a malformed `.spec/spexcode.json`. Compare every `gates.lint` with
       `spex spec lint` on that same tree.
     expected: >
       The lint verdict is exactly `spex spec lint`'s for the served tree at every step, dirty files included,

@@ -3,10 +3,12 @@ import react from '@vitejs/plugin-react'
 import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-// walk up from cwd to the nearest spexcode.json and read dashboard.apiUrl (null if none / unreadable).
+// walk up from cwd to the nearest .spec/spexcode.json and read dashboard.apiUrl (null if none / unreadable).
 function projectApiUrl() {
   for (let dir = process.cwd(); ; ) {
-    const p = join(dir, 'spexcode.json')
+    const preferred = join(dir, '.spec', 'spexcode.json')
+    const legacy = join(dir, 'spexcode.json')
+    const p = existsSync(preferred) ? preferred : legacy
     if (existsSync(p)) {
       try { return JSON.parse(readFileSync(p, 'utf8'))?.dashboard?.apiUrl || null } catch { return null }
     }

@@ -80,5 +80,5 @@ The macOS phase adds these scenarios:
 - `quit-leaves-backends-running`: normal quit leaves a detached backend healthy and discoverable.
 - `packaged-mac-gui-reads-keychain`: a real session dispatched from the packaged app's gateway must authenticate
   through the plain `claude` launcher using the Aqua-domain keychain; failures are findings against the claim.
-- `gatekeeper-quarantine`: after applying quarantine xattrs to the dmg, record exactly what this macOS version
-  shows for the ad-hoc-signed app; this is Tier 2 distribution evidence, not a product failure.
+- `gatekeeper-quarantine`: the quarantined ad-hoc app still launches while `spctl --assess` refuses it with the
+  recorded text; preserve the codesign and quarantine dump as Tier 2 distribution evidence.

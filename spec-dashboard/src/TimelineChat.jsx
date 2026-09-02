@@ -352,8 +352,9 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
           )}
           {readOnly && (
             <div className="m-coldline">
-              <span>{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>
+              <span className="m-coldline-text">{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>
               {onRestore && <button type="button" className="m-coldline-action" disabled={actionOutcome?.phase === 'pending'} onClick={onRestore}>
+                <Icon name="play" size={12} />
                 {t(state === 'archived' ? 'session.shelfRestore' : 'session.relaunch')}
               </button>}
             </div>

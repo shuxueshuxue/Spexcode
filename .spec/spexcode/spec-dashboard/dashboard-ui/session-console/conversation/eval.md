@@ -112,6 +112,22 @@ scenarios:
       All three render the same timeline body and footer component; only the live footer's composer is enabled,
       the offline footer adds the read-only note and relaunch action, the archived footer adds its note and reads
       once without polling; the typed newline renders as a line break, not a reflowed wrap.
+  - name: the-cold-footer-is-a-status-line-with-one-accent-action
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/TimelineChat.jsx]
+    related: [spec-dashboard/src/styles.css]
+    description: >-
+      In a real browser open an offline session's Conversation and an archived one's, in the default dark preset
+      and in a light one. Read the cold footer card's height against the live composer's, the coldline's text
+      colour role (body ink or placeholder grey), and the relaunch / restore control: filled or hairline, its
+      height against the live send mark, whether it carries a mark beside its verb. LOOK at the screenshots.
+    expected: >-
+      The cold footer is the same card the live composer floats, collapsed to one control row — no editor gap
+      above the line, the row at the send mark's height — so it reads as a status line rather than an empty
+      input. Its statement is body ink, not the placeholder grey of a field with nothing typed. The relaunch /
+      restore action is the card's one accent: a filled control the height of the live send mark, a play mark
+      beside its verb, quiet-washed while a restore is pending. The outcome chip, when one shows, sits a step
+      below the line rather than flush against it.
   - name: the-transcript-reads-as-a-conversation
     tags: [frontend-e2e, desktop]
     description: >-

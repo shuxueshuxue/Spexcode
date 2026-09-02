@@ -3157,17 +3157,28 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .m-stop:hover:not(:disabled) { background: color-mix(in srgb, var(--orange) 85%, var(--ink2)); }
 .m-stop:disabled { opacity: .45; cursor: default; }
+/* THE COLD FOOTER IS A STATUS LINE, NOT AN EMPTY INPUT. Offline and archived keep the composer's sheet
+   ([[conversation]]: one footer, data states of it) but nothing here is typed into, so the row sits at control
+   height with no editor gap above it, the statement is body ink rather than placeholder grey, and the one thing
+   a reader can do on it — relaunch / restore — wears the filled accent the live composer's send wears, because
+   it IS that composer's one action in this state. It used to be a muted line at one edge of a tall empty card
+   and a hairline chip at the other, which read as a broken input with a placeholder. */
 .m-coldline {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;
-  color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control);
+  display: flex; align-items: center; gap: var(--space-5); min-height: 26px;
+  color: var(--ink); font-family: var(--ui-font); font-size: var(--type-control);
 }
+.m-coldline-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-coldline-action {
-  flex: none; padding: 4px 9px; color: var(--blue); font: inherit; background: transparent;
-  border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+  flex: none; height: 26px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 5px;
+  color: var(--paper); background: var(--blue); border: 0; border-radius: var(--radius);
+  font: inherit; font-size: var(--type-meta); font-weight: var(--weight-medium); cursor: pointer;
+  transition: background var(--dur-tab), color var(--dur-tab);
 }
-.m-coldline-action:hover, .m-coldline-action:focus-visible { border-color: var(--blue); outline: none; }
-.m-coldline-action:disabled { opacity: .45; cursor: default; }
-.m-composer > .si-action-outcome { margin-top: 7px; }
+.m-coldline-action:hover:not(:disabled), .m-coldline-action:focus-visible { background: color-mix(in srgb, var(--blue) 85%, var(--ink2)); outline: none; }
+.m-coldline-action:disabled { color: var(--muted); background: var(--wash-active); cursor: default; }
+/* the outcome chip lives INSIDE the shell's footer slot, under the coldline — the old direct-child selector
+   matched nothing, so the chip sat flush against the line. */
+.m-composer .composer-footer > .si-action-outcome { margin-top: var(--space-3); }
 
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: var(--type-body); }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }

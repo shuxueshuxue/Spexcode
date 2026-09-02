@@ -23,6 +23,28 @@ scenarios:
       unknown call, 400 without `from`. The GET returns the same turns through the same adapter with the body
       inline; a missing bound, a missing from, and an unknown session answer 400, 400, and 404; the execution
       route is a 404. After a restart the resubscription starts from a `full` frame again.
+  - name: launcher-config-dir-routes-the-read
+    tags: [backend-api]
+    test:
+      path: spec-cli/src/session-transcript.api.test.ts
+      name: "YATU: a launcher-declared config dir routes the transcript read \u2014 pinned dir first, launcher name as the fleet-heal fallback, default root otherwise"
+    code: spec-cli/src/session-transcript.ts
+    related:
+      - spec-cli/src/harness.ts
+      - spec-cli/src/session-record.ts
+      - packages/spec-core/src/layout.ts
+    description: >-
+      Two launchers of one harness keeping threads under different agent config dirs (reclaude under ~/.claude,
+      claude-glm under ~/.claude-glm). Through the real backend HTTP API, read the transcript of a session whose
+      record pins launch_config_dir; of an older record carrying only its launcher name while the live config
+      declares that launcher's configDir; and of a session whose launcher declares nothing while its thread sits
+      under an undeclared dir. Confirm on a real fleet session (a claude-glm worker) and the real dashboard
+      timeline in a real browser.
+    expected: >-
+      The pinned dir wins; the unpinned record resolves its launcher name against live config and reads its real
+      turns (the existing fleet self-heals); the undeclared case reads the harness default root and a thread not
+      there stays a loud 409 "file was not found" — never a silent read of another launcher's dir. The dashboard
+      timeline shows real per-seam turn/tool counts for a claude-glm session instead of "transcript 已不可用".
 ---
 
 Measure through the running HTTP server, not by importing the reader. The rollout must contain more than the

@@ -693,6 +693,14 @@ const worktreeSource = (name: string): string => `worktree:${name}`
 const PROJECT_ROOT_SOURCE = 'project-root'
 let projectRootWatcher: TreeWatcherRegistry | null = null
 let projectRootExitScheduled = false
+let projectRootLivenessTimer: ReturnType<typeof setInterval> | null = null
+
+function scheduleProjectRootExit(root: string): void {
+  if (projectRootExitScheduled) return
+  projectRootExitScheduled = true
+  console.error(`spec-cli: served project root disappeared at ${root}; exiting backend`)
+  setImmediate(() => process.exit(1))
+}
 
 const ignoredWorktreePath = (file: string): boolean =>
   file.split(/[\\/]/).some((segment) => segment === '.git' || segment === 'node_modules')
@@ -718,6 +726,12 @@ export const ignoredProjectRootPath = (file: string): boolean =>
 function ensureProjectRootWatcher(): void {
   const root = resolve(repoRoot())
   if (existsSync(root)) projectRootExitScheduled = false
+  if (!projectRootLivenessTimer) {
+    projectRootLivenessTimer = setInterval(() => {
+      if (!existsSync(root)) scheduleProjectRootExit(root)
+    }, 1_000)
+    projectRootLivenessTimer.unref?.()
+  }
   const coveredByWorktree = [...worktreeWatchers.values()].some((row) => row.path === root)
   if (projectRootWatcher?.root === root && !coveredByWorktree) return
   if (projectRootWatcher) { projectRootWatcher.close(); projectRootWatcher = null }
@@ -739,11 +753,7 @@ function ensureProjectRootWatcher(): void {
       fireChanged('full', 'all')
       // A served checkout disappearing is terminal for this backend. Retrying a missing root forever leaves
       // the orphan process alive after fixture/deployment teardown and turns every repair pass into a spin.
-      if (!existsSync(root) && !projectRootExitScheduled) {
-        projectRootExitScheduled = true
-        console.error(`spec-cli: served project root disappeared at ${root}; exiting backend`)
-        setImmediate(() => process.exit(1))
-      }
+      if (!existsSync(root)) scheduleProjectRootExit(root)
     },
   })
   projectRootWatcher = registry
@@ -1065,6 +1075,7 @@ export function closeBoardFileWatchers(): void {
   registryReady = false
   projectRootWatcher?.close()
   projectRootWatcher = null
+  if (projectRootLivenessTimer) { clearInterval(projectRootLivenessTimer); projectRootLivenessTimer = null }
   for (const [name, row] of worktreeWatchers) {
     row.close()
     releaseSessionEvalProjectionObserver(worktreeObserver(name))

@@ -105,6 +105,24 @@ scenarios:
       readiness probe remains the adapter's normal bounded liveness check; increasing its timeout is not the fix.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/sessions.test.ts
+  - name: readiness-identity-stage-exits-on-the-bound-identity
+    tags: [backend-api]
+    description: >
+      Through a real backend running this code, drive a launchPayloadProof harness (codex, codex-headless) into the
+      state a saturated deployment reaches on roughly two thirds of its launches: a readiness observer armed while
+      the native identity was still unbound, and then another serialized consumer — a recovered-receipt drain, a
+      resume recovery — binds that identity and takes the single-use receipt before the observer's next poll sees
+      it. Read what the readiness observer then does, and what diagnostic lands on the record, the board, and the
+      log.
+    expected: >
+      The observer reads the bound identity as this launch's success and proceeds straight to the adapter liveness
+      check. It records no readiness diagnostic and the session stays active: an absent single-use receipt is never
+      itself a failure, because the receipt is one mechanism that binds the identity and not the state being waited
+      on. A launch on the uninterrupted path is unaffected. When a window genuinely does expire, the recorded
+      diagnostic names the stage that actually expired — an identity never bound, or adapter liveness after it was
+      bound — as decided by the expiring stage itself, never re-derived from record state read after the fact.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
   - name: deterministic-launch-failure-fails-once
     tags: [backend-api]
     description: >

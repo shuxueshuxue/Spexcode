@@ -85,8 +85,7 @@ the historical `offline` display because their close time is unknown.
 Every hook resolves the acting session id through the harness resolver — payload first, launched id as fallback,
 Codex thread ids aliased through `harness_session_id` ([[hook-shell-mirror]], [[identity-injection]]) — and
 writes lifecycle only through the canonical application, never through the runtime envelope.
-The hooks split on the canonical application's session address, not on an envelope grep. The **board-lifecycle**
-hooks below (mark-active, the Stop gate, StopFailure→error, idle) ask the canonical writer whether the session is
+The **board-lifecycle** hooks below (mark-active, the Stop gate, StopFailure→error, idle) ask the canonical writer whether the session is
 governed; a non-governed (user-self-launched) record — or none at all — no-ops (the Stop gate exits 0 SILENTLY),
 because a self-launched agent has no board to feed. The hook shell never reads `runtime.json` to make that decision:
 the runtime envelope is metadata, not a lifecycle gate, and an old/missing envelope must not disable mark-active.

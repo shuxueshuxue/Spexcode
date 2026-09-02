@@ -56,11 +56,10 @@ or notification; the same old-parent queue revocation applies while an unrelated
 
 The command validates the complete batch before changing the first child and reports the committed child
 ids. A filesystem failure rolls back the in-memory watch rewrite for that child before releasing its lock;
-there is no second index or daemon reconciliation. In a migrated store, the same operation also transitions
-the canonical session application state and parent topology under the cutover path; legacy records and the
-canonical projection must agree before the operation returns. Reads rebuild the tree from the canonical
-projection after cutover (and from each child record before cutover), so the next `session ls` or graph request
-immediately shows the new parentage. Repeating the same move is
+there is no second index or daemon reconciliation. The operation transitions the canonical session application
+state and parent topology in the same transaction; the runtime envelope is metadata only. Reads rebuild the tree
+from the canonical projection, so the next `session ls` or graph request immediately shows the new parentage.
+Repeating the same move is
 idempotent: it preserves one new-parent `parent` source and repairs a lingering old-parent `parent` source
 without changing any manual source.
 

@@ -42,12 +42,11 @@ Lifecycle writes have one typed entry point, `markState`; the retired `markError
 the module surface, so callers name the state transition they are making instead of adding a second error mechanism.
 Creation authority is checked before any fresh-project canonical store is initialized: rejected, abandoned, fenced,
 or ambiguous requests leave no SQLite, migration marker, or fence behind. Only a successfully admitted fresh create
-may initialize the empty canonical store; an existing legacy store must be migrated first. In-process fallback uses
-the same post-success canonical projection as the HTTP bridge rather than creating a second creation path.
-During the one-time JSON migration, the durable `.json-migration.lock` fence makes this legacy writer fail closed
-before it can publish `session.json` or `watchers.json`; after the SQLite migration marker those names are residue
-that the next canonical access migrates and retires ([[production-cutin]]), and the canonical application service is
-the only state/event/topology authority.
+may initialize the empty canonical store; an existing legacy store is opened only through the one-time importer.
+That importer is the sole legacy-tree → SQLite path. During migration, the durable `.json-migration.lock` fence
+makes legacy writers fail closed before they can publish `session.json` or `watchers.json`; after the SQLite marker,
+any residue is absorbed and retired on the first canonical access ([[production-cutin]]). The application service is
+the only state/event/topology authority, and callers have no legacy read or write branch.
 [[session-follow]] owns the durable watch relation and what its `manual` and `parent` sources mean; this layer
 supplies the transport. A committed state record projects its watcher edges, notifies each through the existing
 send queue, and invokes ONE post-commit wake callback so each recipient's queue drains in the originating
@@ -59,14 +58,11 @@ watch cancellation each move exactly one source through that same handoff — no
 no second delivery protocol — and a null replacement parent is one transaction's top-level detach, removing the
 relation and its pending delivery without minting a root record, a watcher, or a notification.
 
-Through the JSON-to-application cutover this module is the LEGACY writer and fails closed rather than publishing
-a second truth: the `.json-migration.lock` fence blocks it from writing `session.json`/`watchers.json`, and after
-the marker those names are residue the next canonical access retires ([[production-cutin]]). Legacy lifecycle
-metadata is migration EVIDENCE only — the canonical row always wins the public projection — so governed metadata
-writes omit `status`, `proposal`, `note`, and `parent` after cutover, while non-governed external runtime records
-keep their own contract. One exception is deliberate: a legacy active Claude record still lacking a native
-harness identity drains through its adapter-owned rendezvous transport rather than being stranded behind a false
-`ok`; every other binding problem stays fail-closed.
+The runtime envelope remains metadata-only for governed sessions. The `.json-migration.lock` fence blocks any
+legacy writer during the one-time import; after the marker, residue is retired and governed metadata writes omit
+`status`, `proposal`, `note`, and `parent`, while non-governed external runtime records keep their own contract.
+An active Claude session without a native harness identity may still drain through its adapter-owned rendezvous
+transport; every other binding problem stays fail-closed. No caller reads or writes lifecycle facts in JSON.
 
 A retired protocol address is not delivery debt — the sweep drops that impossible lookup instead of polling it
 forever — and a queue with no bound runtime is retained but not polled, since binding or resume is what makes it

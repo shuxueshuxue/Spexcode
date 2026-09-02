@@ -1,4 +1,4 @@
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
 
@@ -76,8 +76,8 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const f of state.values()) if (f.path.length) return f.path
     return []
   }
-  const application = configuredSessionApplicationIfCutover()
-  const canonicalSelf = self && application?.readState(self) ? self : null
+  const application = configuredSessionApplication()
+  const canonicalSelf = self && application.readState(self) ? self : null
   const readCursor = (id: string): number | null => {
     if (!self) return memo.get(id) ?? null
     return canonicalSelf ? application!.readFollowCursor(canonicalSelf, id) : null
@@ -101,7 +101,7 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     for (const id of ids) {
       if (id === self) continue   // the follower's own log is its INBOX, followed below on its own cursor rule
       seen.add(id)
-      if (!application?.readState(id)) {
+      if (!application.readState(id)) {
         if (state.delete(id)) emit(`${tag}[spex] closed · removed  [id ${id}]`)
         if (take) return { gone: id }
         continue
@@ -171,7 +171,7 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
     // mode the returned message is this wait's consumed result, so advance past it before returning; otherwise
     // an empty cursor returns the same oldest inbox message forever. A turn-boundary delivery may still present
     // the message through the adapter, but it does not own this read cursor.
-    if (self && application?.readState(self)) {
+    if (self && application.readState(self)) {
       const ownEvents = timelineEvents(self)
       const ownStart = readCursor(self) ?? 0
       const ownUnread = ownEvents.slice(ownStart)

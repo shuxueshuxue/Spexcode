@@ -9,7 +9,7 @@ import { repoRoot } from '@spexcode/spec-core'
 import { endpointRecordPath } from './endpoint-record.js'
 import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from '@spexcode/spec-core'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
 import { sessionHost } from './session-host.js'
 
 type Proc = ProcessIdentity & {
@@ -220,10 +220,10 @@ type PublicRecordInventory = {
 }
 const publicRecordInventory = (): PublicRecordInventory => {
   const entries = listSessionIds().map(readPublicRecordEntry)
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   const byId = new Map<string, PublicRecordEntry>()
   const projected = entries.map((entry): PublicRecordEntry => {
-    if (entry.kind !== 'ok' || !application || !entry.raw.governed) return entry
+    if (entry.kind !== 'ok' || !entry.raw.governed) return entry
     const state = application.readState(entry.raw.session_id)
     if (!state) throw new ResourceConflict(`session ${entry.raw.session_id} has no canonical application state after JSON cutover`)
     return {

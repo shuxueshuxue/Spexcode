@@ -5,7 +5,7 @@ import { repoRoot } from '@spexcode/spec-core'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
-import { configuredSessionApplicationIfCutover, sessionApplicationCutoverState } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
 import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
 import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult } from './sessions.js'
 import { fromRaw } from './session-record.js'
@@ -149,10 +149,7 @@ export function localCachedSessions(includeArchived = false): Session[] {
   // The runtime envelope is deliberately metadata-only after migration. A live session may therefore have
   // a canonical application row before its runtime.json is materialized (or after it is retired). Selectors
   // must still resolve that row; treating the missing envelope as "no such session" strands watch/cancel.
-  // Do not create a fresh SQLite store while merely reading an empty project. A canonical application is
-  // needed only when a marker or legacy records prove that this project already has session state.
-  const cutover = sessionApplicationCutoverState()
-  const application = cutover === 'fresh' ? undefined : configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   for (const id of listSessionIds()) {
     const entry = readPublicRecordEntry(id)
     if (entry.kind === 'corrupt') {
@@ -165,7 +162,7 @@ export function localCachedSessions(includeArchived = false): Session[] {
       rows.push(toSession(rec, cachedStatus(rec), 'unknown'))
       continue
     }
-    const state = application?.readState(id)
+    const state = application.readState(id)
     if (!state) continue
     const lifecycle = state.status as Session['lifecycle']
     const status = state.status === 'archived'

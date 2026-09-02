@@ -164,8 +164,8 @@ process.env.SPEXCODE_TMUX = 'boardscope-iso'
   evalProjection = await import('../../spec-eval/src/sessioneval.js')
 
   // The JSON envelope is only the public projection now; seed its canonical application state first.
-  const { configuredSessionApplicationIfCutover } = await import('./session-application.js')
-  sessionApplication = configuredSessionApplicationIfCutover()!
+  const { configuredSessionApplication } = await import('./session-application.js')
+  sessionApplication = configuredSessionApplication()!
   sessionApplication.createSession({ sessionId: SESS_ID, status: 'active' })
   writeSessionRecord({ status: 'active', note: 'first' })   // one governed record in the isolated store
 }

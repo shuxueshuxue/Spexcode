@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 import { controlRequest, withTimeout } from './headless-controller.js'
 import { shQuote } from './sh.js'
+import { hostControlSocket } from './session-host.js'
 
 type ControlRequest = { type: 'deliver'; text: string; mid?: string } | { type: 'interrupt' }
 type ChildTurn = { process: ChildProcess; exited: Promise<number | null> }
@@ -20,7 +21,7 @@ const KILL_EXIT_GRACE_MS = 2_000
 const INTERRUPT_EXIT_GRACE_MS = 15_000
 
 /** The resident controller socket is distinct from pi's per-turn rendezvous socket. */
-export const piHeadlessSock = (id: string) => join(tmpdir(), `spexcode-ph-${id}.sock`)
+export const piHeadlessSock = (id: string) => hostControlSocket('ph', id)
 
 export function piHeadlessLaunchCommand(id: string, runtimeDir: string, piCmd: string): string {
   return [shQuote(SPEX), 'internal', 'pi-headless-run', shQuote(id), shQuote(runtimeDir), shQuote(piCmd), '--'].join(' ')

@@ -18,6 +18,7 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { processStartToken } from '@spexcode/spec-core'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -106,15 +107,24 @@ function writeSessionRecord(spexHome: string, project: string, id: string, workt
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
+  const pid = child.pid
+  const startToken = pid ? processStartToken(pid) : null
+  const signal = (name: 'SIGTERM' | 'SIGKILL'): void => {
+    if (!pid || !startToken || processStartToken(pid) !== startToken) return
+    if (process.platform !== 'win32') {
+      try { process.kill(-pid, name); return } catch { /* fall through to the exact child */ }
+    }
+    try { child.kill(name) } catch { /* already gone */ }
+  }
+  signal('SIGTERM')
   if (child.exitCode !== null || child.signalCode !== null) return
-  child.kill('SIGTERM')
   const exited = once(child, 'exit')
   const timedOut = await Promise.race([
     exited.then(() => false),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 3_000)),
   ])
   if (timedOut && child.exitCode === null && child.signalCode === null) {
-    child.kill('SIGKILL')
+    signal('SIGKILL')
     await once(child, 'exit')
   }
 }
@@ -182,6 +192,7 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
     cwd: project,
     env,
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
@@ -290,7 +301,7 @@ async function assertServedProjectTreeObservation(project: string, fixture: stri
   delete env.SPEXCODE_DISABLE_WATCHERS
   // This direct child is the generation serving the fixture port; do not count a supervisor or its parent.
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -453,6 +464,38 @@ test('a backend launched from an unrecorded linked worktree watches that served 
   }
 })
 
+test('a backend exits when its served project root disappears', { timeout: 20_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-root-disappears-'))
+  const project = prepareEmptyProject(fixture, 'project')
+  const spexHome = join(fixture, 'home')
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_TMUX: `spex-graph-stream-root-disappears-${port}`,
+  }
+  delete env.SPEXCODE_API_URL
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  try {
+    await waitFor(async () => fetch(`http://127.0.0.1:${port}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    await (await fetch(`http://127.0.0.1:${port}/api/graph`)).arrayBuffer()
+    rmSync(project, { recursive: true, force: true })
+    await waitFor(() => child.exitCode !== null || child.signalCode !== null,
+      `backend stayed alive after its served root disappeared:\n${serverLog}`, 5_000)
+    assert.match(serverLog, /served project root disappeared/)
+  } finally {
+    await stopChild(child)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
 // The second half of the adopter incident: once a source is refused, whatever NOTICES the failure must not
 // be what retries it. Here one live worktree's tree is gone, so its attach can only fail; the graph is then
 // read repeatedly. A per-read reattach would re-walk every worktree per request — that is how one refused
@@ -494,7 +537,7 @@ test('a refused watcher source fails loud once and repairs on a bounded schedule
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_DISABLE_WATCHERS
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -615,7 +658,7 @@ exec "${realGit}" "$@"
   }
   delete env.SPEXCODE_API_URL
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -845,7 +888,7 @@ exec "${realGit}" "$@"
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_DISABLE_WATCHERS
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -1000,7 +1043,7 @@ exec "${realGit}" "$@"
   }
   delete env.SPEXCODE_API_URL
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -1195,7 +1238,7 @@ test('disabling the worktree leaf blinds it from every entry point', { timeout: 
   }
   delete env.SPEXCODE_API_URL
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -1286,7 +1329,7 @@ test('a lifecycle commit from another process reaches the stream without tmux, r
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_DISABLE_WATCHERS
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
@@ -1367,7 +1410,7 @@ test('a blinded database leaf is repaired by the patrol through the sessions spl
   }
   delete env.SPEXCODE_API_URL
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   let serverLog = ''
   child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })

@@ -457,7 +457,7 @@ export async function clientCloseThroughPeer(sshAddress: string, id: string): Pr
 
 export async function clientQuarantine(
   id: string,
-  witness: { adapter: string; thread: string | null; tmux: string; worktree: string; branch: string },
+  witness: { adapter: string; thread: string | null; tmux: string | { pid: number; startToken: string }; worktree: string; branch: string },
 ): Promise<{ id: string; bundle: string; sha256: string; observedAt: string }> {
   await guarded('session quarantine')
   const r = await apiFetch(`/api/sessions/${seg(id)}/quarantine`, post(witness))

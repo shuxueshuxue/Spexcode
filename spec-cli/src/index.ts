@@ -323,7 +323,9 @@ app.get('/api/settings', async (c) => c.json({
   launchers: launcherList(),
   // The picker uses this live registry when offering the explicit post-init target action. Keeping the
   // vocabulary on the backend avoids a second frontend list drifting as adapters are added.
-  harnessTargets: [...NATIVE_HARNESS_IDS],
+  harnessTargets: sessionHost().kind === 'process-host'
+    ? HARNESSES.filter((h) => ['claude-headless', 'codex-headless', 'opencode-headless', 'pi-headless'].includes(h.id)).map((h) => h.id)
+    : [...NATIVE_HARNESS_IDS],
   tmuxSocket: sessionHost().socket,
   ...launcherDefault(),
 }))

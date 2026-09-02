@@ -130,7 +130,7 @@ scenarios:
     tags: [cli]
     description: >
       Anchored fixture where the post-version commit touches only a NON-pinned unit (a miss). Run
-      `spex spec lint` with no setting, then with `lint.scopedCodeMiss: "ignore"` in spexcode.json,
+      `spex spec lint` with no setting, then with `lint.scopedCodeMiss: "ignore"` in .spec/spexcode.json,
       then touch the pinned unit under "ignore".
     expected: >
       Default: the ordinary advisory `drift` warn appears, no anchor-drift, exit 0. With "ignore": that

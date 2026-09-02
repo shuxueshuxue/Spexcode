@@ -5,6 +5,7 @@ import { spexcodeHome } from './project-store.js'
 import {
   resolvedIdentityIcon, DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, requireIdentityChoice,
 } from './identity-presets.js'
+import { configPath } from './layout.js'
 
 export type ResolvedIdentity = { title: string; icon: string }
 export type GatewayIdentitySource = { identity: ResolvedIdentity; revision: string }
@@ -23,7 +24,7 @@ function readObject(file: string): { value: Record<string, any>; raw: string | n
 }
 
 export function resolveProjectIdentity(configRoot: string, canonicalRoot = configRoot): ResolvedIdentity {
-  const { value } = readObject(join(configRoot, 'spexcode.json'))
+  const { value } = readObject(configPath(configRoot))
   const dashboard = value.dashboard && typeof value.dashboard === 'object' && !Array.isArray(value.dashboard)
     ? value.dashboard as Record<string, unknown>
     : {}

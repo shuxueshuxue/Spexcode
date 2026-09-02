@@ -356,7 +356,7 @@ function hasGitCommit(root: string): boolean {
 function bootstrapSeedState(root: string): SeedState {
   return {
     spec: existsSync(join(root, '.spec')),
-    config: existsSync(join(root, 'spexcode.json')),
+    config: existsSync(join(root, '.spec', 'spexcode.json')),
     ignore: existsSync(join(root, '.gitignore')),
   }
 }
@@ -367,7 +367,7 @@ function bootstrapSeedPaths(root: string, before: SeedState): string[] {
     // paths are the project's source of truth even when they predate this add attempt, so recover them
     // into the bootstrap commit; `--only` below still keeps every user source path out.
     ['.spec', true],
-    ['spexcode.json', true],
+    ['.spec/spexcode.json', true],
     ['.gitignore', !before.ignore],
   ]
   return candidates.filter(([path, shouldStage]) => shouldStage && existsSync(join(root, path))).map(([path]) => path)
@@ -451,44 +451,54 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
 
 // The dashboard edits the committed, portable source file verbatim. The host fixes the filename (there
 // is no browser-supplied path), works for offline projects, and uses a content revision so a save cannot
-// clobber a concurrent agent/user edit. spexcode.local.json stays outside this surface by contract.
+// clobber a concurrent agent/user edit. .spec/spexcode.local.json stays outside this surface by contract.
 type ProjectConfigSource = { content: string; revision: string }
 let configWriteSeq = 0
 const configRevision = (raw: string | null): string => createHash('sha256').update(raw === null ? 'missing' : `present\0${raw}`).digest('hex')
 
 function readProjectConfig(root: string): ProjectConfigSource {
+  const preferred = join(root, '.spec', 'spexcode.json')
   try {
-    const content = readFileSync(join(root, 'spexcode.json'), 'utf8')
+    const content = readFileSync(preferred, 'utf8')
     return { content, revision: configRevision(content) }
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { content: '{}\n', revision: configRevision(null) }
-    throw e
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+    const legacy = join(root, 'spexcode.json')
+    try {
+      const content = readFileSync(legacy, 'utf8')
+      console.error(`配置已迁到 .spec/，请移动（git mv spexcode.json .spec/；本机的 spexcode.local.json 手动移）：${legacy}`)
+      return { content, revision: configRevision(content) }
+    } catch (legacyError) {
+      if ((legacyError as NodeJS.ErrnoException).code === 'ENOENT') return { content: '{}\n', revision: configRevision(null) }
+      throw legacyError
+    }
   }
 }
 
 function writeProjectConfig(root: string, content: string, revision: string): ProjectConfigSource {
   const current = readProjectConfig(root)
   if (revision !== current.revision) {
-    const e = new Error('spexcode.json changed on disk — reload before saving') as Error & { status?: number }
+    const e = new Error('.spec/spexcode.json changed on disk — reload before saving') as Error & { status?: number }
     e.status = 409
     throw e
   }
   let parsed: unknown
   try { parsed = JSON.parse(content) }
   catch (e) {
-    const err = new Error(`spexcode.json is not valid JSON: ${(e as Error).message}`) as Error & { status?: number }
+    const err = new Error(`.spec/spexcode.json is not valid JSON: ${(e as Error).message}`) as Error & { status?: number }
     err.status = 400
     throw err
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    const e = new Error('spexcode.json must contain one top-level JSON object') as Error & { status?: number }
+    const e = new Error('.spec/spexcode.json must contain one top-level JSON object') as Error & { status?: number }
     e.status = 400
     throw e
   }
 
   const normalized = content.endsWith('\n') ? content : `${content}\n`
-  const file = join(root, 'spexcode.json')
-  const tmp = join(root, `.spexcode.json.${process.pid}.${++configWriteSeq}.tmp`)
+  const file = join(root, '.spec', 'spexcode.json')
+  const tmp = join(dirname(file), `.spexcode.json.${process.pid}.${++configWriteSeq}.tmp`)
+  mkdirSync(dirname(file), { recursive: true })
   try {
     writeFileSync(tmp, normalized)
     renameSync(tmp, file)
@@ -576,28 +586,28 @@ export async function addHarnessTarget(root: string, input: unknown, expectedRev
   const current = readProjectConfig(root)
   const revision = expectedRevision ?? current.revision
   if (revision !== current.revision) {
-    throw Object.assign(new Error('spexcode.json changed on disk — reload before adding a harness target'), { status: 409 })
+    throw Object.assign(new Error('.spec/spexcode.json changed on disk — reload before adding a harness target'), { status: 409 })
   }
 
   let cfg: Record<string, any>
-  try { cfg = objectConfig(JSON.parse(current.content), 'spexcode.json must contain one top-level JSON object') }
+  try { cfg = objectConfig(JSON.parse(current.content), '.spec/spexcode.json must contain one top-level JSON object') }
   catch (e) {
     if ((e as any)?.status) throw e
-    throw Object.assign(new Error(`spexcode.json is not valid JSON: ${(e as Error).message}`), { status: 400 })
+    throw Object.assign(new Error(`.spec/spexcode.json is not valid JSON: ${(e as Error).message}`), { status: 400 })
   }
 
   // A local harness selection changes the effective policy and cannot be silently shadowed by a portable
   // write. Existing local launcher definitions are fine when they already cover the target; otherwise the
   // operation refuses and points at the intentional host-specific edit surface.
-  const local = readJsonConfig(join(root, 'spexcode.local.json'))
+  const local = readJsonConfig(join(root, '.spec', 'spexcode.local.json'))
   if (!local || typeof local !== 'object' || Array.isArray(local)) {
-    throw Object.assign(new Error('spexcode.local.json must contain one top-level JSON object'), { status: 400 })
+    throw Object.assign(new Error('.spec/spexcode.local.json must contain one top-level JSON object'), { status: 400 })
   }
   if (own(local, 'harnesses')) {
-    throw Object.assign(new Error('spexcode.local.json overrides harnesses — edit that host-specific selection explicitly before adding a portable target'), { status: 409 })
+    throw Object.assign(new Error('.spec/spexcode.local.json overrides harnesses — edit that host-specific selection explicitly before adding a portable target'), { status: 409 })
   }
   if (own(local, 'sessions') && (!local.sessions || typeof local.sessions !== 'object' || Array.isArray(local.sessions))) {
-    throw Object.assign(new Error('spexcode.local.json sessions must be an object'), { status: 400 })
+    throw Object.assign(new Error('.spec/spexcode.local.json sessions must be an object'), { status: 400 })
   }
   const localSessions = local?.sessions && typeof local.sessions === 'object' && !Array.isArray(local.sessions) ? local.sessions : null
   const localLaunchersOverride = !!localSessions && own(localSessions, 'launchers')
@@ -607,7 +617,7 @@ export async function addHarnessTarget(root: string, input: unknown, expectedRev
   try { resolveHarnessTargets(portableRaw) }
   catch (e) { throw Object.assign(new Error((e as Error).message), { status: 400 }) }
   if (!Array.isArray(portableRaw)) {
-    throw Object.assign(new Error('spexcode.json "harnesses" must be an ARRAY before a target can be added'), { status: 400 })
+    throw Object.assign(new Error('.spec/spexcode.json "harnesses" must be an ARRAY before a target can be added'), { status: 400 })
   }
   const target = normalizedHarnessTarget(input)
   const present = portableRaw.some((entry: unknown) => sameHarnessTarget(entry, target))
@@ -615,16 +625,16 @@ export async function addHarnessTarget(root: string, input: unknown, expectedRev
   try { resolveHarnessTargets(nextRaw) }
   catch (e) { throw Object.assign(new Error((e as Error).message), { status: 400 }) }
 
-  const sessions = cfg.sessions === undefined ? {} : objectConfig(cfg.sessions, 'spexcode.json sessions must be an object')
-  const portableLaunchers = sessions.launchers === undefined ? {} : objectConfig(sessions.launchers, 'spexcode.json sessions.launchers must be an object')
+  const sessions = cfg.sessions === undefined ? {} : objectConfig(cfg.sessions, '.spec/spexcode.json sessions must be an object')
+  const portableLaunchers = sessions.launchers === undefined ? {} : objectConfig(sessions.launchers, '.spec/spexcode.json sessions.launchers must be an object')
   const effectiveLaunchers = localLaunchersOverride
-    ? objectConfig(localSessions!.launchers, 'spexcode.local.json sessions.launchers must be an object')
+    ? objectConfig(localSessions!.launchers, '.spec/spexcode.local.json sessions.launchers must be an object')
     : portableLaunchers
   let launcher: AddedHarnessLauncher | undefined
   if (typeof target === 'string') {
     launcher = launcherForHarness(effectiveLaunchers, target)
     if (!launcher && localLaunchersOverride) {
-      throw Object.assign(new Error(`spexcode.local.json overrides sessions.launchers and has no launcher for '${target}' — add that launcher in the local config first`), { status: 409 })
+      throw Object.assign(new Error(`.spec/spexcode.local.json overrides sessions.launchers and has no launcher for '${target}' — add that launcher in the local config first`), { status: 409 })
     }
     if (!launcher) {
       const template = templateLauncherForHarness(target)
@@ -663,7 +673,7 @@ function writeProjectIcon(root: string, icon: unknown, revision: string): Projec
   let config: Record<string, any>
   try { config = JSON.parse(current.content) }
   catch (e) {
-    const error = new Error(`spexcode.json is not valid JSON: ${(e as Error).message}`) as Error & { status?: number }
+    const error = new Error(`.spec/spexcode.json is not valid JSON: ${(e as Error).message}`) as Error & { status?: number }
     error.status = 400
     throw error
   }
@@ -673,7 +683,7 @@ function writeProjectIcon(root: string, icon: unknown, revision: string): Projec
       ? config.dashboard
       : null
   if (!dashboard) {
-    const error = new Error('spexcode.json dashboard must be an object before its icon can be changed') as Error & { status?: number }
+    const error = new Error('.spec/spexcode.json dashboard must be an object before its icon can be changed') as Error & { status?: number }
     error.status = 400
     throw error
   }
@@ -718,7 +728,7 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
 //   listProjects — GET /projects rows come from the instance-validated reconciler + the durable catalog
 //                  (online/offline/root), each carrying the hub's gating state.
 //   adminRoute   — /projects/stream (SSE), GET /projects/browse + POST /projects (select/setup/register), DELETE /projects/:id
-//                  (high-friction catalog removal), raw spexcode.json
+//                  (high-friction catalog removal), raw .spec/spexcode.json
 //                  GET|PUT /projects/:id/config, POST /projects/:id/harnesses, and POST /projects/:id/(init|doctor|serve) — all
 //                  behind the hub's admin scope
 //                  ([[gateway-auth]]: implicit from loopback until an admin password exists).
@@ -874,7 +884,7 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
         if (!entry) { json(res, 404, { error: `unknown project '${projectId}' — add it first (POST /projects)` }); return true }
         if (req.method === 'GET') {
           try { json(res, 200, readProjectConfig(entry.root)) }
-          catch (e) { json(res, 500, { error: `cannot read spexcode.json: ${(e as Error).message}` }) }
+          catch (e) { json(res, 500, { error: `cannot read .spec/spexcode.json: ${(e as Error).message}` }) }
           return true
         }
         let body: any

@@ -80,7 +80,7 @@ try {
     '---', 'title: fixture', 'status: active', 'hue: 180', 'desc: session title fixture', '---',
     '# fixture', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')

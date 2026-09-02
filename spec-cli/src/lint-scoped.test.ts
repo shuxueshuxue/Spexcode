@@ -43,7 +43,7 @@ function fixture(): Fx {
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8' }).trim()
   g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, '.gitignore'), 'node_modules\n')
-  writeFileSync(join(proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
+  writeFileSync(join(proj, '.spec/spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
   mkdirSync(join(proj, 'src'))
   writeFileSync(join(proj, 'src/calc.ts'), CALC('1', '2'))
   mkdirSync(join(proj, '.spec/proj'), { recursive: true })
@@ -130,7 +130,7 @@ test('scoped miss keeps the advisory drift warn by DEFAULT; lint.scopedCodeMiss 
   assert.match(miss.out, /drift: src\/calc\.ts is 1 commit\(s\) ahead/, 'default keeps the ordinary advisory')
   assert.ok(!miss.out.includes('anchor-drift'), 'no block on a miss')
 
-  writeFileSync(join(fx.proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'], scopedCodeMiss: 'ignore' } }) + '\n')
+  writeFileSync(join(fx.proj, '.spec/spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'], scopedCodeMiss: 'ignore' } }) + '\n')
   const quiet = fx.lint()
   assert.equal(quiet.code, 0)
   assert.ok(!/drift: src\/calc\.ts/.test(quiet.out), `"ignore" silences the scoped miss advisory: ${quiet.out}`)
@@ -161,7 +161,7 @@ test('related selector: a hit warns (soft, exit 0) naming the selector; a miss i
 
 test('bare compatibility: whole-file code keeps ordinary drift, unaffected by scopedCodeMiss "ignore"', { skip }, () => {
   const fx = fixture()
-  writeFileSync(join(fx.proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'], scopedCodeMiss: 'ignore' } }) + '\n')
+  writeFileSync(join(fx.proj, '.spec/spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'], scopedCodeMiss: 'ignore' } }) + '\n')
   fx.node('calc', 'code:\n  - src/calc.ts')
   fx.commit('v1')
   writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('10', '2'))

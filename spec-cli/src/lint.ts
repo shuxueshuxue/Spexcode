@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
+import { readConfig, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { readJsonConfig } from '@spexcode/spec-core'
 import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
@@ -44,7 +44,7 @@ export function loadConfig(root: string, pendingSource?: string | null): LintCon
   // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
   // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
   let parsed: any
-  if (pendingSource === undefined) parsed = readJsonConfig(join(root, 'spexcode.json'))
+  if (pendingSource === undefined) parsed = readConfig(root)
   else if (pendingSource === null) parsed = {}
   else {
     try { parsed = JSON.parse(pendingSource) }

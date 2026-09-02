@@ -89,7 +89,7 @@ try {
   mkdirSync(join(project, '.spec', 'fixture'), { recursive: true })
   writeFileSync(join(project, '.spec', 'fixture', 'spec.md'), '---\ntitle: fixture\nstatus: active\n---\n\n# fixture\n\nArchive drawer browser fixture.\n')
   writeFileSync(join(project, 'README.md'), 'archive drawer fixture\n')
-  writeFileSync(join(project, 'spexcode.json'), `${JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), `${JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2)}\n`)

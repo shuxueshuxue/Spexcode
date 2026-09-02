@@ -292,7 +292,7 @@ see today's legacy reads; a zero at M8 will not be a tracer that was blind from 
 ### R04 - config and placement assumptions
 
 - **Sabotage:** from an unrelated copied cwd and custom `SPEXCODE_HOME`, inject the old timeline env alias and
-  conflicting `spexcode.json`/`spexcode.local.json`, then open two explicit absolute DB paths in one process.
+  conflicting `.spec/spexcode.json`/`.spec/spexcode.local.json`, then open two explicit absolute DB paths in one process.
   Current home/project derivation is `packages/spec-core/src/project-store.ts:7-17`; config merge is
   `packages/spec-core/src/layout.ts:107-113`; the shell mirror is `spec-cli/hooks/harness.sh:111-119`; the old env
   is `packages/session-core/src/session-timeline.ts:61-63`.

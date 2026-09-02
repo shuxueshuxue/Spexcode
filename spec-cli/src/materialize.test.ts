@@ -51,10 +51,10 @@ function makeHost() {
   writeFileSync(join(proj, '.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n')
   g('add', '-A'); g('commit', '-qm', 'init')
   spex('init', '.', '--harness', 'claude,codex')
-  g('add', '.spec', 'spexcode.json'); g('commit', '-qm', 'adopt (data tracked)', '--no-verify')
+  g('add', '.spec'); g('commit', '-qm', 'adopt (data tracked)', '--no-verify')
   const setLocal = (json: string | null) => {
-    if (json === null) rmSync(join(proj, 'spexcode.local.json'), { force: true })
-    else writeFileSync(join(proj, 'spexcode.local.json'), json)
+    if (json === null) rmSync(join(proj, '.spec/spexcode.local.json'), { force: true })
+    else writeFileSync(join(proj, '.spec/spexcode.local.json'), json)
   }
   return { proj, env, g, spex, spexStderr, setLocal }
 }
@@ -73,7 +73,7 @@ test('one residence behavior: tracked host text keeps pristine index bytes while
     'selection-dependent delivery is visible only in this tree\'s working .gitignore')
   assert.equal(g('show', ':.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n', 'the INDEX keeps the pristine host .gitignore through the filter')
   assert.match(exclude(), /spexcode:start[\s\S]*spexcode:end/, 'the common exclude keeps only checkout-invariant residue')
-  assert.ok(!exclude().includes('.claude/settings.json') && exclude().includes('spexcode.local.json') && exclude().includes('.worktrees/'),
+  assert.ok(!exclude().includes('.claude/settings.json') && exclude().includes('.spec/spexcode.local.json') && exclude().includes('.worktrees/'),
     'local shim stays out of the common exclude; run residue stays in it')
   assert.ok(!/^CLAUDE\.md$/m.test(exclude()) && !/^AGENTS\.md$/m.test(exclude()),
     'tracked contract files are the FILTER domain — never exclude entries')
@@ -220,9 +220,9 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-m
 
   // edge ③: uninstall = materialize(∅) — ordered unplant, zero residue, user bytes restored
   spex('uninstall', '.')
-  // the user's own spexcode.local.json turns visible (its ignore rule left with the materialize) — the only
+  // the user's own .spec/spexcode.local.json turns visible (its ignore rule left with the materialize) — the only
   // acceptable status line; no modified file may remain (no block residue, no phantom-M).
-  assert.equal(status(g), '?? spexcode.local.json', 'edge ③: only the now-unignored user overlay shows after uninstall')
+  assert.equal(status(g), '?? .spec/spexcode.local.json', 'edge ③: only the now-unignored user overlay shows after uninstall')
   assert.equal(readFileSync(claude, 'utf8'), '# team notes\nkeep me\n', 'CLAUDE.md back to the pristine host bytes')
   assert.throws(() => g('config', 'filter.spexcode.clean'), 'filter config unset')
   assert.ok(!existsSync(shim) && !existsSync(join(proj, '.git', 'spexcode', 'contract-block.md')), 'shim + block content removed')
@@ -230,7 +230,7 @@ test('content-filter edges: missing shim degrades to cat; a contract change re-m
   assert.ok(!existsSync(attrs) || !readFileSync(attrs, 'utf8').includes('spexcode'), 'attributes clean')
   assert.ok(!existsSync(join(proj, '.claude', 'settings.json')) && !existsSync(join(proj, '.codex', 'hooks.json')), 'shims removed')
   assert.ok(!existsSync(join(proj, '.claude')) && !existsSync(join(proj, '.codex')), 'the emptied harness dirs themselves are gone — nothing left behind')
-  assert.ok(existsSync(join(proj, '.spec')) && existsSync(join(proj, 'spexcode.json')), 'the spec ASSET is never touched')
+  assert.ok(existsSync(join(proj, '.spec')) && existsSync(join(proj, '.spec/spexcode.json')), 'the spec ASSET is never touched')
 })
 
 test('a HOST-TRACKED empty contract file survives the backout (deleteIfEmpty guards on tracked-ness)', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -316,8 +316,8 @@ test('commit surgery: strips a leaked block from the staged blob (worktree + par
   const wtBefore = readFileSync(join(proj, 'CLAUDE.md'), 'utf8').replace('keep me\n', 'keep me\nUNSTAGED EDIT\n')
   writeFileSync(join(proj, 'CLAUDE.md'), wtBefore)
   // (b) a machine fact force-staged
-  writeFileSync(join(proj, 'spexcode.local.json'), '{"x":1}\n')
-  g('add', '-f', 'spexcode.local.json')
+  writeFileSync(join(proj, '.spec/spexcode.local.json'), '{"x":1}\n')
+  g('add', '-f', '.spec/spexcode.local.json')
   // (c) a wholly-ours AGENTS.md force-staged... AGENTS.md is tracked in this host, so use a worktrees path
   mkdirSync(join(proj, '.worktrees'), { recursive: true })
   writeFileSync(join(proj, '.worktrees', 'stray.txt'), 'residue\n')
@@ -329,9 +329,9 @@ test('commit surgery: strips a leaked block from the staged blob (worktree + par
   assert.equal(staged, '# team notes\nkeep me — staged edit\n', 'the staged blob is cleaned IN PLACE: block gone, staged edit kept')
   assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), wtBefore, 'the worktree (with its unstaged edit) is untouched')
   const stagedList = g('diff', '--cached', '--name-only')
-  assert.ok(!stagedList.includes('spexcode.local.json'), 'the machine fact is evicted from the index')
+  assert.ok(!stagedList.includes('.spec/spexcode.local.json'), 'the machine fact is evicted from the index')
   assert.ok(!stagedList.includes('.worktrees/stray.txt'), 'run residue is evicted from the index')
-  assert.ok(existsSync(join(proj, 'spexcode.local.json')), 'eviction never deletes the file on disk')
+  assert.ok(existsSync(join(proj, '.spec/spexcode.local.json')), 'eviction never deletes the file on disk')
 })
 
 test('commit surgery honors GIT_INDEX_FILE: a temporary index (pathspec/-a commits) is the one repaired', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -405,7 +405,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
 })
 
 // [[residence]] — worktree seeding by KIND: tracked data arrives by CHECKOUT (no symlinks, ever),
-// materialized artifacts by re-materialize, and the ONE thing git cannot deliver — the machine-local spexcode.local.json —
+// materialized artifacts by re-materialize, and the ONE thing git cannot deliver — the machine-local .spec/spexcode.local.json —
 // is COPIED as a snapshot whose writes die with the worktree. What it seeds it hides.
 test('worktree seeding: tracked data via checkout (never a link), host state copied with write isolation, seeded entry hidden', { skip: !gitAvailable() && 'git not available' }, () => {
   const main = mkdtempSync(join(tmpdir(), 'spex-seed-'))
@@ -414,10 +414,10 @@ test('worktree seeding: tracked data via checkout (never a link), host state cop
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   mkdirSync(join(main, '.spec'))
   writeFileSync(join(main, '.spec', 'x.md'), 'x')
-  writeFileSync(join(main, 'spexcode.json'), '{}')
+  writeFileSync(join(main, '.spec/spexcode.json'), '{}')
   g('add', '-A'); g('commit', '-qm', 'init')                      // data TRACKED — the model's invariant
   const hostLocal = '{"sessions":{"defaultLauncher":"reclaude"}}\n'
-  writeFileSync(join(main, 'spexcode.local.json'), hostLocal)
+  writeFileSync(join(main, '.spec/spexcode.local.json'), hostLocal)
 
   const wt = join(main, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
@@ -426,15 +426,15 @@ test('worktree seeding: tracked data via checkout (never a link), host state cop
   // tracked data arrived by CHECKOUT — real files, never links
   assert.ok(!lstatSync(join(wt, '.spec')).isSymbolicLink(), '.spec is a real checkout, not a link')
   assert.equal(readFileSync(join(wt, '.spec', 'x.md'), 'utf8'), 'x', 'spec content delivered by git')
-  assert.ok(!lstatSync(join(wt, 'spexcode.json')).isSymbolicLink(), 'spexcode.json is a real checkout')
+  assert.ok(!lstatSync(join(wt, '.spec/spexcode.json')).isSymbolicLink(), '.spec/spexcode.json is a real checkout')
   // host state is a COPY snapshot with write isolation
-  assert.ok(!lstatSync(join(wt, 'spexcode.local.json')).isSymbolicLink(), 'spexcode.local.json is a copy, not a link')
-  assert.equal(readFileSync(join(wt, 'spexcode.local.json'), 'utf8'), hostLocal, 'a faithful snapshot')
-  writeFileSync(join(wt, 'spexcode.local.json'), '{"forge":{"host":"gitlab"}}\n')
-  assert.equal(readFileSync(join(main, 'spexcode.local.json'), 'utf8'), hostLocal, 'a worker write never reaches the host config')
+  assert.ok(!lstatSync(join(wt, '.spec/spexcode.local.json')).isSymbolicLink(), '.spec/spexcode.local.json is a copy, not a link')
+  assert.equal(readFileSync(join(wt, '.spec/spexcode.local.json'), 'utf8'), hostLocal, 'a faithful snapshot')
+  writeFileSync(join(wt, '.spec/spexcode.local.json'), '{"forge":{"host":"gitlab"}}\n')
+  assert.equal(readFileSync(join(main, '.spec/spexcode.local.json'), 'utf8'), hostLocal, 'a worker write never reaches the host config')
   // the seeded (git-visible) entry is hidden via the shared exclude; a second seed appends nothing
   const st = (dir: string) => execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' }).trim()
-  assert.ok(!st(wt).includes('spexcode.local.json'), 'no force-add bait in the worktree')
+  assert.ok(!st(wt).includes('.spec/spexcode.local.json'), 'no force-add bait in the worktree')
   const exclude = readFileSync(join(main, '.git', 'info', 'exclude'), 'utf8')
   const wt2 = join(main, '.worktrees', 'wt2')
   g('worktree', 'add', '-q', wt2, '-b', 'node/wt2')
@@ -443,7 +443,7 @@ test('worktree seeding: tracked data via checkout (never a link), host state cop
 })
 
 // [[harness-select]] / [[commit-surgery]] — the SELECTION CHAIN, every leg a real adopter rides: the
-// persisted spexcode.json `harnesses` set must be honored by init, by a manual materialize, by the
+// persisted .spec/spexcode.json `harnesses` set must be honored by init, by a manual materialize, by the
 // pre-commit anchor's unconditional materialize, AND by a worktree materialize — never falling back to the
 // default full set. And the retired dispatch gate must NOT materialize: a harness event is never a trigger.
 const DISPATCH = join(SRC, '..', 'hooks', 'dispatch.sh')
@@ -474,8 +474,8 @@ function makeBareRepo(prefix: string) {
 
 test('harness selection chain: a codex-only repo NEVER grows .claude — init, manual materialize, the pre-commit anchor, a worktree materialize; a harness event materializes NOTHING', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex, fireEvent, runtimeHash } = makeBareRepo('spex-cxonly-')
-  // the adopter declares codex-only BEFORE init (init leaves an existing spexcode.json untouched)
-  writeFileSync(join(proj, 'spexcode.json'), '{"harnesses":["codex"],"lint":{"governedRoots":["."]}}\n')
+  // the adopter declares codex-only BEFORE init (init leaves an existing .spec/spexcode.json untouched)
+  writeFileSync(join(proj, '.spec/spexcode.json'), '{"harnesses":["codex"],"lint":{"governedRoots":["."]}}\n')
   g('add', '-A'); g('commit', '-qm', 'init')
   const noClaude = (dir: string, leg: string) => {
     assert.ok(!existsSync(join(dir, '.claude')), `${leg}: no .claude dir`)
@@ -512,25 +512,25 @@ test('the L0-only posture: `--harness none` adopts the spec tree and writes NOTH
   g('add', '-A'); g('commit', '-qm', 'init')
   spex(proj, 'init', '.', '--harness', 'none')
 
-  assert.deepEqual(JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')).harnesses, [], '`none` stamps the empty set')
+  assert.deepEqual(JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8')).harnesses, [], '`none` stamps the empty set')
   assert.ok(existsSync(join(proj, '.spec', 'project', 'spec.md')), 'the spec tree is seeded')
   assert.ok(existsSync(join(proj, '.git', 'hooks', 'pre-commit')), 'the git hooks — the L0 gate — are installed')
   // not one byte into any agent's config, and no ignore file whose whole content is a rule ignoring itself.
   for (const artifact of ['.claude', '.codex', '.opencode', '.pi', '.zcode', 'CLAUDE.md', 'AGENTS.md', '.gitignore'])
     assert.ok(!existsSync(join(proj, artifact)), `no ${artifact}`)
   // and the read side — the whole point of adopting L0 — works with zero materialized artifacts.
-  g('add', '.spec', 'spexcode.json'); g('commit', '-qm', 'adopt', '--no-verify')
+  g('add', '.spec'); g('commit', '-qm', 'adopt', '--no-verify')
   assert.doesNotThrow(() => spex(proj, 'spec', 'lint'), 'lint exits clean on a repo with no harness delivery')
   assert.ok(JSON.parse(spex(proj, 'graph', '--json')).nodes.length > 0, 'the graph reads')
 
   // switching a harness ON later is the ordinary selection change, no re-adoption.
-  writeFileSync(join(proj, 'spexcode.json'),
-    JSON.stringify({ ...JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')), harnesses: ['claude'] }, null, 2) + '\n')
+  writeFileSync(join(proj, '.spec/spexcode.json'),
+    JSON.stringify({ ...JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8')), harnesses: ['claude'] }, null, 2) + '\n')
   spex(proj, 'materialize')
   assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('spexcode:start'), 'selecting claude later delivers it')
   // ...and back off again prunes what it delivered.
-  writeFileSync(join(proj, 'spexcode.json'),
-    JSON.stringify({ ...JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')), harnesses: [] }, null, 2) + '\n')
+  writeFileSync(join(proj, '.spec/spexcode.json'),
+    JSON.stringify({ ...JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8')), harnesses: [] }, null, 2) + '\n')
   spex(proj, 'materialize')
   assert.ok(!existsSync(join(proj, 'CLAUDE.md')), 'deselecting everything prunes the contract')
   assert.ok(!existsSync(join(proj, '.claude', 'settings.json')), 'deselecting everything prunes the shim')
@@ -542,9 +542,9 @@ test('harness selection is persistent + self-healing at the git-native anchors: 
   spex(proj, 'init', '.', '--harness', 'claude,codex')        // explicit both-natives set
   assert.ok(existsSync(join(proj, '.claude', 'settings.json')) && existsSync(join(proj, 'CLAUDE.md')), 'baseline: claude delivered')
   // narrow the PERSISTED selection — a bare config edit, exactly what an adopter does
-  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+  const cfg = JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8'))
   cfg.harnesses = ['codex']
-  writeFileSync(join(proj, 'spexcode.json'), JSON.stringify(cfg, null, 2))
+  writeFileSync(join(proj, '.spec/spexcode.json'), JSON.stringify(cfg, null, 2))
   spex(proj, 'internal', 'commit-surgery')                    // the pre-commit anchor is the next materialize
   assert.ok(!existsSync(join(proj, '.claude')), 'the anchor materialize pruned .claude entirely (shim, skills, agents, the dir itself)')
   assert.ok(!existsSync(join(proj, 'CLAUDE.md')), 'the wholly-ours untracked CLAUDE.md is gone')
@@ -577,9 +577,9 @@ test('one per-tree materialize projection survives a sibling pass across diverge
   // The linked tree selects Codex and adds one hook; main remains Claude-only.
   const wt = join(proj, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
-  const wtCfg = JSON.parse(readFileSync(join(wt, 'spexcode.json'), 'utf8'))
+  const wtCfg = JSON.parse(readFileSync(join(wt, '.spec/spexcode.json'), 'utf8'))
   wtCfg.harnesses = ['codex']
-  writeFileSync(join(wt, 'spexcode.json'), `${JSON.stringify(wtCfg, null, 2)}\n`)
+  writeFileSync(join(wt, '.spec/spexcode.json'), `${JSON.stringify(wtCfg, null, 2)}\n`)
   const probe = join(wt, '.spec', 'project', '.plugins', 'probe')
   mkdirSync(probe, { recursive: true })
   writeFileSync(join(probe, 'spec.md'), '---\ntitle: probe\nsurface: hook\nstatus: active\nevents:\n- SessionStart\norder: 10\nblock: false\n---\nmarker\n')

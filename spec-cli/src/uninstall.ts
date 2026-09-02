@@ -9,7 +9,7 @@ import { loadSkillConfig, loadAgentConfig } from '@spexcode/spec-core'
 import { dematerialize } from './materialize.js'
 import { gitBinary } from '@spexcode/spec-core'
 
-// the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
+// the standard plugin-host folders a host agent scans (in addition to any named in .spec/spexcode.json's `harnesses`).
 const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex', '.adopter-a'] as const
 
 // Init and uninstall share one ownership source for generated git hooks: the shipped canonical templates.
@@ -166,6 +166,6 @@ export function uninstall(targetArg: string | undefined, opts: { hooks?: boolean
 
   console.log(`
 SpexCode wiring removed. Your spec data is untouched:
-  • .spec/ (including .plugins/) and spexcode.json remain — your tracked intent is never deleted by uninstall.
+  • .spec/ (including .plugins/) and .spec/spexcode.json remain — your tracked intent is never deleted by uninstall.
   • To re-adopt later: \`spex init\` regenerates the shims, contract, trust, and global store.`)
 }

@@ -94,7 +94,7 @@ test('cold governed overlays are one public generation, not one Git fanout per s
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), specBody('project'))
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
     git(project, 'init', '-q', '-b', 'main')
     git(project, 'config', 'user.email', 'layout@example.test')
     git(project, 'config', 'user.name', 'Layout Fixture')

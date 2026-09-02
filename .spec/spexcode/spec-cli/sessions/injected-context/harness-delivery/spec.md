@@ -37,7 +37,7 @@ wherever it is defined (help, guides, onboarding docs): not a one-time setup —
 whose outputs are derived, untracked, and edited only via their sources. Its anchors are GIT-NATIVE only ([[commit-surgery]]): the explicit
 verbs (`spex init`, `spex materialize`), session-worktree creation, and the planted pre-commit /
 post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every materialize input
-(`.plugins` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a
+(`.plugins` content, the persisted `.spec/spexcode.json`/`.spec/spexcode.local.json`, a contract file's trackedness, a
 toolchain update) is picked up no later than the next commit, and checkout/merge refresh what arrives from
 other branches. Session creation is its own one-render transaction: it defers the checkout hook's best-effort
 refresh, copies the local snapshot, then materializes once under the creation failure/recovery boundary. A
@@ -45,7 +45,7 @@ harness event is never a trigger — the old dispatcher content-hash gate is ret
 `.plugins` edits are git-transactional (they take effect at the commit/checkout/merge that carries them,
 like any other source). An environment with no planted hooks (CI, a cloud agent's fresh clone) runs
 `spex materialize` in its setup step. It materializes into the harness targets
-[[harness-select]] resolves from `spexcode.json` (default: every native harness), writing, idempotently and
+[[harness-select]] resolves from `.spec/spexcode.json` (default: every native harness), writing, idempotently and
 scoped per project, for each SELECTED harness:
 
 - **the hook manifest** (persistent; the [[hook-dispatch]] dispatcher reads it) — in the materialized tree's
@@ -152,7 +152,7 @@ harness footprint without maintaining a second harness-artifact inventory.
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Ignore is projected with
-the same ownership split. Checkout-invariant machine residue (`spexcode.local.json`, `.worktrees/`, legacy
+the same ownership split. Checkout-invariant machine residue (`.spec/spexcode.local.json`, `.worktrees/`, legacy
 `.session`, and installed shared root transport) stays in the common `.git/info/exclude`. Selection-dependent local
 shims, bundles, skills/agents, and wholly-ours contract files are one managed block in that tree's working
 `.gitignore`. [[content-filter]] keeps a tracked host `.gitignore` pristine in the index, leaves an untracked

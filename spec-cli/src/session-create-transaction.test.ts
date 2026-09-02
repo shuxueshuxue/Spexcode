@@ -48,7 +48,7 @@ test('public session create is bounded, rollback-clean, idempotent, and publishe
   mkdirSync(fakeBin)
   mkdirSync(join(project, '.spec', 'target'), { recursive: true })
   writeFileSync(join(project, '.spec', 'target', 'spec.md'), '---\ntitle: target\nstatus: active\nhue: 200\ndesc: fixture\n---\n# target\n')
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     main: configuredMain,
     mainBranch: 'staging',
     branchPrefix: 'task/',

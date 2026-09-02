@@ -156,7 +156,7 @@ test('close refuses active native turns and missing evidence while retaining rec
   try {
     mkdirSync(dirname(spec), { recursive: true })
     writeFileSync(spec, '---\ntitle: project\nstatus: active\n---\n# project\n\nFixture.\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['codex'] }, null, 2) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['codex'] }, null, 2) + '\n')
     git(project, 'init', '-q', '-b', 'main')
     git(project, 'config', 'user.email', 'archive@example.test')
     git(project, 'config', 'user.name', 'Archive Fixture')

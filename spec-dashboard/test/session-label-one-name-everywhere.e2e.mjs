@@ -107,7 +107,7 @@ try {
     '---', 'title: fixture', 'status: active', 'hue: 180', 'desc: session label browser fixture', '---',
     '# fixture', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project })
   execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project })

@@ -32,7 +32,7 @@ function gitOut(args: string[]): string | null {
 function configuredHost(): string | null {
   const root = gitOut(['rev-parse', '--show-toplevel'])
   if (!root) return null
-  for (const name of ['spexcode.local.json', 'spexcode.json']) {
+  for (const name of ['.spec/spexcode.local.json', '.spec/spexcode.json']) {
     const p = join(root, name)
     if (!existsSync(p)) continue
     let parsed: any

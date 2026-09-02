@@ -158,7 +158,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   (author `'human'`), plus `POST /api/issues/:id/promote` for the local-to-forge move. All are gated by the
   same on/off switch (403 when OFF).
 - **Opt-outable, default ON.** The issues workflow is a feature you can switch off: the single source of
-  truth is `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
+  truth is `.spec/spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). There is deliberately **no
   CLI toggle verb** (v0.3.0 — "no `spex config set`" is this project's standing rule): flip the key by
   editing the JSON; `spex doctor` reports the current state. OFF silences the post-merge

@@ -73,7 +73,7 @@ test('YATU: interrupt reaches a pane-backed TUI as its own key, and refuses wher
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude', 'pi-headless'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude', 'pi-headless'] }) + '\n')
     spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
     spawnSync('git', ['config', 'user.email', 'interrupt@example.test'], { cwd: project })
     spawnSync('git', ['config', 'user.name', 'Interrupt Fixture'], { cwd: project })

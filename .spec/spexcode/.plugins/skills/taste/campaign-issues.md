@@ -52,10 +52,10 @@
 - **Desc:** A reconnaissance report ("reconnaissance only … No implementation") about an external project, parked in the repo root. A scouting note, not durable spec/config — same root-pollution class as N4/N5.
 - **Verdict:** **KEEP.** C1/C4/C3/C5 same as N5. Fix: move to `docs/` if it's worth keeping, else `git rm`. (Lower value than N4/N5 since it's smaller and harmless, but it's the same mechanical T14 removal.)
 
-### N7 · `gateway.ts:29` silently swallows a MALFORMED `spexcode.json`
+### N7 · `gateway.ts:29` silently swallows a MALFORMED `.spec/spexcode.json`
 - **File:** `spec-cli/src/gateway.ts:29`
 - **Taste:** T16 (fail loud; separate missing-vs-malformed)
-- **Desc:** `try { fileCfg = JSON.parse(readFileSync('spexcode.json'))?.serve?.public ?? {} } catch { /* no/!json config */ }` collapses two failure layers into one silent default: a **missing** file (legitimate — no config) and a **malformed** file (a real, fixable error) both fall through to `{}`. Every neighboring branch in this function is meticulously loud (lines 37/42/48/50 all `console.error` + repair path) — this one swallow is the outlier. A user with a typo'd `spexcode.json` silently gets default public-mode behavior.
+- **Desc:** `try { fileCfg = JSON.parse(readFileSync('.spec/spexcode.json'))?.serve?.public ?? {} } catch { /* no/!json config */ }` collapses two failure layers into one silent default: a **missing** file (legitimate — no config) and a **malformed** file (a real, fixable error) both fall through to `{}`. Every neighboring branch in this function is meticulously loud (lines 37/42/48/50 all `console.error` + repair path) — this one swallow is the outlier. A user with a typo'd `.spec/spexcode.json` silently gets default public-mode behavior.
 - **Verdict:** **KEEP.** C1 (behavior-equivalent for the missing case, adds the loud branch only for the real-error case — no new primitive, just split the catch on `existsSync`), C2 (T16 is verbatim "separate config failures into layers… never hide behind a quiet default"; the function's own style sets the determined end-state), C4 (observable: a bad config now warns), C5 (no new noun — reuse the `existsSync` already imported, and the `console.error` pattern already used 4× in this file). *Slightly higher judgment than N1–N2 (what exactly to print), but the file's own idiom fixes that.*
 
 ---

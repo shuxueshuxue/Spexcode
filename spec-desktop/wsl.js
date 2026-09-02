@@ -38,11 +38,15 @@ function parseWslList(value) {
 
 function detectWsl({ probe = DEFAULT_PROBE } = {}) {
   probe = process.env.SPEXCODE_DESKTOP_WSL_PROBE || probe
+  const file = /\.js$/i.test(probe) ? process.execPath : probe
+  const args = /\.js$/i.test(probe) ? [probe, '-l', '-v'] : ['-l', '-v']
   return new Promise((resolveResult, rejectResult) => {
-    execFile(probe, ['-l', '-v'], { encoding: 'buffer', windowsHide: true }, (error, stdout, stderr) => {
+    execFile(file, args, { encoding: 'buffer', windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
         const detail = decodeWslOutput(stderr || stdout || error.message).trim()
-        rejectResult(new Error(`WSL2 detection failed: ${detail || error.message}`))
+        const failure = new Error(`WSL2 detection failed: ${detail || error.message}`)
+        failure.code = error.code
+        rejectResult(failure)
         return
       }
       const distros = parseWslList(stdout)
@@ -57,7 +61,9 @@ function detectWsl({ probe = DEFAULT_PROBE } = {}) {
           : distros.every((distro) => distro.version === 1)
             ? 'only WSL version 1 distros are installed'
             : 'no default WSL2 distro is available'
-        rejectResult(new Error(`WSL2 is unavailable: ${reason}`))
+        const failure = new Error(`WSL2 is unavailable: ${reason}`)
+        failure.code = 'WSL_UNAVAILABLE'
+        rejectResult(failure)
         return
       }
       resolveResult({ ...selected, distros, probe })
@@ -70,6 +76,21 @@ function runWsl(distro, command, options = {}) {
     stdio: options.stdio || ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
     env: options.env,
+  })
+}
+
+function readWslHostRecord(distro, { probe = process.env.SPEXCODE_DESKTOP_WSL_PROBE || DEFAULT_PROBE } = {}) {
+  return new Promise((resolveRecord) => {
+    execFile(probe, ['-d', distro, '--', 'bash', '-lc', 'cat "$HOME/.spexcode/host.json"'], { encoding: 'utf8', windowsHide: true }, (error, stdout) => {
+      if (error) return resolveRecord(null)
+      try {
+        const record = JSON.parse(stdout)
+        if (record?.version !== 1 || typeof record.url !== 'string' || !Number.isInteger(record.pid) || record.pid <= 0 || typeof record.instanceId !== 'string') return resolveRecord(null)
+        const url = new URL(record.url)
+        if (!['http:', 'https:'].includes(url.protocol)) return resolveRecord(null)
+        resolveRecord(record)
+      } catch { resolveRecord(null) }
+    })
   })
 }
 
@@ -124,6 +145,7 @@ module.exports = {
   parseWslList,
   detectWsl,
   runWsl,
+  readWslHostRecord,
   bootstrapCommand,
   translateWslPath,
   projectRootForPost,

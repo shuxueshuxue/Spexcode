@@ -87,7 +87,14 @@ async function probeGateway(url) {
   }
 }
 
-async function findRunningGateway() {
+async function findRunningGateway(distro = null) {
+  if (process.platform === 'win32' && distro) {
+    const wslRecord = await wsl.readWslHostRecord(distro)
+    if (wslRecord) {
+      const found = await probeGateway(validLoopbackUrl(wslRecord.url) || '')
+      if (found) return found
+    }
+  }
   const recorded = gatewayRecordUrl()
   if (recorded) {
     const found = await probeGateway(recorded)
@@ -246,7 +253,7 @@ function startWslGateway(distro, port) {
 async function attachOrStartGateway() {
   if (process.platform === 'win32') {
     const wslHost = await wsl.detectWsl()
-    const running = await findRunningGateway()
+    const running = await findRunningGateway(wslHost.name)
     if (running) return { url: running, owned: false, child: null, distro: wslHost.name }
     const port = await freePort()
     return startWslGateway(wslHost.name, port)
@@ -324,10 +331,13 @@ async function pickProject(gatewayUrl, distro) {
 async function bootstrapWindowsAndStart() {
   let host
   try { host = await wsl.detectWsl() } catch (error) {
-    const win = showFirstRunPage(`${error.message}\n\nAction: open an administrator PowerShell, run wsl --install, reboot, then reopen SpexCode.`)
+    const action = error.code === 'ENOENT'
+      ? '\n\nAction: open an administrator PowerShell, run wsl --install, reboot, then reopen SpexCode.'
+      : '\n\nDetection failed. Fix the WSL probe and reopen SpexCode.'
+    const win = showFirstRunPage(`${error.message}${action}`)
     return new Promise(() => { win.on('closed', () => {}) })
   }
-  const running = await findRunningGateway()
+  const running = await findRunningGateway(host.name)
   if (running) return { url: running, owned: false, child: null, distro: host.name }
   const config = wsl.wslConfigStatus()
   const win = showFirstRunPage(`Detected WSL2 distro: ${host.name}\nRecommended WSL memory cap: 8GB (${config.present ? `${config.path} is present` : `${config.path} is not present`}).\n`)

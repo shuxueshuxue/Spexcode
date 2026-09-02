@@ -4,16 +4,15 @@
 // and adds only operating-system integration around the same dashboard a browser loads.
 const { app, BrowserWindow, Menu, utilityProcess, shell, ipcMain, dialog } = require('electron')
 const { createServer } = require('node:net')
-const { homedir } = require('node:os')
-const { resolve, join } = require('node:path')
-const { existsSync, readFileSync } = require('node:fs')
+const { resolve } = require('node:path')
+const { existsSync } = require('node:fs')
 const wsl = require('./wsl.js')
 const { createDesktopIntegration } = require('./desktop-integration.js')
+const { findRunningGateway: findHostGateway } = require('./gateway-discovery.js')
 
 const SPEX_ENTRY = process.env.SPEXCODE_DESKTOP_ENTRY || resolve(__dirname, '..', 'bin', 'spex.mjs')
 const NODE_ENTRY = resolve(__dirname, 'node-entry.mjs')
 const PROJECT_CWD = process.env.SPEXCODE_DESKTOP_CWD || process.cwd()
-const DEFAULT_DASHBOARD_PORT = Number(process.env.SPEXCODE_DASHBOARD_PORT || 5173)
 const BOOT_TIMEOUT_MS = 30_000
 const PROBE_TIMEOUT_MS = 1_000
 const MAX_BIND_ATTEMPTS = 5
@@ -56,18 +55,6 @@ function validLoopbackUrl(value) {
   }
 }
 
-// The host-facts gateway record will become the authoritative discovery source. Keeping it behind this
-// function means that landing that record changes one seam; until then the configured default is probed.
-function gatewayRecordUrl() {
-  const file = process.env.SPEXCODE_GATEWAY_RECORD || join(process.env.SPEXCODE_HOME || join(homedir(), '.spexcode'), 'gateway.json')
-  try {
-    const record = JSON.parse(readFileSync(file, 'utf8'))
-    return validLoopbackUrl(record?.url || record?.gateway?.url)
-  } catch {
-    return null
-  }
-}
-
 async function probeGateway(url) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
@@ -93,13 +80,7 @@ async function findRunningGateway(distro = null) {
       if (found) return found
     }
   }
-  const recorded = gatewayRecordUrl()
-  if (recorded) {
-    const found = await probeGateway(recorded)
-    if (found) return found
-  }
-  const configured = validLoopbackUrl(`http://127.0.0.1:${DEFAULT_DASHBOARD_PORT}`)
-  return configured ? probeGateway(configured) : null
+  return findHostGateway()
 }
 
 function startGateway(port) {

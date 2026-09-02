@@ -59,7 +59,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
     git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')
     git(project, 'add', '.'); git(project, 'commit', '-qm', 'fixture')
     const sessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
@@ -165,7 +165,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
     git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')
     git(project, 'add', '.'); git(project, 'commit', '-qm', 'fixture')
 
@@ -244,7 +244,7 @@ test('YATU: a dispatched probe worker receives the note-to-terminal counter-inse
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
       harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
     }) + '\n')
     git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')
@@ -335,7 +335,7 @@ process.exit(result.status === null ? 1 : result.status)
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
     const piCommand = `${JSON.stringify(process.execPath)} ${JSON.stringify(fakePi)}`
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
       harnesses: ['pi-headless'], sessions: { launchers: { probe: { harness: 'pi-headless', cmd: piCommand } }, defaultLauncher: 'probe' },
     }) + '\n')
     git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')

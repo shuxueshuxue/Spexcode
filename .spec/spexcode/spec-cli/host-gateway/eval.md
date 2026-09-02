@@ -33,7 +33,7 @@ scenarios:
     description: >-
       In isolated throwaway Git repositories, initialize one project with a native target and add another
       through the host operation and its admin HTTP route. Repeat with an explicit plugin target and with a
-      missing persisted selection; inspect `spexcode.json`, generated launchers, materialize output, and the
+      missing persisted selection; inspect `.spec/spexcode.json`, generated launchers, materialize output, and the
       revision-guard response.
     expected: >-
       The operation appends exactly the requested native or plugin target, preserves existing defaults, and

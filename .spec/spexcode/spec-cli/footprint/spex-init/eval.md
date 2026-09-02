@@ -5,7 +5,7 @@ scenarios:
     description: >-
       In a fresh git repo, run `spex init . --harness claude,codex` and compare what the success message +
       next-steps CLAIM about mainBranch, lint.governedRoots, harnesses, and launchers with what the planted
-      spexcode.json actually contains.
+      .spec/spexcode.json actually contains.
     expected: >-
       Every printed value IS the planted value (mainBranch is the adoption checkout's branch; the starter
       ships governedRoots ["."]; harnesses and seeded launcher names echo the --harness choice), read back

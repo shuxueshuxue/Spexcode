@@ -3,7 +3,7 @@ scenarios:
   - name: plugin-target-emits-self-contained-bundle
     tags: [cli]
     description: >-
-      In a fresh git project carrying the spec tree, set spexcode.json `harnesses` to
+      In a fresh git project carrying the spec tree, set .spec/spexcode.json `harnesses` to
       [{"plugin":".adopter-a"}] and run `spex materialize`. Inspect what landed under .adopter-a and at the repo root.
     expected: >-
       A self-contained Claude-plugin bundle is written at .adopter-a/plugins/spexcode/ — a .claude-plugin/plugin.json
@@ -44,7 +44,7 @@ scenarios:
 # eval.md — plugin-harness
 
 Loss is read through the CLI surface a real adopter touches (YATU): `spex materialize` on a project whose
-spexcode.json names a `{"plugin":"<folder>"}` target. Three things must hold: the emit produces a complete,
+.spec/spexcode.json names a `{"plugin":"<folder>"}` target. Three things must hold: the emit produces a complete,
 self-contained Claude-plugin bundle (manifest + dispatch wiring + contract-as-additionalContext + skills/
 commands/agents) and NO native artifacts; the SessionStart injector actually emits the contract as valid
 additionalContext JSON (the harness-neutral stand-in for --append-system-prompt); and deselecting a folder

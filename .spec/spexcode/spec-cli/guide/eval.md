@@ -15,11 +15,11 @@ scenarios:
   - name: config-topic-prints-settings-manual
     description: >
       Run the real CLI verb `spex guide settings` and read its stdout. It must print the runtime-settings
-      manual for spexcode.json / spexcode.local.json — the Config fields plus the crucial committed-vs-
+      manual for .spec/spexcode.json / .spec/spexcode.local.json — the Config fields plus the crucial committed-vs-
       host-local file distinction, with the clean-init launcher commands and a concrete host-local profile
       example. The unknown-topic fallback has its own scenario below and is not probed here.
     expected: >
-      Output names BOTH files by role (spexcode.json = committed/portable, spexcode.local.json =
+      Output names BOTH files by role (.spec/spexcode.json = committed/portable, .spec/spexcode.local.json =
       gitignored/host-specific), documents the launcher schema
       (launchers: { <name>: { harness, cmd } } and defaultLauncher), and shows the working split — the
       portable defaultLauncher name in the committed file, the host absolute `cmd` in the local file.

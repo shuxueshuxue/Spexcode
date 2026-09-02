@@ -79,7 +79,7 @@ test('public direct close removes the worktree only after the live target is col
     process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     mkdirSync(dirname(spec), { recursive: true })
     writeFileSync(spec, '---\ntitle: project\nstatus: active\n---\n# project\n\nFixture.\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }, null, 2) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'] }, null, 2) + '\n')
     git(project, 'init', '-q', '-b', 'main')
     git(project, 'config', 'user.email', 'archive@example.test')
     git(project, 'config', 'user.name', 'Archive Fixture')

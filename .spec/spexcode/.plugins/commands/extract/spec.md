@@ -61,6 +61,6 @@ node lands and loses everything to one interruption. Fix the top-level cut and c
 subtree at a time (write the leaf, list its files, lint, COMMIT) before the next — never more than one
 subtree uncommitted, so progress survives context limits.
 
-Confirm `spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
+Confirm `.spec/spexcode.json`'s `governedRoots` points at the real source dirs first — lint reads silently empty
 otherwise. Commit one node per commit (`spec: <id> — extract from <area>`) and run `spex spec lint` after each:
 0 errors, 0 coverage/altitude warnings.

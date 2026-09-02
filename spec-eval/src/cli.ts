@@ -57,7 +57,7 @@ function changedScope(root: string): ChangedScope {
       else add(fields[i++])
     }
     for (const path of git(['-C', root, '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard']).split('\n')) add(path.trim())
-    const config = existsSync(join(root, 'spexcode.json')) ? join(root, 'spexcode.json') : 'defaults'
+    const config = existsSync(join(root, '.spec/spexcode.json')) ? join(root, '.spec/spexcode.json') : 'defaults'
     return { base, paths, config }
   } catch (error) {
     const detail = error instanceof Error ? error.message.trim() : String(error)

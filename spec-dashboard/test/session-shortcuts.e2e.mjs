@@ -54,7 +54,7 @@ const fixture = mkdtempSync(join(tmpdir(), 'spex-session-shortcuts-'))
 const project = join(fixture, 'project'); const home = join(fixture, 'home')
 mkdirSync(project, { recursive: true }); mkdirSync(home, { recursive: true })
 const write = (path, text) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, text) }
-write(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }))
+write(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }))
 execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
 execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project })
 execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project })

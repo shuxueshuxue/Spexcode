@@ -309,7 +309,7 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
   assert.ok(initOutput.includes(`harnesses ["${harness.id}"], launchers ["${harness.id}"]`),
     `[${name}] init reports the selected harness and launcher`)
 
-  const config = JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8'))
+  const config = JSON.parse(readFileSync(join(project, '.spec/spexcode.json'), 'utf8'))
   assert.deepEqual(config.harnesses, [harness.id], `[${name}] selection persists as one harness`)
   assert.deepEqual(config.sessions, {
     launchers: { [harness.id]: { harness: harness.id, cmd: harness.id } },
@@ -322,12 +322,12 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
   assertReceipt({ entries: receipt, initOutput, project, codexHome, harness, caseName: name })
 
   const beforeAdoption = git('rev-parse', 'HEAD').trim()
-  git('add', '--', '.spec', 'spexcode.json')
+  git('add', '--', '.spec', '.spec/spexcode.json')
   const staged = git('diff', '--cached', '--name-only').trim().split('\n').filter(Boolean)
-  assert.ok(staged.includes('spexcode.json') && staged.some((path) => path.startsWith('.spec/')),
+  assert.ok(staged.includes('.spec/spexcode.json') && staged.some((path) => path.startsWith('.spec/')),
     `[${name}] adoption stages both project source assets`)
-  assert.ok(staged.every((path) => path === 'spexcode.json' || path.startsWith('.spec/')),
-    `[${name}] adoption stages only .spec and spexcode.json: ${staged.join(', ')}`)
+  assert.ok(staged.every((path) => path === '.spec/spexcode.json' || path.startsWith('.spec/')),
+    `[${name}] adoption stages only .spec and .spec/spexcode.json: ${staged.join(', ')}`)
 
   const preCommit = git('rev-parse', '--path-format=absolute', '--git-path', 'hooks/pre-commit').trim()
   assert.ok(existsSync(preCommit), `[${name}] init installs pre-commit`)
@@ -361,9 +361,9 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
     `[${name}] adoption commit contains exactly the staged source assets`,
   )
 
-  const headPaths = new Set(git('ls-tree', '-r', '--name-only', 'HEAD', '--', '.spec', 'spexcode.json')
+  const headPaths = new Set(git('ls-tree', '-r', '--name-only', 'HEAD', '--', '.spec', '.spec/spexcode.json')
     .trim().split('\n').filter(Boolean))
-  for (const sourcePath of walkFiles(join(project, '.spec')).map((path) => relative(project, path)).concat('spexcode.json')) {
+  for (const sourcePath of walkFiles(join(project, '.spec')).map((path) => relative(project, path)).concat('.spec/spexcode.json')) {
     assert.ok(headPaths.has(sourcePath), `[${name}] HEAD reaches source asset ${sourcePath}`)
   }
   const tracked = new Set(git('ls-files').trim().split('\n').filter(Boolean))

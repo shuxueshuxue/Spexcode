@@ -15,7 +15,7 @@ export type Config = {
   // tracked now (one residence behavior: the per-clone exclude, plus the content filter for a mixed
   // contract file), so the field is IGNORED with a loud non-fatal notice (materialize's retiredAxisNotice);
   // it stays in the type only so the notice can read it. The schema deliberately has NO knob for the spec
-  // DATA: `.spec` + spexcode.json are ALWAYS tracked ("git is the database") — the vocabulary itself makes
+  // DATA: `.spec` + .spec/spexcode.json are ALWAYS tracked ("git is the database") — the vocabulary itself makes
   // "untrack the spec" unsayable.
   render?: string
   // RETIRED (residence compat): the old private-overlay toggle — ignored with the same loud notice;
@@ -31,7 +31,7 @@ export type Config = {
   }
   uploads?: {
     // One resumable attachment policy. Values default from templates/spexcode.json so a project may omit this
-    // section, while spexcode.local.json can tune the whole top-level section for one machine.
+    // section, while .spec/spexcode.local.json can tune the whole top-level section for one machine.
     maxBytes?: number               // maximum bytes in one attachment (default: templates/spexcode.json)
     chunkBytes?: number             // raw PATCH payload cap and client slice size (default: templates/spexcode.json)
     concurrency?: number            // simultaneous attachment streams in one dashboard batch (default: templates/spexcode.json)
@@ -48,7 +48,7 @@ export type Config = {
     // named launcher profiles: a session picks ONE by name at create time ([[launcher-select]]), fixing both
     // its harness AND its exact launch command; the chosen NAME is persisted on the record so resume reuses the
     // same auth. `harness` defaults to 'claude'. Host-specific `cmd`s (abs wrapper paths) belong in the
-    // gitignored spexcode.local.json — the name is portable, the cmd is a machine fact.
+    // gitignored .spec/spexcode.local.json — the name is portable, the cmd is a machine fact.
     // `configDir` declares WHERE the launcher's agent keeps its config/state dir when its cmd (a wrapper)
     // points the harness somewhere non-default (claude-glm's CLAUDE_CONFIG_DIR=~/.claude-glm). It is a
     // read-side declaration the transcript resolver consumes ([[session-transcript]]) — never injected into
@@ -76,7 +76,7 @@ export type Config = {
     enabled?: boolean                // the [[local-issues]] issues-workflow on/off switch (default ON). OFF silences the post-merge nudge + hides the dashboard view; flip by editing this key (no CLI toggle verb — v0.3.0). A legacy `proposals.enabled` is NOT read; `spex doctor` reports it.
   }
   forge?: {
-    host?: string                    // explicit forge host id ('github'|'gitlab'|…) overriding the origin-remote derivation ([[forge-host]] — read by spec-forge drivers.ts resolveForgeHost, not here). A project fact → committed spexcode.json.
+    host?: string                    // explicit forge host id ('github'|'gitlab'|…) overriding the origin-remote derivation ([[forge-host]] — read by spec-forge drivers.ts resolveForgeHost, not here). A project fact → committed .spec/spexcode.json.
   }
 }
 // the resolved LAYOUT convention — main/mainBranch/branchPrefix filled to defaults. `dashboard`, `sessions`,
@@ -106,13 +106,28 @@ export function readJsonConfig(p: string): any {
     throw err
   }
 }
-// committed `spexcode.json` with an OPTIONAL machine-local `spexcode.local.json` layered on top (gitignored).
+// committed `.spec/spexcode.json` with an OPTIONAL machine-local `.spec/spexcode.local.json` layered on top (gitignored).
 // The local layer is the durable home for HOST-SPECIFIC values that must never be committed — e.g. an
 // absolute worker-launcher path (the host-path leak the repo otherwise warns against). Precedence per field:
 // local over committed; a targeted env override (e.g. SPEXCODE_CODEX_SERVER_CMD) still wins at its read site.
+export function configPath(root: string, local = false): string {
+  return join(root, '.spec', local ? 'spexcode.local.json' : 'spexcode.json')
+}
+
+function readProjectConfig(root: string, local: boolean): any {
+  const preferred = configPath(root, local)
+  if (existsSync(preferred)) return readJsonConfig(preferred)
+  const legacy = join(root, local ? 'spexcode.local.json' : 'spexcode.json')
+  if (existsSync(legacy)) {
+    console.error(`配置已迁到 .spec/，请移动（git mv spexcode.json .spec/；本机的 spexcode.local.json 手动移）：${legacy}`)
+    return readJsonConfig(legacy)
+  }
+  return {}
+}
+
 export function readConfig(root: string): Config {
-  const committed = readJsonConfig(join(root, 'spexcode.json'))
-  const local = readJsonConfig(join(root, 'spexcode.local.json'))
+  const committed = readProjectConfig(root, false)
+  const local = readProjectConfig(root, true)
   const out: any = { ...committed }
   for (const k of Object.keys(local)) {
     const b = committed[k], o = local[k]

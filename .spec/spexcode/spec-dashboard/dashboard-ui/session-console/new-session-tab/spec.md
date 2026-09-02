@@ -47,7 +47,7 @@ Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launc
 launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
 launch `POST /api/sessions` carries only `launcher`; the backend derives `harness` from that selected profile.
 The picker is a clean pill **button** wearing the selected launcher's harness vendor mark + name — no caret,
-no label; its tooltip points at `spexcode.json` / `spexcode.local.json` as the one place launchers change.
+no label; its tooltip points at `.spec/spexcode.json` / `.spec/spexcode.local.json` as the one place launchers change.
 It opens a **centred pop-out card** — a viewport-centred dialog over a light backdrop, deliberately
 not an anchored dropdown — with **one row per configured launcher** ([[launcher-select]]; headless profiles are ordinary rows) (the row's
 harness glyph + name, the selected row marked), and beneath each name the profile's configured command

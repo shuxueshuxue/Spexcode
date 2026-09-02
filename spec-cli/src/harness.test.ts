@@ -2098,11 +2098,11 @@ test('launchCmd cmd override wins over the ambient default (claude + codex) — 
   assert.match(codexCmd, /exec codex-glm --yolo [^\n]*--remote/)
 })
 
-test('launcherList + resolveLauncher read the named profiles from spexcode.json, fail loud on an unknown name', () => {
+test('launcherList + resolveLauncher read the named profiles from .spec/spexcode.json, fail loud on an unknown name', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-launchers-'))
   // claude/codex are ORDINARY safe seeded entries (as `spex init` plants them), NOT env-derived built-ins — alongside
   // two custom profiles. harness defaults to claude when omitted; cmd is carried through verbatim.
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({
     sessions: { launchers: {
       claude: { harness: 'claude', cmd: 'claude' },
       codex: { harness: 'codex', cmd: 'codex' },
@@ -2133,7 +2133,7 @@ test('launcherList + resolveLauncher read the named profiles from spexcode.json,
 
 test('no built-in ghosts: an unseeded config lists NO launchers, and claude/codex are not implicitly resolvable', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-nolaunchers-'))
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
+  writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
   // with no seeded launchers there is nothing to list — the old env-derived built-in claude/codex are gone.
   assert.deepEqual(launcherList(root), [])
   // and `claude`/`codex` are just names like any other: unconfigured → fail loud, never a silent built-in.
@@ -2142,10 +2142,10 @@ test('no built-in ghosts: an unseeded config lists NO launchers, and claude/code
   assert.throws(() => defaultLauncher(root), /sessions\.defaultLauncher is required/)
   assert.deepEqual(launcherDefault(root), {
     default: null,
-    error: 'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})',
+    error: 'sessions.defaultLauncher is required for a launch without --launcher; set it in .spec/spexcode.json or .spec/spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})',
   })
   // seed a claude launcher + name it the default (the shape `spex init` plants) → resolves.
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ sessions: { maxActive: 4, launchers: { claude: { harness: 'claude', cmd: 'claude' } }, defaultLauncher: 'claude' } }))
+  writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({ sessions: { maxActive: 4, launchers: { claude: { harness: 'claude', cmd: 'claude' } }, defaultLauncher: 'claude' } }))
   assert.equal(defaultLauncher(root), 'claude')
   assert.deepEqual(launcherDefault(root), { default: 'claude', error: null })
 })

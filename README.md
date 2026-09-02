@@ -86,7 +86,7 @@ That's the whole adoption. The example lists all the built-in harnesses; remove 
 use (`--harness` is required and takes any one id or comma-separated subset). Want the spec asset and
 nothing wired into an agent? `--harness none` adopts L0 alone and writes nothing into any agent's config.
 `spex init` works on any existing git repo and does three things: it seeds a root
-`.spec/project/spec.md` plus a starter `spexcode.json`, installs the git hooks, and **materializes**
+`.spec/project/spec.md` plus a starter `.spec/spexcode.json`, installs the git hooks, and **materializes**
 the workflow rules into the files your agent already reads (`CLAUDE.md`, `AGENTS.md`): read the
 governing spec before the code, land spec and code in one commit, propose merges instead of
 performing them. Any agent that opens the repo discovers the workflow on its own.

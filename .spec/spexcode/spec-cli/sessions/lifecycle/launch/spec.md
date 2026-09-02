@@ -209,7 +209,7 @@ genuinely unclassifiable keeps the bounded retry. This adds no fallback and neve
 
 ### Concurrency cap (bounded working set)
 
-At most **N** agents run **autonomously progressing** at once — **N configured per project in `spexcode.json`
+At most **N** agents run **autonomously progressing** at once — **N configured per project in `.spec/spexcode.json`
 (`sessions.maxActive`, default 8)**, not hardcoded, read live so an edit applies on the next drain (the
 `SPEXCODE_MAX_ACTIVE` env is a fallback). A slot is **compute** pressure: a session holds one **only while
 live AND `working` or `parked`** (self-resuming). Everything **waiting on the human frees its slot** — `idle`,

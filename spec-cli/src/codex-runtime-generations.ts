@@ -66,6 +66,20 @@ function newEndpoint(root: string, id = `detached-v3-${randomUUID()}`): CodexGen
 
 const emptyLedger = (): CodexGenerationLedger => Object.freeze({ version: 3, revision: 0, current: null, pending: null, generations: {}, bindings: {} })
 
+type LedgerCacheEntry = { mtimeNs: bigint; size: bigint; value: CodexGenerationLedger }
+const ledgerCache = new Map<string, LedgerCacheEntry>()
+const ledgerCacheReads = new Map<string, number>()
+
+function ledgerFileSignature(path: string): { mtimeNs: bigint; size: bigint } | null {
+  try {
+    const stat = statSync(path, { bigint: true })
+    return { mtimeNs: stat.mtimeNs, size: stat.size }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
 function isEndpoint(value: unknown): value is CodexGenerationEndpoint {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<CodexGenerationEndpoint>
@@ -106,8 +120,30 @@ function parseLedger(value: unknown): CodexGenerationLedger {
 }
 
 export function readCodexGenerationLedger(root: string): CodexGenerationLedger {
-  if (!existsSync(ledgerPath(root))) return emptyLedger()
-  return parseLedger(JSON.parse(readFileSync(ledgerPath(root), 'utf8')))
+  const path = ledgerPath(root)
+  const signature = ledgerFileSignature(path)
+  if (!signature) {
+    const cached = ledgerCache.get(path)
+    if (cached?.mtimeNs === -1n && cached.size === -1n) return cached.value
+    const value = emptyLedger()
+    ledgerCache.set(path, { mtimeNs: -1n, size: -1n, value })
+    return value
+  }
+  const cached = ledgerCache.get(path)
+  if (cached?.mtimeNs === signature.mtimeNs && cached.size === signature.size) return cached.value
+  ledgerCacheReads.set(path, (ledgerCacheReads.get(path) ?? 0) + 1)
+  const value = parseLedger(JSON.parse(readFileSync(path, 'utf8')))
+  ledgerCache.set(path, { ...signature, value })
+  return value
+}
+
+export function codexGenerationLedgerCacheStatsForTests(root: string): { reads: number } {
+  return { reads: ledgerCacheReads.get(ledgerPath(root)) ?? 0 }
+}
+
+export function resetCodexGenerationLedgerCacheForTests(): void {
+  ledgerCache.clear()
+  ledgerCacheReads.clear()
 }
 
 // The backend startup sweep must see legacy roots too. Bootstrap only when the legacy residue is present; an
@@ -133,6 +169,7 @@ function writeLedger(root: string, previous: CodexGenerationLedger, next: Ledger
   const temp = `${ledgerPath(root)}.${process.pid}.${randomUUID()}.tmp`
   writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 })
   renameSync(temp, ledgerPath(root))
+  ledgerCache.delete(ledgerPath(root))
   return value
 }
 

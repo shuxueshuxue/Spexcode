@@ -23,7 +23,12 @@
 # session_id, grouped per-project (see hp_store_dir). The sibling runtime.json is only the runtime/worktree
 # envelope. GATED on `governed`: a user-self-launched
 # (non-governed) session has no board to feed, so this no-ops on it. cwd = the session worktree.
+SPEX_PROFILE_VALUE="${SPEX_PROFILE:-full}"
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
+hp_profile_hook_enabled mark-active
+profile_status=$?
+[ "$profile_status" -eq 1 ] && exit 0
+[ "$profile_status" -ne 0 ] && exit "$profile_status"
 payload=$(cat 2>/dev/null)
 # an IN-PROCESS SUBAGENT's tool call (Claude's Task tool) fires the parent's hooks with the PARENT's
 # session_id — flipping here let a supervising parent's own subagents erase its declared park/ask within

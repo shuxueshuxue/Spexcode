@@ -13,6 +13,8 @@ related:
 
 # hook-shell-mirror
 
+The shared mirror also resolves the startup `SPEX_PROFILE` hook list, so each core handler has one profile gate.
+
 The hook handlers are pure shell and cannot import `harness.ts`, so [[harness-adapter]]'s payload facts have a
 second, mirrored home: `hooks/harness.sh`, sourced by every handler and exported by `dispatch.sh`. It owns exactly
 the divergences a handler must read from a hook's stdin — never a lifecycle decision — and every handler consumes

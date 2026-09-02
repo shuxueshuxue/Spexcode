@@ -8,6 +8,7 @@ events:
 order: 10
 block: true
 ---
+The startup `SPEX_PROFILE` hook list may disable this lifecycle hook with a clean no-op; `full` and profiles that include `stop-gate` retain it.
 **An artifact is a note ON the demand, not a replacement for it.** The artifact reminder used to be its own
 branch taken INSTEAD of the full menu, with the taught sentinel stamped before it, so a session that had
 posted anything never saw the four states at all. It also looked at files only, while `session web add` writes

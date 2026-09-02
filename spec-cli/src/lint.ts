@@ -1,9 +1,8 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { readConfig, repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
+import { readConfig, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
-import { readJsonConfig } from '@spexcode/spec-core'
-import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
+import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
@@ -41,14 +40,14 @@ const DEFAULT_CONFIG: LintConfig = {
   scopedCodeMiss: 'warn',
 }
 export function loadConfig(root: string, pendingSource?: string | null): LintConfig {
-  // Absent .spec/spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
-  // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
+  // Absent .spec/spexcode.json → tuned defaults; a malformed one throws rather than silently
+  // reverting the author's budgets to defaults.
   let parsed: any
   if (pendingSource === undefined) parsed = readConfig(root)
   else if (pendingSource === null) parsed = {}
   else {
     try { parsed = JSON.parse(pendingSource) }
-    catch (e: any) { throw new Error(`invalid JSON in candidate .spec/spexcode.json: ${e?.message ?? e}`) }
+    catch (e: any) { throw new Error(`invalid JSON in candidate spexcode.json: ${e?.message ?? e}`) }
   }
   const c = parsed?.lint ?? {}
   const merged = { ...DEFAULT_CONFIG, ...c }
@@ -59,9 +58,9 @@ export function loadConfig(root: string, pendingSource?: string | null): LintCon
 // sourceExtensions is compatibility syntax only: it contributes include globs and never reaches discovery.
 export function normalizeConfig(cfg: LintConfig): LintConfig {
   // a mistyped enum silently reverting to the default would green-wash (or over-warn) exactly the
-  // advisory the author meant to tune — same fail-loud rule as a malformed .spec/spexcode.json.
+  // advisory the author meant to tune — same fail-loud rule as a malformed spexcode.json.
   if (cfg.scopedCodeMiss !== 'warn' && cfg.scopedCodeMiss !== 'ignore')
-    throw new Error(`.spec/spexcode.json lint.scopedCodeMiss must be "warn" or "ignore", got ${JSON.stringify(cfg.scopedCodeMiss)}`)
+    throw new Error(`spexcode.json lint.scopedCodeMiss must be "warn" or "ignore", got ${JSON.stringify(cfg.scopedCodeMiss)}`)
   const dedot = (xs: string[]) => xs.map((x) => x.replace(/^\.+/, ''))
   const anyDepth = (xs: string[]) => xs.map((g) => (g.includes('/') ? g : `**/${g}`))
   const extensions = cfg.sourceExtensions === null ? null : dedot(cfg.sourceExtensions)
@@ -86,7 +85,7 @@ function untrackedAdoptionFiles(root: string): string[] {
     '-C', root,
     '-c', 'core.quotePath=false',
     'status', '--porcelain=v1', '-z', '--untracked-files=all',
-    '--', '.spec',
+    '--', '.spec', 'spexcode.json',
   ])
   return status.split('\0')
     .filter((entry) => entry.startsWith('?? '))
@@ -130,7 +129,7 @@ export async function pendingTouchesGoverned(root: string, tip: string): Promise
   const specs = await loadSpecs(root, { tip, history: null, drift: null })
   const claims = specs.flatMap((spec) => [...spec.code, ...spec.related])
   return changed.some((path) => claims.some((claim) => relationClaimsPath(claim, path))
-    || path === '.spec/spexcode.json' || path === '.spec/spexcode.local.json'
+    || path === 'spexcode.json' || path === 'spexcode.local.json'
     || (path.startsWith('.spec/') && !path.startsWith('.spec/.issues/'))
     || path === '.spec')
 }
@@ -168,7 +167,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     ? !files.has(path) && directories.has(path.replace(/\/+$/, ''))
     : statSync(join(root, path)).isDirectory()
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
-  const cfg = loadConfig(root, pending ? treeFileText(root, tip, '.spec/spexcode.json') : undefined)
+  const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
   const untracked = untrackedAdoptionFiles(root)
   if (untracked.length) {
     const shown = untracked.slice(0, 6)
@@ -178,7 +177,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
       findings: [{
         level: 'error',
         rule: 'integrity',
-        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
+        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec spexcode.json\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
       }],
     }
   }
@@ -323,7 +322,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
 
   // coverage: every governed source file must be claimed by at least one spec.
   if (governed.length === 0)
-    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in .spec/spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
+    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
   for (const f of governed)
     if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 
@@ -382,6 +381,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   // One parse per candidate file per run, shared by every source that anchors it. Without it a file many
   // scenarios anchor is re-extracted once per scenario, and extraction is the expensive half of this gate.
   const unitsAtTip = new Map<string, { units: any } | { error: string }>()
+  const objectFormat = gitObjectFormat(root)
   for (const s of specs) {
     for (const src of [
       nodeSource(s, 'code', s.codeScoped),
@@ -413,15 +413,17 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
           try {
             const source = textAtTip(path)
             if (source === null) throw new Error(`candidate tree has no file '${path}'`)
-            cached = { units: await x.extract(source, path) }
+            const extraction = await extractCachedBlob(source, path, x, blobShaForContent(source, objectFormat))
+            cached = extraction
           } catch (e: any) { cached = { error: e?.message ?? String(e) } }
           unitsAtTip.set(path, cached)
         }
-        if ('error' in cached) {
-          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} (${owner}) is unverifiable — the current file does not parse: ${cached.error}` } })
+        const resolved = cached!
+        if ('error' in resolved) {
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} (${owner}) is unverifiable — the current file does not parse: ${resolved.error}` } })
           continue
         }
-        const units = cached.units
+        const units = resolved.units
         // each selector resolves (or errors) on its own; only the live ones feed the window engine.
         // The dead/ambiguous verdict itself comes from the ONE shared classifier ([[code-anchor]]); only the
         // wording of the gate's findings lives here.

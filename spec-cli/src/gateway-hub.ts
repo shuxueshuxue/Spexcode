@@ -240,7 +240,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
 
     // Host facts are an admin-scoped extension just like the project catalog, but live at a stable
     // top-level path so browsers, shells, and CLI readers share one identity-bearing endpoint.
-    if (path === '/host' && ext.hostRoute) {
+    if ((path === '/host' || path.startsWith('/host/')) && ext.hostRoute) {
       const d = adminz()
       if (!d.ok) return d.reason === 'locked'
         ? sendJson(res, 403, { error: 'admin surface is locked: no admin password is configured and this is not a loopback connection' })

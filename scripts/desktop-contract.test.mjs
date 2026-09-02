@@ -34,7 +34,8 @@ test('macOS menu forwards native tab accelerators into the page key service', ()
   assert.match(desktopMain, /accelerator: 'Command\+W'/)
   assert.match(desktopMain, /accelerator: `Command\+\$\{ordinal\}`/)
   assert.match(desktopMain, /executeJavaScript\(`window\.dispatchEvent\(new KeyboardEvent/)
-  assert.match(desktopSpec, /Window menu catches them and injects/)
+  assert.match(desktopSpec, /Menu accelerators are the native, reliable/)
+  assert.match(desktopSpec, /Each menu item injects the equivalent cancelable/)
 })
 
 test('desktop attach reads the shared host record without a port or record-name fallback', () => {

@@ -55,12 +55,12 @@ window carries the project switcher; a tab torn out of the strip ([[tab-strip]])
 `BrowserWindow` through the SPA's ordinary `window.open`, so the same gesture yields a popup in a browser and a
 window here. Same-origin opens become windows; every off-origin link goes to the user's real browser.
 
-**The application menu owns the macOS ⌘W and ⌘1–9 accelerators.** Chromium's Aqua path consumes these
-accelerators before the page's capture listener can arbitrate them, so the Window menu catches them and injects
-the equivalent cancelable `KeyboardEvent` into the focused page. The page still dispatches through the ordinary
-keymap ([[keyboard-service]]) and tab APIs; the SPA has no Electron branch. On Linux, where the browser delivers
-Ctrl chords to the page, the menu remains unchanged. Quit, copy/paste, zoom and the platform's standard items
-remain.
+**The application menu owns the macOS ⌘W and ⌘1–9 accelerators.** Menu accelerators are the native, reliable
+route for ⌘ chords and make these tab actions discoverable in the Window menu. Each menu item injects the
+equivalent cancelable `KeyboardEvent` into the focused page, where the ordinary keymap ([[keyboard-service]])
+and tab APIs decide the action; the SPA has no Electron branch. Whether an unclaimed ⌘ chord would otherwise
+reach the page is not established. On Linux, where the browser delivers Ctrl chords to the page, the menu
+remains unchanged. Quit, copy/paste, zoom and the platform's standard items remain.
 
 **Native folder picker, existing route.** "Add project" in the desktop opens the OS folder dialog and posts the
 chosen path as `{root}` from the main process to the gateway's existing `POST /projects`, then navigates the main

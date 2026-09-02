@@ -69,11 +69,15 @@ const session = (id, label) => ({
   note: null, archived: false, archiveHazard: null, prompt: null, promptPreview: null,
   created: now, activity: null, sortKey: now, files: [], web: [],
 })
+const CONVERSATION_LIMIT = 6                    // SessionInterface's own warm-set bound
 const A = 'scroll-survives-a'
 const B = 'scroll-survives-b'
 const C = 'scroll-survives-c'
+// A, B and C carry scenes 1-3; the extras exist only so scene 4's walk can pass the warm-set bound of 6.
+const EXTRAS = Array.from({ length: 6 }, (_, index) => `scroll-survives-x${index}`)
 const graph = {
-  sessions: [session(A, 'reader A'), session(B, 'reader B'), session(C, 'reader C')],
+  sessions: [session(A, 'reader A'), session(B, 'reader B'), session(C, 'reader C'),
+    ...EXTRAS.map((id, index) => session(id, `walker ${index}`))],
   specs: [], files: [], issues: [],
 }
 // Enough authored history that the timeline scrolls well past one viewport; the text names its session so a
@@ -133,7 +137,7 @@ try {
   await page.route('**/api/plugins*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.route('**/api/settings*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }))
   // the record detail read, which the Conversation asks for per session
-  for (const id of [A, B, C]) {
+  for (const id of graph.sessions.map((row) => row.id)) {
     const row = graph.sessions.find((item) => item.id === id)
     await page.route(`**/api/sessions/${id}`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...row, prompt: null }) }))
   }
@@ -218,8 +222,38 @@ try {
     pass: !!afterOne && !!afterTwo && afterTwo.scrollHeight === atPark.scrollHeight,
   })
 
+
+  // 4 — the order is stable ACROSS THE BOUND, not just across a switch. The fix keeps a mount-order list beside
+  // the two sets, so the question a reader of the fix will ask is whether that list leaks: walk more sessions
+  // than the warm set holds and read, at every step, which layers are mounted in DOM order. The eviction must
+  // drop from the FRONT (least recently shown) while a newly warmed layer appends at the END, and no layer that
+  // survives a step may change its order relative to the others that survived with it — a single inversion is a
+  // detached layer, which is the whole defect.
+  const mountedOrder = () => page.evaluate(() => [...document.querySelectorAll('.si-term-body > *')]
+    .map((wrap) => (wrap.textContent.match(/(scroll-survives-[a-z0-9]+) message 1\./) || [])[1] || null))
+  const walk = []
+  for (const id of [A, B, C, ...EXTRAS]) {
+    await visit(id)
+    const order = await mountedOrder()
+    walk.push({ visited: id, mounted: order.filter(Boolean) })
+  }
+  const peak = Math.max(...walk.map((step) => step.mounted.length))
+  const inversions = []
+  for (let index = 1; index < walk.length; index += 1) {
+    const before = walk[index - 1].mounted
+    const after = walk[index].mounted
+    const survived = before.filter((id) => after.includes(id))
+    const projected = after.filter((id) => survived.includes(id))
+    if (projected.join() !== survived.join()) inversions.push({ step: index, survived, projected })
+  }
+  scenes.push({
+    scene: 'the mount order survives eviction: layers leave from the front and arrive at the end, never reordering',
+    walk, peakMounted: peak, inversions,
+    pass: peak <= CONVERSATION_LIMIT && inversions.length === 0,
+  })
+
   const kept = scenes.filter((scene) => scene.pass).length
-  const report = { dashboardRoot, kept, probed: scenes.length, scenes, errors, sessions: { A, B, C } }
+  const report = { dashboardRoot, kept, probed: scenes.length, scenes, errors, sessions: { A, B, C, EXTRAS } }
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
   assert.deepEqual(errors, [], 'no product errors in the browser')

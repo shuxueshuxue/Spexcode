@@ -414,13 +414,18 @@ scenarios:
       and leave it there. Select another session and come back; then select two others and come back. Read the
       scroll offset off that same DOM node each time — identify it by its own content, not by which layer is
       visible, and record which slot it occupies among the mounted layers. Keep one control reading that the
-      node's `scrollHeight` never changes, so a remount can never be mistaken for a kept position.
+      node's `scrollHeight` never changes, so a remount can never be mistaken for a kept position. Then walk
+      MORE sessions than the warm set holds, reading which layers are mounted in document order at every step,
+      so the order is measured across an eviction and not only across a switch.
     expected: >-
       The offset is exactly where the reader left it after every return, and the node holds the same slot
       throughout — the mounted layers keep their arrival order, so selecting elsewhere changes what is visible
-      and moves nothing. Zero loss = a reader mid-history keeps their line across any number of switches; the
+      and moves nothing. Across the walk the mount count stops at the warm-set bound instead of at the number
+      of sessions visited, eviction takes the least recently shown layer from the FRONT while a newly warmed
+      one appends at the END, and no layer that survives a step changes its order relative to the others that
+      survived with it. Zero loss = a reader mid-history keeps their line across any number of switches; the
       defect is the offset back at 0 with the history intact, which is a layer that left the document and
-      returned.
+      returned, and one order inversion anywhere in the walk is that same defect caught earlier.
   - name: headless-conversation-mount-is-bounded
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs

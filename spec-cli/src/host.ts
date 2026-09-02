@@ -88,6 +88,13 @@ function gitProjectRoot(dir: string): string | null {
   catch { return null }
 }
 
+const WINDOWS_DRIVE_PROJECT_MESSAGE = 'Projects on /mnt/c use 9p, where git and inotify are slow or unreliable; choose a folder under \\\\wsl$\\<distro>\\home instead.'
+function rejectWindowsDriveProjectPath(dir: string): void {
+  if (/^[A-Za-z]:[\\/]/.test(dir) || /^\/mnt\/[A-Za-z](?:\/|$)/i.test(dir)) {
+    throw new Error(WINDOWS_DRIVE_PROJECT_MESSAGE)
+  }
+}
+
 // The admin folder picker reads directory NAMES only. An absent typed path is a read-only candidate, so
 // the UI can offer an explicit new-project transaction instead of making a failed browse do that work.
 export type ProjectDirectoryListing = {
@@ -401,6 +408,7 @@ function createInitialProjectCommit(root: string, before: SeedState): void {
 // can add its first target later.
 export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
   if (setup.createDir && !setup.initGit) throw new Error('creating a project directory requires Git initialization')
+  rejectWindowsDriveProjectPath(dir)
   let directoryCreated = false
   let path: string
   try { path = existingDirectory(dir) }

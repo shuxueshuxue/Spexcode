@@ -602,6 +602,16 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
 
     const refused = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: join(repo, 'nope') }) })
     assert.equal(refused.status, 400)
+    const catalogBeforeWindowsRefusals = readCatalog()
+    for (const root of ['C:\\Users\\Jeffry\\repo', '/mnt/c/Users/Jeffry/repo']) {
+      const windowsRefused = await fetch(`${base}/projects`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ root }),
+      })
+      assert.equal(windowsRefused.status, 400)
+      const windowsBody = await windowsRefused.json()
+      assert.equal(windowsBody.error, 'Projects on /mnt/c use 9p, where git and inotify are slow or unreliable; choose a folder under \\\\wsl$\\<distro>\\home instead.')
+    }
+    assert.deepEqual(readCatalog(), catalogBeforeWindowsRefusals, 'Windows-drive refusal does not write the catalog')
     const noSuch = await fetch(`${base}/projects/no-such/init`, { method: 'POST', body: '{}' })
     assert.equal(noSuch.status, 404)
     assert.equal((await getJson(`${base}/projects/no-such/config`)).status, 404)

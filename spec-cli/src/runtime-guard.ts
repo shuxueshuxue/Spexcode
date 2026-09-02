@@ -1,13 +1,15 @@
-import { spawnSync } from 'node:child_process'
+import { hasTmux as hostHasTmux, selectSessionHost, type SessionHost } from './session-host.js'
 
 // tmux presence is the primitive we actually depend on, so probe THAT rather than assuming by platform:
 // this also catches a bare POSIX box that simply hasn't installed tmux, not only native Windows.
 export function hasTmux(): boolean {
-  try {
-    return spawnSync('tmux', ['-V'], { stdio: 'ignore' }).status === 0
-  } catch {
-    return false
-  }
+  return hostHasTmux()
+}
+
+// Host selection is deliberately a runtime capability, not a platform branch. Phase 1 has only tmux-host;
+// the loud refusal remains the sole non-tmux outcome until process-host lands in phase 2.
+export function selectSessionRuntimeHost(): SessionHost {
+  return selectSessionHost(hasTmux())
 }
 
 // Pure so it is unit-testable without spawning or exiting: null = runtime OK; otherwise the stderr lines.

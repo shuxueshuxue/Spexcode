@@ -3,6 +3,8 @@ title: session-host
 status: pending
 hue: 285
 desc: The session HOST is an adapter boundary like the harness — tmux-host today, byte-identical; process-host for hosts without tmux, offering headless adapters only.
+code:
+  - spec-cli/src/session-host.ts
 related:
   - spec-cli/src/session-tmux.ts
   - spec-cli/src/sessions.ts
@@ -48,3 +50,13 @@ POSIX, named pipes on Windows. A `[[host-facts]]` reader shows which host is act
 
 The lane runs in two phases with a landing between them: extract the boundary with tmux-host alone and prove
 parity; then add process-host and prove a headless session's full loop on a host with no tmux.
+
+## current state
+
+Phase 1 is implemented. `session-host.ts` exposes the `SessionHost` lifecycle/witness boundary plus optional
+interactive operations and a narrow host command probe. `tmux-host` delegates to [[session-tmux]] without
+changing its socket, command arguments, probe timeouts, or witness value; lifecycle, graph pollers, record
+quarantine, attach/input routes, PTY probes, and resource accounting select that host rather than invoking
+tmux directly. `runtime-guard.ts` now exposes host selection and retains the existing loud refusal when tmux
+is unavailable. The invocation recorder is opt-in via `SPEXCODE_TMUX_RECORD` for the `tmux-host-parity` proof.
+Process-host remains intentionally unimplemented for phase 2.

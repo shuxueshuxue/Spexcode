@@ -18,3 +18,7 @@ name, bounded probe durations, command execution, and timeout classification. Ca
 answer: a clean non-zero result may prove absence, while a killed or timed-out probe remains unknown. The module
 does not own lifecycle, liveness, record, or quarantine policy; it only keeps those callers on the same transport
 and timeout facts.
+
+The transport also has an opt-in `SPEXCODE_TMUX_RECORD` recorder. When set, each invocation appends one JSON line
+containing the socket, exact argument array, and timeout value before executing the unchanged command. It is
+diagnostic evidence for [[session-host]] parity, not a second transport or a product runtime dependency.

@@ -21,7 +21,7 @@ import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoa
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
-import { TMUX_SOCK } from './session-tmux.js'
+import { sessionHost } from './session-host.js'
 import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable } from './session-record.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionTranscript, readSessionTranscriptTool, sessionTranscriptStream } from './session-transcript.js'
@@ -324,7 +324,7 @@ app.get('/api/settings', async (c) => c.json({
   // The picker uses this live registry when offering the explicit post-init target action. Keeping the
   // vocabulary on the backend avoids a second frontend list drifting as adapters are added.
   harnessTargets: [...NATIVE_HARNESS_IDS],
-  tmuxSocket: TMUX_SOCK,
+  tmuxSocket: sessionHost().socket,
   ...launcherDefault(),
 }))
 // the `surface: command` plugin-root nodes (built/active only) for new-session and live-inbox `/` dropdowns — each with

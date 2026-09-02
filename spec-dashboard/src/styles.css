@@ -3723,7 +3723,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .host-facts-head h2 { margin: 0; font-size: var(--type-title); }
 .host-facts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
 .host-facts-grid > div, .host-facts-launchers { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: var(--type-meta); }
-.host-facts-grid b, .host-facts-launchers b { color: var(--ink2); font-size: var(--type-caption); text-transform: uppercase; }
+.host-facts-grid b, .host-facts-launchers b { color: var(--ink2); font-size: var(--type-caption); }
 .host-facts-launchers { margin-top: 10px; }
 .host-facts-launchers .broken { color: var(--red); }
 @media (max-width: 720px) { .host-facts-grid { grid-template-columns: 1fr; } }

@@ -59,13 +59,14 @@ translates `\\wsl$\\<distro>\\home\\…` paths to `/home/…`. The Windows picke
 Native drive paths and `/mnt/*` are refused before
 the existing project POST with the 9p reason. A missing `wsl.exe` reports the install action; other probe spawn
 errors remain detection failures. `wsl-bootstrap.sh` is fed through `wsl.exe` with a piped stdin, so apt's
-single sudo prompt remains in the verbatim transcript; it uses a bundled tarball when supplied and otherwise
-reports its npm fallback before running the real `spex doctor`. `first-run.html` is a static `file://` transcript
+single sudo prompt remains in the verbatim transcript; the packaged app passes its complete local SpexCode
+tarball directory as a Windows resource path (translated to `/mnt/c/...`), and bootstrap refuses to run when
+that set is missing or empty before running the real `spex doctor`. `first-run.html` is a static `file://` transcript
 surface; the preload bridge only carries the sudo response back to the shell. Once `/health` responds, the shell
 closes that page and loads the same gateway URL used by a browser.
 
-The bootstrap must install a self-consistent SpexCode package set: either one tarball per package from the same
-commit or a pinned published set whose dependency versions agree; a thin root tarball must not mix release lines.
+The bootstrap must install the self-consistent SpexCode package set from [[desktop-packaging]]: one local tarball
+per package from the same commit. A thin root tarball must not mix release lines, and there is no registry fallback.
 
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource

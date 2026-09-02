@@ -69,9 +69,12 @@ supplies the fixture path while the HTTP request and catalog write remain real. 
 WSL filesystem and the path is translated ([[desktop-windows-wsl]]).
 
 **Platforms.** Linux and macOS run the gateway natively. On macOS a GUI-launched gateway runs inside the user's
-Aqua session, so the backends it starts can read the login keychain directly — no credential-sync agent is needed
-for desktop users. Windows runs the gateway inside WSL2 ([[desktop-windows-wsl]]) because the session runtime
-needs tmux, bash and unix sockets; a native Windows runtime waits on [[session-host]].
+Aqua session and the backend can read the login keychain directly (the measured `Claude Code-credentials` item was
+readable from `gui/501`). That alone does not make a plain `claude` launcher authenticate: on the measured Mac mini
+the worker still reported `Claude.ai login was rejected` / `Not logged in`, so the failure is in the launcher's
+token/auth path rather than keychain access. The shell does not claim to replace login or a credential-sync agent.
+Windows runs the gateway inside WSL2 ([[desktop-windows-wsl]])
+because the session runtime needs tmux, bash and unix sockets; a native Windows runtime waits on [[session-host]].
 
 **Why it lives outside the root workspaces.** Electron is ~150 MB of runtime. Placing this package in the
 workspace list would put that download in front of every contributor who runs `npm install`. It is installed on

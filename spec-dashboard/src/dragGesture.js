@@ -51,11 +51,19 @@ export function elementAt(x, y, selector) {
 export function startDrag(event, { threshold = DRAG_THRESHOLD, onStart, onMove, onDrop, onCancel } = {}) {
   if (event.button !== 0) return () => {}
   const origin = { x: event.clientX, y: event.clientY }
+  const captureTarget = event.currentTarget || event.target
+  const pointerId = event.pointerId
+  const captured = Number.isFinite(pointerId) && typeof captureTarget?.setPointerCapture === 'function'
   let live = false
 
   const detach = () => {
     window.removeEventListener('mousemove', onPointerMove, true)
     window.removeEventListener('mouseup', onPointerUp, true)
+    if (captured) {
+      window.removeEventListener('pointermove', onPointerMove, true)
+      window.removeEventListener('pointerup', onPointerUp, true)
+      if (captureTarget.hasPointerCapture?.(pointerId)) captureTarget.releasePointerCapture(pointerId)
+    }
     window.removeEventListener('keydown', onKey, true)
     if (live) document.body.classList.remove(DRAGGING_CLASS)
   }
@@ -83,6 +91,11 @@ export function startDrag(event, { threshold = DRAG_THRESHOLD, onStart, onMove, 
 
   window.addEventListener('mousemove', onPointerMove, true)
   window.addEventListener('mouseup', onPointerUp, true)
+  if (captured) {
+    captureTarget.setPointerCapture(pointerId)
+    window.addEventListener('pointermove', onPointerMove, true)
+    window.addEventListener('pointerup', onPointerUp, true)
+  }
   window.addEventListener('keydown', onKey, true)
   return abandon
 }

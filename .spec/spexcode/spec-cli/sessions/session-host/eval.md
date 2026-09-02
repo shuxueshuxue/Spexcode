@@ -19,6 +19,8 @@ scenarios:
     expected: >-
       The runtime guard selects process-host and the harness inventory lists only headless adapters; the session
       survives the backend reload and its liveness stays online; stop ends it and the record shows offline.
+      Windows-native measurement is outside this lane because it requires a Windows Node runtime for the backend;
+      leave that reading for the packaging wave.
     related: [spec-cli/src/runtime-guard.ts, spec-cli/src/runtime-ownership.ts]
 ---
 # eval.md - session-host

@@ -448,6 +448,10 @@ type PidEntry = { mtimeMs: number; pid: number; deadLatched: boolean }
 const pidRegistry = new Map<string, PidEntry>()
 function readAgentPid(p: string): number { try { return Number(readFileSync(p, 'utf8').trim()) } catch { return NaN } }
 function agentAlive(id: string): boolean | undefined {
+  if (sessionHost().kind === 'process-host') {
+    const identity = sessionHost().witness(id)
+    return !identity || typeof identity === 'string' ? false : processStartToken(identity.pid) === identity.startToken
+  }
   const pidPath = sessionArtifactPath(id, 'agent.pid')
   let mtimeMs: number
   try { mtimeMs = statSync(pidPath).mtimeMs } catch { pidRegistry.delete(id); return undefined }   // no pid file → pre-registration
@@ -471,6 +475,10 @@ export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean 
 async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
   const windows = new Map<string, PaneProbe>()
   const titles = new Map<string, string>()
+  if (sessionHost().kind === 'process-host') {
+    // process-host has no window/pane census. Per-session process identity is joined by liveness().
+    return { probeFailed: false, windows, titles, sockets: new Set(), unproven: new Set() }
+  }
   let out: string
   try {
     // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
@@ -522,6 +530,10 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
 }
 
 async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> {
+  if (sessionHost().kind === 'process-host') {
+    if (await sessionHost().alive(id)) throw new ResourceConflict(`refusing to stop ${id}: target process remains ${phase}`)
+    return
+  }
   const deadline = Date.now() + TARGET_TMUX_CLOSE_SETTLE_MS
   let probeFailed = false
   do {
@@ -618,7 +630,10 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
   // 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (h.liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
+  const processAlive = sessionHost().kind === 'process-host' ? agentAlive(rec.session) === true : false
+  const hostAlive = sessionHost().kind === 'process-host' ? processAlive : snap.windows.has(rec.session)
+  const pane = sessionHost().kind === 'process-host' ? { pidAlive: processAlive } : snap.windows.get(rec.session)
+  if (h.liveness(rec, hostAlive, runtimeRoot(), pane, snap.sockets.has(rec.session)) === 'online') return 'online'
   if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
   // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
   // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would

@@ -6,8 +6,8 @@ export function hasTmux(): boolean {
   return hostHasTmux()
 }
 
-// Host selection is deliberately a runtime capability, not a platform branch. Phase 1 has only tmux-host;
-// the loud refusal remains the sole non-tmux outcome until process-host lands in phase 2.
+// Host selection is deliberately a runtime capability, not a platform branch. tmux-host is preferred; a host
+// without tmux uses process-host and exposes only adapters that do not require an attachable terminal.
 export function selectSessionRuntimeHost(): SessionHost {
   return selectSessionHost(hasTmux())
 }
@@ -30,6 +30,11 @@ export function sessionRuntimeBlock(env: { hasTmux: boolean; platform: string })
 // Called at the top of the session-launching command path (`spex serve`). Exits 69 (EX_UNAVAILABLE: a
 // required support program does not exist) — a distinct, honest code, not a swallowed error or a stacktrace.
 export function assertSessionRuntime(): void {
+  // A host without tmux is supported by process-host; only its interactive capabilities are reduced.
+  if (!hasTmux()) {
+    console.error('spex: tmux is unavailable; using process-host (headless adapters only).')
+    return
+  }
   const block = sessionRuntimeBlock({ hasTmux: hasTmux(), platform: process.platform })
   if (!block) return
   for (const line of block) console.error(line)

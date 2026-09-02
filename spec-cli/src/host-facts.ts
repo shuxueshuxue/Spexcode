@@ -19,6 +19,22 @@ export type HostFacts = {
   gateway?: HostRecord
 }
 
+export type WslDetectionInput = {
+  platformName?: NodeJS.Platform
+  procVersion?: string
+  distroName?: string | null
+}
+
+export function isWsl(input: WslDetectionInput = {}): boolean {
+  if ((input.platformName ?? platform()) !== 'linux') return false
+  const distroName = input.distroName === undefined ? process.env.WSL_DISTRO_NAME : input.distroName
+  let procVersion = input.procVersion
+  if (procVersion === undefined) {
+    try { procVersion = readFileSync('/proc/version', 'utf8') } catch { procVersion = '' }
+  }
+  return /microsoft|wsl/i.test(procVersion) || !!distroName
+}
+
 function commandPath(command: string): string | null {
   const token = command.trim().match(/^(?:'([^']+)'|"([^"]+)"|(\S+))/)?.slice(1).find(Boolean)
   if (!token) return null
@@ -89,8 +105,7 @@ function launcherFacts(roots: string[]): LauncherFact[] {
 }
 
 function memoryFact(): HostFacts['memory'] {
-  const isWsl = platform() === 'linux' && (() => { try { return /microsoft|wsl/i.test(readFileSync('/proc/version', 'utf8')) || !!process.env.WSL_DISTRO_NAME } catch { return !!process.env.WSL_DISTRO_NAME } })()
-  if (isWsl) {
+  if (isWsl()) {
     const path = join(homedir(), '.wslconfig')
     let limitBytes: number | null = null
     try {
@@ -109,10 +124,10 @@ function memoryFact(): HostFacts['memory'] {
 }
 
 export function collectHostFacts(roots = discoverRoots()): HostFacts {
-  const isWsl = platform() === 'linux' && (() => { try { return /microsoft|wsl/i.test(readFileSync('/proc/version', 'utf8')) || !!process.env.WSL_DISTRO_NAME } catch { return !!process.env.WSL_DISTRO_NAME } })()
+  const wsl = isWsl()
   const runtime = platform() === 'darwin'
     ? { kind: 'darwin' as const, label: 'darwin' }
-    : isWsl ? { kind: 'wsl2' as const, label: 'wsl2', distro: process.env.WSL_DISTRO_NAME || undefined }
+    : wsl ? { kind: 'wsl2' as const, label: 'wsl2', distro: process.env.WSL_DISTRO_NAME || undefined }
       : { kind: 'native-linux' as const, label: 'native linux' }
   const record = readHostRecord()
   return {

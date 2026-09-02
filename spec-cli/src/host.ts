@@ -28,7 +28,7 @@ import {
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { clearProjectPassword } from './gateway-auth.js'
 import { resolveHarnessTargets } from './harness-select.js'
-import { collectHostFacts } from './host-facts.js'
+import { collectHostFacts, isWsl } from './host-facts.js'
 import { dropOwnHostRecord, newHostRecord, publishHostRecord, type HostRecord } from './host-record.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -88,8 +88,9 @@ function gitProjectRoot(dir: string): string | null {
   catch { return null }
 }
 
-const WINDOWS_DRIVE_PROJECT_MESSAGE = 'Projects on /mnt/c use 9p, where git and inotify are slow or unreliable; choose a folder under \\\\wsl$\\<distro>\\home instead.'
-function rejectWindowsDriveProjectPath(dir: string): void {
+const WINDOWS_DRIVE_PROJECT_MESSAGE = 'Projects on Windows drives reach WSL through 9p, where git and inotify are slow or unreliable; choose a folder under \\\\wsl$\\<distro>\\home instead.'
+export function rejectWindowsDriveProjectPath(dir: string, runningInWsl = isWsl()): void {
+  if (!runningInWsl) return
   if (/^[A-Za-z]:[\\/]/.test(dir) || /^\/mnt\/[A-Za-z](?:\/|$)/i.test(dir)) {
     throw new Error(WINDOWS_DRIVE_PROJECT_MESSAGE)
   }

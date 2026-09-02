@@ -7,7 +7,9 @@ scenarios:
       session, send a message to each, stop one, quarantine a synthetic unreadable record, and capture every tmux
       invocation (socket, args, timeouts) plus the resulting session records.
     expected: >-
-      The captured tmux invocations and the record contents are identical before and after, field for field.
+      Normalize generated ids and paths, then collapse consecutive repeats of the same periodic poll invocation;
+      poll cadence is timing, not contract. Compare every other invocation (launch, send, has-session, kill, and
+      quarantine witness probes) in order and field-for-field, along with the resulting session records.
     related: [spec-cli/src/session-tmux.ts, spec-cli/src/sessions.ts]
   - name: process-host-headless-loop
     tags: [backend-api]

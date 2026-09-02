@@ -6,7 +6,10 @@ desc: The desktop shell — a window over `spex dashboard`. A packaging of the e
 code:
   - spec-desktop/main.js
 related:
+  - spec-desktop/desktop-integration.js
+  - spec-desktop/gateway-discovery.js
   - spec-desktop/node-entry.mjs
+  - spec-desktop/deep-link.test.js
   - spec-desktop/package.json
   - package.json
   - scripts/desktop-contract.test.mjs
@@ -41,8 +44,10 @@ none of them. The cgroup containment the spike grew to reap leaked backends is r
 process the shell owns is a `utilityProcess` and dies with it.
 
 **Attach before start.** If a host gateway is already listening for this user, the shell loads it rather than
-starting a second; otherwise it starts one on a free loopback port and waits for its ready line. The gateway's
-own discovery record is [[host-facts]]'s concern; until it exists the shell probes the configured port.
+starting a second; otherwise it starts one on a free loopback port and waits for its ready line. The shell reads
+[[host-facts]]'s one `host.json` record through the CLI's shared `readHostRecord`, then probes that recorded
+origin before attaching. There is no configured-port fallback and no second shell-owned record name: an absent,
+stale, or mismatched record means start a new gateway and let its bind publish the new truth.
 
 **One instance, one main window, real secondary windows.** The shell holds the single-instance lock so a second
 launch — or a deep link ([[desktop-deep-link]]) — focuses the existing window instead of racing it. The main
@@ -57,8 +62,11 @@ only job is to build a menu that leaves them unclaimed. Quit, copy/paste, zoom a
 remain.
 
 **Native folder picker, existing route.** "Add project" in the desktop opens the OS folder dialog and posts the
-chosen path to the gateway's existing `POST /projects`; the browser keeps its read-only directory browser. On
-Windows the dialog browses the WSL filesystem and the path is translated ([[desktop-windows-wsl]]).
+chosen path as `{root}` from the main process to the gateway's existing `POST /projects`, then navigates the main
+window to the returned project id; no preload or renderer privilege is involved, and the browser keeps its
+read-only directory browser. `SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY` is the test-only dialog seam: when set it
+supplies the fixture path while the HTTP request and catalog write remain real. On Windows the dialog browses the
+WSL filesystem and the path is translated ([[desktop-windows-wsl]]).
 
 **Platforms.** Linux and macOS run the gateway natively. On macOS a GUI-launched gateway runs inside the user's
 Aqua session, so the backends it starts can read the login keychain directly — no credential-sync agent is needed

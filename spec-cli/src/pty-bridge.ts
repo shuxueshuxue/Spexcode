@@ -1,10 +1,8 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 import { alive } from './sessions.js'
+import { sessionHost } from './session-host.js'
 
-const pexec = promisify(execFile)
-const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 const HELPER = fileURLToPath(new URL('./pty-helper.mjs', import.meta.url))
 
 export type Viewer = {
@@ -76,10 +74,7 @@ function commitSize(bridge: Bridge): void {
 }
 
 async function tmux(args: string[]): Promise<string> {
-  try {
-    const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args])
-    return stdout.trim()
-  } catch { return '' }
+  try { return (await sessionHost().command(args)).trim() } catch { return '' }
 }
 
 function onHelperOutput(bridge: Bridge, chunk: Buffer): void {

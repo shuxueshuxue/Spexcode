@@ -9,7 +9,7 @@ import { defaultHarness, HARNESSES, harnessById, rendezvousListening } from './h
 import { gitTry } from '@spexcode/spec-core'
 import { ResourceConflict } from './host-resources.js'
 import { recordStatus } from './session-timeline.js'
-import { tmux, probeTimedOut, TMUX_PROBE_TIMEOUT_MS } from './session-tmux.js'
+import { sessionHost, probeTimedOut, TMUX_PROBE_TIMEOUT_MS } from './session-host.js'
 
 type Lifecycle = SessionLifecycle
 type Proposal = SessionProposal
@@ -395,7 +395,8 @@ function normalizeQuarantineWitness(id: string, raw: unknown): CorruptRecordQuar
   const threadValue = value.thread
   const thread = typeof threadValue === 'string' && threadValue.trim() ? threadValue.trim() : threadValue == null || threadValue === '' ? null : null
   if (!adapter || !HARNESSES.some((h) => h.id === adapter)) throw new ResourceConflict(`refusing to quarantine ${id}: adapter must name one registered harness`)
-  if (tmux !== id) throw new ResourceConflict(`refusing to quarantine ${id}: tmux witness must be the exact session id ${id}`)
+  const expectedWitness = sessionHost().witness(id)
+  if (tmux !== expectedWitness) throw new ResourceConflict(`refusing to quarantine ${id}: tmux witness must be the exact session id ${id}`)
   if (!worktree || !isAbsolute(worktree)) throw new ResourceConflict(`refusing to quarantine ${id}: worktree witness must be an absolute path`)
   if (!branch || branch.startsWith('-') || branch.startsWith('refs/')) throw new ResourceConflict(`refusing to quarantine ${id}: branch witness must be one local branch name`)
   if (threadValue !== undefined && threadValue !== null && typeof threadValue !== 'string') throw new ResourceConflict(`refusing to quarantine ${id}: thread witness must be a string or null`)
@@ -403,7 +404,7 @@ function normalizeQuarantineWitness(id: string, raw: unknown): CorruptRecordQuar
 }
 
 async function proveQuarantineTmuxAbsent(id: string): Promise<{ state: 'absent' }> {
-  try { await tmux(['has-session', '-t', id], TMUX_PROBE_TIMEOUT_MS) }
+  try { await sessionHost().alive(id, TMUX_PROBE_TIMEOUT_MS) }
   catch (error) {
     if (probeTimedOut(error)) throw new ResourceConflict(`refusing to quarantine ${id}: tmux absence is unknown (probe timed out)`)
     if (typeof (error as NodeJS.ErrnoException).code === 'number') return { state: 'absent' }

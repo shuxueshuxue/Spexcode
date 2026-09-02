@@ -36,6 +36,16 @@ scenarios:
     expected: >-
       The second process exits immediately, no second window appears, and the first window receives focus.
     code: [spec-desktop/main.js]
+  - name: menu-add-project-registers-folder
+    tags: [desktop]
+    description: >-
+      Launch the real Electron shell with SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY naming a fixture Git repository,
+      then choose File -> Add Project... from the application menu.
+    expected: >-
+      Electron bypasses only the native dialog under that documented test seam; the main process sends the real
+      POST /projects request, the durable catalog gains the fixture root, and the project appears in the switcher.
+    code: [spec-desktop/desktop-integration.js]
+    related: [spec-cli/src/host.ts, spec-dashboard/src/ProjectsPage.jsx]
 ---
 # eval.md - spec-desktop
 

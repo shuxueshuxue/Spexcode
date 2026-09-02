@@ -8,6 +8,7 @@ const { homedir } = require('node:os')
 const { resolve, join } = require('node:path')
 const { existsSync, readFileSync } = require('node:fs')
 const wsl = require('./wsl.js')
+const { createDesktopIntegration } = require('./desktop-integration.js')
 
 const SPEX_ENTRY = process.env.SPEXCODE_DESKTOP_ENTRY || resolve(__dirname, '..', 'bin', 'spex.mjs')
 const NODE_ENTRY = resolve(__dirname, 'node-entry.mjs')
@@ -21,6 +22,7 @@ let gateway = null
 let mainWindow = null
 let bootstrapChild = null
 let firstRunWindow = null
+let desktopIntegration = null
 
 // Electron's second-instance event is delivered to the first process. Acquire the lock before registering any
 // ready handlers so a losing launch exits without starting a gateway or creating a window.
@@ -28,12 +30,8 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  })
+  desktopIntegration = createDesktopIntegration({ app, dialog, getGateway: () => gateway, getMainWindow: () => mainWindow })
+  app.on('second-instance', (_event, argv) => desktopIntegration.handleSecondInstance(argv))
 }
 
 function freePort() {
@@ -276,7 +274,7 @@ async function attachOrStartGateway() {
 
 function installApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'File', submenu: [{ role: 'quit' }] },
+    { label: 'File', submenu: [{ id: 'add-project', label: 'Add Project…', click: () => void (process.platform === 'win32' ? pickProject(gateway?.url, gateway?.distro) : desktopIntegration.addProject()) }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'front' }] },
@@ -375,6 +373,7 @@ if (hasSingleInstanceLock) {
         gateway = await attachOrStartGateway()
       }
       openWindow(gateway.url, `${gateway.url}/`, true)
+      await desktopIntegration.ready()
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) openWindow(gateway.url, `${gateway.url}/`, true)
       })

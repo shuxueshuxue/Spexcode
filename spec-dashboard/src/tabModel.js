@@ -91,6 +91,13 @@ export function moveTab(tabs, key, before = null) {
   return [...rest.slice(0, to), tabs[from], ...rest.slice(to)]
 }
 
+// Positional focus is one-based for the desktop chord family. Digit 9 follows the browser/Obsidian
+// convention and selects the last tab, while positions beyond the current strip are inert.
+export function focusTab(tabs, ordinal) {
+  if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 9 || !tabs.length) return null
+  return tabs[ordinal === 9 ? tabs.length - 1 : ordinal - 1] || null
+}
+
 // WHERE CLOSING LANDS — one selector, no per-kind branches while tabs remain. `recent` is the strip's focus
 // history, most recent first, as tab keys. A surviving tab in that history inherits regardless of kind — the
 // reader is returned to the document they actually came from, so a Spec tab beats an unrelated session file

@@ -336,8 +336,10 @@ mechanism.
 
 A
 pane-backed Conversation mounts only on its first visit, then remains mounted after deselection or going offline
-so its timeline cursor, rendered history and last live tail survive revisits ([[message-stream]]); its refresh
-timer and transcript stream run only while selected.
+so its timeline cursor, rendered history, last live tail and the READER'S POSITION IN IT survive revisits
+([[message-stream]]); its refresh timer and transcript stream run only while selected. Scroll offset is browser
+state a mounted node holds only while it stays in the document, so it survives being hidden but not being moved:
+whatever orders the mounted layers may not depend on the selection ([[session-console]] owns that order).
 Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
 surfaces remain inert and make no timeline/detail reads or polling timers.
 
@@ -358,8 +360,9 @@ detail. The same rule holds one layer down, in the browser: an unshown Conversat
 not merely painted invisible, because a subtree that is only `visibility: hidden` is still measured on every
 reflow — and the console's own composer forces one on every character it autosizes, so the price of typing was
 the whole warm set's rendered history, measured again per keystroke. Skipping preserves the layer's rendering
-state, which is the one thing keeping it mounted was for; hiding it by removal would throw away the scroll
-position and make the mount pointless. The terminal layer beside it keeps its layout deliberately — a warm pane
+state, which is the one thing keeping it mounted was for; what forfeits the reading position is leaving the
+document, not being hidden inside it, so a hidden layer is skipped where an unmounted or reordered one would be
+back at the top of its history. The terminal layer beside it keeps its layout deliberately — a warm pane
 owes xterm its final geometry ([[terminal-io]]) — and it was never what the reflow cost. 
 
 **The transcript grammar is bound, not owned.** The person quoted, the agent as the page, the tool sentence,

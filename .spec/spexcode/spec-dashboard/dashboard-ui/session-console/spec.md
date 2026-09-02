@@ -25,6 +25,7 @@ related:
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/session-shortcuts.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
+  - spec-dashboard/test/conversation-scroll-survives-switch.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
@@ -86,7 +87,15 @@ working set.** The two layer sets answer to different rules and the console must
 is warm because its session HAS A LIVE PANE, so that set is bounded by the board and shrinks on its own, while a
 Conversation is warm because someone LOOKED AT IT, which is a set that only grows. The console therefore keeps
 the most recently shown Conversations up to the same working-set limit the workspace puts on mounted documents
-([[workspace-shell]]), evicts by least recently shown, and never evicts the selection. It is one bound answering
+([[workspace-shell]]), evicts by least recently shown, and never evicts the selection. **That recency order is
+the eviction's alone and never reaches the screen.** The warm layers sit absolutely positioned over one another,
+so their order in the document says nothing to a reader — but ordering them by anything the selection moves is
+how the console threw away a reader's place in a Conversation: reordering keyed children detaches the node and
+re-inserts it, and a scroll container that leaves the document comes back at the top. The mounted layers
+therefore keep a stable MOUNT order: a layer holds the slot it arrived in for as long as it stays mounted, and a
+newly warmed one is appended after it, so selecting another session changes what is visible and nothing else.
+Reading position is part of what keeping a Conversation mounted is for, exactly like the timeline cursor beside
+it ([[conversation]]), and a switch away and back must return the reader to the line they left. It is one bound answering
 one question — how much does an idle console hold — so a second limit keyed to memory, node count or session age
 would be a second answer to it. The console's own composer drafts live in the console's state, so it also owes
 its mounted layers referentially stable props: typing into the New prompt or the Command Box must cost the same

@@ -34,9 +34,10 @@ needs a repository nor enters the noun-first command map.
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
 after its noun, so an id can never occupy a verb slot and no id is a reserved word. Seven noun drawers
 (`spec` · `session` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
-`init` · `materialize` · `doctor` · `serve` · `dashboard` · `guidance` · `uninstall`) allowed only because their
-object is invariably THIS project (`dashboard`'s object is the HOST's project set — still no free
-object slot), plus the two help surfaces (`help` · `guide`). A bare noun prints its
+`init` · `materialize` · `doctor` · `serve` · `dashboard` · `open` · `guidance` · `uninstall`) allowed only because
+their object stays inside THIS project (`open` selects one of its nodes/sessions/files; `dashboard`'s object is
+the HOST's project set) — there is no free cross-project object slot — plus the two help surfaces (`help` ·
+`guide`). A bare noun prints its
 drawer's help and exits clean — there is no implicit default action. A verb reused across drawers
 must mean the same thing everywhere (`ls` lists a collection, `add` appends a record, `open`/`close`
 are lifecycle, `retract` is the author withdrawing their own record). Sub-command vs flag follows one

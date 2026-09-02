@@ -301,6 +301,17 @@ Loopback-only by default; --host widens the bind — the admin surface stays loc
 an admin password exists, and ungated projects serve open.`,
     see: 'spex serve (each project\'s backend) · spex serve ui (explicit one-backend pairing)',
   },
+  open: {
+    line: 'open <target>         open a node, session, or project file in the running host dashboard  [--print-only]',
+    body: `Usage: spex open <node-id|session-SEL|path> [--print-only]
+
+Resolves the target in the current project, prints its canonical HTTP(S) dashboard URL to stdout, and
+opens that URL in the platform browser. Node ids resolve before session selectors, then existing project
+files; ambiguous selectors, paths outside the project, and missing targets fail loudly. The host gateway
+must already be running and must know the current project. --print-only prints without invoking the
+platform opener.`,
+    see: 'spex dashboard (start the host gateway) · spex spec search · spex session ls',
+  },
   guidance: {
     line: 'guidance              export the immutable guidance catalog index  [--out <path>]',
     body: `Usage: spex guidance [--out <path>] [--json]
@@ -605,6 +616,7 @@ Project verbs (implicit object = this project)
   ${ENTRIES.uninstall.line}
   ${ENTRIES.serve.line}
   ${ENTRIES.dashboard.line}
+  ${ENTRIES.open.line}
   ${ENTRIES.guidance.line}
 
 Noun drawers

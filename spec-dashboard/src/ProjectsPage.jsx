@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import {
@@ -13,6 +13,7 @@ import { IdentityIcon, IdentityPicker } from './IdentityIcon.jsx'
 import Modal from './Modal.jsx'
 import { PageScroll } from './PageScroll.jsx'
 import { useEscLayer } from './escStack.js'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 // The Projects management page ([[projects-hub]]) — the admin face over the hub's landed contract
 // ([[gateway-hub]] + [[host-gateway]]): one row per KNOWN project — the host's reconciled view of the
@@ -568,6 +569,7 @@ function GatewayIdentityEditor({ gateway, onRefresh, t }) {
 
 export default function ProjectsPage() {
   const t = useT()
+  const { notify } = useTransientNotice()
   const [state, setState] = useState({ kind: 'loading' }) // loading | ok | denied | absent
   const [health, setHealth] = useState({})                // id → 'running' | 'unreachable' (probed)
   const [drawer, setDrawer] = useState(null)              // 'admin' | null
@@ -580,6 +582,15 @@ export default function ProjectsPage() {
   const [hostDoctorBusy, setHostDoctorBusy] = useState(false)
   const [hostDoctorResult, setHostDoctorResult] = useState(null)
   const seq = useRef(0)
+
+  useLayoutEffect(() => {
+    const url = new URL(window.location.href)
+    const notice = url.searchParams.get('notice')
+    if (!notice) return
+    notify(notice, { kind: 'error' })
+    url.searchParams.delete('notice')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [notify])
 
   const refresh = useCallback(async () => {
     const mine = ++seq.current

@@ -284,7 +284,7 @@ test('project config loads and revision-guarded saves the raw source; ids encode
 })
 
 test('project config surfaces conflicts and rejects malformed server answers', async () => {
-  const conflict = await withFetch(async () => jsonRes(409, { error: 'spexcode.json changed on disk — reload before saving' }),
+  const conflict = await withFetch(async () => jsonRes(409, { error: '.spec/spexcode.json changed on disk — reload before saving' }),
     () => saveProjectConfig('a', '{}', 'old'))
   assert.equal(conflict.status, 409)
   assert.match(conflict.error, /changed on disk/)
@@ -349,7 +349,7 @@ test('structured icon writes use canonical responses and encode project ids', as
   assert.match(project.content, /"lucide:radar"/)
 })
 
-test('initProject carries only the EXPLICIT harness choice in the body; preset lives in spexcode.json', async () => {
+test('initProject carries only the EXPLICIT harness choice in the body; preset lives in .spec/spexcode.json', async () => {
   const calls = []
   const impl = async (url, init) => { calls.push({ url, body: JSON.parse(init.body) }); return jsonRes(200, { ok: true, code: 0, output: '✓ done' }) }
   await withFetch(impl, () => initProject('a b', 'claude,codex'))

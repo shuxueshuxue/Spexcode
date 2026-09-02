@@ -23,10 +23,10 @@ import { useTransientNotice } from './TransientNotice.jsx'
 // end-to-end truth), the gating state, a password set/clear drawer, and either Open (online — a plain
 // project-scoped link, `/p/<id>/#/graph`) or Start (offline — POST /projects/:id/serve boots the real
 // detached `spex serve` and resolves only when its record reconciles online). The settings gear edits
-// the raw committed spexcode.json through the host admin surface, even while the backend is offline;
+// the raw committed .spec/spexcode.json through the host admin surface, even while the backend is offline;
 // saves are JSON-validated and revision-guarded. A separate setup drawer runs the REAL spex verbs in
 // the repo (POST /projects/:id/init|doctor): init demands the explicit harness choice (the CLI refuses
-// without one), while preset stays in spexcode.json; every run renders its exit code + full transcript
+// without one), while preset stays in .spec/spexcode.json; every run renders its exit code + full transcript
 // in place, a failure stays visible and the button is the retry. The header
 // carries the ADMIN password control: `adminGated:false` means management is implicit-loopback-only, so
 // the page offers the bootstrap (the hub keeps the setter signed in by rotating their cookie). It
@@ -280,7 +280,7 @@ function ConfigDrawer({ p, onRefresh, t }) {
   return (
     <div className="proj-drawer proj-config">
       <div className="proj-config-head">
-        <code>spexcode.json</code>
+        <code>.spec/spexcode.json</code>
         {saved && <span className="proj-op-status ok">{t('projects.configSaved')}</span>}
       </div>
       {!loaded ? (
@@ -324,7 +324,7 @@ function ConfigDrawer({ p, onRefresh, t }) {
 
 // the setup drawer — the real management verbs for one registered repo. init requires the explicit
 // harness choice (multi-select chips over the native vocabulary; none picked = the button stays dark),
-// while preset stays in spexcode.json; doctor is one press. The result block is the spawned verb's honest
+// while preset stays in .spec/spexcode.json; doctor is one press. The result block is the spawned verb's honest
 // answer: exit code + transcript, kept on screen (success or failure), the same button the retry.
 function SetupDrawer({ p, busyOp, run, result, t }) {
   const [harnesses, setHarnesses] = useState([])

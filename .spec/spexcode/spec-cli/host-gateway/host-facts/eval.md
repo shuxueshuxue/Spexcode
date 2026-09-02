@@ -7,7 +7,7 @@ scenarios:
       `spex doctor` at host scope in a terminal.
     expected: >-
       Runtime, node, tmux, git, agent-login and launcher-resolution facts on the card equal the CLI's, field for
-      field; a deliberately broken launcher path in spexcode.local.json is named by both.
+      field; a deliberately broken launcher path in .spec/spexcode.local.json is named by both.
     related: [spec-dashboard/src/ProjectsPage.jsx, spec-cli/src/doctor.ts]
   - name: serve-failure-links-to-host
     tags: [frontend-e2e]

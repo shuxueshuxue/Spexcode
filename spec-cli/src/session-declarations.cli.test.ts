@@ -89,7 +89,7 @@ test('merge declaration records without the removed acceptance configuration', (
   try {
     process.env.SPEXCODE_HOME = home
     mkdirSync(root, { recursive: true })
-    writeFileSync(join(root, 'spexcode.json'), '{}\n')
+    writeFileSync(join(root, '.spec/spexcode.json'), '{}\n')
     writeFileSync(join(root, 'README.md'), 'fixture\n')
     execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root })
     execFileSync('git', ['config', 'user.email', 'merge-declaration@example.test'], { cwd: root })
@@ -104,7 +104,7 @@ test('merge declaration records without the removed acceptance configuration', (
     process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
     const application = initializeFreshSessionApplication()
     const path = recordPath(home, id, root)
-    const config = JSON.parse(readFileSync(join(root, 'spexcode.json'), 'utf8')) as Record<string, unknown>
+    const config = JSON.parse(readFileSync(join(root, '.spec/spexcode.json'), 'utf8')) as Record<string, unknown>
     assert.equal(config.review, undefined, 'the project config no longer carries the removed review gate')
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, `${JSON.stringify({

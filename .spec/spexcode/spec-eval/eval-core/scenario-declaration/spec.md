@@ -37,7 +37,7 @@ list JSON so callers see one stable shape regardless of how the author wrote the
 
 **Tags classify a scenario** so it can be filtered now and routed to the right driver later (a surface like
 `frontend-e2e`/`backend-api`/`cli`, a device like `desktop`/`mobile`). Each scenario carries **≥1 tag**, every
-tag drawn from a **closed vocabulary** — the library configured in `lint.scenarioTags` (spexcode.json). A tag
+tag drawn from a **closed vocabulary** — the library configured in `lint.scenarioTags` (.spec/spexcode.json). A tag
 outside the library is rejected with the repair the author owns: pick an existing tag, or **extend the
 library** to mint a new one. The library is data, not a fixed enum baked in code, so the project grows its
 own classification deliberately; the tags ride into `/api/graph` so every surface that shows a scenario

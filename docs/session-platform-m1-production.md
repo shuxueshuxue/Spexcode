@@ -93,7 +93,7 @@ B 与 C 再并行分叉于含 A 的集成头。
 | **A** protocol core | `packages/session-protocol/**`、`.spec/spexcode/session-protocol/{engine,schema,message-envelope,errors,package-entry}/**`、`.spec/spexcode/session-protocol/spec.md` 的 `related:` 一行 | 不碰 topology、不碰 adopter、不碰 `packages/session-core/**` |
 | **B** topology seam | `packages/session-topology/**`、`.spec/spexcode/session-topology/**`（新子节点） | 不改 protocol 包一个字节；不编码 parent/manager/ZSwarm/Spex 角色策略 |
 | **C** self-launch adopter | `packages/session-selflaunch/**`、`.spec/spexcode/session-runtime/self-launch/**` | 不 import spec-core / session-core；不做 daemon、不做 drain loop、不假设 Spex root |
-| **集成方** | 根 `package.json`、`spexcode.json`、`package-lock.json`、本文件与其 owning 节点 | 不替 writer 改代码；不替 evaluator 报数 |
+| **集成方** | 根 `package.json`、`.spec/spexcode.json`、`package-lock.json`、本文件与其 owning 节点 | 不替 writer 改代码；不替 evaluator 报数 |
 
 **D-14 事务体自己抛出的异常必须原样传出。** 契约冻结了事务体里只能有 SQL 与纯内存校验，也冻结了错误码清单，
 但**没有**说调用方在事务体里抛出的异常该怎么处理。本阶段收口为：**调用方的异常是调用方的**——协议回滚，然后原样重抛，

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
+import { readConfig, repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { readJsonConfig } from '@spexcode/spec-core'
 import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
@@ -41,14 +41,14 @@ const DEFAULT_CONFIG: LintConfig = {
   scopedCodeMiss: 'warn',
 }
 export function loadConfig(root: string, pendingSource?: string | null): LintConfig {
-  // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
+  // Absent .spec/spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
   // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
   let parsed: any
-  if (pendingSource === undefined) parsed = readJsonConfig(join(root, 'spexcode.json'))
+  if (pendingSource === undefined) parsed = readConfig(root)
   else if (pendingSource === null) parsed = {}
   else {
     try { parsed = JSON.parse(pendingSource) }
-    catch (e: any) { throw new Error(`invalid JSON in candidate spexcode.json: ${e?.message ?? e}`) }
+    catch (e: any) { throw new Error(`invalid JSON in candidate .spec/spexcode.json: ${e?.message ?? e}`) }
   }
   const c = parsed?.lint ?? {}
   const merged = { ...DEFAULT_CONFIG, ...c }
@@ -59,9 +59,9 @@ export function loadConfig(root: string, pendingSource?: string | null): LintCon
 // sourceExtensions is compatibility syntax only: it contributes include globs and never reaches discovery.
 export function normalizeConfig(cfg: LintConfig): LintConfig {
   // a mistyped enum silently reverting to the default would green-wash (or over-warn) exactly the
-  // advisory the author meant to tune — same fail-loud rule as a malformed spexcode.json.
+  // advisory the author meant to tune — same fail-loud rule as a malformed .spec/spexcode.json.
   if (cfg.scopedCodeMiss !== 'warn' && cfg.scopedCodeMiss !== 'ignore')
-    throw new Error(`spexcode.json lint.scopedCodeMiss must be "warn" or "ignore", got ${JSON.stringify(cfg.scopedCodeMiss)}`)
+    throw new Error(`.spec/spexcode.json lint.scopedCodeMiss must be "warn" or "ignore", got ${JSON.stringify(cfg.scopedCodeMiss)}`)
   const dedot = (xs: string[]) => xs.map((x) => x.replace(/^\.+/, ''))
   const anyDepth = (xs: string[]) => xs.map((g) => (g.includes('/') ? g : `**/${g}`))
   const extensions = cfg.sourceExtensions === null ? null : dedot(cfg.sourceExtensions)
@@ -86,7 +86,7 @@ function untrackedAdoptionFiles(root: string): string[] {
     '-C', root,
     '-c', 'core.quotePath=false',
     'status', '--porcelain=v1', '-z', '--untracked-files=all',
-    '--', '.spec', 'spexcode.json',
+    '--', '.spec',
   ])
   return status.split('\0')
     .filter((entry) => entry.startsWith('?? '))
@@ -130,7 +130,7 @@ export async function pendingTouchesGoverned(root: string, tip: string): Promise
   const specs = await loadSpecs(root, { tip, history: null, drift: null })
   const claims = specs.flatMap((spec) => [...spec.code, ...spec.related])
   return changed.some((path) => claims.some((claim) => relationClaimsPath(claim, path))
-    || path === 'spexcode.json' || path === 'spexcode.local.json'
+    || path === '.spec/spexcode.json' || path === '.spec/spexcode.local.json'
     || (path.startsWith('.spec/') && !path.startsWith('.spec/.issues/'))
     || path === '.spec')
 }
@@ -168,7 +168,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     ? !files.has(path) && directories.has(path.replace(/\/+$/, ''))
     : statSync(join(root, path)).isDirectory()
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
-  const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
+  const cfg = loadConfig(root, pending ? treeFileText(root, tip, '.spec/spexcode.json') : undefined)
   const untracked = untrackedAdoptionFiles(root)
   if (untracked.length) {
     const shown = untracked.slice(0, 6)
@@ -178,7 +178,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
       findings: [{
         level: 'error',
         rule: 'integrity',
-        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec spexcode.json\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
+        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
       }],
     }
   }
@@ -323,7 +323,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
 
   // coverage: every governed source file must be claimed by at least one spec.
   if (governed.length === 0)
-    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
+    out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in .spec/spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
   for (const f of governed)
     if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })
 

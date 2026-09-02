@@ -50,7 +50,7 @@ test('a real StopFailure drives a live session to error through the shipped shim
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-failchain-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-failchain-project-'))
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')

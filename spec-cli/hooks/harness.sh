@@ -170,8 +170,8 @@ hp_toolchain_version() {
 }
 
 # the deterministic content fingerprint of EVERYTHING the materialize is a function of: the EDITABLE config
-# roots (.plugins + plugin-system md/sh), the PERSISTED POLICY files (the MAIN checkout's spexcode.json +
-# spexcode.local.json — the `harnesses` set materialize reads via readConfig(mainCheckout)), and the
+# roots (.plugins + plugin-system md/sh), the PERSISTED POLICY files (the MAIN checkout's .spec/spexcode.json +
+# .spec/spexcode.local.json — the `harnesses` set materialize reads via readConfig(mainCheckout)), and the
 # toolchain version above. Since the dispatch-gate retired ([[commit-surgery]] — materialize anchors on
 # git-native events only), this is a FRESHNESS STAMP materialize records after each pass, a diagnostic
 # (is the last materialize current?) rather than a trigger. Run with cwd = the project. ONE definition:
@@ -183,7 +183,7 @@ hp_config_hash() {
   { hp_toolchain_version
     find .spec/*/.plugins .spec/*/plugin-system \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
       | sort -z | xargs -0 cat 2>/dev/null
-    [ -n "$gcd" ] && cat "$(dirname "$gcd")/spexcode.json" "$(dirname "$gcd")/spexcode.local.json" 2>/dev/null
+    [ -n "$gcd" ] && cat "$(dirname "$gcd")/.spec/spexcode.json" "$(dirname "$gcd")/.spec/spexcode.local.json" 2>/dev/null
   } | sha256sum | cut -d' ' -f1
 }
 

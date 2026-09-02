@@ -72,7 +72,7 @@ async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'
 // matched BY NAME (to avoid importing them) and rendered as a one-line `spex: <message>` (a user's
 // config typo or a refused cross-project write must read as their situation, not a SpexCode stack dump);
 // anything else prints in full so a real bug keeps its trace. A synchronous throw inside an awaited call
-// (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
+// (loadConfig on a malformed .spec/spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
   if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError', 'SessionFileError'].includes(e.name)) console.error(`spex: ${e.message}`)
@@ -287,7 +287,7 @@ const SIGNPOSTS: Record<string, string> = {
   tree: 'spex graph',
   board: 'spex graph --json',
   blob: 'spex evidence put|get',
-  issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
+  issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in .spec/spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
   runtime: 'spex doctor repair app-server',
   new: 'spex session new',

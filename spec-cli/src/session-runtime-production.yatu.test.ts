@@ -56,7 +56,7 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
   mkdirSync(join(project, '.spec', 'project'), { recursive: true })
   mkdirSync(tmuxDir)
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }) + '\n')

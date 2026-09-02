@@ -169,7 +169,7 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
     '',
   ].join('\n'))
   writeFileSync(join(project, 'src', 'nested', 'value.ts'), 'export const value = 1\n')
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -407,7 +407,7 @@ function prepareEmptyProject(fixture: string, name: string, commit = true): stri
   const project = join(fixture, name)
   mkdirSync(join(project, 'src'), { recursive: true })
   writeFileSync(join(project, 'src', 'value.ts'), 'export const value = 1\n')
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -510,7 +510,7 @@ test('a refused watcher source fails loud once and repairs on a bounded schedule
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: watcher hold fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -614,7 +614,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: patrol fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -843,7 +843,7 @@ test('a failed refresh keeps watcher causes through patrol recovery', { timeout:
     '---', 'title: Before failure', 'status: active', 'hue: 180', 'desc: recovery fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -1000,7 +1000,7 @@ test('a closed session delta overtakes an active route-owned full cache flight',
     '---', 'title: Before route-owned full', 'status: active', 'hue: 180', 'desc: route-owned fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -1213,7 +1213,7 @@ test('disabling the worktree leaf blinds it from every entry point', { timeout: 
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: blind fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
@@ -1289,7 +1289,7 @@ function fixtureProject(prefix: string): { fixture: string; project: string; spe
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: hook-authored state fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
-  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')

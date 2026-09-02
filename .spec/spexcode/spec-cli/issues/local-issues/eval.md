@@ -123,10 +123,10 @@ scenarios:
     related: [spec-cli/templates/hooks/post-merge, packages/spec-core/src/layout.ts, spec-cli/src/doctor.ts]
     description: >-
       With no config, read the switch through its surfaces (`spex doctor` Repo section; `spex internal
-      nudge <node>`). Then set `"issues": { "enabled": false }` in spexcode.json (there is no CLI toggle
+      nudge <node>`). Then set `"issues": { "enabled": false }` in .spec/spexcode.json (there is no CLI toggle
       verb — the JSON is the switch) and re-read: the nudge, `spex issue ls`'s footer, and doctor. Then
       restore true. Also run the removed spellings (`spex issue on|off|status`) and put a legacy
-      `"proposals": { "enabled": false }` key in spexcode.json.
+      `"proposals": { "enabled": false }` key in .spec/spexcode.json.
     expected: >-
       Default is ON with no config. With enabled:false, `spex internal nudge <node>` prints empty, `spex
       issue ls` appends a one-line OFF note naming the settings key, and doctor reports OFF — effective

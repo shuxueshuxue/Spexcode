@@ -3,7 +3,7 @@ import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadSpecs } from '@spexcode/spec-core'
+import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadSpecs, readConfig } from '@spexcode/spec-core'
 import { treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout, readJsonConfig } from '@spexcode/spec-core'
 import { loadConfig } from './lint.js'
 import { GENERATED_MARK } from './harness.js'
@@ -62,7 +62,7 @@ const DEFAULT_BREADTH: BreadthConfig = {
 }
 
 function loadAltitudeConfig(root: string): AltitudeConfig {
-  const configured = readJsonConfig(join(root, 'spexcode.json'))?.doctor?.altitude ?? {}
+  const configured = (readConfig(root) as any)?.doctor?.altitude ?? {}
   const merged = { ...DEFAULT_ALTITUDE, ...configured }
   return {
     ...merged,
@@ -71,7 +71,7 @@ function loadAltitudeConfig(root: string): AltitudeConfig {
 }
 
 function loadBreadthConfig(root: string): BreadthConfig {
-  const configured = readJsonConfig(join(root, 'spexcode.json'))?.doctor?.breadth ?? {}
+  const configured = (readConfig(root) as any)?.doctor?.breadth ?? {}
   return { ...DEFAULT_BREADTH, ...configured }
 }
 
@@ -336,7 +336,7 @@ async function doubleDeliveryReport(base: string): Promise<{ lines: string[]; co
   if (conflict) {
     L.push('Repair — SpexCode is reaching this agent through MORE THAN ONE discovery channel. Keep exactly one:')
     L.push('  • remove the independently-installed plugin bundle (delete its dir, or `claude plugin uninstall spexcode`); or')
-    L.push('  • if you WANT the plugin, stop the native delivery: set spexcode.json to')
+    L.push('  • if you WANT the plugin, stop the native delivery: set .spec/spexcode.json to')
     L.push('    `"harnesses": [{"plugin":".claude"}]`, then run `spex materialize` to prune the loose shim/contract/skills; or')
     L.push('  • remove SpexCode\'s generated delivery with `spex uninstall`.')
   } else {
@@ -361,7 +361,7 @@ async function doctor(): Promise<number> {
   const cwd = process.cwd()
   const root = repoRoot(cwd)
   const base = root ?? cwd   // the contract files (CLAUDE.md/AGENTS.md) + hook shims live at the worktree ROOT — anchor every probe here
-  const adopted = existsSync(join(base, '.spec')) && existsSync(join(base, 'spexcode.json'))
+  const adopted = existsSync(join(base, '.spec')) && (existsSync(join(base, '.spec', 'spexcode.json')) || existsSync(join(base, 'spexcode.json')))
   // managed = THIS agent's own session is a GOVERNED record in the global store (the dashboard launcher set
   // governed:true). That governed flag is the source of truth the old worktree `.session` presence only implied
   // (see [[state]]); resolve the agent's id from its env and read the record — a self-launched BYOA agent has none.
@@ -382,7 +382,7 @@ async function doctor(): Promise<number> {
   L.push('Agent')
   line('detected', runningHarness ? `${runningHarness.id}  (${runningHarness.sessionEnvVar}=${process.env[runningHarness.sessionEnvVar]})` : 'none detected (no harness session env var set)')
   L.push('\nRepo')
-  line('spex-adopted', adopted ? 'yes (.spec/ + spexcode.json)' : root ? 'no — run `spex init`' : 'not a git repo')
+  line('spex-adopted', adopted ? 'yes (.spec/ + .spec/spexcode.json)' : root ? 'no — run `spex init`' : 'not a git repo')
   line('root', base)
   line('mode', managed ? 'managed worktree (backend-launched session)' : 'standalone repo (bring-your-own-agent)')
   // the issues-workflow switch ([[local-issues]]): its only home is the `issues.enabled` settings key
@@ -397,9 +397,9 @@ async function doctor(): Promise<number> {
     const legacy = ['spexcode.json', 'spexcode.local.json'].filter((f) => {
       try { return 'proposals' in JSON.parse(readFileSync(join(cfgHome, f), 'utf8')) } catch { return false }
     })
-    line('issues workflow', `${issuesEnabled() ? 'ON' : 'OFF'} (spexcode.json issues.enabled)`)
+    line('issues workflow', `${issuesEnabled() ? 'ON' : 'OFF'} (.spec/spexcode.json issues.enabled)`)
     if (legacy.length) line('  LEGACY key', `\`proposals\` found in ${legacy.map((f) => join(cfgHome, f)).join(', ')} — no longer read; rename it to "issues": { "enabled": … }`)
-    const projectConfig = readJsonConfig(join(base, 'spexcode.json'))
+    const projectConfig = readJsonConfig(join(base, '.spec', 'spexcode.json'))
     if (Object.prototype.hasOwnProperty.call(projectConfig.lint ?? {}, 'maxChildren'))
       line('RETIRED key', '`lint.maxChildren` is no longer read — move the value to `doctor.breadth.maxChildren`')
   }

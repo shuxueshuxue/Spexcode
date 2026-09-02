@@ -25,7 +25,7 @@ the agent from one verb, picked by an optional topic:
   discovers backends that are already running or start later, exposes `/projects` for global switching and
   management, and scopes each project's dashboard under `/p/:id/`. There is no per-project UI process or
   API/UI port pairing. Each step names the real seam, not internals: **cwd** picks the repo a backend serves,
-  backend **`--port`** avoids listen collisions, and **`spexcode.json`** governs lint's layout. The
+  backend **`--port`** avoids listen collisions, and **`.spec/spexcode.json`** governs lint's layout. The
   source-checkout path (repo-root `npm link`, `npm run api`, and the Vite/HMR `npm run web`) stays a
   *contributor footnote*, never the installed-user headline: teaching the maintainer's path as the install
   was exactly the drift the packaging node's arrival made stale. The adopt step represents **every
@@ -78,11 +78,11 @@ the agent from one verb, picked by an optional topic:
   happened: `files` and `web` were registered as real pages while the unknown-topic error still named four.
   Nothing about the shorter list looked wrong, because an enumeration cannot report what it is missing.
 - **`settings` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
-  through this same primitive rather than a new mechanism: `spex guide settings` prints every `spexcode.json`
-  / `spexcode.local.json` field (launchers, dashboard icon, upload transfer policy, deterministic lint policy,
+  through this same primitive rather than a new mechanism: `spex guide settings` prints every `.spec/spexcode.json`
+  / `.spec/spexcode.local.json` field (launchers, dashboard icon, upload transfer policy, deterministic lint policy,
   doctor health budgets, layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
-  `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
+  `.spec/spexcode.json` vs. the gitignored, host-specific `.spec/spexcode.local.json` (absolute launcher paths,
   secrets). Deterministic lint policy and the doctor's altitude/breadth health budgets remain separate
   owners. Its launcher table mirrors [[launcher-select]]: interactive clean-init profiles use ordinary
   commands that preserve the harness permission model, while the independent [[opencode-headless]] profile
@@ -100,7 +100,7 @@ the agent from one verb, picked by an optional topic:
   `spex config set` — the guide + a direct edit is the whole surface.
 - **`footprint` → the residence MODEL manual.** The [[residence]] model as an operator's handbook: the
   four artifact kinds and their fixed track facts (materialized artifacts never tracked), the migration
-  recipe for a legacy untracked spec tree (`git add .spec spexcode.json` with the pushed-history WARN),
+  recipe for a legacy untracked spec tree (`git add .spec` with the pushed-history WARN),
   how the [[content-filter]] behaves on a host-tracked contract file, and the forgetting-law guarantees
   (any-order switching, `spex uninstall` as the empty policy).
 - **`files` → the agent-to-human PATH handoff.** The three `session files` verbs, the live and host-local

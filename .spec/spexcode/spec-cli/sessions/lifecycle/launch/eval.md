@@ -52,7 +52,7 @@ scenarios:
     tags: [backend-api]
     description: >
       Measure the concurrency cap through the REAL backend board (`/api/graph`, i.e. `spex graph --json`) — the
-      same status truth the dashboard renders. With the cap N = `spexcode.json` `sessions.maxActive`, look at
+      same status truth the dashboard renders. With the cap N = `.spec/spexcode.json` `sessions.maxActive`, look at
       a board that has MORE live sessions than N, where several are `idle`/`asking`/`review`/`done` (waiting
       on the human) alongside the `working`/`parked` ones, plus some `queued`. Confirm which sessions occupy
       a slot: count the live `working` + `parked` agents and compare to how many `queued` sessions remain
@@ -67,13 +67,13 @@ scenarios:
   - name: cap-value-comes-from-spexcode-json
     tags: [backend-api]
     description: >
-      Confirm the cap is configured in JSON, not hardcoded. Read `spexcode.json` `sessions.maxActive` and the
+      Confirm the cap is configured in JSON, not hardcoded. Read `.spec/spexcode.json` `sessions.maxActive` and the
       live board's occupied/queued counts. Then EDIT `sessions.maxActive` (raise or lower it) and, without
       restarting the backend, watch the next drain tick: a raised cap should launch more `queued` sessions; a
       lowered cap should stop launching new ones (already-running agents are never killed). Precedence:
-      `spexcode.json` wins, else the `SPEXCODE_MAX_ACTIVE` env, else default 8; a value < 1 floors to 1.
+      `.spec/spexcode.json` wins, else the `SPEXCODE_MAX_ACTIVE` env, else default 8; a value < 1 floors to 1.
     expected: |
-      The effective cap equals `spexcode.json` `sessions.maxActive` when present (env only fills in when the
+      The effective cap equals `.spec/spexcode.json` `sessions.maxActive` when present (env only fills in when the
       JSON key is absent; default 8 when neither is set). A live edit to the JSON re-tunes the cap on the
       next drain with no backend restart — raising it drains more `queued` sessions immediately, lowering it
       simply stops further launches (running agents keep their slots). The cap value is never baked into the
@@ -177,5 +177,5 @@ Measured through the **real backend board** (`/api/graph` = `spex graph --json`)
 dashboard renders — never an internal counter. The launch script itself is also a backend-owned surface: it
 is the exact file the worker pane runs. The loss being scored is the cap contract and launch bring-up
 honesty: a slot is **compute** pressure, so only live `working`/`parked` agents hold one (everything
-waiting-on-the-human frees it), the cap **value lives in `spexcode.json`**, read live so it tunes without a
+waiting-on-the-human frees it), the cap **value lives in `.spec/spexcode.json`**, read live so it tunes without a
 restart, and a retryable fast launch exit reports the observed condition without inventing a cause.

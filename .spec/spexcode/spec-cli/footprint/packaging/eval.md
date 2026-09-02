@@ -40,7 +40,7 @@ scenarios:
       The root tarball installs into the clean consumer project without dashboard, TypeScript, tsx, or esbuild.
       `npx spex --help` starts the compiled CLI through Node.
       Inside a fresh git repo, `spex init --harness codex` exits 0 and plants `.spec/project/spec.md` plus
-      `spexcode.json`; the config records Codex as the selected delivery target. Bare init remains a loud
+      `.spec/spexcode.json`; the config records Codex as the selected delivery target. Bare init remains a loud
       refusal because first adoption has no implicit harness choice.
       The consumer's production `node_modules` does not contain TypeScript; host projects carry the compiler
       only when their own development or JS-anchor setup needs it.
@@ -76,7 +76,7 @@ scenarios:
       before and after.
     expected: >
       Every L0 verb exits 0: lint reports zero errors, graph renders a nonempty tree, materialize completes,
-      init seeds `.spec/project/spec.md` and `spexcode.json`, and guide prints the workflow. `serve ui` and
+      init seeds `.spec/project/spec.md` and `.spec/spexcode.json`, and guide prints the workflow. `serve ui` and
       `dashboard` each exit 1 before binding a port, with no stack trace and the dashboard installation command.
       The Python adopter's real `.`/`py` configuration is
       honored by its lint and graph reads, its live worktree remains byte-for-byte Git-clean, and materialize

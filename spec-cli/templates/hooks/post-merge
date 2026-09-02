@@ -7,7 +7,7 @@
 # too. GUARDED to the `merge node/<id>:` commit, so an ordinary `git pull`/unrelated merge never nags.
 #
 # The nudge TEXT and the on/off toggle both live in the CLI (`spex internal nudge <node>` prints nothing when
-# the feature is OFF in spexcode.json), so this hook is a THIN resolver + caller: resolve `spex` the same
+# the feature is OFF in .spec/spexcode.json), so this hook is a THIN resolver + caller: resolve `spex` the same
 # three ways the pre-commit hook does, pass the merged node, echo whatever it prints. No CLI resolvable → no
 # nudge (safe degradation, same as the lint shim's advisory mode).
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")

@@ -30,7 +30,7 @@ global statistics and focused-node information. The whole UI is rendered through
 **i18n provider** wrapping the app, so every surface reads its copy from a locale rather
 than hardcoded strings. The tool is named **SpexCode**: npm packages are scoped
 `@spexcode/*`, the main-guard escape hatch is `SPEXCODE_ALLOW_MAIN`, and the optional
-layout override is `spexcode.json` — the package directory names (spec-cli,
+layout override is `.spec/spexcode.json` — the package directory names (spec-cli,
 spec-dashboard, spec-eval) stay as components, not the brand.
 
 ## Dependency accounting

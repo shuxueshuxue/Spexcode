@@ -25,7 +25,7 @@ const stop = async (child) => { if (!child || child.exitCode != null) return; ch
 rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true })
 const fixture = mkdtempSync(join(tmpdir(), 'spex-rail-tab-')); const project = join(fixture, 'project'); const home = join(fixture, 'home')
 mkdirSync(project, { recursive: true }); mkdirSync(home, { recursive: true })
-writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }))
+writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }))
 execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project }); execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project }); execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project }); execFileSync('git', ['add', '.'], { cwd: project }); execFileSync('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'seed'], { cwd: project })
 const apiPort = await freePort(); const uiPort = await freePort(); const api = `http://127.0.0.1:${apiPort}`; const base = `http://127.0.0.1:${uiPort}`
 const env = { ...process.env, PORT: String(apiPort), SPEXCODE_HOME: home, SPEXCODE_TMUX: `spex-rail-${process.pid}`, SPEXCODE_API_URL: '', FAKE_HARNESS_INTERVAL_MS: '80' }

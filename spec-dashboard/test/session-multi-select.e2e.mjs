@@ -99,6 +99,9 @@ try {
   await page.mouse.move(rootBox.x + 32, rootBox.y + rootBox.height / 2)
   const rootDrop = page.locator('[data-session-root-drop]')
   await rootDrop.waitFor({ state: 'visible' })
+  // the zone scrolls with the rows, so a long board can leave it above the viewport; scroll it in as a
+  // reader holding the row would before aiming at it
+  await rootDrop.scrollIntoViewIfNeeded()
   const rootDropBox = await rootDrop.boundingBox()
   assert.ok(rootDropBox, 'nested drag reveals the top-level drop zone')
   await page.mouse.move(rootDropBox.x + rootDropBox.width / 2, rootDropBox.y + rootDropBox.height / 2)

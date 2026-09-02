@@ -1727,9 +1727,14 @@ a.scenario-count:hover { background: var(--wash-hover); }
 .si-selaction:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
 .si-selaction.danger { color: var(--red); }
 .si-selaction:disabled { opacity: .45; cursor: default; }
-.si-check { flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: var(--radius); box-sizing: border-box; }
-.si-check.on { border-color: var(--blue); background: var(--blue); position: relative; }
-.si-check.on::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px; border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+/* [[session-multi-select]]: while selecting, the fold column IS the pick column. The ring is the pod's own
+   circle in the pod's own slot — a parent keeps its subtree count and rollup colour, a leaf gets an empty
+   ring — so a row never carries two circles. Fill means picked here (blue, never the rollup), and a leaf's
+   fill carries a check where a parent's carries its count. */
+.sess-fold.sess-pick { position: relative; background: transparent; border-color: var(--pick, var(--muted)); color: var(--pick, var(--muted)); }
+.sess-fold.sess-pick:empty { min-width: 14px; padding: 0; }
+.sess-fold.sess-pick.on { background: var(--blue); border-color: var(--blue); color: var(--paper); }
+.sess-fold.sess-pick.on:empty::after { content: ''; position: absolute; left: 4px; top: 2px; width: 3px; height: 6px; border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
 .si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
 .si-root-drop { height: 30px; margin: 5px 10px 2px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px dashed color-mix(in srgb, var(--muted) 60%, transparent); border-radius: var(--radius); color: var(--muted); }
 .si-root-drop.on { position: relative; z-index: 51; background: color-mix(in srgb, var(--green) 12%, var(--panel2)); border-color: var(--green); color: var(--green); }

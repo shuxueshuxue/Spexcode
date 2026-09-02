@@ -57,9 +57,9 @@ try {
   await childRow.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'select…' }).click()
   assert.equal(await page.locator('.si-selbar').count(), 1, 'row selection bar is visible')
-  assert.equal(await childRow.locator('.si-check.on').count(), 1, 'context-menu row starts selected')
+  assert.equal(await childRow.locator('.sess-pick.on').count(), 1, 'context-menu row starts selected')
   await targetRow.click()
-  assert.equal(await page.locator('.si-check.on').count(), 2, 'second row toggles into the same selection')
+  assert.equal(await page.locator('.sess-pick.on').count(), 2, 'second row toggles into the same selection')
   assert.match(page.url(), new RegExp(`/sessions/${child.id}$`), 'multi-select does not navigate')
   const selectionBar = page.locator('.si-selbar')
   const selectionBox = await selectionBar.boundingBox()
@@ -99,6 +99,9 @@ try {
   await page.mouse.move(rootBox.x + 32, rootBox.y + rootBox.height / 2)
   const rootDrop = page.locator('[data-session-root-drop]')
   await rootDrop.waitFor({ state: 'visible' })
+  // the zone scrolls with the rows, so a long board can leave it above the viewport; scroll it in as a
+  // reader holding the row would before aiming at it
+  await rootDrop.scrollIntoViewIfNeeded()
   const rootDropBox = await rootDrop.boundingBox()
   assert.ok(rootDropBox, 'nested drag reveals the top-level drop zone')
   await page.mouse.move(rootDropBox.x + rootDropBox.width / 2, rootDropBox.y + rootDropBox.height / 2)

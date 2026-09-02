@@ -26,6 +26,14 @@ scenarios:
       The desktop registration claims the spexcode:// scheme and xdg-open focuses the existing packaged
       window rather than starting a second shell.
     related: [spec-desktop/desktop-integration.js]
+  - name: packaged-deep-link-windows
+    tags: [desktop]
+    description: >-
+      Install the unsigned per-user NSIS package on Windows, verify its HKCU spexcode:// registration,
+      then run `start spexcode://p/<projectId>/#/settings` while the packaged app is already running.
+    expected: >-
+      The existing packaged window remains the only window, is focused, and navigates from the hub to the
+      requested project address without launching a second shell.
   - name: quit-leaves-backends-running
     tags: [desktop]
     description: >-
@@ -40,3 +48,8 @@ scenarios:
 These scenarios are measured on the ThinkPad through the real AppImage with `DISPLAY=:0` and
 `XAUTHORITY=/run/user/1000/gdm/Xauthority`. Evidence is stored under `/home/jeffry/spex-evidence/<lane>/`,
 published with `spex session files add`, and filed with `spex eval add` against the commit that was measured.
+
+Windows SmartScreen is an explicitly unmeasured Tier 2 gap for this phase: the unsigned-installer warning
+requires an interactive Windows desktop session and cannot be driven or observed from the SSH-only machine
+access used for the reproducible package run. No SmartScreen reading is filed until that interactive path is
+available.

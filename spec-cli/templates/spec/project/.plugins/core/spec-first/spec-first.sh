@@ -15,7 +15,12 @@
 # @@@ all sessions, global sentinel - file governance is independent of a record's `governed` bit, so the
 # same gate serves dashboard and self-launched agents. The sentinel lives in the per-session global store dir
 # (see hp_store_dir) and is created only by the first governed read. cwd = the worktree.
+SPEX_PROFILE_VALUE="${SPEX_PROFILE:-full}"
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
+hp_profile_hook_enabled spec-first
+profile_status=$?
+[ "$profile_status" -eq 1 ] && exit 0
+[ "$profile_status" -ne 0 ] && exit "$profile_status"
 S="${SPEX:-spex}"
 payload=$(cat 2>/dev/null)
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0

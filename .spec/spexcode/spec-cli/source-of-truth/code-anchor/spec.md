@@ -4,6 +4,7 @@ status: active
 hue: 15
 desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
+  - packages/spec-core/src/anchors.ts#extractCachedBlob
   - packages/spec-core/src/anchors.ts#runAnchorQueries
   - packages/spec-core/src/anchors.ts#anchorHitQueries
   - packages/spec-core/src/anchors.ts#anchorHitExists
@@ -77,6 +78,10 @@ drift asks about a NODE and so subtracts `Spec-OK` acks; eval freshness asks abo
 never vindicates, so it takes the plain ancestry window. A selector verdict this side is never a block
 either: eval's whole lint layer is advisory, and a dead or ambiguous selector there stales its reading
 rather than stopping a commit.
+
+Extraction of a live tree is memoized by its immutable Git blob id plus the extractor's complete memo key. A
+working-tree edit therefore creates one new parse result, while repeated lint or freshness reads for unchanged
+bytes reuse the existing units; the cache is in-process only and never becomes stored drift state.
 
 Exact impact projection is a third consumer of the same event/project/range seam. Its base→head window does
 not subtract `Spec-OK`: it asks what the session changed, not whether a node acknowledged drift. A declaration

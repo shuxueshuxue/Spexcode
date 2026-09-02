@@ -23,14 +23,14 @@ const argHas = (name: string) => process.argv.includes(`--${name}`)
 
 export function resolvePublicConfig(repoRoot: string): PublicConfig | null {
   let fileCfg: any = {}
-  // a MISSING spexcode.json is fine (defaults); a MALFORMED one fails LOUD — silently swallowing it would
+  // a MISSING .spec/spexcode.json is fine (defaults); a MALFORMED one fails LOUD — silently swallowing it would
   // serve the dashboard with the wrong public/TLS posture, the opposite of what the file says.
-  try { fileCfg = JSON.parse(readFileSync(join(repoRoot, 'spexcode.json'), 'utf8'))?.serve?.public ?? {} }
-  catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`spexcode.json is malformed (cannot resolve public-mode config): ${(e as Error).message}`) }
+  try { fileCfg = JSON.parse(readFileSync(join(repoRoot, '.spec', 'spexcode.json'), 'utf8'))?.serve?.public ?? {} }
+  catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`.spec/spexcode.json is malformed (cannot resolve public-mode config): ${(e as Error).message}`) }
   const enabled = argHas('public') || process.env.SPEXCODE_PUBLIC === '1' || fileCfg?.enabled === true
   if (!enabled) return null
 
-  // the gate is OPT-IN: a password (flag/env only — never spexcode.json) makes the login appear; WITHOUT one
+  // the gate is OPT-IN: a password (flag/env only — never .spec/spexcode.json) makes the login appear; WITHOUT one
   // the dashboard is served OPEN. That is loud-warned, not refused — open public access drives the agents, so
   // anyone who reaches the URL has them. The caller (you) chooses; we never silently gate or silently expose.
   const password = argFlag('password') ?? process.env.SPEXCODE_PASSWORD ?? ''

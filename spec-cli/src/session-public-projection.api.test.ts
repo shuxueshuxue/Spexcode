@@ -102,7 +102,7 @@ test('all public record APIs share pending projection and malformed fail-closed 
   try {
     mkdirSync(dirname(spec), { recursive: true })
     writeFileSync(spec, '---\ntitle: project\nstatus: active\n---\n# project\n\nFixture.\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
       harnesses: ['claude'],
       resources: { sampleMs: 50, reportIntervalMs: 60_000 },
     }, null, 2) + '\n')

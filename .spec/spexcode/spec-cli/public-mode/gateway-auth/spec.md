@@ -31,7 +31,7 @@ an unconfigured management plane must fail closed to the internet. The loopback 
 socket's remote address, never a header — `X-Forwarded-For` is attacker-controlled.
 
 **Password verifiers live only in the gateway's private per-user store** (`~/.spexcode/gateway/auth.json`,
-0600 in a 0700 dir) — never in a repo, a `spexcode.json`, or a backend record. A verifier is a salted
+0600 in a 0700 dir) — never in a repo, a `.spec/spexcode.json`, or a backend record. A verifier is a salted
 scrypt hash compared in constant time; plaintext never touches disk. The same store holds a random signing
 secret, so sessions are stateless HMAC-signed cookies that survive a gateway restart.
 

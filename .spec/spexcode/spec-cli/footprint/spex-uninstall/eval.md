@@ -14,7 +14,7 @@ scenarios:
       contract/ignore/attribute blocks, shims, generated and name-scoped legacy skills/agents, filter config
       and files, trust entries, plugin bundles from configured/standard/ledger hosts, skip-worktree bits,
       canonical hooks, and the whole per-project store including manifests, stamps, ledgers, sessions, and
-      legacy files. User prose, `.gitignore` rules, tracked `.spec` including `.plugins`, `spexcode.json`,
+      legacy files. User prose, `.gitignore` rules, tracked `.spec` including `.plugins`, `.spec/spexcode.json`,
       modified and unrelated hooks, foreign plugins/skills/settings/config, and all other user bytes remain
       identical. Default uninstall leaves all Git hooks, `--hooks` removes only canonical unchanged templates,
       and the repeated `--hooks` uninstall is a clean no-op.

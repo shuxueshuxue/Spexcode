@@ -40,7 +40,7 @@ export function commitSurgery(proj = process.cwd()): void {
   if (!staged.length) return
   const rel = (f: string) => relative(proj, f)
   const contracts = new Set(HARNESSES.flatMap((h) => h.contractFiles(proj)).map(rel))
-  const machine = new Set<string>(['spexcode.local.json', '.session'])
+  const machine = new Set<string>(['.spec/spexcode.local.json', '.session'])
   for (const h of HARNESSES) {
     machine.add(rel(h.shimFile(proj)))
     const a = h.worktreeHookAnchor(proj)

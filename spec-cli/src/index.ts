@@ -307,7 +307,7 @@ app.post('/api/evidence', async (c) => {
   if (buf.length > evidenceMaxBytes()) return c.json({ error: 'evidence too large' }, 413)
   return c.json({ hash: putBlob(buf) }, 201)
 })
-// the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
+// the SETTINGS read surface — one route for everything .spec/spexcode.json / .spec/spexcode.local.json resolves to:
 // `layout` (resolveLayout()'s main/worktrees/branch shape — the write-guard's project-identity probe reads
 // `.layout.main`) and the complete launcher profiles ([[launcher-select]]) the New-Session picker offers —
 // `{ name, harness, cmd, headless }`: the cmd is read-only display data for the picker (the dashboard sits
@@ -974,6 +974,15 @@ app.post('/api/sessions/:id/input', async (c) => {
     return c.json({ ok }, ok ? 200 : 404)
   }
   return c.json({ error: 'input needs kind: "text" | "command" | "keys"' }, 400)
+})
+app.post('/api/sessions/:id/push', async (c) => {
+  const id = c.req.param('id')
+  try {
+    await drainSession(id)
+    return c.json({ ok: true })
+  } catch (error) {
+    return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 502)
+  }
 })
 app.post('/api/sessions/reparent', async (c) => {
   const result = await reparentRequest(await c.req.json().catch(() => null))

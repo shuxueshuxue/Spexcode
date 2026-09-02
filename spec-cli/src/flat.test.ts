@@ -39,15 +39,15 @@ function initializedLocalRepo() {
   mkdirSync(join(repo, '.spec', 'project', 'source-two'), { recursive: true })
   writeFileSync(join(repo, '.spec', 'project', 'source-one', 'spec.md'), `---\ntitle: source one\nstatus: active\nhue: 165\ndesc: Exposes the first fixture value.\ncode:\n  - src-one.ts\n---\n# source one\n\nThe source module exposes the first fixture value.\n`)
   writeFileSync(join(repo, '.spec', 'project', 'source-two', 'spec.md'), `---\ntitle: source two\nstatus: active\nhue: 165\ndesc: Exposes the second fixture value.\ncode:\n  - src-two.ts\n---\n# source two\n\nThe source module exposes the second fixture value.\n`)
-  const config = JSON.parse(readFileSync(join(repo, 'spexcode.json'), 'utf8'))
+  const config = JSON.parse(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'))
   config.sessions = { launchers: { local: { harness: 'codex', cmd: join(bin, 'codex') } }, defaultLauncher: 'local' }
   config.lint = { governedRoots: ['.'], sourceExtensions: ['ts'] }
-  writeFileSync(join(repo, 'spexcode.json'), `${JSON.stringify(config, null, 2)}\n`)
+  writeFileSync(join(repo, '.spec/spexcode.json'), `${JSON.stringify(config, null, 2)}\n`)
   writeFileSync(join(bin, 'codex'), '#!/bin/sh\n[ "$1" = "exec" ] && [ "$2" = "-" ] || exit 64\ncat >/dev/null\n')
   execFileSync('chmod', ['+x', join(bin, 'codex')])
   git(repo, ['add', '-A'])
   git(repo, ['commit', '-qm', 'initialized'])
-  return { root, repo, config: readFileSync(join(repo, 'spexcode.json'), 'utf8') }
+  return { root, repo, config: readFileSync(join(repo, '.spec/spexcode.json'), 'utf8') }
 }
 
 test('profiling governs tracked source and ignores what no spec could claim', () => {
@@ -240,7 +240,7 @@ test('an initialized local repository is continued in place with only its .spec 
   assert.equal(result.repo, repo, 'the source repository is the flat repository')
   assert.equal(result.rounds, 0, 'a fully covered existing spec does not invoke the agent')
   assert.equal(result.passed, true)
-  assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), config, 'the existing project configuration stays byte-identical')
+  assert.equal(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), config, 'the existing project configuration stays byte-identical')
   assert.ok(existsSync(join(root, 'app.flat', 'flat.json')), 'the reading lives beside the source repository')
   assert.equal(existsSync(join(root, 'app.flat', 'repo')), false, 'a local repository is never cloned into its flat record')
   assert.equal(git(repo, ['status', '--porcelain']), '', 'the completed repository is clean')
@@ -287,7 +287,7 @@ git -c user.name=Agent -c user.email=agent@example.invalid commit --no-verify -q
   const result = await flatNew({ target: repo, rounds: 1, coverage: 100 }, () => {})
   assert.equal(result.rounds, 1)
   assert.equal(result.passed, true)
-  assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), config, 'the selected local launcher configuration is preserved')
+  assert.equal(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8'), config, 'the selected local launcher configuration is preserved')
   assert.deepEqual(git(repo, ['show', '--format=', '--name-only', 'HEAD']).split('\n').filter(Boolean), ['.spec/project/source-one/spec.md'])
   assert.equal(git(repo, ['log', '-1', '--format=%an']), 'Flatcode', 'Flatcode owns the committed measurement')
   assert.equal(git(repo, ['status', '--porcelain']), '')

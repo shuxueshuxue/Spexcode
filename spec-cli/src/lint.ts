@@ -1,9 +1,8 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
+import { readConfig, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
-import { readJsonConfig } from '@spexcode/spec-core'
-import { extractors, extractorFor, extOf, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
+import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
@@ -41,10 +40,10 @@ const DEFAULT_CONFIG: LintConfig = {
   scopedCodeMiss: 'warn',
 }
 export function loadConfig(root: string, pendingSource?: string | null): LintConfig {
-  // Absent spexcode.json → tuned defaults; a MALFORMED one throws LOUD (readJsonConfig) rather than
-  // silently reverting the author's budgets to defaults and green-washing the very warnings they tuned.
+  // Absent .spec/spexcode.json → tuned defaults; a malformed one throws rather than silently
+  // reverting the author's budgets to defaults.
   let parsed: any
-  if (pendingSource === undefined) parsed = readJsonConfig(join(root, 'spexcode.json'))
+  if (pendingSource === undefined) parsed = readConfig(root)
   else if (pendingSource === null) parsed = {}
   else {
     try { parsed = JSON.parse(pendingSource) }
@@ -382,6 +381,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   // One parse per candidate file per run, shared by every source that anchors it. Without it a file many
   // scenarios anchor is re-extracted once per scenario, and extraction is the expensive half of this gate.
   const unitsAtTip = new Map<string, { units: any } | { error: string }>()
+  const objectFormat = gitObjectFormat(root)
   for (const s of specs) {
     for (const src of [
       nodeSource(s, 'code', s.codeScoped),
@@ -413,15 +413,17 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
           try {
             const source = textAtTip(path)
             if (source === null) throw new Error(`candidate tree has no file '${path}'`)
-            cached = { units: await x.extract(source, path) }
+            const extraction = await extractCachedBlob(source, path, x, blobShaForContent(source, objectFormat))
+            cached = extraction
           } catch (e: any) { cached = { error: e?.message ?? String(e) } }
           unitsAtTip.set(path, cached)
         }
-        if ('error' in cached) {
-          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} (${owner}) is unverifiable — the current file does not parse: ${cached.error}` } })
+        const resolved = cached!
+        if ('error' in resolved) {
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} (${owner}) is unverifiable — the current file does not parse: ${resolved.error}` } })
           continue
         }
-        const units = cached.units
+        const units = resolved.units
         // each selector resolves (or errors) on its own; only the live ones feed the window engine.
         // The dead/ambiguous verdict itself comes from the ONE shared classifier ([[code-anchor]]); only the
         // wording of the gate's findings lives here.

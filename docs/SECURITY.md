@@ -24,7 +24,7 @@ SpexCode's session layer dispatches AI workers that drive a coding-agent harness
 selected harness's ordinary command, preserving that harness's normal permission prompts and sandbox policy.
 An operator can explicitly configure a more permissive named launcher (for example Claude
 `--dangerously-skip-permissions`, Codex `--yolo`, or OpenCode `--auto`) in
-`spexcode.json`/`spexcode.local.json`; such a worker can **read, write, and execute** on your machine without
+`.spec/spexcode.json`/`.spec/spexcode.local.json`; such a worker can **read, write, and execute** on your machine without
 per-action prompts. The git worktree is its working directory, and the dashboard's live "Sessions" console is
 a **real terminal** over a WebSocket — i.e. shell access to the host.
 

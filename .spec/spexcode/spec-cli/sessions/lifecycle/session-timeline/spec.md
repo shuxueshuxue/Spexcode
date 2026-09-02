@@ -176,3 +176,6 @@ neither set nor clear it, they say nothing about where the human reads) is deliv
 Fired exactly once: the transition send itself is recorded without the note marker, so the next terminal send ships bare.
 Without the counter-signal an agent that note-replied a few times keeps note-replying from context inertia
 long after the human left the phone — the failure that made entering the phone surface feel irreversible.
+
+Messages enqueued by the CLI's offline send path and by descendant broadcast remain durable queue entries until
+the recipient or its backend drains them; the hook's prompt event is not a receipt path.

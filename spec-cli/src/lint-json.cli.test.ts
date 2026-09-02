@@ -21,7 +21,7 @@ function fixture(extraCode = '') {
   mkdirSync(join(root, 'src/a'), { recursive: true })
   mkdirSync(join(root, 'src/z'), { recursive: true })
   writeFileSync(join(root, '.spec/project/spec.md'), `---\ntitle: project\ncode:\n  - src/z/covered.ts${extraCode}\n---\n# project\n`)
-  writeFileSync(join(root, 'spexcode.json'), '{"lint":{"governedRoots":["src/z","src/a"],"testGlobs":[]}}\n')
+  writeFileSync(join(root, '.spec/spexcode.json'), '{"lint":{"governedRoots":["src/z","src/a"],"testGlobs":[]}}\n')
   writeFileSync(join(root, 'src/z/covered.ts'), 'export const covered = true\n')
   writeFileSync(join(root, 'src/a/uncovered.ts'), 'export const uncovered = true\n')
   git('add', '-A')

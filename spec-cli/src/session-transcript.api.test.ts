@@ -82,7 +82,7 @@ test('YATU: the transcript GET and stream read one native thread through the ada
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['codex'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['codex'] }) + '\n')
     spawnSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
     spawnSync('git', ['config', 'user.email', 'transcript@example.test'], { cwd: project })
     spawnSync('git', ['config', 'user.name', 'Transcript Fixture'], { cwd: project })
@@ -202,7 +202,7 @@ test('YATU: a launcher-declared config dir routes the transcript read — pinned
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
     // the launcher registry declares WHERE claude-glm keeps its config dir; 'plain' declares nothing
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { defaultLauncher: 'plain', launchers: {
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { defaultLauncher: 'plain', launchers: {
       plain: { harness: 'claude', cmd: 'claude' },
       'claude-glm': { harness: 'claude', cmd: 'claude-glm-wrapper', configDir: declaredDir },
     } } }) + '\n')

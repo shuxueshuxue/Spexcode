@@ -70,6 +70,7 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
 test('init success message reports the governedRoots the template ACTUALLY ships — read from the planted file, drift-proof', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, spex } = freshRepo()
   const out = spex('init', '.', '--harness', 'claude,codex')
+  assert.match(readFileSync(join(proj, '.gitignore'), 'utf8'), /^\.spec\/spexcode\.local\.json$/m)
   assert.ok(out.includes(`lint.governedRoots starts as ${TEMPLATE_ROOTS}`), `plant message names the template value ${TEMPLATE_ROOTS}: ${out}`)
   assert.ok(out.includes(`(currently ${TEMPLATE_ROOTS})`), 'next-steps names the LIVE planted value')
   assert.ok(!out.includes('["src"]') || TEMPLATE_ROOTS === '["src"]', 'no stale hardcoded ["src"] claim anywhere')
@@ -97,9 +98,9 @@ test('init adoption data cannot masquerade as a clean untracked project', { skip
   })
   assert.equal(before.status, 1, `untracked adoption data must block lint: ${before.stdout}\n${before.stderr}`)
   assert.match(before.stderr, /integrity: project source of truth is untracked/i)
-  assert.match(before.stderr, /git add \.spec spexcode\.json/i)
+  assert.match(before.stderr, /git add \.spec/i)
 
-  g('add', '.spec', 'spexcode.json')
+  g('add', '.spec')
   execFileSync('git', ['-C', proj, 'commit', '-qm', 'adopt SpexCode seed'], {
     env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
   })
@@ -133,7 +134,7 @@ test('adoption needs no vote: a host-TRACKED contract file goes straight through
 test('a wholly generated ignore stays self-hidden after repeated materialize', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env, g, spex } = freshRepo()
   spex('init', '.', '--harness', 'codex')
-  g('add', '.spec', 'spexcode.json')
+  g('add', '.spec')
   execFileSync('git', ['-C', proj, 'commit', '-qm', 'adopt SpexCode seed'], {
     env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
   })
@@ -152,7 +153,7 @@ test('init without --harness fails loud BEFORE writing anything — the delivery
   const all = `${result.stdout}${result.stderr}\nexit:${result.status}`
   assert.match(all, /--harness is required/, 'the error names the missing flag')
   assert.match(all, /exit:1/, 'non-zero exit')
-  assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
+  assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, '.spec/spexcode.json')), 'nothing was written')
 })
 
 test('--harness seeds only the selected launchers, with automatic permission limited to the headless runtime that requires it', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -160,7 +161,7 @@ test('--harness seeds only the selected launchers, with automatic permission lim
   for (const selected of selections) {
     const { proj, codex, spex } = freshRepo()
     const out = spex('init', '.', '--harness', selected.join(','))
-    const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+    const cfg = JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8'))
     const expectedNames = Object.keys(SEEDED_LAUNCHERS).filter((name) => selected.includes(name))
     const expectedLaunchers = Object.fromEntries(expectedNames.map((name) => [name, SEEDED_LAUNCHERS[name as keyof typeof SEEDED_LAUNCHERS]]))
 
@@ -290,7 +291,8 @@ test('post-checkout defers only the session-owned refresh', { skip: !gitAvailabl
 
 test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env } = freshRepo()
-  writeFileSync(join(proj, 'spexcode.json'), '{"render":"committed","lint":{"governedRoots":["."]}}\n')
+  mkdirSync(join(proj, '.spec'), { recursive: true })
+  writeFileSync(join(proj, '.spec/spexcode.json'), '{"render":"committed","lint":{"governedRoots":["."]}}\n')
   const result = spawnSync(process.execPath, [TSX, CLI, 'init', '.', '--harness', 'claude,codex'], { cwd: proj, encoding: 'utf8', env })
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
   const all = `${result.stdout}${result.stderr}`
@@ -325,7 +327,7 @@ test('re-init refreshes managed Spex hooks, preserves a custom commit-msg, and n
   writeFileSync(localSpex, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(TSX)} ${JSON.stringify(CLI)} "$@"\n`)
   chmodSync(localSpex, 0o755)
 
-  const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
+  const cfg = JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8'))
   assert.equal(cfg.mainBranch, 'main', 'init persists trunk identity before an ordinary checkout can switch away')
   g('switch', '-qc', 'node/init-hook')
   writeFileSync(join(proj, 'README.md'), '# changed\n')

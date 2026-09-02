@@ -33,7 +33,7 @@ test('real eval lint shares tracked-text algebra and compiled extension compatib
   git('config', 'user.email', 'test@example.com')
   git('config', 'user.name', 'Test')
   write('.spec/project/spec.md', '---\ntitle: project\n---\n# project\n')
-  write('spexcode.json', JSON.stringify({ lint: { governedRoots: ['.'] } }) + '\n')
+  write('.spec/spexcode.json', JSON.stringify({ lint: { governedRoots: ['.'] } }) + '\n')
   for (const [id, path, content] of [
     ['python', 'src/app.py', 'VALUE = 1\n'],
     ['rust', 'src/lib.rs', 'pub fn value() {}\n'],
@@ -53,13 +53,13 @@ test('real eval lint shares tracked-text algebra and compiled extension compatib
   for (const id of ['python', 'rust', 'backend', 'frontend', 'docs', 'config'])
     assert.match(auto.out, new RegExp(`eval-coverage: '${id}' governs source code`), auto.out)
 
-  write('spexcode.json', JSON.stringify({ lint: {
+  write('.spec/spexcode.json', JSON.stringify({ lint: {
     governedRoots: ['.'],
     sourceIncludeGlobs: ['src/*.ts', 'README.md'],
     sourceExtensions: ['rs'],
     sourceExcludeGlobs: ['server.ts', 'README.md'],
   } }) + '\n')
-  git('add', 'spexcode.json')
+  git('add', '.spec/spexcode.json')
   git('commit', '-qm', 'narrow source')
   const rustOnly = lint()
   assert.equal(rustOnly.code, 0, rustOnly.out)
@@ -164,7 +164,7 @@ test('real changed eval lint proves its scope and fails loud when the base is un
   write('.spec/project/calc/spec.md', '---\ntitle: calc\ncode:\n  - src/calc.ts\n---\n# calc\n')
   write('.spec/project/calc/eval.md', '---\nscenarios:\n  - name: calc\n    tags: [cli]\n    description: add\n    expected: adds\n---\n')
   write('src/calc.ts', 'export const add = (a: number, b: number) => a + b\n')
-  write('spexcode.json', JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
+  write('.spec/spexcode.json', JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
   git('add', '-A')
   git('commit', '-qm', 'seed')
   const base = git('rev-parse', 'HEAD')
@@ -188,7 +188,7 @@ test('real changed eval lint proves its scope and fails loud when the base is un
   assert.match(renamed.out, /paths=4/, renamed.out)
   assert.match(renamed.out, /eval-schema: 'calc'.*src\/calc\.ts/, renamed.out)
 
-  unlinkSync(join(candidate, 'spexcode.json'))
+  unlinkSync(join(candidate, '.spec/spexcode.json'))
   const defaults = lint()
   assert.equal(defaults.code, 0, defaults.out)
   assert.match(
@@ -197,14 +197,14 @@ test('real changed eval lint proves its scope and fails loud when the base is un
     defaults.out,
   )
 
-  write('spexcode.json', JSON.stringify({ mainBranch: 'missing-main', lint: { governedRoots: ['src'] } }) + '\n')
+  write('.spec/spexcode.json', JSON.stringify({ mainBranch: 'missing-main', lint: { governedRoots: ['src'] } }) + '\n')
   const missing = lint()
   assert.notEqual(missing.code, 0, missing.out)
   assert.match(missing.out, /cannot establish changed scope against 'missing-main'/, missing.out)
   assert.doesNotMatch(missing.out, /node\(s\) flagged/, missing.out)
 
-  write('spexcode.local.json', '{ malformed\n')
-  write('spexcode.json', JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
+  write('.spec/spexcode.local.json', '{ malformed\n')
+  write('.spec/spexcode.json', JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
   const malformed = lint()
   assert.notEqual(malformed.code, 0, malformed.out)
   assert.match(malformed.out, /malformed .*spexcode\.local\.json/, malformed.out)

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 // @@@ help journey - the CLI's three help layers, each pointing at the next so no probe dead-ends:
 //   1. `spex help`            → the MAP: the whole noun-first surface, one line per drawer/verb.
 //   2. `spex help <cmd>`      → ONE drawer/command's usage (also `spex <cmd> --help`, intercepted pre-verb).
@@ -12,6 +14,55 @@
 
 // One command's help entry. `see` renders as a trailing "see also:" journey pointer.
 type Entry = { line: string; body: string; see?: string }
+
+export type CliProfile = Readonly<{
+  name: string
+  commands: ReadonlySet<string>
+  hooks: ReadonlySet<string>
+}>
+
+const REPO_COMMANDS = ['spec', 'eval', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
+const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
+const REPO_HOOKS = new Set(['spec-first', 'spec-of-file', 'comment-altitude'])
+
+function profileError(message: string): never {
+  const error = new Error(message)
+  error.name = 'ConfigError'
+  throw error
+}
+
+/** Resolve the startup-only agent surface from SPEX_PROFILE. */
+export function resolveCliProfile(): CliProfile {
+  const raw = process.env.SPEX_PROFILE?.trim() || 'full'
+  if (raw === 'full') return { name: 'full', commands: new Set(), hooks: new Set(ALL_CORE_HOOKS) }
+  if (raw === 'repo') return { name: 'repo', commands: new Set(REPO_COMMANDS), hooks: REPO_HOOKS }
+  let parsed: unknown
+  try { parsed = JSON.parse(readFileSync(raw, 'utf8')) } catch (error) {
+    profileError(`invalid SPEX_PROFILE '${raw}': expected 'full', 'repo', or a readable JSON profile file (${error instanceof Error ? error.message : String(error)})`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) profileError(`invalid SPEX_PROFILE '${raw}': JSON must be an object`)
+  const value = parsed as { commands?: unknown; hooks?: unknown }
+  if (!Array.isArray(value.commands) || value.commands.some((name) => typeof name !== 'string' || !name.trim())) {
+    profileError(`invalid SPEX_PROFILE '${raw}': commands must be an array of command names`)
+  }
+  const commands = new Set(value.commands as string[])
+  const known = new Set([...Object.keys(ENTRIES), 'help'])
+  for (const name of commands) if (!known.has(name) || name === 'internal') profileError(`invalid SPEX_PROFILE '${raw}': unknown command '${name}'`)
+  if (value.hooks !== undefined && (!Array.isArray(value.hooks) || (value.hooks as unknown[]).some((name) => typeof name !== 'string' || !ALL_CORE_HOOKS.includes(name as typeof ALL_CORE_HOOKS[number])))) {
+    profileError(`invalid SPEX_PROFILE '${raw}': hooks must list known core plugin names`)
+  }
+  const hooks = value.hooks === undefined ? new Set(ALL_CORE_HOOKS) : new Set(value.hooks as string[])
+  return { name: raw, commands, hooks }
+}
+
+export function profileAllowsCommand(profile: CliProfile, name: string): boolean {
+  return name === 'help' || profile.name === 'full' || profile.commands.has(name)
+}
+
+export function profileRefusal(profile: CliProfile, name: string): never {
+  console.error(`spex: command '${name}' is not exposed by SPEX_PROFILE=${profile.name}; sessions are owned by your harness; use SPEX_PROFILE=full for the full CLI`)
+  process.exit(2)
+}
 
 const SEL_NOTE = `SEL = session id (or unique id-prefix) | branch — every session read/control verb
 accepts any of the three; inside a session worktree, . means that worktree's session. On the list verbs (ls/watch),
@@ -49,7 +100,7 @@ The successful receipt names what to read, monitor, and reply on. --ssh uses an 
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
 prompt carries a runnable reply path over that same tunnel.`, ['project-bound']],
     ls: [['spex session ls [SEL…] [--children[=<PARENT-SEL>]] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--children=<PARENT-SEL>] [--status a,b] [--json]'],
-      'One-shot table of this project\'s session records, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Closed records are hidden from the working projection; --all includes them, and naming one explicitly always shows it. A missing id is a loud record miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table.', ['selector']],
+      'One-shot table of this project\'s session records, with each direct parent beside the row. --children scopes it to the caller\'s all descendants (use the former direct-child scope only through a selector-specific call); --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Closed records are hidden from the working projection; --all includes them, and naming one explicitly always shows it. A missing id is a loud record miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
       'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
@@ -71,8 +122,8 @@ session's store is gone.`, ['selector']],
     merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     reparent: ['spex session reparent <child-SEL...> --to <parent-SEL>',
       'Move one or more governed children to a replacement parent, replacing only the former parent\'s managed watch relation. It never restarts a child and works when the former parent is offline.', ['selector', 'project-bound']],
-    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send --ssh <address> <FULL-SESSION-ID> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
-      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --ssh uses an existing gateway-to-gateway communication tunnel and requires a full session id; no tunnel fails loud so an agent may run \`spex peer connect <address>\` then retry. --keys is the LAST RESORT:
+    send: [['spex session send <SEL> "<msg>"', 'spex session send --children [--direct] ["<msg>"]', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send --ssh <address> <FULL-SESSION-ID> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
+      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. With --children, the caller's descendants are enqueued in one transaction; --direct limits the set to direct children. With no inline message, stdin supplies the body. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --ssh uses an existing gateway-to-gateway communication tunnel and requires a full session id; no tunnel fails loud so an agent may run \`spex peer connect <address>\` then retry. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
 is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use keys only when text
 provably cannot land.`, ['selector', 'project-bound']],
@@ -159,9 +210,9 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
     body: `Usage: spex init [dir=cwd] --harness <id[,id]|plugin:<folder>> [--preset default]
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plugins plugins), plants
-spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
+.spec/spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
 shims). --harness is REQUIRED — the explicit choice of which harnesses materialize delivers into
-(stamped as spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
+(stamped as .spec/spexcode.json "harnesses"; only their launchers are seeded); a pre-existing "harnesses"
 field satisfies it; --harness none delivers into NO harness (spec tree + lint + git hooks only, nothing
 written into any agent's config). Additive: it never replaces a file you own — where a harness discovers its
 hooks in your own config (.claude/settings.json, …) only SpexCode's entries are merged in and out, and a
@@ -178,7 +229,7 @@ a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex
 The base operation of HARNESS ADAPTATION: one pass renders the spec tree's surface nodes into the
 artifacts each selected harness auto-discovers — the managed <!-- spexcode --> block of
 CLAUDE.md/AGENTS.md, the .claude/.codex shims, the skills/agents — and prints the content hash.
-The outputs are derived and never tracked: to change one, edit its source (.plugins, spexcode.json)
+The outputs are derived and never tracked: to change one, edit its source (.plugins, .spec/spexcode.json)
 and re-materialize — never the artifact. Not a one-time setup: it anchors on git-native events
 (init · this verb · session-worktree creation · the pre-commit/post-checkout/post-merge hooks) —
 run it by hand after a toolchain update, or in the setup step of any clone that has no spex-planted
@@ -255,7 +306,7 @@ landed on a host can be checked against what was built.`,
 
 Removes all SpexCode-derived wiring and project-local state: contract blocks, harness shims,
 generated skills/agents, plugin bundles, trust/filter/exclude entries, and the global per-project
-store. Your tracked intent (.spec including .plugins, plus spexcode.json) and surrounding user prose
+store. Your tracked intent (.spec including .plugins, plus .spec/spexcode.json) and surrounding user prose
 are preserved. Git hooks remain unless --hooks; that flag removes only unmodified canonical copies.`,
     see: 'spex init (re-adopt later — your tracked intent survives)',
   },
@@ -292,7 +343,7 @@ Admin surface (hub-authorized: implicit from loopback until an admin password is
 sessions): GET /projects (the validated list + gating state) · GET /projects/stream (SSE) ·
 GET /projects/browse?path=… (read-only host folder picker) · POST /projects {root, initGit?, init?}
 (explicit setup, then register) · GET|PUT /projects/<id>/config (raw portable
-spexcode.json, revision-guarded) · POST /projects/<id>/init|doctor|serve
+.spec/spexcode.json, revision-guarded) · POST /projects/<id>/init|doctor|serve
 (run the real \`spex init\`/\`spex doctor\`, or start an offline project's backend, detached — a
 backend never depends on this gateway staying up) · PUT|DELETE /projects/admin-password and
 /projects/<id>/password (the gates). A gated project answers /p/<id>/login with the designed page.
@@ -345,10 +396,11 @@ consumes the token after it.`,
     see: 'spex session send --ssh <address> <full-session-id> "<msg>" · spex dashboard (the host gateway)',
   },
   spec: {
-    line: 'spec <verb>           the governance graph: search · owner · lint · ack',
+    line: 'spec <verb>           the governance graph: search · owner · lint · ack · report',
     body: `Usage: spex spec search <query…> [--limit N=10] [--json]
        spex spec owner <path> [--actionable]
        spex spec lint [--json]
+       spex spec report [<rev>|<a..b>] [--note <text>] [--always]
        spex spec ack <node-id>… --reason "<why the contract still holds>"
 
 search — which spec node GOVERNS a topic, ranked by user-story relevance (which surfaces user-facing
@@ -454,7 +506,7 @@ not only bugs; --store <host> opens straight on the forge. \`reply\` and \`close
 issue's store — one verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one
 recorded action. \`links\` is the read-only forge trace: which open forge issues/PRs serve which
 spec node (--pending narrows to threads still awaiting an eval). The issues workflow's
-on/off switch is the \`issues.enabled\` key in spexcode.json (no CLI toggle verb — edit the JSON;
+on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle verb — edit the JSON;
 \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex evidence put (stash evidence bytes)',
@@ -488,11 +540,11 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · .spec/spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
        spex guide eval       the eval.md scenario format + how loss is measured and filed
-       spex guide settings   every spexcode.json / spexcode.local.json field, and which file it belongs in
+       spex guide settings   every .spec/spexcode.json / .spec/spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
@@ -562,8 +614,9 @@ configured Codex launcher.\n\nsee also: spex doctor (the complete command) · sp
 export type PublicCommand = Readonly<{ name: string; text: string }>
 
 export function publicCommands(): readonly PublicCommand[] {
+  const profile = resolveCliProfile()
   return Object.entries(ENTRIES)
-    .filter(([name]) => name !== 'internal')
+    .filter(([name]) => name !== 'internal' && profileAllowsCommand(profile, name))
     .map(([name, entry]) => ({ name, text: `${entry.line}\n${entry.body}` }))
 }
 
@@ -601,7 +654,15 @@ export function peerSessionLaunchReceipt(id: string, sshAddress: string): string
 }
 
 export function overviewHelp(): string {
-  return `spex — SpexCode CLI (spec↔code graph + worktree session state machine)
+  const profile = resolveCliProfile()
+  const full = profile.name === 'full'
+  const visible = (name: string) => profileAllowsCommand(profile, name)
+  const projectLines = ['graph', 'init', 'materialize', 'doctor', 'uninstall', 'serve', 'dashboard', 'open', 'guidance']
+    .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
+  const nounLines = ['spec', 'session', 'peer', 'eval', 'issue', 'remark', 'evidence', 'flat']
+    .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
+  const manualLines = ['guide'].filter(visible).map((name) => `  ${ENTRIES[name].line}`)
+  return `spex — SpexCode CLI (spec↔code graph${full ? ' + worktree session state machine' : ''})
 
 Usage: spex <noun> <verb> [object] [flags]     the verb is always the token after its noun;
                                                a bare noun prints that drawer's help
@@ -609,34 +670,18 @@ Usage: spex <noun> <verb> [object] [flags]     the verb is always the token afte
                                                safe: a help probe never runs the verb)
 
 Project verbs (implicit object = this project)
-  ${ENTRIES.graph.line}
-  ${ENTRIES.init.line}
-  ${ENTRIES.materialize.line}
-  ${ENTRIES.doctor.line}
-  ${ENTRIES.uninstall.line}
-  ${ENTRIES.serve.line}
-  ${ENTRIES.dashboard.line}
-  ${ENTRIES.open.line}
-  ${ENTRIES.guidance.line}
+${projectLines.join('\n')}
 
 Noun drawers
-  ${ENTRIES.spec.line}
-  ${ENTRIES.session.line}
-  ${ENTRIES.peer.line}
-  ${ENTRIES.eval.line}
-  ${ENTRIES.issue.line}
-  ${ENTRIES.remark.line}
-  ${ENTRIES.evidence.line}
-  ${ENTRIES.flat.line}
+${nounLines.join('\n')}
 
 Manuals
-  ${ENTRIES.guide.line}
+${manualLines.join('\n')}
 
 Conventions (stated once, hold everywhere)
-  ${SEL_NOTE.split('\n').join('\n  ')}
-  ${JSON_NOTE.split('\n').join('\n  ')}
+${full ? `  ${SEL_NOTE.split('\n').join('\n  ')}\n  ${JSON_NOTE.split('\n').join('\n  ')}` : '  Profile-scoped help lists only commands exposed to this agent; hidden surfaces are owned by the harness.'}
   ${ROUTING_NOTE.split('\n').join('\n  ')}
-  ${MENTION_NOTE.split('\n').join('\n  ')}
+${full ? `  ${MENTION_NOTE.split('\n').join('\n  ')}` : ''}
 
 Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide settings · guide footprint.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`

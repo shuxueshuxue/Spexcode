@@ -92,7 +92,7 @@ async function structuralCounterexample() {
     mkdirSync(join(root, 'src'), { recursive: true })
     mkdirSync(join(root, '.spec', 'proj', 'n1'), { recursive: true })
     writeFileSync(join(root, 'package.json'), '{"private":true}\n')
-    writeFileSync(join(root, 'spexcode.json'), '{"lint":{"governedRoots":["src"],"sourceExtensions":["ts"]}}\n')
+    writeFileSync(join(root, '.spec/spexcode.json'), '{"lint":{"governedRoots":["src"],"sourceExtensions":["ts"]}}\n')
     writeFileSync(join(root, 'src', 'a.ts'), 'export function f(): number {\n  return 1\n}\nexport function g(): number {\n  return 2\n}\n')
     writeFileSync(join(root, '.spec', 'proj', 'n1', 'spec.md'), body(0, 0))
     run(root, 'init', '-q', '-b', 'main')
@@ -213,7 +213,7 @@ const clearedFor = (commit, version, node) => isAncestor(commit, version)
 if (process.env.SPEX_FOLD_FAST === '1') {
   let scopedCodeMiss = 'warn'
   try {
-    const settings = JSON.parse(git(['show', `${tip}:spexcode.json`]))
+    const settings = JSON.parse(git(['show', `${tip}:.spec/spexcode.json`]))
     scopedCodeMiss = settings?.lint?.scopedCodeMiss ?? 'warn'
   } catch { /* absent settings use the product default */ }
   const findings = new Set()

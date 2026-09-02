@@ -15,7 +15,12 @@
 # (dashboard-launched) session: a user-self-launched agent has no board to feed, so an undeclared stop is
 # none of our business. Lifecycle status/proposal come from the canonical session application through one
 # CLI read; this shell never treats runtime.json as a second lifecycle database.
+SPEX_PROFILE_VALUE="${SPEX_PROFILE:-full}"
 . "${SPEXCODE_HARNESS_LIB:?harness.sh not exported by dispatch.sh}"
+hp_profile_hook_enabled stop-gate
+profile_status=$?
+[ "$profile_status" -eq 1 ] && exit 0
+[ "$profile_status" -ne 0 ] && exit "$profile_status"
 S="${SPEX:-spex}"
 # @@@ the block must survive its own text - three ways a decision was lost. (1) A `hook-prompt` failure exited
 # non-zero, which for a Stop hook means ALLOW: the one gate whose job is to stop an undeclared stop was

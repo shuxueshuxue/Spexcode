@@ -4,7 +4,7 @@ scenarios:
     description: >
       Through the real product surface (planted hooks + bare git): on an adopted repo, force a leak the
       way it happens in the field — stage a CLAUDE.md blob carrying prose + the sentinel block plus a
-      force-added spexcode.local.json — leave a FURTHER unstaged edit in the worktree, then run `git
+      force-added .spec/spexcode.local.json — leave a FURTHER unstaged edit in the worktree, then run `git
       commit` with the planted pre-commit hook. Read the resulting commit, the index, and the worktree.
     expected: >
       The commit SUCCEEDS (repair, never reject) with one stderr note per repair: the committed CLAUDE.md

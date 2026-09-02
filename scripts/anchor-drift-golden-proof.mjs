@@ -84,7 +84,7 @@ function buildPositiveControl() {
   mkdirSync(join(root, '.spec', 'project'), { recursive: true })
   mkdirSync(join(root, 'src'), { recursive: true })
   writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
-  writeFileSync(join(root, 'spexcode.json'), '{"lint":{"governedRoots":["src"]}}\n')
+  writeFileSync(join(root, '.spec/spexcode.json'), '{"lint":{"governedRoots":["src"]}}\n')
   for (let index = 1; index <= 13; index++) {
     const id = `calc-${String(index).padStart(2, '0')}`
     mkdirSync(join(root, '.spec', 'project', id), { recursive: true })

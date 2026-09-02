@@ -35,7 +35,7 @@ function makeProject(folder, title, icon) {
   const dir = join(repos, folder)
   mkdirSync(join(dir, '.spec', 'project'), { recursive: true })
   writeFileSync(join(dir, '.spec', 'project', 'spec.md'), `---\ntitle: ${title}\ndesc: browser identity fixture\n---\n# project\n\n${title} fixture.\n`)
-  writeFileSync(join(dir, 'spexcode.json'), `${JSON.stringify({ harnesses: ['codex'], dashboard: { title, icon } }, null, 2)}\n`)
+  writeFileSync(join(dir, '.spec/spexcode.json'), `${JSON.stringify({ harnesses: ['codex'], dashboard: { title, icon } }, null, 2)}\n`)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
   execFileSync('git', ['config', 'user.email', 'identity@test'], { cwd: dir })
   execFileSync('git', ['config', 'user.name', 'identity'], { cwd: dir })
@@ -100,7 +100,7 @@ const getCatalog = async (base) => {
   return response.json()
 }
 
-const configIcon = (project) => JSON.parse(readFileSync(join(project.dir, 'spexcode.json'), 'utf8')).dashboard.icon
+const configIcon = (project) => JSON.parse(readFileSync(join(project.dir, '.spec/spexcode.json'), 'utf8')).dashboard.icon
 const favicon = (page) => page.locator("link[rel~='icon']").evaluate((link) => link.href)
 
 async function assertCollapsedPickers(page, label) {
@@ -272,7 +272,7 @@ try {
 
   step('open project details work area')
   const atlasRow = page.locator('.proj-row').filter({ hasText: 'Atlas Lab' })
-  await atlasRow.getByRole('button', { name: 'edit spexcode.json' }).click()
+  await atlasRow.getByRole('button', { name: 'edit .spec/spexcode.json' }).click()
   const atlasDrawer = atlasRow.locator('.proj-config')
   await atlasDrawer.locator('.proj-config-editor').waitFor()
   await assertEditorLayout(atlasDrawer, { minHeight: 430, maxHeight: 470, label: 'desktop' })
@@ -407,7 +407,7 @@ try {
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
   await page.getByRole('heading', { name: 'Projects' }).waitFor()
   const offlineAtlas = page.locator('.proj-row').filter({ hasText: 'Atlas Lab' })
-  await offlineAtlas.getByRole('button', { name: 'edit spexcode.json' }).click()
+  await offlineAtlas.getByRole('button', { name: 'edit .spec/spexcode.json' }).click()
   await offlineAtlas.locator('.proj-config-editor').waitFor()
   await offlineAtlas.getByRole('button', { name: 'edit project icon' }).click()
   await offlineAtlas.getByRole('group', { name: 'project icon' }).locator('label').filter({ hasText: 'Spark' }).click()
@@ -468,7 +468,7 @@ try {
 
   step('mobile project editor and broad choice')
   const mobileAtlas = page.locator('.proj-row').filter({ hasText: 'Atlas Lab' })
-  await mobileAtlas.getByRole('button', { name: 'edit spexcode.json' }).click()
+  await mobileAtlas.getByRole('button', { name: 'edit .spec/spexcode.json' }).click()
   const mobileDrawer = mobileAtlas.locator('.proj-config')
   await mobileDrawer.locator('.proj-config-editor').waitFor()
   await assertEditorLayout(mobileDrawer, { minHeight: 500, maxHeight: 540, label: 'mobile' })

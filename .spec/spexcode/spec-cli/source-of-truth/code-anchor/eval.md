@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: anchor-extraction-cached
+    tags: [cli, backend-api]
+    code: [packages/spec-core/src/anchors.ts#extractCachedBlob]
+    description: >
+      Warm the same backend and capture a 5 s CDP CPU profile with the repository's profiler. Repeat the
+      profile after unchanged governed blobs have been seen once, then change one governed blob and profile
+      again against the same store and backend.
+    expected: >
+      In the measured throwaway workload, `extract` is absent from the self-time and inclusive CPU tops. The
+      unchanged blobs are not reparsed, while the changed blob is extracted once and the drift verdict remains
+      derived live from Git. Production-load percentage validation is a live-backend follow-up because the
+      throwaway has no active SSE/poll demand.
   - name: fold-project-boundary
     tags: [cli]
     code: [packages/spec-core/src/git.ts#canonicalPathProjector]
@@ -120,7 +132,7 @@ scenarios:
     tags: [cli]
     description: >
       Anchored fixture where the post-version commit touches only a NON-pinned unit (a miss). Run
-      `spex spec lint` with no setting, then with `lint.scopedCodeMiss: "ignore"` in spexcode.json,
+      `spex spec lint` with no setting, then with `lint.scopedCodeMiss: "ignore"` in .spec/spexcode.json,
       then touch the pinned unit under "ignore".
     expected: >
       Default: the ordinary advisory `drift` warn appears, no anchor-drift, exit 0. With "ignore": that

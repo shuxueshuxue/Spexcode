@@ -61,7 +61,7 @@ test('session diff anchors to refs: live worktree, removed worktree, and vanishe
   let backend: ChildProcess | null = null
   try {
     mkdirSync(project, { recursive: true })
-    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'] }) + '\n')
     writeFileSync(join(project, 'README.md'), 'fixture\n')
     git(project, 'init', '-q', '-b', 'main')
     git(project, 'config', 'user.email', 'diff@example.test')

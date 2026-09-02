@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/dragGesture.js
   - spec-dashboard/src/tabStrip.test.mjs
+  - spec-dashboard/test/tab-click-activates.e2e.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/src/SessionForestPanel.jsx

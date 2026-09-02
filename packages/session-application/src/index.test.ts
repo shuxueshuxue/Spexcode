@@ -46,6 +46,18 @@ test('notifyRecipients with no subscribers does not invent a message or event', 
   assert.equal(protocol.readMessages('child').length, 0)
 })
 
+test('broadcast enqueues one idempotent message per explicit recipient', t => {
+  const { protocol, app } = fixture()
+  t.after(() => protocol.close())
+  const first = app.broadcast('child', ['parent-a', 'parent-b', 'parent-a'], { kind: 'session.text.v1', body: Buffer.from('hello') })
+  assert.deepEqual(Object.keys(first), ['parent-a', 'parent-b'])
+  assert.equal(protocol.listPending('parent-a').length, 1)
+  assert.equal(protocol.listPending('parent-b').length, 1)
+  const second = app.broadcast('child', ['parent-a', 'parent-b'], { kind: 'session.text.v1', body: Buffer.from('hello') })
+  assert.deepEqual(second, first)
+  assert.equal(protocol.listPending('parent-a').length, 1)
+})
+
 test('the application service cannot make a partial relation visible after a transaction error', t => {
   const { protocol, topology, app } = fixture()
   t.after(() => protocol.close())

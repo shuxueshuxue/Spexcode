@@ -12,6 +12,7 @@ import {
   prepareCodexGenerationClose,
   prepareCodexGenerationRegistration,
   readCodexGenerationLedger,
+  codexGenerationLedgerCacheStatsForTests,
   reclaimDrainingCodexGeneration,
   rotateCodexCurrentGeneration,
   resolveCodexGenerationForResume,
@@ -23,6 +24,26 @@ import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { processStartToken } from '@spexcode/spec-core'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+test('generation ledger cache avoids unchanged reads and invalidates on replacement', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-cache-'))
+  const path = join(root, 'codex-app-server-generations.json')
+  const empty = { version: 3, revision: 0, current: null, pending: null, generations: {}, bindings: {} }
+  try {
+    assert.equal(readCodexGenerationLedger(root).revision, 0)
+    assert.equal(readCodexGenerationLedger(root).revision, 0)
+    assert.equal(codexGenerationLedgerCacheStatsForTests(root).reads, 0)
+    writeFileSync(path, `${JSON.stringify(empty)}\n`)
+    assert.equal(readCodexGenerationLedger(root).revision, 0)
+    assert.equal(readCodexGenerationLedger(root).revision, 0)
+    assert.equal(codexGenerationLedgerCacheStatsForTests(root).reads, 1)
+    writeFileSync(path, `${JSON.stringify({ ...empty, revision: 1, padding: 'changed' })}\n`)
+    assert.equal(readCodexGenerationLedger(root).revision, 1)
+    assert.equal(codexGenerationLedgerCacheStatsForTests(root).reads, 2)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 async function waitForSocket(path: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {

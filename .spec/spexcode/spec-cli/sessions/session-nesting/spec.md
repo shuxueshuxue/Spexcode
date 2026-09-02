@@ -49,7 +49,7 @@ family is visible rather than silently disappearing; this is a read-time project
 
 **The CLI exposes the same provenance without pretending to be the dashboard tree.** `spex session ls` stays a
 flat project board, but every row prints its direct parent id and `--children` scopes the board to the caller's
-direct children. `--children=<PARENT-SEL>` chooses another parent in an attached value so a following positional
+all descendants. `--children=<PARENT-SEL>` chooses another parent in an attached value so a following positional
 remains a child-result filter. The direct pointer remains usable after a parent closes: children are still found
 by that durable id even though the dashboard's forest correctly auto-promotes them. A status summary describes
 only the displayed rows; it never turns child states into the parent's lifecycle state.

@@ -25,8 +25,8 @@ const LOCAL_STORE_REL = '.spec/.issues'
 const LEGACY_STORE_REL = '.spec/.forum'
 
 // @@@ the on/off switch - the issues workflow is an OPT-OUTABLE feature (default ON). The single source of
-// truth is `spexcode.json`'s `issues.enabled` (the same settings file that carries every other toggle),
-// read via readConfig so a machine-local `spexcode.local.json` can override it. OFF silences the post-merge
+// truth is `.spec/spexcode.json`'s `issues.enabled` (the same settings file that carries every other toggle),
+// read via readConfig so a machine-local `.spec/spexcode.local.json` can override it. OFF silences the post-merge
 // nudge (and, in the dashboard, hides the issues view); the raw write verbs stay usable, since running one
 // is explicit consent. There is deliberately NO CLI toggle verb (v0.3.0 — "no `spex config set`" is this
 // project's standing rule): flip the key by editing the JSON, effective immediately because readConfig

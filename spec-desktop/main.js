@@ -331,8 +331,10 @@ async function pickProject(gatewayUrl, distro) {
 async function bootstrapWindowsAndStart() {
   let host
   try { host = await wsl.detectWsl() } catch (error) {
-    const action = error.code === 'ENOENT'
-      ? '\n\nAction: open an administrator PowerShell, run wsl --install, reboot, then reopen SpexCode.'
+    const action = error.code === 'ENOENT' || error.code === 'WSL_UNAVAILABLE'
+      ? (error.message.includes('version 1')
+        ? '\n\nAction: upgrade the installed distro to WSL2, then reopen SpexCode.'
+        : '\n\nAction: open an administrator PowerShell, run wsl --install, reboot, then reopen SpexCode.')
       : '\n\nDetection failed. Fix the WSL probe and reopen SpexCode.'
     const win = showFirstRunPage(`${error.message}${action}`)
     return new Promise(() => { win.on('closed', () => {}) })

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./TabStrip.jsx', import.meta.url), 'utf8')
+const gesture = readFileSync(new URL('./dragGesture.js', import.meta.url), 'utf8')
 const sideBar = readFileSync(new URL('./SideBar.jsx', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 const views = readFileSync(new URL('./views.jsx', import.meta.url), 'utf8')
@@ -53,6 +54,12 @@ test('closing tabs retain their original visual slot while the live list updates
 test('tab dragging reorders during motion and treats the strip tail as an end landing', () => {
   assert.match(source, /const track = \(point\) => \{[\s\S]{0,260}if \(before !== undefined\) move\(key, before\)[\s\S]{0,180}setDrag/)
   assert.match(source, /tabsHostRef\.current[\s\S]{0,500}getBoundingClientRect\(\)/)
+})
+
+test('tab tear-off captures the pointer so release outside the viewport reaches the gesture', () => {
+  assert.match(source, /onPointerDown=\{\(e\) => \{ if \(!isClosing\) startTabDrag\(e, tab\) \}\}/)
+  assert.match(gesture, /setPointerCapture\(pointerId\)/)
+  assert.match(gesture, /window\.addEventListener\('pointerup', onPointerUp, true\)/)
 })
 
 test('dragging a tab outside the viewport opens its scoped address and closes through the tab store', () => {

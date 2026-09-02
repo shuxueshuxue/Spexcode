@@ -31,6 +31,9 @@ single-instance lock ([[spec-desktop]]); macOS delivers a link through the `open
 through a second instance's argv. A cold argv or pre-ready macOS event waits for the gateway and main window.
 In every case the handler reads the live catalog, maps a known project plus a structurally valid registered-page
 address onto the gateway origin, focuses the existing window and navigates it — a link never spawns a second app.
+On macOS the scheme is claimed only by a packaged `.app` bundle whose `CFBundleURLTypes` declares it; an
+unpackaged Electron development binary cannot be opened by Launch Services, so dev proof uses a direct
+second-instance invocation with the URL argument and packaged builds require a separate re-measurement.
 
 An unpackaged development launch registers `process.execPath` with the resolved application entry argument so the
 OS invokes this shell rather than Electron's default app; packaged builds use the installed application handler.

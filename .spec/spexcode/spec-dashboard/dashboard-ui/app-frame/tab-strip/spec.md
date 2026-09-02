@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/tabModel.test.mjs
   - spec-dashboard/src/subtractive-boundaries.test.mjs
   - spec-dashboard/src/TabStrip.jsx
+  - spec-dashboard/src/dragGesture.js
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/src/Dock.jsx
   - spec-dashboard/src/FileTree.jsx

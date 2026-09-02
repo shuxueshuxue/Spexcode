@@ -67,14 +67,11 @@ matches a keyed pending entry back to its receipt by operation, request digest, 
 bytes (text, sender, and optional attributes) before contacting the adapter. If that exact receipt is already settled, the queue entry is merely consumed;
 if receipt identity is absent or differs, it remains owed and delivery stops fail-closed.
 
-**One logical log may span immutable files.** Existing sessions keep their legacy `timeline.ndjson` as the
-first segment. New writes append only to the highest numbered `timeline/<n>.ndjson` segment; once a segment
-reaches the fixed byte bound, the writer creates the next number and never edits the old file again. File-name
-order is event order; there is no mutable manifest or second history truth. Every reader joins legacy then
-numbered segments as one log. The detail tail reads newest segments backward until it has its requested events,
-while a full observer still sees the exact full sequence. A sealed segment may later be losslessly compressed,
-but no live cursor authorizes semantic deletion: archive preserves every segment and close remains the one
-physical deletion boundary.
+**The canonical log is SQLite.** Legacy `timeline.ndjson` files are migration inputs only. The one-time importer
+copies them into `session-events`, then retires the tree; all new writes and every reader use the application's
+event stream. Sequence order remains the growth cursor and occurrence order remains the display order, including
+migrated events. No live cursor authorizes semantic deletion: archive preserves canonical events and close remains
+the one physical deletion boundary.
 
 **The append is what ACCEPTS an admissible message; the queue is what owes it.** `sendText` appends the `sent`
 fact and enqueues the same message in one application transaction ([[dispatch]]), and reports success on that write.

@@ -165,9 +165,11 @@ scenarios:
     code: [spec-dashboard/src/keymap.js, spec-dashboard/src/KeyboardService.jsx, spec-dashboard/src/Legend.jsx, spec-dashboard/src/Settings.jsx]
   - name: tear-off-opens-window
     description: >-
-      In a real headless browser against the running dashboard, open two document tabs and drag one tab beyond
-      the viewport so the release has no in-strip drop target. Observe popup creation and inspect its URL and
-      the original strip after the drag settles.
+      In a real Electron shell against the running dashboard, open two document tabs and use a real-pointer driver
+      (for example xdotool on the live display) to drag one tab beyond the viewport so the release has no in-strip
+      drop target. Observe the second BrowserWindow and inspect its URL and the original strip after the drag
+      settles. Separately run the same gesture with Playwright page.mouse in headless Chromium as the web-path
+      check.
     expected: >-
       One popup opens at the dragged tab's full scoped address, including `/p/<id>/` when scoped, and the
       dragged tab leaves the original strip through the normal close path. No cross-window tab state sync is

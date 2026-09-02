@@ -32,7 +32,7 @@ export function setSessionApplicationCommitObserver(observer: (change: Pick<Comm
 }
 
 /** The backend's sole session application composition. Path selection is shared with self-launch. */
-export function configuredSessionApplication(): ProductionSessionApplication {
+function openConfiguredSessionApplication(): ProductionSessionApplication {
   const databasePath = resolveDatabasePath()
   if (cached !== undefined && cachedPath === databasePath) return cached
   if (cached !== undefined) cached.close()
@@ -75,15 +75,15 @@ export function sessionApplicationCutoverState(): SessionApplicationCutoverState
 
 /** Resolve the canonical application. A legacy tree is cut over at its first canonical access; runtime code
  * never gets to choose between JSON and SQLite based on the caller or request path. */
-export function configuredSessionApplicationIfCutover(): ProductionSessionApplication | undefined {
+export function configuredSessionApplication(): ProductionSessionApplication {
   const state = sessionApplicationCutoverState()
-  if (state === 'ready') return configuredSessionApplication()
+  if (state === 'ready') return openConfiguredSessionApplication()
   if (state === 'migration-required' || state === 'residue') return initializeMigratedSessionApplication(state)
   if (state === 'fresh') return initializeFreshSessionApplication()
   if (state === 'fenced' || state === 'ambiguous') {
-    throw new Error(`session application cutover is ${state}; refusing a legacy/runtime split`)
+    throw new Error(`session application cutover is ${state}; refusing canonical access`)
   }
-  return undefined
+  throw new Error(`unknown session application cutover state: ${state}`)
 }
 
 // One importer for both shapes of legacy tree. Before the marker it installs the canonical store; after the
@@ -95,9 +95,9 @@ function initializeMigratedSessionApplication(state: 'migration-required' | 'res
   const locality = (path: string) => { requireLocalDatabasePath(path) }
   if (state === 'migration-required') {
     migrateJsonSessionRecords({ databasePath, recordsRoot, locality })
-    return configuredSessionApplication()
+    return openConfiguredSessionApplication()
   }
-  const application = configuredSessionApplication()
+  const application = openConfiguredSessionApplication()
   const report = migrateJsonSessionRecords({ databasePath, recordsRoot, locality, application })
   settledResidueStores.add(`${databasePath}\0${recordsRoot}`)
   const residue = report.residue
@@ -110,13 +110,13 @@ function initializeMigratedSessionApplication(state: 'migration-required' | 'res
 /** Initialize a fresh canonical store only after an accepted create has crossed its no-side-effect boundary. */
 export function initializeFreshSessionApplication(): ProductionSessionApplication {
   const state = sessionApplicationCutoverState()
-  if (state === 'ready') return configuredSessionApplication()
+  if (state === 'ready') return openConfiguredSessionApplication()
   if (state === 'residue') return initializeMigratedSessionApplication(state)
   if (state !== 'fresh') throw new Error(`cannot initialize a fresh session store from cutover state: ${state}`)
   const databasePath = resolveDatabasePath()
   const recordsRoot = join(runtimeRoot(), 'sessions')
   migrateJsonSessionRecords({ databasePath, recordsRoot, locality: path => { requireLocalDatabasePath(path) } })
-  return configuredSessionApplication()
+  return openConfiguredSessionApplication()
 }
 
 export function acquireFreshSessionApplicationForCreate(): { application: ProductionSessionApplication; owned: boolean } {
@@ -130,11 +130,11 @@ export function acquireFreshSessionApplicationForCreate(): { application: Produc
   }
   if (state === 'ready' && freshStoreOwned && !freshStoreCommitted) {
     freshStoreLeases++
-    return { application: configuredSessionApplication(), owned: true }
+    return { application: openConfiguredSessionApplication(), owned: true }
   }
   if (state === 'residue') return { application: initializeMigratedSessionApplication(state), owned: false }
   if (state !== 'ready') throw new Error(`cannot initialize a session store from cutover state: ${state}`)
-  return { application: configuredSessionApplication(), owned: false }
+  return { application: openConfiguredSessionApplication(), owned: false }
 }
 
 export function releaseFreshSessionApplicationForCreate(owned: boolean, committed: boolean): void {

@@ -3,12 +3,11 @@ import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, readdir
 import { join, dirname, isAbsolute, resolve } from 'node:path'
 import { mainRoot, runtimeRoot, sessionStoreDir, sessionRecordPath, sessionArtifactPath, rawLaunchReadinessOriginal, readRecordEntry, readAliasedRecordEntry, processStartToken, isSessionLifecycle, isSessionProposal, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
-import { configuredSessionApplicationIfCutover } from './session-application.js'
+import { configuredSessionApplication, sessionApplicationCutoverState } from './session-application.js'
 import { withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from './session-record-lock.js'
 import { defaultHarness, HARNESSES, harnessById, rendezvousListening } from './harness.js'
 import { gitTry } from '@spexcode/spec-core'
 import { ResourceConflict } from './host-resources.js'
-import { recordStatus } from './session-timeline.js'
 import { sessionHost, probeTimedOut, TMUX_PROBE_TIMEOUT_MS } from './session-host.js'
 
 type Lifecycle = SessionLifecycle
@@ -77,8 +76,8 @@ export function readRecord(id: string): SessRec | null {
     // A migrated session may retain its canonical application row after an envelope was removed or never
     // materialized. Lifecycle hooks must still reach that row; do not turn missing runtime metadata into a
     // silent "not governed" result. The minimal projection deliberately carries no guessed resource identity.
-    const application = configuredSessionApplicationIfCutover()
-    const state = application?.readState(id)
+    const application = configuredSessionApplication()
+    const state = application.readState(id)
     if (!state) return null
     return {
       session: id,
@@ -100,8 +99,8 @@ export function readRecord(id: string): SessRec | null {
     // After cutover, runtime.json is only the runtime/worktree envelope. Lifecycle is owned by the
     // session application. Overlaying here keeps every internal caller on the same fact instead of
     // letting a stale JSON snapshot steer a launch, close, or hook decision.
-    const application = configuredSessionApplicationIfCutover()
-    if (!application || !record.governed) return record
+    const application = configuredSessionApplication()
+    if (!record.governed) return record
     const state = application.readState(record.session)
     if (!state) throw new ResourceConflict(`session ${record.session} has no canonical application state after JSON cutover`)
     return {
@@ -256,20 +255,20 @@ export function restoreLaunchReadinessOriginal(rec: SessRec): SessRec {
 // Rebuild the full disk projection so retired keys disappear on the next write.
 export function assertLegacyJsonWritesAllowed(): void {
   const fence = jsonMigrationFencePath(join(runtimeRoot(), 'sessions'))
-  if (existsSync(fence) && !configuredSessionApplicationIfCutover()) {
+  if (existsSync(fence) && sessionApplicationCutoverState() === 'fenced') {
     throw new ResourceConflict(`legacy JSON session store is fenced for one-time migration: ${fence}`)
   }
 }
 
 export function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
-  const application = configuredSessionApplicationIfCutover()
+  const application = configuredSessionApplication()
   // The JSON file is runtime/worktree metadata after cutover, not a lifecycle store. Once the canonical row
   // exists, omit the four old lifecycle keys entirely; retaining them would leave a second apparent fact for
   // readers and tempt a future path to trust the wrong writer. New records still need the legacy shape until
   // their canonical row is created, and non-governed external runtime records keep their own contract.
-  const envelope = application && rec.governed ? readAliasedRecordEntry(rec.session) : null
-  const canonicalMetadataOnly = envelope?.kind === 'ok' && rec.governed && !!application
+  const envelope = rec.governed ? readAliasedRecordEntry(rec.session) : null
+  const canonicalMetadataOnly = envelope?.kind === 'ok' && rec.governed
   const lifecycle = { status: rawLifecycleStatus(rec), proposal: rec.proposal, note: rec.note, parent: rec.parent }
   // A queued legacy envelope may still carry its lease until this metadata rewrite. The lease is an
   // operational launch claim, not a lifecycle fact, so preserve only that field while the typed record clears it.
@@ -355,13 +354,6 @@ export function writeRecord(rec: SessRec): void {
   const tmp = join(dir, `.runtime.json.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n')
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
-  const previousPublic = previous ? publicRecord(previous) : null
-  const nextPublic = publicRecord(rec)
-  if (!application && rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
-    || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
-    recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
-    scheduleWatchNotifications(rec)
-  }
 }
 
 export type CorruptRecordQuarantineWitness = {

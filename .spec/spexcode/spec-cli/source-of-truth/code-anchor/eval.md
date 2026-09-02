@@ -1,5 +1,15 @@
 ---
 scenarios:
+  - name: anchor-extraction-cached
+    tags: [cli, backend-api]
+    code: [packages/spec-core/src/anchors.ts#extractCachedBlob]
+    description: >
+      Warm the same backend and capture a 5 s CDP CPU profile with the repository's profiler. Repeat the
+      profile after unchanged governed blobs have been seen once, then change one governed blob and profile
+      again against the same store and backend.
+    expected: >
+      The after profile keeps `extract` inclusive below 5% at steady state. The unchanged blobs are not
+      reparsed, while the changed blob is extracted once and the drift verdict remains derived live from Git.
   - name: fold-project-boundary
     tags: [cli]
     code: [packages/spec-core/src/git.ts#canonicalPathProjector]

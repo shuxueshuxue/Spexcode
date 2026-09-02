@@ -1,5 +1,14 @@
 ---
 scenarios:
+  - name: codex-generation-ledger-parse-cached
+    tags: [backend-api]
+    code: [spec-cli/src/codex-runtime-generations.ts#readCodexGenerationLedger]
+    description: >
+      Warm the same backend and capture a 5 s CDP CPU profile with the repository's profiler. Repeat the
+      profile after the ledger cache is warm, keeping the backend, store, and profiler interval identical.
+    expected: >
+      The after profile keeps `listSessions`'s inclusive ledger path below 2% and records no repeated ledger
+      file reads when `(path, mtimeNs, size)` is unchanged; a ledger replacement is observed on the next read.
   - name: worktree-thread-hooks-fire-from-the-root-checkout-shim
     tags: [backend-api, cli]
     code: [spec-cli/src/codex-harness.ts#codexHarness]

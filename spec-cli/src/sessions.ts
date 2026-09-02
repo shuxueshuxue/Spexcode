@@ -25,7 +25,7 @@ import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
 import { lastHumanSendVia } from './session-timeline.js'
-import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, tmux, probeTimedOut } from './session-tmux.js'
+import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, sessionHost, probeTimedOut } from './session-host.js'
 
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
@@ -211,8 +211,8 @@ export const sessionTitle = (s: Session): string => s.title
 // Compatibility for older callers; all visible surfaces now resolve through `title`.
 export const sessionHeadline = sessionTitle
 
-async function tmuxOk(args: string[]): Promise<boolean> { try { await tmux(args); return true } catch { return false } }
-export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-session', '-t', id]) }
+async function hostOk(args: string[]): Promise<boolean> { try { await sessionHost().command(args); return true } catch { return false } }
+export async function alive(id: string): Promise<boolean> { return hostOk(['has-session', '-t', id]) }
 
 function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
@@ -483,7 +483,7 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
     const args = targetId
       ? ['list-panes', '-t', targetId, '-F', TMUX_PANE_FORMAT]
       : ['list-panes', '-a', '-F', TMUX_PANE_FORMAT]
-    out = await tmux(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
+    out = await sessionHost().command(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
     // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
@@ -1246,10 +1246,8 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
   // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
   if (harness.ownsRendezvous) stampRvSock(id)
-  await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
   const file = launchScript(id, tail, harness, cmd)
-  await tmux(['send-keys', '-t', id, '-l', '--', launchShellCommand(file)])
-  await tmux(['send-keys', '-t', id, 'Enter'])
+  await sessionHost().launch(id, launchShellCommand(file), path)
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
@@ -2861,7 +2859,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     catch (error) {
       return { ok: false, refused: true, error: error instanceof Error ? error.message : String(error) }
     }
-    await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
+    await sessionHost().stop(id)   // drop a dead/offline pane (or a force-killed live one)
     await launch(id, wt.path, resumeTail, h, launcherCmd(wt.rec))
     let readiness: LaunchReadinessOutcome = { ok: false, stage: 'liveness' }
     let readinessError = ''
@@ -3967,7 +3965,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   // Adapter-owned headless sessions may have no live leaf PID, but launch still created an exact tmux session
   // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the leaf receipt proof, never the
   // exact tmux teardown.
-  await tmuxOk(['kill-session', '-t', id])
+  await sessionHost().stop(id)
   await assertTargetTmuxAbsent(id, 'after kill')
   if (leaf) {
     await killAgentProcess(id, assertOwned, leaf)
@@ -4251,7 +4249,7 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
     const harness = harnessById(wt.rec.harness || defaultHarness.id)
     if (!harness.exactNativeTargetId(wt.rec)) {
       await assertUnboundCloseSafe(id, wt.rec)
-      await tmuxOk(['kill-session', '-t', id])
+      await sessionHost().stop(id)
       await assertTargetTmuxAbsent(id, 'after unbound residue close')
       await harness.cleanupRuntime(wt.rec)
       unboundStopped = true
@@ -4301,7 +4299,7 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
     const known = (await listSessions(true)).some((s) => s.id === id)
     return { ok: false, reason: known ? 'offline' : 'unknown' }
   }
-  try { return { ok: true, pane: await tmux(['capture-pane', '-e', '-p', '-t', id]) } }
+  try { return { ok: true, pane: await sessionHost().command(['capture-pane', '-e', '-p', '-t', id]) } }
   catch { return { ok: false, reason: 'capture-failed' } }
 }
 
@@ -4577,7 +4575,7 @@ export async function drainSession(id: string): Promise<void> {
             const text = canonicalMessageText(msg, rec)
             if (h.deliveryBlockedBy) {
               try {
-                if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+            if (h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
               } catch { /* no pane to consult — let the adapter decide */ }
             }
             const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
@@ -4599,7 +4597,7 @@ export async function drainSession(id: string): Promise<void> {
         const text = canonicalMessageText(msg, rec)
         if (h.deliveryBlockedBy) {
           try {
-            if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+                if (h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
           } catch { /* no pane to consult — let the adapter decide */ }
         }
         const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
@@ -4720,7 +4718,9 @@ async function sendRawKeysLocked(id: string, keys: readonly string[]): Promise<b
   for (const k of list) {
     const args = rawKeyArgs(id, k)
     if (!args) continue
-    await tmux(args); sent = true
+    const sendKeys = sessionHost().sendKeys
+    if (!sendKeys) continue
+    await sendKeys(id, args.slice(3)); sent = true
   }
   return sent
 }

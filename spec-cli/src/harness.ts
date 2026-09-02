@@ -306,7 +306,7 @@ export interface Harness {
   // SHARED per-project app-server socket (it stays bound after a failed `--remote resume` dropped the pane back
   // to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
   // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
-  liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
+  liveness(rec: HarnessLivenessRecord, hostAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
   // A completed launch command is only transport acceptance. An adapter with stronger runtime ownership may
   // keep the caller waiting until the launched conversation is genuinely addressable. The lazy record source
   // lets a one-shot launch publish its native id while readiness is pending. The returned adapter-owned fence
@@ -784,19 +784,19 @@ export function opencodeLaunchCommand(opencodeCmd = 'opencode'): string {
   return `bash -lc ${shQuote(script)} spexcode-opencode`
 }
 
-const socketListenerLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, _pane, socketLive) =>
-  (tmuxAlive && !!socketLive ? 'online' : 'offline')
+const socketListenerLiveness: Harness['liveness'] = (_rec, hostAlive, _runtimeDir, _pane, socketLive) =>
+  (hostAlive && !!socketLive ? 'online' : 'offline')
 
-const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
-  (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline')
+const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, hostAlive, _runtimeDir, pane, socketLive) =>
+  (hostAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline')
 
-const panePidLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane) =>
-  (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
+const panePidLiveness: Harness['liveness'] = (_rec, hostAlive, _runtimeDir, pane) =>
+  (hostAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 // Leaf-backed headless sessions are the controller process, not the tmux pane that hosts it. The pane can
 // survive a SIGKILL as a bare shell, so tmux presence without the launch-registered PID is never online.
-const sessionHomeLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane) =>
-  (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
+const sessionHomeLiveness: Harness['liveness'] = (_rec, hostAlive, _runtimeDir, pane) =>
+  (hostAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 // @@@ unlinkSocks - remove ONLY the transport this teardown PROVED dead. `cleanupRuntime` unlinks *their*
 // socket, and the honest test of "theirs" is that the agent it just killed is GONE. It used to unlink on

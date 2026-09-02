@@ -1,7 +1,6 @@
-import { spawnSync } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { alive, apiBase } from './sessions.js'
-import { TMUX_SOCK } from './session-tmux.js'
+import { sessionHost } from './session-host.js'
 
 const AGENT_ALTERNATIVES = 'read the pane with `spex session show <SEL> --capture`, drive it with `session send` (plain text first; `--keys` only as a last resort)'
 
@@ -39,6 +38,10 @@ Bring it back with \`spex session resume ${id}\`, or read its record with \`spex
     return 1
   }
   console.log(`attaching to ${id} — detach with C-b d (the session keeps running)`)
-  const r = spawnSync('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], { stdio: 'inherit' })
-  return r.status ?? 1
+  const attach = sessionHost().attach
+  if (!attach) {
+    console.error(`spex session attach: the active session host does not provide an interactive attach transport.`)
+    return 2
+  }
+  return attach(id)
 }

@@ -2,7 +2,7 @@
 title: spec-desktop
 status: pending
 hue: 25
-desc: The desktop shell — a window over `spex serve`. A packaging of the existing product, never a second one.
+desc: The desktop shell — a window over `spex dashboard`. A packaging of the existing product, never a second one.
 code:
   - spec-desktop/main.js
 related:
@@ -10,96 +10,83 @@ related:
   - spec-desktop/package.json
   - package.json
   - scripts/desktop-contract.test.mjs
+  - spec-cli/src/host.ts
+  - spec-cli/src/gateway-hub.ts
+  - spec-cli/src/endpoint-record.ts
 ---
 # spec-desktop
 
-A desktop application that is **a window and a child process, and nothing else**. It picks a free loopback
-port, starts the existing CLI in the project directory, and loads that origin in a `BrowserWindow`. Because
-the page is served by the same process a terminal user starts by hand, over the same origin, the dashboard
-needs **zero** desktop-specific code.
+A desktop application that is **a window over the host gateway, and nothing else**. It finds a running
+`spex dashboard` for this user or starts one as its child, loads that loopback origin in a `BrowserWindow`, and
+adds operating-system integration the browser cannot: an application menu, a protocol handler, a native folder
+picker, real windows. Because the page is the same dashboard dist the same gateway serves to a browser tab, the
+SPA has **zero** desktop-specific code and no desktop build.
 
-The optional shell is reachable from the repository root through `npm run desktop:install` followed by
-`npm run desktop:start`; `npm run desktop:check` verifies these entrypoints and the optional-workspace boundary.
-Electron remains outside the root workspaces by design, so browser-only contributors do not install the desktop
-runtime. These entrypoints are developer integration, not a claim that signed installers or a release channel
-exist.
+**The rule that keeps it honest.** Anything the desktop app can do, `spex dashboard` plus a browser must also be
+able to do. The shell may add OS integration and may add nothing else. If a capability appears that only exists
+inside the shell, that is the alarm, not the feature. This is [[self-launch-entry]]'s rule applied one layer up:
+the dashboard reduces to the CLI path, and the desktop app reduces to the dashboard. The one exception is the
+first-run page ([[desktop-windows-wsl]]): before a gateway exists there is no dashboard to load, so the shell
+shows the bootstrap transcript itself — verbatim output, never a summary.
 
-**This node began as a measured spike, and the sections below preserve those measurements.** Boot, port hand-off,
-and window load work: the window loads first try in about two seconds, and the load retry never fires. The two
-spike failures are now repaired by selecting the existing gateway origin and adding Linux process containment.
+**The verb is `spex dashboard`, not `spex serve`.** An earlier spike aimed the window at `spex serve` plus
+`spex serve ui` — the explicit one-backend pairing — and so owned a backend lifetime it should never have had:
+every launch started a fresh backend, nothing stopped it, nothing reused it, and the project's single-owner
+records ([[host-gateway]]'s endpoint record) were fought over by serves the human could not see. The host gateway
+is already the multi-project face: it discovers every backend through instance-validated records, keeps the
+durable catalog, starts an offline project's backend on demand as a **detached** `spex serve` that outlives the
+gateway, and renders the project switcher ([[projects-hub]]). The shell therefore starts and stops **only the
+gateway**. Backends behave exactly as on the web deployment: they outlive the window, and quitting the app stops
+none of them. The cgroup containment the spike grew to reap leaked backends is retired with the leak; the
+process the shell owns is a `utilityProcess` and dies with it.
 
-The dashboard proof used a one-node demo project, so the real project's roughly 90-second cold `/api/graph` build
-was not covered; a long initial "loading specs from git…" state is graph cost, not a desktop-shell defect.
+**Attach before start.** If a host gateway is already listening for this user, the shell loads it rather than
+starting a second; otherwise it starts one on a free loopback port and waits for its ready line. The gateway's
+own discovery record is [[host-facts]]'s concern; until it exists the shell probes the configured port.
 
-**Which origin serves the dashboard was got wrong, and the correction is not a detail.** `spex serve`'s `/`
-is a plain-text index of API routes; the backend serves no static bundle, so a shell pointed at it renders a
-line of text where a board should be. The dashboard dist is served by the **gateway** — `spex serve ui`, and
-the same gateway the supervisor already starts on its public branch with a `distDir`. So the shape "one
-loopback origin serving the bundle and proxying `/api`" is not something this node must invent; it exists, and the
-shell was aimed one process to the left of it. The shell now starts that existing pair: `spex serve --port P` for
-the project backend and `spex serve ui --port Q --api-port P` for the loopback dashboard origin, then loads Q.
-This is the smallest honest choice: making `spex serve` serve static files would change the CLI contract for every
-terminal and browser user, while the gateway already is the product's explicit one-backend pairing.
+**One instance, one main window, real secondary windows.** The shell holds the single-instance lock so a second
+launch — or a deep link ([[desktop-deep-link]]) — focuses the existing window instead of racing it. The main
+window carries the project switcher; a tab torn out of the strip ([[tab-strip]]) opens as its own
+`BrowserWindow` through the SPA's ordinary `window.open`, so the same gesture yields a popup in a browser and a
+window here. Same-origin opens become windows; every off-origin link goes to the user's real browser.
 
-**The rule that keeps it honest.** Anything the desktop app can do, `spex serve` plus a browser must also be
-able to do. The shell may add operating-system integration — a window, a project picker, a tray, an
-updater — and may add nothing else. If a capability appears that only exists inside the shell, that is the
-alarm, not the feature. This is [[self-launch-entry]]'s rule applied one layer up: the dashboard reduces to the CLI
-path, and the desktop app reduces to the dashboard.
+**The application menu deliberately owns no ⌘W.** In a browser tab ⌘W and ⌘1–9 belong to the browser and never
+reach the page, which is why the dashboard's chords are Alt+Shift. In this window nothing claims those
+accelerators, so they reach the page as ordinary keydowns and the keymap ([[keyboard-service]]) fires; the shell's
+only job is to build a menu that leaves them unclaimed. Quit, copy/paste, zoom and the platform's standard items
+remain.
+
+**Native folder picker, existing route.** "Add project" in the desktop opens the OS folder dialog and posts the
+chosen path to the gateway's existing `POST /projects`; the browser keeps its read-only directory browser. On
+Windows the dialog browses the WSL filesystem and the path is translated ([[desktop-windows-wsl]]).
+
+**Platforms.** Linux and macOS run the gateway natively. On macOS a GUI-launched gateway runs inside the user's
+Aqua session, so the backends it starts can read the login keychain directly — no credential-sync agent is needed
+for desktop users. Windows runs the gateway inside WSL2 ([[desktop-windows-wsl]]) because the session runtime
+needs tmux, bash and unix sockets; a native Windows runtime waits on [[session-host]].
 
 **Why it lives outside the root workspaces.** Electron is ~150 MB of runtime. Placing this package in the
-workspace list would put that download in front of every contributor who runs `npm install`, including
-everyone who will never touch the shell — an install-surface tax paid by people who receive nothing for it.
-It is installed on its own, from its own directory.
+workspace list would put that download in front of every contributor who runs `npm install`. It is installed on
+its own: `npm run desktop:install`, `npm run desktop:start`; `npm run desktop:check` verifies the entrypoints and
+the optional-workspace boundary. These are developer integration, not a claim that signed installers exist;
+packaging and distribution tiers are a later slice, and the signed build must keep Electron's `runAsNode` fuse
+enabled because the CLI re-spawns itself through `process.execPath`.
 
-**The child is a `utilityProcess`, not a spawned command** — a Chromium Services child, so it dies with the
-browser process even under `SIGKILL`, and it is unaffected by the `runAsNode` fuse that any hardened build
-disables.
-
-**But that guarantee stops at the child, and an earlier draft of this node claimed otherwise.** Measured:
-after `kill -9` on the shell, the utility process does die — and the backend's own `child_process.spawn`
-grandchildren reparent to init and go on holding the port. An ordinary quit leaks one too. So the sentence
-"a crashed shell cannot leave a server holding the port" was false, and the reason it was false is
-instructive: process-tree bookkeeping is defeated by reparenting, which is exactly the case that matters.
-Reaping needs a mechanism that reparenting cannot escape. On Linux the node shim enters each service into a
-`systemd-run --user --scope` cgroup whose `KillMode=control-group` owns the service; an in-scope watchdog observes
-the utility process and writes `1` to that cgroup's `cgroup.kill` after the utility is killed, so reparenting to init
-does not change membership. The Linux adapter requires the user's systemd bus (`XDG_RUNTIME_DIR` and
-`DBUS_SESSION_BUS_ADDRESS`)
-and fails loudly when it cannot create a scope. Windows has no implementation yet (the intended seam is a Job Object
-with `KILL_ON_JOB_CLOSE`); macOS has no equivalent kernel primitive in this package, so those platforms retain the
-measured leak and are named as unsupported rather than given a process-tree approximation.
-
-**Where `ELECTRON_RUN_AS_NODE` is set decides whether the app starts at all.** The backend re-spawns itself
-through `process.execPath`, which under Electron is the Electron binary, so it needs the flag to come back
-up as Node — and the first such re-spawn is not the supervisor but the CLI entry's own last line. Putting
-the flag in the utility process's **own env** does not merely fail to help: Electron launches that process
-as `electron --type=utility --utility-sub-type=node.mojom.NodeService …`, the flag makes the binary read
-those Chromium switches as Node options, and it exits with `bad option: --type=utility` before anything
-runs. `execArgv` is not an escape either — Electron reports the values in `process.execArgv` and never
-executes them. The placement that works is inside the child at runtime, which is why the utility process
-entry is a shim that sets the variable and then imports the CLI: from there it reaches only the processes
-that child spawns, which is precisely the set that needs it.
-
-**Port selection is a guess plus a retry, and says so.** The shell asks the operating system for a free port
-and hands it to the backend, which is a time-of-check/time-of-use race: the port can be taken in between. On
-a single-user desktop binding loopback the window is microseconds, and the retry — a fresh port on a bind
-failure, a bounded number of times — is what actually closes it, rather than a claim that the race is not
-there. The alternative, having the backend bind port zero and report what it got, is the better shape and is
-not yet available: `PORT=0` is swallowed by the supervisor's `|| 8787` default, and the ready line prints the
-*requested* port rather than the bound one, so a zero-port launch would announce `:0`.
+**Where `ELECTRON_RUN_AS_NODE` is set decides whether the app starts at all.** The CLI re-spawns itself through
+`process.execPath`, which under Electron is the Electron binary, so it needs the flag to come back up as Node.
+Putting the flag in the utility process's own env makes Electron read its Chromium switches as Node options and
+exit with `bad option: --type=utility`; `execArgv` is reported, never executed. The placement that works is inside
+the child at runtime — the utility entry is a shim that sets the variable and then imports the CLI, so the flag
+reaches exactly the processes that child spawns.
 
 **The child's environment is scrubbed, not inherited whole.** A shell launched from a backend inherits that
-backend's `PORT`, `SPEXCODE_API_URL`, and `SPEXCODE_PROJECT_ROOT`; passed through, they would point this
-project's serve at another project's endpoint record. The routing variables are dropped at the fork.
+backend's `PORT`, `SPEXCODE_API_URL` and `SPEXCODE_PROJECT_ROOT`; passed through, they would point the gateway at
+another project's endpoint. The routing variables are dropped at the fork.
 
-**Quitting is unconditional, including on macOS.** The usual platform exception keeps an application
-resident with no windows; here that means a backend still holding a port, so the next launch races itself. A
-process whose only purpose is to host a window it no longer has is not a feature.
+**Quitting is unconditional, including on macOS.** A resident process whose only purpose is to host a window it
+no longer has is not a feature; with the backends detached there is nothing to keep alive.
 
-The window is chrome-only in the other sense too: system-coloured to the board's own paper so there is no
-white flash before first paint, retrying the initial load because a listener and its first accepted
-connection are not the same instant, and handing every off-origin link to the user's real browser rather
-than opening it in an app window with no address bar. Renderer isolation stays at the defaults — context
-isolation on, node integration off, sandbox on — and `webSecurity` is never relaxed: a loopback origin is
-already a secure context, so nothing needs to be given up to serve from one.
+The window is chrome-only in the other sense too: system-coloured to the board's own paper so there is no white
+flash before first paint, retrying the initial load because a listener and its first accepted connection are not
+the same instant. Renderer isolation stays at the defaults — context isolation on, node integration off, sandbox
+on — and `webSecurity` is never relaxed: a loopback origin is already a secure context.

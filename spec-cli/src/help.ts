@@ -186,11 +186,12 @@ hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arriv
     see: 'spex doctor (verify the materialized artifacts actually reach an agent)',
   },
   doctor: {
-    line: 'doctor                diagnose project health; repair app-server only on explicit request  [--contract|--conflicts]',
+    line: 'doctor                diagnose project health; host facts via --host; repair app-server only on explicit request  [--host|--contract|--conflicts]',
     body: `Usage: spex doctor                spec-health findings + delivery report: preconditions · git-hook floor ·
                                   contract · hooks + handler existence · backend · footprint
        spex doctor --contract     print the composed surface:system text any agent here reads
        spex doctor --conflicts    detect double-delivery (loose artifacts beside the managed ones)
+       spex doctor --host         print host runtime/toolchain/agent/launcher/memory facts (same data as GET /host)
        spex doctor repair app-server [--launcher <name>]
                                   prove a fresh app-server, then switch new sessions to it
 

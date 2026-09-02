@@ -3718,6 +3718,15 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .proj-op-status { font-size: var(--type-meta); }
 .proj-op-status.ok { color: var(--green); }
 .proj-op-status.fail { color: var(--red); }
+.host-facts-card { margin: 0 0 16px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.host-facts-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.host-facts-head h2 { margin: 0; font-size: var(--type-title); }
+.host-facts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+.host-facts-grid > div, .host-facts-launchers { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: var(--type-meta); }
+.host-facts-grid b, .host-facts-launchers b { color: var(--ink2); font-size: var(--type-caption); }
+.host-facts-launchers { margin-top: 10px; }
+.host-facts-launchers .broken { color: var(--red); }
+@media (max-width: 720px) { .host-facts-grid { grid-template-columns: 1fr; } }
 .proj-log {
   margin: 4px 0 0; padding: 8px 10px; max-height: 240px; overflow: auto;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel2);

@@ -269,7 +269,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
           <div key={key} data-tab-key={key} className={`tab${active ? ' on' : ''}${isClosing ? ' tab-closing' : ''}${marks}`}
             role="tab" aria-selected={active} aria-grabbed={drag?.key === key || undefined}
             aria-hidden={isClosing ? 'true' : undefined}
-            onMouseDown={(e) => { if (!isClosing) startTabDrag(e, tab) }}
+            onPointerDown={(e) => { if (!isClosing) startTabDrag(e, tab) }}
             onContextMenu={(e) => {
               if (isClosing) return
               e.preventDefault()

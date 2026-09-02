@@ -52,6 +52,16 @@ if (cmd === '--version' || cmd === '-v') {
   process.exit(0)
 }
 
+const { resolveCliProfile, profileAllowsCommand, profileRefusal } = await import('./help.js')
+let cliProfile: import('./help.js').CliProfile
+try {
+  cliProfile = resolveCliProfile()
+} catch (error) {
+  console.error(`spex: ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(2)
+}
+if (cmd && cmd !== 'internal' && cmd !== 'help' && cmd !== '--help' && cmd !== '-h' && !profileAllowsCommand(cliProfile, cmd)) profileRefusal(cliProfile, cmd)
+
 const DAEMON_DEPENDENCIES = ['hono', '@hono/node-server', '@hono/node-ws', 'node-pty']
 
 async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'): Promise<void> {
@@ -549,6 +559,7 @@ if (cmd === 'serve') {
   const topic = positionals(3)[0]
   if (cmd === 'help' && topic) {
     if (SIGNPOSTS[topic]) signpost(`spex ${topic}`, SIGNPOSTS[topic])
+    if (!profileAllowsCommand(cliProfile, topic)) profileRefusal(cliProfile, topic)
     const h = commandHelp(topic)
     if (!h) { console.error(`spex help: no command '${topic}' — run \`spex help\` for the map`); process.exit(2) }
     console.log(h)

@@ -319,6 +319,14 @@ Both files are optional; omit any field to take its default, except \`sessions.d
 The host-wide gateway has one separate per-user setting, \`gateway.icon\` in
 \`$SPEXCODE_HOME/config.json\`. It is documented below and never belongs to either project file.
 
+── PROFILE (set by the agent's harness at startup — NOT a repository setting) ──
+  SPEX_PROFILE controls which CLI surface an agent can see for this process. The built-in \`full\` (default)
+  keeps the complete surface; \`repo\` exposes repository work only (spec, eval, graph, guide, init,
+  materialize, doctor, issue, help) and leaves session/dashboard work to the harness. A JSON file may instead
+  name \`commands\` and optional core-plugin \`hooks\`; omitted hooks mean all hooks. Invalid values fail loudly.
+  This is a launch-time harness property: do not commit it to \`spexcode.json\`, \`spexcode.local.json\`, or any
+  other repository file. A hidden command explains its owner and points at \`SPEX_PROFILE=full\` for the full CLI.
+
 MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
 uploads, sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
 pass through untouched. This is exactly what lets a launcher's portable NAME reference (defaultLauncher)

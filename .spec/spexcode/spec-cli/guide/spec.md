@@ -114,7 +114,8 @@ the agent from one verb, picked by an optional topic:
   paths, reads its base from `location.pathname`, and keeps that local server alive rather than mistaking a live
   page for an uploaded artifact.
 
-Every page describes the PRESENT model. A retired knob is absent from the active field list; when silently
+Every page describes the PRESENT model. `spex guide settings` documents `SPEX_PROFILE` as a launch-time
+harness property, never repository configuration. A retired knob is absent from the active field list; when silently
 ignoring a stale authored field would leave its owner ambiguous, one concise migration note names the live
 replacement and the runtime diagnosis repeats that repair. History remains git's job, not a static
 retirement catalogue.

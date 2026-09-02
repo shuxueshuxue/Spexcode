@@ -12,6 +12,29 @@
 # `case "$SPEXCODE_HARNESS"` below routes all four through the claude branch via the default case; only codex
 # keeps parse arms of its own.
 
+# Startup surface gate shared by every materialized core hook. 0 means run, 1 means intentional no-op,
+# and 2 means the launch profile is malformed and must be repaired loudly.
+hp_profile_hook_enabled() {
+  local profile="${SPEX_PROFILE_VALUE:-${SPEX_PROFILE:-full}}" plugin="$1"
+  [ "$profile" = full ] && return 0
+  if [ "$profile" = repo ]; then
+    case "$plugin" in spec-first|spec-of-file|comment-altitude) return 0 ;; *) return 1 ;; esac
+  fi
+  node --input-type=module - "$profile" "$plugin" <<'NODE'
+import { readFileSync } from 'node:fs'
+const [profile, plugin] = process.argv.slice(2)
+try {
+  const value = JSON.parse(readFileSync(profile, 'utf8'))
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.commands)) throw new Error('commands must be an array')
+  if (value.hooks !== undefined && (!Array.isArray(value.hooks) || value.hooks.some((name) => typeof name !== 'string'))) throw new Error('hooks must be an array')
+  process.exit(value.hooks === undefined || value.hooks.includes(plugin) ? 0 : 1)
+} catch (error) {
+  console.error(`invalid SPEX_PROFILE '${profile}': ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(2)
+}
+NODE
+}
+
 
 # the string value of a top-level JSON string field (first match). Harness-agnostic — both harnesses' payloads
 # carry session_id / tool_name as plain string fields. $1 = payload, $2 = field name. The value is scanned as a

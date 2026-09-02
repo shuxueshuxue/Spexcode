@@ -35,6 +35,9 @@ On macOS the scheme is claimed only by a packaged `.app` bundle whose `CFBundleU
 unpackaged Electron development binary cannot be opened by Launch Services, so dev proof uses a direct
 second-instance invocation with the URL argument and packaged builds require a separate re-measurement.
 
+An unpackaged development launch registers `process.execPath` with the resolved application entry argument so the
+OS invokes this shell rather than Electron's default app; packaged builds use the installed application handler.
+
 **`spex open` is the terminal twin.** `spex open <node|session|path>` reads [[host-facts]]'s live `host.json`,
 validates its instance against `GET /host`, and matches the current project's main root against the gateway
 catalog. It resolves an exact node id first, then a session selector, then an existing file within that project;

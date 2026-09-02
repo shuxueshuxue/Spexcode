@@ -34,7 +34,7 @@ scenarios:
       Quitting closes the Electron gateway utility child but leaves project backends running and discoverable;
       no backend is killed as a side effect of the packaged window closing.
     related: [spec-desktop/main.js]
-  - name: desktop-deep-link
+  - name: packaged-deep-link-mac
     tags: [desktop]
     description: >-
       With the installed packaged macOS app running, invoke `open spexcode://p/<id>/<address>` from the Aqua
@@ -43,14 +43,15 @@ scenarios:
       The app's `CFBundleURLTypes` registration routes the link to the running instance, which focuses the
       existing window and navigates its gateway page without spawning a second shell.
     related: [spec-desktop/desktop-integration.js, spec-desktop/deep-link.js]
-  - name: mac-gui-launch-reads-keychain
+  - name: packaged-mac-gui-reads-keychain
     tags: [desktop]
     description: >-
-      Launch the packaged app in a throwaway Aqua `gui/<uid>` agent, read the `Claude Code-credentials` item
-      through that GUI domain, and dispatch the plain `claude` launcher.
+      From the packaged app's Aqua-launched gateway, add the fixture project and dispatch a real session with
+      the plain `claude` launcher; inspect the session's recorded state and the Aqua-domain credential path.
     expected: >-
-      Record the keychain read and the launcher's actual authentication result verbatim; a launcher failure is
-      a finding and must not be softened.
+      The worker authenticates and reaches a live session because the packaged app's backend runs inside the
+      Aqua session and can read the login keychain. A failure to authenticate or reach a live session is a
+      finding against this claim and must be filed honestly.
     related: [spec-desktop/main.js, spec-cli/src/sessions.ts]
   - name: gatekeeper-quarantine
     tags: [desktop]
@@ -58,8 +59,9 @@ scenarios:
       Apply a quarantine xattr to the dmg and installed app, then run macOS assessment and LaunchServices
       opening on the measured OS version.
     expected: >-
-      Preserve the exact Gatekeeper/spctl text and open result as Tier 2 distribution evidence, not a product
-      pass/fail claim.
+      The quarantined ad-hoc app still launches (`open` exits 0 and the window appears), while
+      `spctl --assess` refuses it with the recorded text; preserve the codesign and xattr dump as Tier 2
+      distribution evidence.
     related: [spec-desktop/electron-builder.config.cjs]
 ---
 # eval.md - desktop-packaging
@@ -74,9 +76,9 @@ The macOS phase adds these scenarios:
 
 - `packaged-shell-renders-hub`: the installed packaged `.app` renders the projects hub.
 - `packaged-cli-is-self-consistent`: bundled `@spexcode/*` versions and commit stamp match the monorepo.
-- `desktop-deep-link`: `open spexcode://p/<id>/<address>` focuses the running window via `CFBundleURLTypes`.
+- `packaged-deep-link-mac`: `open spexcode://p/<id>/<address>` focuses and navigates the running window via `CFBundleURLTypes`.
 - `quit-leaves-backends-running`: normal quit leaves a detached backend healthy and discoverable.
-- `mac-gui-launch-reads-keychain`: the Aqua-domain keychain read is recorded alongside the plain `claude`
-  launcher's actual authentication result.
+- `packaged-mac-gui-reads-keychain`: a real session dispatched from the packaged app's gateway must authenticate
+  through the plain `claude` launcher using the Aqua-domain keychain; failures are findings against the claim.
 - `gatekeeper-quarantine`: after applying quarantine xattrs to the dmg, record exactly what this macOS version
   shows for the ad-hoc-signed app; this is Tier 2 distribution evidence, not a product failure.

@@ -41,6 +41,11 @@ out of agreement in one edit, and the table could not tell that it had happened.
 row rather than keep renumbering it. A rail entry is now reached by its icon, by its address, or by a chord
 that names the place (`⌥F` for evals); an entry with no such chord shows no hint at all.
 
+The workspace tab family is separate from rail positions: `shell.tabClose` keeps its `Alt+Shift+KeyX` chord
+and additionally accepts `Meta+KeyW` / `Ctrl+KeyW`, while `shell.tabFocus1` through `shell.tabFocus9` accept
+`Meta+DigitN` / `Ctrl+DigitN` (9 means the last open tab). These fixed actions are rendered from the same
+registry in the legend and Settings; they name documents, never activity-rail slots.
+
 **A binding the table does not hold is a binding nothing can render truthfully**, so a chord matched inline in some handler's body is a defect and not a shortcut: the console's Command Box chord was one, invisible to the legend, to the editor, and to its own tooltip. **And a hint typed into translated prose is the same defect wearing a label** — a copy no rebind reaches, duplicated per language, free to drift into a second glyph dialect, which is what left a rail entry advertising a modifier-less key for a chord that had moved. The dictionaries carry NAMES; the hint is appended by the reader from the live registry, with every modifier the chord actually has, and an action with no binding gets no hint. Chord glyphs are DERIVED from the binding token (`Alt+Shift+ArrowRight` → `⌥⇧→`) rather than looked up per chord, because a per-chord table is one more place a modifier can go missing.
 
 The split that keeps this from spending complexity: **the registry owns the *binding*, never the *behavior*.** The handler bodies — the chord buffer, the focus-follow pan, the scope-following overlay cycle — stay exactly where they are; the registry only decides *which physical key names which action*. So the indirection is one resolver (`bindings.js`: `firesKey`/`firesEvent` for dispatch, `keysOf` and `shortcutHint` for display, all honoring user overrides), not a re-implementation of the keys.

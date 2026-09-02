@@ -1,6 +1,9 @@
 'use strict'
 
+const { mkdirSync, writeFileSync } = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { hubNoticeUrl, mapDeepLink } = require('./deep-link.js')
 
 const PROTOCOL = 'spexcode'
@@ -15,6 +18,38 @@ function focusWindow(win) {
   if (win.isMinimized()) win.restore()
   win.show()
   win.focus()
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`
+}
+
+function registerLinuxAppImageProtocol() {
+  if (process.platform !== 'linux' || !appIsPackaged()) return false
+  const executable = process.env.APPIMAGE || process.execPath
+  const applications = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'applications')
+  const desktopFile = path.join(applications, 'spexcode.desktop')
+  mkdirSync(applications, { recursive: true })
+  writeFileSync(desktopFile, [
+    '[Desktop Entry]',
+    'Name=SpexCode',
+    'Comment=SpexCode desktop shell',
+    `Exec=${shellQuote(executable)} %u`,
+    'Terminal=false',
+    'Type=Application',
+    'Categories=Development;',
+    'MimeType=x-scheme-handler/spexcode;',
+  ].join('\n') + '\n')
+  const result = spawnSync('xdg-mime', ['default', 'spexcode.desktop', 'x-scheme-handler/spexcode'], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    console.error(`[shell] could not register ${PROTOCOL}:// via xdg-mime: ${(result.stderr || '').trim()}`)
+    return false
+  }
+  return true
+}
+
+function appIsPackaged() {
+  return process.defaultApp !== true && Boolean(process.resourcesPath)
 }
 
 async function projectIds(gatewayUrl) {
@@ -36,7 +71,7 @@ function createDesktopIntegration({ app, dialog, getGateway, getMainWindow }) {
     ? process.argv[1]
     : process.argv.slice(1).find((value) => !value.startsWith('-')) || app.getAppPath()
   const registered = app.isPackaged
-    ? app.setAsDefaultProtocolClient(PROTOCOL)
+    ? (registerLinuxAppImageProtocol() || app.setAsDefaultProtocolClient(PROTOCOL))
     : app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [path.resolve(unpackagedEntry)])
   if (!registered) {
     console.error(`[shell] could not register ${PROTOCOL}:// as the default protocol handler`)

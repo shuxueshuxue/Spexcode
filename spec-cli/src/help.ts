@@ -242,7 +242,7 @@ hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arriv
                                   contract · hooks + handler existence · backend · footprint
        spex doctor --contract     print the composed surface:system text any agent here reads
        spex doctor --conflicts    detect double-delivery (loose artifacts beside the managed ones)
-       spex doctor --host         print host runtime/toolchain/agent/launcher/memory facts (same data as GET /host)
+       spex doctor --host         print host runtime/toolchain/agent/launcher facts (same data as GET /host)
        spex doctor repair app-server [--launcher <name>]
                                   prove a fresh app-server, then switch new sessions to it
 

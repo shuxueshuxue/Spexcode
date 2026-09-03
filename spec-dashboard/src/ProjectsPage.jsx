@@ -515,16 +515,6 @@ function ProjectRow({ p, health, onRefresh, t }) {
   )
 }
 
-// THE MEMORY ROW ANSWERS ONE QUESTION: does this host cap the memory the work runs inside, and at what size. It
-// used to render the MECHANISM and whether that mechanism was found — `unknown: missing` on any Mac — which reads
-// like a broken dependency rather than the true answer, that macOS caps nothing. A host with neither a cgroup file
-// nor a `.wslconfig` is not missing a cap; its envelope is the whole machine.
-const memoryCap = (memory, t) => {
-  if (!memory || memory.kind === 'unknown') return t('projects.memoryNoCap')
-  if (memory.limitBytes == null) return t('projects.memoryNoLimit', { kind: memory.kind })
-  return t('projects.memoryLimit', { kind: memory.kind, size: `${(memory.limitBytes / 1024 ** 3).toFixed(1)} GiB` })
-}
-
 // THE HOST CARD HOLDS ONLY HOST-LEVEL FACTS. It listed each known project's launcher profiles, which put one
 // project's `.spec/spexcode.local.json` on the cross-project panel — rows nobody managing projects can act on, and a
 // duplicate of what a project's own surfaces own. The host-level version of that question is already answered
@@ -542,7 +532,6 @@ function HostCard({ facts, busy, result, onDoctor, t }) {
       <div className="host-facts-grid">
         <div><b>{t('projects.hostVersions')}</b><span>node {facts.versions?.node || '?'}</span><span>tmux {facts.versions?.tmux || t('projects.missing')}</span><span>git {facts.versions?.git || t('projects.missing')}</span></div>
         <div><b>{t('projects.hostAgents')}</b>{agentRows.map(([name, agent]) => <span key={name}>{name}: {agent.installed ? t('projects.installed') : t('projects.missing')} · {agent.loggedIn ? t('projects.loggedIn') : t('projects.notLoggedIn')}</span>)}</div>
-        <div><b>{t('projects.hostMemory')}</b><span>{memoryCap(facts.memory, t)}</span></div>
       </div>
       {result && <div className="proj-op-result proj-full"><div className={result.ok ? 'proj-op-status ok' : 'proj-op-status fail'}>{result.ok ? t('projects.hostDoctorOk') : t('projects.hostDoctorFail', { code: result.code ?? '?' })}</div>{result.output ? <pre className="proj-log">{result.output}</pre> : null}</div>}
     </section>

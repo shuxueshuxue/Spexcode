@@ -11,17 +11,18 @@ scenarios:
       .spec/spexcode.local.json is named by the CLI and by the card's host-doctor result block, never as a project-qualified
       row on the cross-project panel.
     related: [spec-dashboard/src/ProjectsPage.jsx, spec-cli/src/doctor.ts]
-  - name: memory-cap-row-reads-as-a-cap
+  - name: no-memory-envelope-on-the-host-surfaces
     tags: [frontend-e2e, cli]
     description: >-
-      Read the host card's memory row and the CLI's memory line on a host with no cap (a Mac, or a Linux box whose
-      enclosing cgroup sets `max`), then read them again from inside a cgroup that really is capped —
-      `systemd-run --user --scope -p MemoryMax=8G`.
+      Read the host card in a real browser and `spex doctor --host` in a terminal, then read `GET /host`'s
+      payload. Run the CLI half a second time from inside a cgroup that really is capped
+      (`systemd-run --user --scope -p MemoryMax=8G`), where a cap reader would have something to report.
     expected: >-
-      Uncapped, both say the host sets no cap and neither prints a mechanism name followed by `missing`. Capped,
-      both name the cap as a size (`8.0 GiB`) read from the cgroup that binds the process, not from a fixed root
-      path — the old fixed-path read reported `unknown: missing` in that same capped scope.
-    related: [spec-cli/src/host-facts.ts, spec-dashboard/src/ProjectsPage.jsx]
+      No surface mentions a memory envelope: no row or line about a cap, no `cgroup`/`.wslconfig` word, and no
+      `memory` key in the payload — including inside the capped scope, where the removal is visible as silence
+      rather than as a missing value. `spex session resources` still answers about per-process ownership, which is
+      the different question this product does render.
+    related: [spec-cli/src/host-facts.ts, spec-dashboard/src/ProjectsPage.jsx, spec-cli/src/doctor.ts]
   - name: serve-failure-links-to-host
     tags: [frontend-e2e]
     description: >-

@@ -534,7 +534,7 @@ function migrationRemoved(): number {
 function usage(): number {
   console.error(`spex doctor — diagnose spec health and how the SpexCode workflow reaches your agent
   (bare)         spec-health findings + delivery report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
-  --host         host runtime, toolchain, agent-login, launcher, and memory facts (same data as GET /host)
+  --host         host runtime, toolchain, agent-login, and launcher facts (same data as GET /host)
   --contract     print the surface:system contract text (hand it to any agent)
   --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
   repair app-server [--launcher <name>]

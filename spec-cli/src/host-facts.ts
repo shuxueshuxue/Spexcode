@@ -15,7 +15,6 @@ export type HostFacts = {
   versions: { node: string; tmux: string | null; git: string | null }
   agents: Record<'claude' | 'codex' | 'opencode' | 'pi', AgentFact>
   launchers: LauncherFact[]
-  memory: { kind: 'wslconfig' | 'cgroup' | 'unknown'; present: boolean; path: string | null; limitBytes: number | null }
   gateway?: HostRecord
 }
 
@@ -104,45 +103,6 @@ function launcherFacts(roots: string[]): LauncherFact[] {
   return rows.sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name))
 }
 
-function memoryFact(): HostFacts['memory'] {
-  if (isWsl()) {
-    const path = join(homedir(), '.wslconfig')
-    let limitBytes: number | null = null
-    try {
-      const match = readFileSync(path, 'utf8').match(/^memory\s*=\s*([0-9]+)([KMG]B)?/im)
-      if (match) limitBytes = Number(match[1]) * ({ KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 } as any)[match[2]?.toUpperCase() || 'MB']
-    } catch {}
-    return { kind: 'wslconfig', present: existsSync(path), path, limitBytes }
-  }
-  // THE CAP THAT BINDS is the tightest one on the chain from THIS PROCESS up to the cgroup root — not one at a
-  // fixed path. cgroup v2's root has no `memory.max` at all, so reading fixed paths answered "no mechanism" on
-  // every ordinary v2 host, including one whose slice is capped; the fleet's own hosts run every SpexCode process
-  // inside `/system.slice/cron.service` and reported `unknown` from the root. A cap is a NUMBER OF BYTES: `max`
-  // (v2) and the 2^63-ish sentinel (v1) are both "no cap", one of them wearing a number.
-  const own = (() => {
-    try { return readFileSync('/proc/self/cgroup', 'utf8').split('\n').find((line) => line.startsWith('0::'))?.slice(3).trim() || '' }
-    catch { return '' }
-  })()
-  const segments = own.split('/').filter(Boolean)
-  const candidates = [
-    ...segments.map((_, i) => join('/sys/fs/cgroup', ...segments.slice(0, segments.length - i), 'memory.max')),
-    '/sys/fs/cgroup/memory.max',
-    '/sys/fs/cgroup/memory/memory.limit_in_bytes',
-  ]
-  let path: string | null = null
-  let limitBytes: number | null = null
-  for (const candidate of candidates) {
-    let raw: string
-    try { raw = readFileSync(candidate, 'utf8').trim() } catch { continue }
-    path ??= candidate                                  // a readable file proves the mechanism, capped or not
-    const value = Number(raw)
-    if (raw === 'max' || !Number.isSafeInteger(value) || value <= 0) continue
-    if (limitBytes == null || value < limitBytes) { limitBytes = value; path = candidate }
-  }
-  if (!path) return { kind: 'unknown', present: false, path: null, limitBytes: null }
-  return { kind: 'cgroup', present: true, path, limitBytes }
-}
-
 export function collectHostFacts(roots = discoverRoots()): HostFacts {
   const wsl = isWsl()
   const runtime = platform() === 'darwin'
@@ -158,25 +118,13 @@ export function collectHostFacts(roots = discoverRoots()): HostFacts {
     versions: { node: process.version, tmux: commandVersion('tmux', ['-V']), git: commandVersion('git', ['--version']) },
     agents: agentFacts(),
     launchers: launcherFacts(roots),
-    memory: memoryFact(),
     ...(record ? { gateway: record } : {}),
   }
-}
-
-// THE MEMORY FACT ANSWERS ONE QUESTION: does this host cap the memory the work runs inside, and at what size.
-// Reporting the MECHANISM and its presence instead read as a broken dependency — a Mac has neither a cgroup file
-// nor a `.wslconfig`, so the row said `unknown: missing` about a host that is simply uncapped. A host with no
-// capping mechanism is not missing one; its envelope is the whole machine, which is the answer to give.
-export function formatMemoryCap(memory: HostFacts['memory']): string {
-  if (memory.kind === 'unknown') return 'no cap on this host'
-  if (memory.limitBytes == null) return `${memory.kind}: no cap set`
-  return `${memory.kind}: ${(memory.limitBytes / 1024 ** 3).toFixed(1)} GiB`
 }
 
 export function formatHostFacts(facts: HostFacts): string {
   const lines = [`Host facts`, `host: ${facts.host.kind} (${facts.host.reason})`, `runtime: ${facts.runtime.label}${facts.runtime.distro ? ` (${facts.runtime.distro})` : ''}`, `node: ${facts.versions.node}`, `tmux: ${facts.versions.tmux || 'missing'}`, `git: ${facts.versions.git || 'missing'}`]
   for (const [name, value] of Object.entries(facts.agents)) lines.push(`${name}: ${value.installed ? 'installed' : 'missing'}; ${value.loggedIn ? 'logged in' : 'not logged in'}`)
-  lines.push(`memory cap: ${formatMemoryCap(facts.memory)}`)
   lines.push('launchers:')
   for (const launcher of facts.launchers) lines.push(`  ${launcher.project}/${launcher.name}: ${launcher.resolves ? `resolves (${launcher.binary})` : 'BROKEN'} — ${launcher.cmd}`)
   return lines.join('\n')

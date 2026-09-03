@@ -14,6 +14,10 @@
 //   POST /projects/:id/init|doctor       run the REAL spex verb in that repo → { ok, code, output }
 //   POST /projects/:id/serve             start an offline project's backend (detached, record-validated)
 //   POST /login · POST /p/:id/login      the credential posts (JSON {password}; success 302s, wrong 401)
+//   GET  /machines                       → { machineId, machines: [{ machineId, sshAddress, state, gateway, lastError }] }
+//   /m/:machineId/*                      the SAME routes above, answered by that machine's gateway through
+//                                        this one ([[machine-routing]]) — so every reader here is
+//                                        prefix-parameterized rather than duplicated per machine
 // The registry is the host's reconciled view: the durable known-project catalog plus the machine's live
 // backend records — a project appears by running `spex serve` in its repo OR by explicit registration
 // here. `online` is the host's instance-validated liveness; the client still probes each ONLINE
@@ -104,9 +108,14 @@ export const applyCatalogResult = (prev, next) =>
   (next?.state === 'absent' && prev && prev.state !== 'absent' ? prev : next)
 
 // GET /projects → { state: 'ok', adminGated, projects } | { state: 'denied', reason } | { state: 'absent' }.
-export async function loadProjects() {
+// `base` addresses ANOTHER machine's hub through this one ('/m/<machineId>' — [[machine-routing]]): the far
+// gateway answers the identical catalog on the identical route, so a machine's group is read by the same
+// loader, normalized by the same normalizer, and denied-or-absent by the same rules. There is no second
+// client for remote projects, because a remote project is not a different kind of thing — it is the same
+// thing at a deeper address.
+export async function loadProjects(base = '') {
   let res
-  try { res = await fetch('/projects', { cache: 'no-store', headers: { Accept: 'application/json' } }) }
+  try { res = await fetch(`${base}/projects`, { cache: 'no-store', headers: { Accept: 'application/json' } }) }
   catch { return { state: 'absent' } }
   if (res.status === 401) return { state: 'denied', reason: 'admin-login' }
   if (res.status === 403) return { state: 'denied', reason: 'locked' }
@@ -120,13 +129,41 @@ export async function loadProjects() {
   return { state: 'ok', adminGated: !!body?.adminGated, gateway, projects }
 }
 
+// The fleet: GET /machines → { state: 'ok', machineId, machines } | { state: 'denied', reason } | { state: 'absent' }.
+// 'absent' is what a gateway generation without the machine surface answers, and it is the honest reading —
+// this machine simply has no fleet, so the page is exactly the single-machine page it has always been.
+// A machine with `gateway: false` is LISTED and not routable: its agent channel is unaffected, so hiding it
+// would misreport a linked machine as no machine at all.
+export const machineBase = (machineId) => `/m/${encodeURIComponent(machineId)}`
+export function normalizeMachine(m) {
+  if (!m || typeof m !== 'object' || typeof m.machineId !== 'string' || !m.machineId) return null
+  return {
+    machineId: m.machineId,
+    sshAddress: typeof m.sshAddress === 'string' ? m.sshAddress : '',
+    state: m.state === 'connected' ? 'connected' : 'connecting',
+    gateway: !!m.gateway,
+    lastError: typeof m.lastError === 'string' && m.lastError ? m.lastError : null,
+  }
+}
+export async function loadMachines() {
+  let res
+  try { res = await fetch('/machines', { cache: 'no-store', headers: { Accept: 'application/json' } }) }
+  catch { return { state: 'absent' } }
+  if (res.status === 401) return { state: 'denied', reason: 'admin-login' }
+  if (res.status === 403) return { state: 'denied', reason: 'locked' }
+  if (!res.ok) return { state: 'absent' }
+  const body = await jsonOf(res)
+  if (!body || typeof body.machineId !== 'string' || !Array.isArray(body.machines)) return { state: 'absent' }
+  return { state: 'ok', machineId: body.machineId, machines: body.machines.map(normalizeMachine).filter(Boolean) }
+}
+
 // liveness of one project's backend, probed through the authorized /p/:id lane (the hub proxies /health
 // to the loopback backend, which answers a bare 'ok'). Anything else — a 502 from a dead backend, a
 // redirect to a login page, a timeout — reads 'unreachable'. Only the admin catalog calls this, so the
 // probe rides the admin scope.
-export async function probeProjectHealth(id, { timeoutMs = 2500 } = {}) {
+export async function probeProjectHealth(id, { timeoutMs = 2500, base = '' } = {}) {
   try {
-    const res = await fetch(`/p/${encodeURIComponent(id)}/health`, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
+    const res = await fetch(`${base}/p/${encodeURIComponent(id)}/health`, { cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
     if (!res.ok || res.redirected) return 'unreachable'
     return (await res.text()).trim() === 'ok' ? 'running' : 'unreachable'
   } catch { return 'unreachable' }

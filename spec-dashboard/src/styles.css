@@ -3629,6 +3629,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* catalog rows */
 .proj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* The fleet ([[machine-routing]]): peers are grouped BELOW this machine's own list, one group per machine,
+   each indented under its own head so a row's machine is never ambiguous. An offline group keeps its head and
+   its reason and shows no rows at all — the emptiness is the honest state, not a rendering gap. */
+.proj-fleet-label { color: var(--muted); font-size: var(--type-caption); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; }
+.proj-fleet { margin-top: 18px; }
+.proj-machines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.proj-machine { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 8px 10px; }
+.proj-machine.offline { border-style: dashed; }
+.proj-machine-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.proj-machine-head > svg { flex: none; color: var(--muted); }
+.proj-machine-name { color: var(--ink2); font-size: var(--type-body); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.proj-machine-state { color: var(--muted); font-size: var(--type-meta); margin-left: auto; flex: none; }
+.proj-machine.offline .proj-machine-state { color: var(--red); }
+.proj-machine-note { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); margin-top: 5px; }
+.proj-machine-list { margin-top: 8px; }
+
 .proj-pagination { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; }
 .proj-page-label { color: var(--muted); font-size: var(--type-meta); min-width: 88px; text-align: center; }
 .proj-row { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 7px 10px; }

@@ -148,6 +148,19 @@ machines with the same project path produce the same project id — ids stay mac
 the machine segment is what disambiguates them. No global id scheme is introduced, and no row is ever
 shown without the machine it belongs to.
 
+That grouping is now in the SPA ([[projects-hub]]), and the seam is the scope parser rather than a client:
+`parseProjectPath` learned an optional `/m/<machineId>` prefix and folds it into the ONE base every scoped
+`/api` call, SSE stream and terminal socket is already built from, so no other module learns that machines
+exist. Measured through a real browser over a real two-gateway leg — two gateways with separate homes and
+separate auth stores, joined by an issued leg credential — one click from the local list landed on
+`/m/<id>/p/<project>/#/graph` with the far project's own graph rendered and every request, the SSE stream
+included, riding the machine prefix. A peer with no routable gateway leg is LISTED and simply carries no
+rows: hiding it would report a linked machine as no machine, and its own last ssh error is a fact about the
+leg rather than an answer to the gateway question, so the group's reason is what states the emptiness and
+that error stands as a dimmer second line. The local list is deliberately exempt from the empty-on-failure
+rule above — the page you are reading was served by that gateway, so a blip in its own catalog read does not
+put its own projects in doubt.
+
 A remote route crosses two proxy hops instead of one, so both must share one lifecycle: an abrupt visitor
 close tears down this gateway's exchange, the remote gateway's exchange, and the backend's, in that order.
 A closed browser tab that leaves a live terminal child alive on another machine is the failure this

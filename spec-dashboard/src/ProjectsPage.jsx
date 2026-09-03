@@ -5,7 +5,7 @@ import {
   CATALOG_POLL_MS, loadProjects, probeProjectHealth, setProjectPassword, clearProjectPassword,
   setAdminPassword, clearAdminPassword, browseProjectDirectories, addProject, loadProjectConfig, saveProjectConfig,
   initProject, doctorProject, startProjectBackend, saveGatewayIcon, saveProjectIcon, paginateProjects, removeProject,
-  loadHostFacts, runHostDoctor,
+  loadHostFacts, runHostDoctor, loadMachines, machineBase,
 } from './projects.js'
 import { projectHref, PROJECT_ID } from './project.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -397,7 +397,11 @@ function RemoveProjectModal({ project, busy, error, onClose, onRemove, t }) {
   )
 }
 
-function ProjectRow({ p, health, onRefresh, t }) {
+// `machineId` names the machine this row's project lives on, or null for THIS machine. A remote row is the
+// same row at a deeper address — same identity, same dot, same Open — minus the management cluster: those
+// controls write another machine's config, catalog and passwords, which is a wider claim than "switch
+// quickly between machines" and is not one this page makes on evidence it has ([[machine-routing]]).
+function ProjectRow({ p, health, onRefresh, t, machineId = null }) {
   const [panel, setPanel] = useState(null)   // 'config' | 'setup' | 'pw' | null
   const [busy, setBusy] = useState(false)    // password writes
   const [busyOp, setBusyOp] = useState(null) // 'init' | 'doctor' | 'serve' | null
@@ -407,7 +411,8 @@ function ProjectRow({ p, health, onRefresh, t }) {
   const [removeBusy, setRemoveBusy] = useState(false)
   const [removeError, setRemoveError] = useState(null)
   const [hostError, setHostError] = useState(false)
-  const current = p.id === PROJECT_ID
+  const remote = !!machineId
+  const current = !remote && p.id === PROJECT_ID
   const offline = p.online === false
   // the dot: an offline row is calmly 'stopped' (the host already validated there is no live backend —
   // probing it would only paint a scary red); otherwise the probe's answer is the end-to-end truth.
@@ -450,6 +455,13 @@ function ProjectRow({ p, health, onRefresh, t }) {
         {current && <span className="proj-tag">{t('projects.current')}</span>}
         <span className="proj-path" title={p.id}>{p.root || p.id}</span>
         <span className="proj-actions">
+          {/* A remote row's only action is Open, and only while the project is LIVE: the management cluster
+              writes another machine's config, catalog and passwords, and `start` runs a backend there — both
+              wider claims than "switch quickly between machines". An OFFLINE remote project therefore offers
+              nothing: its dot already says stopped, and an Open link would address a backend that is down. */}
+          {remote ? (
+            offline ? null : <a className="proj-act primary" href={projectHref(p.id, '#/graph', machineId)}>{t('projects.open')}</a>
+          ) : <>
           <IconButton
             icon="settings"
             label={t('projects.configTitle')}
@@ -488,6 +500,7 @@ function ProjectRow({ p, health, onRefresh, t }) {
           ) : (
             <a className="proj-act primary" href={projectHref(p.id)}>{t('projects.open')}</a>
           )}
+          </>}
         </span>
       </div>
       {error && <div className="proj-err">{error}{hostError && <> {' '}<a href="#host-facts-card">{t('projects.seeHostFacts')}</a></>}</div>}
@@ -570,6 +583,69 @@ function GatewayIdentityEditor({ gateway, onRefresh, t }) {
   )
 }
 
+// One peered machine's group ([[machine-routing]]). It reads that MACHINE's own hub through this gateway's
+// `/m/<machineId>` route — same loader, same normalizer, same rows — so a group is the far machine's live
+// answer and never something this gateway remembers. That is why a failed read EMPTIES the group instead of
+// keeping the rows it had: the read that just failed was the only evidence of the far state. The local list
+// is deliberately different — the page you are reading was served by that gateway, so a blip in its own
+// catalog read does not put its projects in doubt. Each group polls on its own, so one dead machine costs
+// this page nothing but its own group.
+function MachineGroup({ machine, t }) {
+  const base = machineBase(machine.machineId)
+  // `gateway: false` is a linked machine with no routable gateway leg — its agent channel is unaffected, so
+  // the machine is LISTED and simply carries no rows. Hiding it would report a linked machine as no machine.
+  const [state, setState] = useState({ kind: machine.gateway ? 'loading' : 'offline', reason: 'noGateway' })
+  const [health, setHealth] = useState({})
+  const seq = useRef(0)
+
+  const read = useCallback(async () => {
+    if (!machine.gateway) { setState({ kind: 'offline', reason: 'noGateway' }); return }
+    const mine = ++seq.current
+    const r = await loadProjects(base)
+    if (mine !== seq.current) return
+    if (r.state === 'ok') {
+      setState({ kind: 'ok', projects: r.projects })
+      r.projects.filter((p) => p.online !== false).forEach((p) => {
+        probeProjectHealth(p.id, { base }).then((h) => { if (mine === seq.current) setHealth((m) => ({ ...m, [p.id]: h })) })
+      })
+    } else setState({ kind: 'offline', reason: r.state === 'denied' ? 'denied' : 'unreachable' })
+  }, [base, machine.gateway, machine.machineId])
+
+  useEffect(() => {
+    read()
+    const id = setInterval(read, CATALOG_POLL_MS)
+    return () => clearInterval(id)
+  }, [read])
+
+  const rows = state.kind === 'ok' ? state.projects : []
+  return (
+    <li className={`proj-machine ${state.kind}`}>
+      <div className="proj-machine-head">
+        <Icon name="globe" size={12} />
+        <span className="proj-machine-name">{machine.sshAddress || machine.machineId}</span>
+        <span className="proj-machine-state">
+          {state.kind === 'ok' ? t('projects.count', { n: rows.length })
+            : state.kind === 'loading' ? t('hud.loading')
+              : t(state.reason === 'noGateway' ? 'projects.machineNoGatewayShort' : 'projects.machineOffline')}
+        </span>
+      </div>
+      {rows.length ? (
+        <ul className="proj-list proj-machine-list">
+          {rows.map((p) => <ProjectRow key={p.id} p={p} health={health[p.id]} onRefresh={read} t={t} machineId={machine.machineId} />)}
+        </ul>
+      ) : state.kind === 'offline' ? (
+        <>
+          {/* The note says why THIS GROUP is empty. The link's own last error is supplementary — it is a fact
+              about the ssh leg, not an answer to the gateway question, and letting it stand in as the headline
+              reported "ssh exited (255)" where the real answer was "that machine publishes no gateway". */}
+          <div className="proj-machine-note">{t(`projects.machine${state.reason[0].toUpperCase()}${state.reason.slice(1)}`)}</div>
+          {machine.lastError ? <div className="proj-machine-note proj-dim">{machine.lastError}</div> : null}
+        </>
+      ) : null}
+    </li>
+  )
+}
+
 export default function ProjectsPage() {
   const t = useT()
   const { notify } = useTransientNotice()
@@ -584,6 +660,10 @@ export default function ProjectsPage() {
   const [hostFacts, setHostFacts] = useState(null)
   const [hostDoctorBusy, setHostDoctorBusy] = useState(false)
   const [hostDoctorResult, setHostDoctorResult] = useState(null)
+  // the fleet ([[machine-routing]]): { machineId, machines } once this gateway answers /machines, else null —
+  // and null is the honest reading of a gateway generation without the machine surface, so the page stays
+  // exactly the single-machine page it has always been rather than announcing an empty fleet.
+  const [fleet, setFleet] = useState(null)
   const seq = useRef(0)
 
   useLayoutEffect(() => {
@@ -607,6 +687,10 @@ export default function ProjectsPage() {
         probeProjectHealth(p.id).then((h) => { if (mine === seq.current) setHealth((m) => ({ ...m, [p.id]: h })) })
       })
       loadHostFacts().then((host) => { if (host.ok) setHostFacts(host) })
+      loadMachines().then((f) => {
+        if (mine !== seq.current) return
+        setFleet(f.state === 'ok' ? { machineId: f.machineId, machines: f.machines } : null)
+      })
     } else if (r.state === 'denied') setState({ kind: 'denied', reason: r.reason })
     else setState((s) => (s.kind === 'ok' ? s : { kind: 'absent' })) // a transient miss keeps the last catalog
     return r
@@ -691,6 +775,9 @@ export default function ProjectsPage() {
             {adminErr && <div className="proj-err">{adminErr}</div>}
           </div>
         )}
+        {/* The local list needs a heading only once there is something to tell it apart FROM: with no peers,
+            "this machine" is the only machine and naming it is noise. */}
+        {fleet?.machines.length ? <div className="proj-fleet-label">{t('projects.thisMachine')}</div> : null}
         {state.projects.length ? (
           <ul className="proj-list">
             {page.items.map((p) => <ProjectRow key={p.id} p={p} health={health[p.id]} onRefresh={refresh} t={t} />)}
@@ -707,6 +794,14 @@ export default function ProjectsPage() {
               disabled={page.page === page.pageCount} onClick={() => setProjectPage((n) => n + 1)} />
           </nav>
         )}
+        {fleet?.machines.length ? (
+          <section className="proj-fleet" aria-label={t('projects.fleet')}>
+            <div className="proj-fleet-label">{t('projects.fleet')}</div>
+            <ul className="proj-machines">
+              {fleet.machines.map((m) => <MachineGroup key={m.machineId} machine={m} t={t} />)}
+            </ul>
+          </section>
+        ) : null}
         <div className="proj-page-details" aria-label={t('projects.gatewaySettings')}>
           <GatewayIdentityEditor gateway={state.gateway} onRefresh={refresh} t={t} />
         </div>

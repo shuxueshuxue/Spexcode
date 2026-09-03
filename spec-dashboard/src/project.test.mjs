@@ -8,14 +8,32 @@ import { PAGES, parseRoute } from './route.js'
 // backend call in the app rides them.
 
 test('parseProjectPath: only /p/<id> paths carry a scope', () => {
-  assert.deepEqual(parseProjectPath('/'), { id: null, base: '' })
-  assert.deepEqual(parseProjectPath(''), { id: null, base: '' })
-  assert.deepEqual(parseProjectPath('/index.html'), { id: null, base: '' })
-  assert.deepEqual(parseProjectPath('/px/abc'), { id: null, base: '' })
-  assert.deepEqual(parseProjectPath('/p/'), { id: null, base: '' })
-  assert.deepEqual(parseProjectPath('/p/abc'), { id: 'abc', base: '/p/abc' })
-  assert.deepEqual(parseProjectPath('/p/abc/'), { id: 'abc', base: '/p/abc' })
-  assert.deepEqual(parseProjectPath('/p/abc/deep/route'), { id: 'abc', base: '/p/abc' })
+  const bare = { machineId: null }
+  assert.deepEqual(parseProjectPath('/'), { ...bare, id: null, base: '' })
+  assert.deepEqual(parseProjectPath(''), { ...bare, id: null, base: '' })
+  assert.deepEqual(parseProjectPath('/index.html'), { ...bare, id: null, base: '' })
+  assert.deepEqual(parseProjectPath('/px/abc'), { ...bare, id: null, base: '' })
+  assert.deepEqual(parseProjectPath('/p/'), { ...bare, id: null, base: '' })
+  assert.deepEqual(parseProjectPath('/p/abc'), { ...bare, id: 'abc', base: '/p/abc' })
+  assert.deepEqual(parseProjectPath('/p/abc/'), { ...bare, id: 'abc', base: '/p/abc' })
+  assert.deepEqual(parseProjectPath('/p/abc/deep/route'), { ...bare, id: 'abc', base: '/p/abc' })
+})
+
+// A machine segment is not a second scope model — it deepens the ONE base, so every /api call, terminal
+// socket and SSE stream the page makes rides the machine prefix without any module knowing it exists
+// ([[machine-routing]]).
+test('parseProjectPath: a machine segment deepens the base and names the machine', () => {
+  assert.deepEqual(parseProjectPath('/m/mach-1/p/abc/'), { machineId: 'mach-1', id: 'abc', base: '/m/mach-1/p/abc' })
+  assert.deepEqual(parseProjectPath('/m/mach-1/p/abc/deep/route'), { machineId: 'mach-1', id: 'abc', base: '/m/mach-1/p/abc' })
+  assert.equal(scopedApiUrl('/api/graph', parseProjectPath('/m/mach-1/p/abc/').base), '/m/mach-1/p/abc/api/graph')
+  // a machine segment with no project is the fleet address, not a project scope
+  assert.deepEqual(parseProjectPath('/m/mach-1/'), { machineId: null, id: null, base: '' })
+  assert.deepEqual(parseProjectPath('/m/mach-1'), { machineId: null, id: null, base: '' })
+  // both segments decode for use and stay raw in the base
+  const r = parseProjectPath('/m/ma%20ch/p/my%20proj/')
+  assert.equal(r.machineId, 'ma ch')
+  assert.equal(r.id, 'my proj')
+  assert.equal(r.base, '/m/ma%20ch/p/my%20proj')
 })
 
 test('parseProjectPath: the id is decoded for use, the base keeps the raw served segment', () => {
@@ -41,6 +59,9 @@ test('scopedApiUrl prefixes exactly the /api lane, idempotently', () => {
 test('cross-scope hrefs land on their canonical project and global surfaces', () => {
   assert.equal(projectHref('abc'), '/p/abc/#/graph')
   assert.equal(projectHref('a b', '#/sessions'), '/p/a%20b/#/sessions')
+  // the bare form permanently means this machine; a machine-qualified href is the same builder, deeper
+  assert.equal(projectHref('abc', '#/graph', 'mach-1'), '/m/mach-1/p/abc/#/graph')
+  assert.equal(projectHref('a b', '#/sessions', 'ma ch'), '/m/ma%20ch/p/a%20b/#/sessions')
   assert.equal(hubHref(), '/projects')
 })
 

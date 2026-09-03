@@ -474,7 +474,9 @@ function makeBareRepo(prefix: string) {
 
 test('harness selection chain: a codex-only repo NEVER grows .claude — init, manual materialize, the pre-commit anchor, a worktree materialize; a harness event materializes NOTHING', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex, fireEvent, runtimeHash } = makeBareRepo('spex-cxonly-')
-  // the adopter declares codex-only BEFORE init (init leaves an existing .spec/spexcode.json untouched)
+  // the adopter declares codex-only BEFORE init (init leaves an existing .spec/spexcode.json untouched);
+  // the config lives under .spec/ now, so the fixture makes that directory itself ([[portable-layout]]).
+  mkdirSync(join(proj, '.spec'), { recursive: true })
   writeFileSync(join(proj, '.spec/spexcode.json'), '{"harnesses":["codex"],"lint":{"governedRoots":["."]}}\n')
   g('add', '-A'); g('commit', '-qm', 'init')
   const noClaude = (dir: string, leg: string) => {

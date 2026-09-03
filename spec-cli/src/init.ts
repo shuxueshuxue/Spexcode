@@ -145,10 +145,16 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true })
   console.log(`spex init → ${targetDir}`)
 
-  // 1. seed the spec tree: templates/spec/* -> <dir>/.spec/* (an existing .spec aborts this phase loudly).
+  // 1. seed the spec tree: templates/spec/* -> <dir>/.spec/* (an existing TREE aborts this phase loudly).
+  // The config now lives INSIDE .spec ([[portable-layout]]), so the directory's mere existence no longer
+  // means "already adopted": an adopter who declares its harnesses before running init creates .spec by
+  // writing that file alone, and skipping on the directory would leave it with no tree and no contract.
+  // What blocks the scaffold is a real tree — any entry that is not one of the two config files.
   const specDest = join(targetDir, '.spec')
-  if (existsSync(specDest)) {
-    console.warn(`• .spec already exists at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
+  const specTreeExists = existsSync(specDest)
+    && readdirSync(specDest).some((e) => e !== 'spexcode.json' && e !== 'spexcode.local.json')
+  if (specTreeExists) {
+    console.warn(`• .spec already carries a tree at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
   } else {
     const includeSeedDir = (dir: string) => selectedNativeEvents === null || seedableForEvents(dir, selectedNativeEvents)
     const planted = copyTreeNoClobber(
@@ -206,14 +212,8 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.log(`✓ planted .spec/spexcode.json — mainBranch ${JSON.stringify(cfg.mainBranch)}, harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
   }
 
-  // The host-local overlay is part of the adopted layout and must never become force-add bait.
-  const ignoreFile = join(targetDir, '.gitignore')
-  const ignoreLine = '.spec/spexcode.local.json'
-  const ignoreText = existsSync(ignoreFile) ? readFileSync(ignoreFile, 'utf8') : ''
-  if (!ignoreText.split(/\r?\n/).includes(ignoreLine)) {
-    writeFileSync(ignoreFile, `${ignoreText}${ignoreText && !ignoreText.endsWith('\n') ? '\n' : ''}${ignoreLine}\n`)
-    console.log(`✓ ignored ${ignoreLine}`)
-  }
+  // The host-local overlay is ignored by the MATERIALIZED block, not by hand-appended text: an appended
+  // line reads as host authorship and costs a wholly-generated .gitignore its self-entry ([[spex-init]]).
 
   // 2. install the git hooks. Unknown existing hooks are user-owned and stay byte-identical. An exact
   // SpexCode snapshot is refreshed because a multi-hook protocol cannot mix old and new generations.

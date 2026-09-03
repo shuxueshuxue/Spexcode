@@ -59,8 +59,18 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   authoritative. Later ordinary `git switch` operations cannot redefine a feature branch as trunk. A re-init
   preserves an explicit value and fills a missing one without changing the surrounding config.
 
-Init also ensures `.gitignore` contains `.spec/spexcode.local.json`; an existing ignore file is appended to,
-never replaced. The local overlay remains machine-only while the committed `.spec/spexcode.json` stays tracked.
+The host-local overlay is already covered by the checkout-invariant common exclude that materialize writes
+([[harness-delivery]]: `.spec/spexcode.local.json` is machine residue and lives in `.git/info/exclude`), so
+`spex init` does not also append it to `.gitignore`. That append was redundant, and worse than redundant: a
+hand-appended line reads as host authorship, and a `.gitignore` that looks host-authored loses the self-entry
+materialize gives a wholly generated file — every adopted repo would carry a permanently visible generated
+file.
+
+**What blocks the spec scaffold is a TREE, not the directory.** The project config lives inside `.spec`
+([[portable-layout]]), so an adopter that declares its harnesses before running init creates `.spec` by
+writing that one file; skipping on the directory's existence would leave that repo with no tree and no
+contract files at all. Init therefore skips only when `.spec` holds an entry that is not one of the two
+config files.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string

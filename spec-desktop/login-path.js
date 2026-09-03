@@ -9,8 +9,6 @@
 
 const { execFileSync } = require('node:child_process')
 
-// what a GUI session hands a process; nothing here comes from the user's profile.
-const GUI_PATH_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
 // rc files print banners, so the PATH is announced after a marker and everything before it is noise.
 const MARKER = '__SPEXCODE_LOGIN_PATH__'
 const PROBE_TIMEOUT_MS = 5_000
@@ -19,11 +17,13 @@ function dirs(value) {
   return String(value || '').split(':').filter(Boolean)
 }
 
-// The tell-tale of a GUI launch: nothing outside the minimal set is present. A shell-launched app already
-// carries the profile PATH and is left alone, so the probe cost is paid only where it buys something.
-function needsLoginPath(platformName, currentPath) {
+// The tell-tale of a GUI launch is that there is no controlling terminal: that is what "double-clicked"
+// means. Judging by the shape of PATH instead does not work — the measured Mac's launchd session injects
+// ~/.cargo/bin, so a PATH that looks personalized can still be one no profile ever touched. A process with a
+// tty already inherited the shell that started it, so the probe cost is paid only where it buys something.
+function needsLoginPath(platformName, hasTty) {
   if (platformName !== 'darwin' && platformName !== 'linux') return false
-  return dirs(currentPath).every((dir) => GUI_PATH_DIRS.includes(dir))
+  return !hasTty
 }
 
 // Login dirs win: they carry the version manager the user actually runs. The inherited system dirs stay,
@@ -44,8 +44,8 @@ function loginShellCommand(shell) {
 
 // Repairs env.PATH in place and returns what happened, so a failure is reported rather than swallowed: a
 // bare-looking host is then a fact about the probe, not a silent lie about the machine.
-function repairLoginPath(env = process.env, platformName = process.platform, run = execFileSync) {
-  if (!needsLoginPath(platformName, env.PATH)) return { needed: false, repaired: false, reason: 'inherited a profile PATH' }
+function repairLoginPath(env = process.env, platformName = process.platform, run = execFileSync, hasTty = Boolean(process.stdout?.isTTY || process.stdin?.isTTY)) {
+  if (!needsLoginPath(platformName, hasTty)) return { needed: false, repaired: false, reason: 'started from a terminal' }
   const { file, args } = loginShellCommand(env.SHELL)
   let printed = ''
   try {

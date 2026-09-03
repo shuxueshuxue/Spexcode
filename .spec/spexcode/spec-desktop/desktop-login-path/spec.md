@@ -31,9 +31,12 @@ announced after a marker so an rc file's banner cannot be mistaken for a path), 
 first because they carry the version manager the user actually runs, and every inherited directory kept, so a shell
 that resolves nothing can never leave the app with less than it started with.
 
-The probe is paid only where it buys something. A shell-launched app already carries the profile PATH and is left
-alone; the tell-tale of a GUI launch is that **nothing** outside the minimal set is present. Windows is never
-probed — its PATH comes from the registry and reaches a GUI launch intact.
+The probe is paid only where it buys something, and the test for that is the **absence of a controlling
+terminal** — which is what "double-clicked" means. A process with a tty inherited the shell that started it and
+is left alone. Judging by the shape of PATH does not work: the measured Mac's launchd session injects
+`~/.cargo/bin`, so a PATH can look personalized and still be one no profile ever touched — an earlier version of
+this node tested for "nothing outside `/usr/bin:/bin:/usr/sbin:/sbin`" and silently declined to repair that
+machine. Windows is never probed — its PATH comes from the registry and reaches a GUI launch intact.
 
 A failed or silent probe is reported, never swallowed: the shell logs which shell failed and what PATH remains.
 A bare-looking host must be a statement about the probe, not a silent lie about the machine.

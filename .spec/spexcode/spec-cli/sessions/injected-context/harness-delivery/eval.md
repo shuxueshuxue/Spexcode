@@ -121,8 +121,10 @@ scenarios:
       editor) and fire a harness tool event through dispatch.sh; then bring the edit to a git-native anchor
       (commit it, or run `spex materialize`).
     expected: >-
-      The harness event materializes NOTHING — the contract file and manifest are byte-unchanged, the hook hot
-      path stays pure bash with zero node boots. The git-native anchor then brings the AGENTS.md/CLAUDE.md
+      The harness event materializes NOTHING — the contract file and manifest are byte-unchanged, and the
+      dispatch path itself boots no node (an event fired against an empty manifest costs zero node
+      processes; a handler's own CLI calls, such as the seeded session-state bookkeeping, are that handler's
+      cost and not a render). The git-native anchor then brings the AGENTS.md/CLAUDE.md
       block and the manifest current: .plugins edits are git-transactional ([[commit-surgery]]).
 ---
 # eval.md — harness-delivery

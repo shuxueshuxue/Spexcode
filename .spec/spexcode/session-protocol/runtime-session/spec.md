@@ -11,7 +11,7 @@ related:
 ---
 # runtime-session
 
-The former ZCode-oriented `runtime-session.ts` bridge is retired. It is not part of the public package surface and
+The former host-agent-oriented `runtime-session.ts` bridge is retired. It is not part of the public package surface and
 must not be restored as a compatibility layer. Its old responsibilities now have explicit owners: protocol
 addresses and messages in [[session-protocol]], relations in [[session-topology]], lifecycle/events/watch delivery
 in [[session application service]], and native identity in [[runtime-bindings]].

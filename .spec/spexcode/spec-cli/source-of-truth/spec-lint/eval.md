@@ -84,6 +84,27 @@ scenarios:
       paths), `mention` ERRORs on the dangling prose mention ONLY (the backticked and fenced samples
       stay silent), `confusable-id` WARNs on the one-edit pair, and the run exits non-zero. On the
       real tree: all three rules report nothing and `spex spec lint` still counts 0 error(s).
+  - name: adoption-boundary-follows-the-loader
+    tags: [cli]
+    code: spec-cli/src/lint.ts
+    test:
+      path: spec-cli/src/init.test.ts
+      name: a legacy root config the loader has stopped reading is not source of truth
+    description: >-
+      On a throwaway git repo adopted by the real `spex init`, walk the config file through the three
+      shapes the loader distinguishes and run the real `spex spec lint` at each. (a) DEAD LEGACY:
+      `.spec/spexcode.json` tracked and an untracked root-level `spexcode.json` beside it — the loader
+      prefers the `.spec` one and never reads the root file. (b) LIVE AND TRACKED: `git mv` the config
+      back to the root so it is the only one, committed. (c) LIVE AND UNTRACKED: untrack that same root
+      file while it stays the only config. Read the exit code, the integrity line, and the `git add`
+      repair it names.
+    expected: >-
+      Integrity speaks about exactly the files the loader reads. (a) exits 0 with no
+      `source of truth is untracked` finding — a legacy file the loader has stopped reading is not
+      source of truth and is never demanded. (b) exits 0, satisfied. (c) exits 1 with
+      `integrity: project source of truth is untracked: spexcode.json` and a repair naming
+      `git add .spec spexcode.json`. The repair's pathspec never names a path ruled out by config
+      precedence, so integrity and the loader never say different things about one file.
 ---
 # eval.md — spec-lint
 

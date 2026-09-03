@@ -119,8 +119,10 @@ and a plaintext client on the TLS port is refused, never silently downgraded. Ab
 dashboard` stays plain loopback HTTP; `--host` widens the bind, behind whatever gates the operator
 configured. It widens the CONSOLE listener alone: this same process also binds a second, always-loopback
 **peer ingress** — plain HTTP, no TLS, the ssh tunnel being the transport's encryption — which no flag can
-widen. The single host-record publish waits until both doors are bound, so a reader never sees a record that
-omits a door this gateway has and an absent peer port means no machine entry rather than a moment too early.
+widen. The single host-record publish waits until both doors are bound, and a failed bind ends the process
+rather than publishing, so every record this version writes names both doors. An absent peer port is therefore
+not a timing state at all: it identifies a record left by an older gateway that had no peer ingress, and reads
+as "no machine entry on that machine" — a machine that cannot be routed to, not an error.
 Requests arriving there are decided as [[gateway-auth]]'s peer entry, so the implicit admin grant a human at
 this machine gets from its own loopback is unreachable through a forward.
 

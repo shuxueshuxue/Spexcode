@@ -962,9 +962,12 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
 
   const hostRecord = newHostRecord(`${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${opts.port}`)
 
-  // @@@one record, two doors - the single publish waits for BOTH binds. Which listener wins the race is not
-  // a promise Node makes, so counting them is what keeps a reader from ever seeing a record that omits a
-  // door this gateway has; reading no `peerPort` must mean "no machine entry", never "not published yet".
+  // @@@one record, two doors - the single publish waits for BOTH binds. Which listener wins the race is not a
+  // promise Node makes, so counting them is what keeps this process from ever publishing a record that omits a
+  // door it has: a failed bind exits the process (listenOrExit), so a record reaches disk only with both ports
+  // in it. An absent `peerPort` therefore has exactly one source — a record left by an OLDER binary that had
+  // no peer ingress — and its one honest reading is "that gateway offers no machine entry", not a timing
+  // window here.
   let bound = 0
   const publishWhenBothBound = () => { if (++bound === 2) publishHostRecord(hostRecord) }
 

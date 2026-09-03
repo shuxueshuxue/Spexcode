@@ -64,8 +64,10 @@ the flag is documented in `spex help doctor`.
 
 `spex dashboard` publishes `~/.spexcode/host.json` only from the listener's post-bind callback. The record is
 `{version:1,url,pid,instanceId,startedAt}` plus an optional `peerPort` naming the gateway's always-loopback peer
-ingress ([[gateway-auth]]'s second door); the one publish waits until both doors are bound, so an absent `peerPort`
-means this gateway offers no machine entry and never means "not published yet";
+ingress ([[gateway-auth]]'s second door). The one publish waits until both doors are bound, and a failed bind
+ends the process rather than publishing, so a record this version writes always names both: the only source of an
+absent `peerPort` is a record written by an older binary that had no peer ingress, and its one reading is "that
+gateway offers no machine entry" — never a half-published record.
 `readHostRecord` validates its shape, URL, and live PID and drops a malformed `peerPort` to absent, while
 `dropOwnHostRecord` removes it only when the instance id still matches. A killed dashboard therefore leaves at
 most a stale file that readers treat as absent. The ProjectsPage renders one host card above project rows —

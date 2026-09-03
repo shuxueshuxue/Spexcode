@@ -95,7 +95,7 @@ revision. The host extends the persisted `harnesses` array only after validating
 with [[harness-select]]: native and plugin targets are mutually exclusive, and a missing or malformed
 `harnesses` field fails loud instead of inventing a selection. The write is atomic and revision-guarded,
 then runs the real `spex materialize` in the project root. A native target may receive a launcher copied from
-the safe init template; a target without such a template (currently `zcode`) is still delivered without a
+the safe init template; a target whose adapter ships no such template is still delivered without a
 fabricated command. The response carries the resulting source, revision, targets, and materialize exit code
 and transcript, including when materialize fails so the caller can retry the persisted choice. This route is
 admin-scoped like the other project management operations.

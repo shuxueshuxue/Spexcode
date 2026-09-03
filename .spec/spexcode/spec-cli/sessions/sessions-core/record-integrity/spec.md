@@ -27,7 +27,8 @@ canonical lifecycle state. `session.json` is migration input only and is retired
 A record whose `runtime_owner` names an external controller is instead written by
 [[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
 stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
-format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
+format without turning a host agent's own
+state into SpexCode lifecycle policy. The reason for a single typed writer per
 ownership mode is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
 existing JSON eventually meets a quote, a backslash, or a newline and leaves a record nothing can parse. Both
 note-carrying entries — the agent's typed declaration and the hook's capture of an asked question — therefore

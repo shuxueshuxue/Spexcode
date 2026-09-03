@@ -74,6 +74,30 @@ single-digit milliseconds. One detail makes the deeper prefix free as well: the 
 references its assets RELATIVELY, so it resolves them correctly under any prefix depth and a machine
 segment needs no build change, no `<base>`, and no absolute asset root.
 
+### The forwarded gateway port is where a peer is addressable here
+
+A peer is reachable through its own gateway, so the peer record carries a gateway leg: a local loopback port,
+the far gateway's own port, and the instance id that port was published under. Those far facts are PUBLISHED,
+never guessed — the accepting machine reads its own host record when it answers a dial, so the answer is either
+the gateway it runs right now or an honest absence, and an absence records no leg at all rather than a port
+nobody could later prove wrong. A leg is therefore always either correct-as-of-its-instance or missing.
+
+The leg is directional, and the record says so instead of pretending otherwise. `spex peer connect` opens the
+forward, so it makes the TARGET addressable HERE; the accepting side runs no ssh child of its own and so holds
+no leg back, which is why its own gateway fields stay empty and the reverse view is one `peer connect` run on
+that machine. Nothing here is symmetric that the transport is not.
+
+Staleness has one repair, and it is explicit. The retry loop redials ssh without asking the far side anything,
+so a gateway that restarted on another port would otherwise keep a forward aimed at a dead instance forever.
+Re-running `peer connect` is that repair: it re-asks which gateway the far side publishes now and rebuilds the
+leg when the instance changed, keeping the LOCAL port stable across the rebuild so whatever already addresses
+it keeps working. A refused ask leaves the recorded leg untouched rather than erasing it, so an unreachable
+peer can still have its tunnel kicked exactly as before.
+
+The leg deliberately carries no route and no credential yet. A forwarded port that nothing proxies into is
+reachable only from this machine, by someone who already has a shell here — which is what makes it safe to
+land before the two clauses below, and unsafe to land them in the other order.
+
 ### Authorization is explicit per machine, never inherited from loopback
 
 The chain is visitor → this gateway → forwarded loopback port → the remote gateway. The remote gateway

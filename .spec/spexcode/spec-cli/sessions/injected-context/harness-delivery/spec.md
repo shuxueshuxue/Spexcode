@@ -172,7 +172,12 @@ sibling's selection change.
 
 Materialize reads and writes only the current tree slot and current per-tree filter payload. It does not import
 pre-slot ledgers, common ignore projections, or other retired-format receipts, and a normal pass never enumerates
-registered sibling worktrees. Shared filter transport is refreshed in place; project-wide teardown may still inspect
+registered sibling worktrees. That boundary has a visible consequence and it is the intended one: on a repo whose
+common exclude still carries a retired projection, the first tree to materialize replaces that block with the
+checkout-invariant residue alone, so a sibling that has not materialized yet shows its own generated files as
+untracked until it does. The repair is that tree's own materialize — which its git hooks already run at the next
+commit, checkout, or merge — never a cross-tree import, because reconstructing a sibling's policy from a shared
+file is the ledger this design refuses to keep. Shared filter transport is refreshed in place; project-wide teardown may still inspect
 registered trees when it is explicitly removing that shared transport. Older runtime state is not a supported
 materialize input and must be removed through an explicit reinstall/uninstall operation.
 

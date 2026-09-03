@@ -125,11 +125,16 @@ otherwise-unavailable piece of routing information explicit without teaching the
 filesystem paths.
 
 `session ls` names a collection, not an implied supervisor tree: bare `ls` remains the project-wide board for
-scripts and human operators. `--children` changes only that read scope to the governed caller's direct children;
-`--children=<PARENT-SEL>` names another direct-parent scope in an attached value, deliberately leaving a
+scripts and human operators. `--children` changes only that read scope to the governed caller's whole
+descendant subtree; `--children=<PARENT-SEL>` names another subtree in an attached value, deliberately leaving a
 following positional as the ordinary result selector (`ls --children <SEL>`). Scope precedes the existing
 selector and status filters, so a caller can ask for one child without changing the meaning of `SEL`. The table
-must expose every row's direct parent and summarize the displayed scope by status. A peer list has no remote
+must expose every row's direct parent, its depth below the scope root, and a status summary of the displayed
+scope. The scope is the SUBTREE and not one generation because a supervisor asking "what is running under me"
+is asking about work, and work delegated one level further is still running under them — a direct-children read
+answered that question with a row whose own children were invisible. Depth is what the reader loses when the
+scope deepens, so the table states it per row rather than flattening the shape away; [[session-nesting]] holds
+the traversal. A peer list has no remote
 caller identity, so its child scope requires the explicit attached parent selector.
 
 **One verb, one spelling.** The old verb mirror (promoted session verbs + bare session subs) is

@@ -155,13 +155,17 @@ scenarios:
     related: [spec-cli/src/machine-peer.ts, spec-cli/src/client.ts]
   - name: session-ls-child-scope-keeps-selector-grammar
     description: >
-      Through the real session ls CLI against a controlled project board with one parent, two direct children,
-      and an unrelated row, run `ls --children`, `ls --children <child-SEL>`, and
-      `ls --children=<parent-SEL>`. Also run the help probe.
+      Through the real session ls CLI against a controlled project board, run `ls --children`,
+      `ls --children <child-SEL>`, and `ls --children=<parent-SEL>`. The board must be at least three
+      generations deep — a parent, a child, a GRANDCHILD, and an unrelated row — because a two-generation
+      fixture cannot tell a direct-children scope from a subtree one, and reads identically under both.
+      Also run the help probe.
     expected: >
-      Bare `--children` selects the governed caller's direct children; its following positional still filters
-      those rows, while only the attached value names another parent. The output has a direct PARENT column and
-      a status summary of the displayed scope, and help teaches both forms without a second parent flag.
+      Bare `--children` selects the governed caller's whole descendant subtree, grandchild included and the
+      unrelated row excluded; its following positional still filters those rows to one, while only the attached
+      value names another scope root, which reaches that root's descendants too. The output has a direct PARENT
+      column, a DEPTH column stating each row's distance below the scope root, and a status summary of the
+      displayed scope, and help teaches both forms without a second parent flag.
     tags: [cli, backend-api]
     test:
       path: spec-cli/src/session-ls-cli.test.ts

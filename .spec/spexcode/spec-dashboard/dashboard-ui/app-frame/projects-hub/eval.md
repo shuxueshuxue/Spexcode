@@ -114,7 +114,7 @@ scenarios:
       its repair reason and leaves the catalog unchanged.
   - name: fleet-groups-and-remote-open
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/project.js, spec-dashboard/src/projects.js]
+    code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/project.js, spec-dashboard/src/projects.js, spec-dashboard/src/styles.css]
     description: >-
       Stand up TWO real gateways with separate `SPEXCODE_HOME`s and therefore separate auth stores, and join
       them with a real leg credential issued by the far gateway to the near one, aimed at the far gateway's

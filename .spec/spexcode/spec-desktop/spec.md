@@ -71,8 +71,10 @@ read-only directory browser. `SPEXCODE_DESKTOP_TEST_PICK_DIRECTORY` is the test-
 supplies the fixture path while the HTTP request and catalog write remain real. On Windows the dialog browses the
 WSL filesystem and the path is translated ([[desktop-windows-wsl]]).
 
-**Platforms.** Linux and macOS run the gateway natively. On macOS a GUI-launched gateway runs inside the user's
-Aqua session and the backend can read the login keychain directly (the measured `Claude Code-credentials` item was
+**Platforms.** Linux and macOS run the gateway natively. A GUI launch also arrives without the user's shell
+profile, so the shell repairs its own PATH before it spawns the gateway ([[desktop-login-path]]); without that,
+every tool the product resolves through PATH reads as missing on a machine that has all of them. On macOS a
+GUI-launched gateway runs inside the user's Aqua session and the backend can read the login keychain directly (the measured `Claude Code-credentials` item was
 readable from `gui/501`). That alone does not make a plain `claude` launcher authenticate: on the measured Mac mini
 the worker still reported `Claude.ai login was rejected` / `Not logged in`, so the failure is in the launcher's
 token/auth path rather than keychain access. The shell does not claim to replace login or a credential-sync agent.

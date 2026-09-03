@@ -9,6 +9,7 @@ const { existsSync } = require('node:fs')
 const wsl = require('./wsl.js')
 const { createDesktopIntegration } = require('./desktop-integration.js')
 const { findRunningGateway: findHostGateway } = require('./gateway-discovery.js')
+const { repairLoginPath } = require('./login-path.js')
 
 const PACKAGED_BUNDLE = app.isPackaged ? resolve(process.resourcesPath, 'spexcode') : null
 const SPEX_ENTRY = process.env.SPEXCODE_DESKTOP_ENTRY || (PACKAGED_BUNDLE
@@ -362,6 +363,10 @@ async function bootstrapWindowsAndStart() {
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
     installApplicationMenu()
+    const pathRepair = repairLoginPath()
+    if (pathRepair.needed && !pathRepair.repaired) {
+      console.error(`[shell] PATH not repaired (${pathRepair.reason}); tools outside ${process.env.PATH} will read as missing.`)
+    }
     if (!existsSync(SPEX_ENTRY)) {
       console.error(`[shell] no CLI entry at ${SPEX_ENTRY} - set SPEXCODE_DESKTOP_ENTRY to the spex bin.`)
       app.exit(1)

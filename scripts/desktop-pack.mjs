@@ -1,12 +1,15 @@
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RELEASE_PACKAGES } from './release-publish.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const repo = dirname(root)
-const evidence = resolve(process.env.SPEXCODE_EVIDENCE_DIR || '/home/jeffry/spex-evidence/desktop-packaging')
+// The build scratch defaults into the OS temp dir, never a checkout and never one machine's home: a
+// hardcoded absolute default makes the documented command work on exactly one computer.
+const evidence = resolve(process.env.SPEXCODE_EVIDENCE_DIR || join(tmpdir(), 'spexcode-desktop-pack'))
 const output = resolve(process.env.SPEXCODE_DESKTOP_OUTPUT_DIR || join(evidence, 'artifacts'))
 const work = join(evidence, '.work')
 const bundle = join(work, 'bundle')

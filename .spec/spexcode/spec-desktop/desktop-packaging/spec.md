@@ -52,8 +52,10 @@ version to record the exact Gatekeeper prompt for Tier 2 distribution, which is 
 product claim. The Aqua GUI run also rechecks keychain readability and records the plain `claude` launcher's
 authentication result without softening a failure.
 Electron remains outside the root workspaces; `npm run desktop:install` is the only installation path for its
-toolchain. The pack command writes artifacts and its README under `/home/jeffry/spex-evidence/<lane>/` (or
-`SPEXCODE_EVIDENCE_DIR`), never into the repository.
+toolchain. The pack command writes artifacts and its README outside the repository, under
+`SPEXCODE_EVIDENCE_DIR` when a lane sets one and otherwise a `spexcode-desktop-pack` directory in the OS temp
+dir. The default is deliberately machine-independent: an absolute path naming one person's home makes the
+documented command fail everywhere else, which is how a macOS build first ran into `ENOENT ... mkdir`.
 
 On Windows, the same pack driver selects the NSIS target and adapts npm's `.cmd` shims and Git-Bash path
 translation without changing the staged package set. The Windows installer is unsigned and per-user

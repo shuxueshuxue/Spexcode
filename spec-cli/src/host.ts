@@ -338,7 +338,7 @@ export type AddProjectSetupResult = {
   init?: { code: number | null; output: string }
 }
 
-const INITIAL_PROJECT_COMMIT_MESSAGE = 'chore: 初始化项目'
+const INITIAL_PROJECT_COMMIT_MESSAGE = 'chore: initialize project'
 const BOOTSTRAP_COMMIT_AUTHOR = 'SpexCode <spexcode@spexcode.invalid>'
 type SeedState = { spec: boolean; config: boolean; ignore: boolean }
 
@@ -475,7 +475,7 @@ function readProjectConfig(root: string): ProjectConfigSource {
     const legacy = join(root, 'spexcode.json')
     try {
       const content = readFileSync(legacy, 'utf8')
-      console.error(`配置已迁到 .spec/，请移动（git mv spexcode.json .spec/；本机的 spexcode.local.json 手动移）：${legacy}`)
+      console.error(`Config moved to .spec/ — run \`git mv spexcode.json .spec/\` and move this host's spexcode.local.json by hand: ${legacy}`)
       return { content, revision: configRevision(content) }
     } catch (legacyError) {
       if ((legacyError as NodeJS.ErrnoException).code === 'ENOENT') return { content: '{}\n', revision: configRevision(null) }

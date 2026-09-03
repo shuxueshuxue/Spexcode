@@ -298,7 +298,7 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.equal(existsSync(join(plain, '.spec')), true)
   assert.equal(execFileSync('git', ['-C', plain, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
   assert.match(gitHead(plain) ?? '', /^[0-9a-f]{40,64}$/)
-  assert.equal(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim(), 'chore: 初始化项目')
+  assert.equal(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim(), 'chore: initialize project')
   assert.equal(execFileSync('git', ['-C', plain, 'log', '-1', '--format=%an <%ae>'], { encoding: 'utf8' }).trim(), 'SpexCode <spexcode@spexcode.invalid>')
   const plainTree = execFileSync('git', ['-C', plain, 'ls-tree', '-r', '--name-only', 'HEAD'], { encoding: 'utf8' })
   assert.match(plainTree, /(^|\n)\.spec\//)

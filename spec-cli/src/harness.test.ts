@@ -2102,6 +2102,7 @@ test('launcherList + resolveLauncher read the named profiles from .spec/spexcode
   const root = mkdtempSync(join(tmpdir(), 'spex-launchers-'))
   // claude/codex are ORDINARY safe seeded entries (as `spex init` plants them), NOT env-derived built-ins — alongside
   // two custom profiles. harness defaults to claude when omitted; cmd is carried through verbatim.
+  mkdirSync(join(root, '.spec'), { recursive: true })
   writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({
     sessions: { launchers: {
       claude: { harness: 'claude', cmd: 'claude' },
@@ -2133,6 +2134,7 @@ test('launcherList + resolveLauncher read the named profiles from .spec/spexcode
 
 test('no built-in ghosts: an unseeded config lists NO launchers, and claude/codex are not implicitly resolvable', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-nolaunchers-'))
+  mkdirSync(join(root, '.spec'), { recursive: true })
   writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
   // with no seeded launchers there is nothing to list — the old env-derived built-in claude/codex are gone.
   assert.deepEqual(launcherList(root), [])

@@ -57,7 +57,11 @@ resolution prefers `.spec/spexcode.json` and reads the root-level legacy `spexco
 absent ([[portable-layout]]), so a legacy file the loader has already stopped reading is not source of truth and
 this check must not demand it — the repair names exactly the paths still in play. Two surfaces disagreeing about
 one path is the failure mode: integrity is the surface that blocks, so it, not the operator, must be the one that
-yields to the precedence. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
+yields to the precedence. **The same precedence governs the candidate tree**, not just the worktree: a
+pending run reads its policy out of the tip it judges, preferring `.spec/spexcode.json` there and falling back
+to the legacy path, because a pending read that knows only the legacy path silently seats DEFAULT policy — the
+blocking gate would then judge a different `governedRoots` than `spex spec lint` does, and a project whose roots
+differ from the defaults would govern nothing at the one moment that blocks. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
 are machine-local and are not part of this check. A staged candidate is judged from its candidate tree, so
 staged adoption data is valid; an untracked seed cannot masquerade as a clean graph. Bare receivers have no
 worktree state to inspect and continue with the immutable candidate tree.

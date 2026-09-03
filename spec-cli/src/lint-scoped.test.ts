@@ -43,6 +43,7 @@ function fixture(): Fx {
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8' }).trim()
   g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, '.gitignore'), 'node_modules\n')
+  mkdirSync(join(proj, '.spec'), { recursive: true })
   writeFileSync(join(proj, '.spec/spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
   mkdirSync(join(proj, 'src'))
   writeFileSync(join(proj, 'src/calc.ts'), CALC('1', '2'))

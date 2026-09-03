@@ -482,6 +482,11 @@ sign-off bound to that one immutable measurement (a newer measurement or stalene
 no un-ok exists). The evals feed default-hides a fresh, ok'd scenario; a governed session is refused
 (an agent's judgment on a measurement is a remark, never a self-blessing).
 
+clean — garbage-collects the content-addressed evidence cache against what the sidecars still reference.
+Bare it removes only UNREFERENCED blobs (nothing a filed reading names is touched); --keep-latest also drops
+the evidence of superseded readings, keeping each scenario's latest; --all empties the cache and reads no
+sidecar. It prints how many files it removed and how many it kept, with the mode it ran in.
+
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
 deletes a line); the previous eval becomes latest again, or the scenario honestly returns to
 unmeasured.
@@ -499,15 +504,26 @@ ${JSON_NOTE}`,
        spex issue promote <id>
        spex issue links [--pending] [--store <host>] [--node <id>] [--json]
 
-ls is the drain view a supervisor reads: ONE store-tagged list, local + forge interleaved by
-creation time. \`show <id>\` is the single-thread detail — the whole thread with its replies (a local
-id, or a forge id like github#12). \`open\` welcomes taste, annotations, and off-mainline smells —
-not only bugs; --store <host> opens straight on the forge. \`reply\` and \`close\` route by the
-issue's store — one verb, local or forge. \`promote\` moves an OPEN local issue to the forge as one
-recorded action. \`links\` is the read-only forge trace: which open forge issues/PRs serve which
-spec node (--pending narrows to threads still awaiting an eval). The issues workflow's
-on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle verb — edit the JSON;
-\`spex doctor\` reports its state).
+ls — the drain view a supervisor reads: ONE store-tagged list, local + forge interleaved by
+creation time.
+
+show — the single-thread detail: the whole thread with its replies, named by a local id or a forge id
+like github#12.
+
+open — welcomes taste, annotations, and off-mainline smells, not only bugs; --store <host> opens
+straight on the forge.
+
+reply — routes by the issue's own store: one verb, local or forge.
+
+close — routes by the issue's own store too, so a thread ends where it lives.
+
+promote — moves an OPEN local issue to the forge as one recorded action.
+
+links — the read-only forge trace: which open forge issues/PRs serve which spec node (--pending
+narrows to threads still awaiting an eval).
+
+The issues workflow's on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle
+verb — edit the JSON; \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex evidence put (stash evidence bytes)',
   },
@@ -587,11 +603,44 @@ your own state is declared with spex session done|park|ask.`,
   },
 }
 
-// `spex <cmd> --help` must meet the user wherever they typed it: cli.ts intercepts the probe pre-verb.
-// Session's noun-verb shape gets one extra projection; a bare noun still returns the complete drawer.
+// @@@ a verb page is a PROJECTION of its drawer, never a second manual - the drawer body stays the one
+// authored manual per noun, so a verb page cannot drift from it. Splitting the body on blank lines is
+// safe because every drawer is `Usage:` block + prose paragraphs; a wrapped usage entry continues on a
+// line that does not itself start with `spex`.
+function usageEntries(body: string): string[] {
+  const block = body.split(/\n\s*\n/)[0]
+  if (!block.startsWith('Usage:')) return []
+  const entries: string[] = []
+  for (const raw of block.replace(/^Usage:/, '').split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    if (line.startsWith('spex ') || !entries.length) entries.push(line)
+    else entries[entries.length - 1] += `\n${' '.repeat(7)}${line}`
+  }
+  return entries
+}
+
+function mentionsVerb(paragraph: string, verb: string): boolean {
+  return new RegExp(`(^|[^a-z-])${verb.replace(/ /g, '\\s+')}([^a-z-]|$)`).test(paragraph)
+}
+
+function verbProjection(name: string, body: string, phrase: string): string | null {
+  const head = `spex ${name} ${phrase}`
+  const mine = usageEntries(body).filter((entry) => entry === head || entry.startsWith(`${head} `) || entry.startsWith(`${head}\n`))
+  if (!mine.length) return null
+  const prose = body.split(/\n\s*\n/).slice(1).filter((paragraph) => mentionsVerb(paragraph, phrase))
+  if (!prose.length) return null
+  const usage = mine.map((entry, index) => `${index === 0 ? 'Usage: ' : '       '}${entry}`).join('\n')
+  return `${usage}\n\n${prose.join('\n\n')}`
+}
+
+// `spex <cmd> --help` must meet the user wherever they typed it: cli.ts intercepts the probe pre-verb and
+// hands over every leading positional, so a noun-verb probe answers about the VERB on any drawer. An
+// authored per-verb page (session) wins; otherwise the drawer projects one; a verb the drawer's usage
+// block never names falls back to the complete drawer rather than failing.
 export function commandHelp(name: string, verb?: string): string | null {
   if (name === 'session' && verb) {
-    const exact = sessionVerbHelp(verb)
+    const exact = sessionVerbHelp(verb.split(' ')[0])
     if (exact) return `${exact}\n\nsee also: spex session (the complete drawer)\n\nmap: spex help · skills: spex guide`
   }
   if (name === 'doctor' && verb === 'repair') {
@@ -604,6 +653,13 @@ configured Codex launcher.\n\nsee also: spex doctor (the complete command) · sp
   }
   const e = ENTRIES[name]
   if (!e) return null
+  if (verb) {
+    const words = verb.split(' ').filter(Boolean)
+    for (let take = words.length; take > 0; take -= 1) {
+      const projected = verbProjection(name, e.body, words.slice(0, take).join(' '))
+      if (projected) return `${projected}\n\nsee also: spex ${name} (the complete drawer)\n\nmap: spex help · skills: spex guide`
+    }
+  }
   const oneLiner = e.line.replace(/^\S+(\s+\S+)*?\s{2,}/, '')   // the map line minus its "cmd args" column
   const header = oneLiner ? `spex ${name} — ${oneLiner}\n\n` : ''  // unlisted entries (internal, help) lead with their own Usage
   return `${header}${e.body}${e.see ? `\n\nsee also: ${e.see}` : ''}\n\nmap: spex help · skills: spex guide`

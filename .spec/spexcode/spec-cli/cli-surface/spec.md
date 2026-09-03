@@ -182,12 +182,23 @@ has a move:
    `--api`/`--port` routing, the mention grammar).
 2. `spex help <command>` / `spex <command> --help` — ONE drawer/command's usage. The `--help`
    interception still fires BEFORE any verb runs ([[guide]]'s safety contract: probing `session new`
-   or `session watch` with `--help` must never start the verb). A noun-verb probe such as
-   `spex session wait --help` answers with that VERB's exact usage, projected from the same definition
-   the bare `spex session` drawer assembles; exact help never carries a copied second manual. Shared
-   selector grammar and project-bound write warnings follow the relevant verb into that projection.
-   The project-bound warning applies to `session new` just as it does to project-bound writes that change
-   existing rows; creating a row does not create a second warning policy.
+   or `session watch` with `--help` must never start the verb). **A noun-verb probe answers about the
+   VERB on EVERY drawer, not only on `session`** — `spex eval add --help` is a page about filing an eval,
+   never the whole measurement drawer handed back to someone who already named their verb. Which verbs
+   have a page is not an authoring decision per drawer: **a page exists for every verb the drawer's own
+   usage block names and whose behaviour the drawer describes**, because the page is a PROJECTION of the
+   drawer — that verb's usage lines plus the drawer prose that discusses it — so the drawer stays the ONE
+   authored manual per noun and exact help can never carry a copied second manual that drifts from it. A
+   noun may additionally carry hand-authored per-verb pages, and where one exists it wins: `session` does,
+   because its verbs each carry contract an operator must be able to read alone. The FALLBACK when a verb
+   has no page — a token the usage block never names, or a verb the drawer lists but says nothing about —
+   is the complete drawer, never a failure: at the help layer an unrecognized token is a reader who does
+   not yet know the vocabulary, and the drawer is exactly the vocabulary. Consequently a verb whose
+   behaviour the drawer leaves undescribed silently loses its page, so **describing a verb in its
+   drawer is what publishes it**. Shared selector grammar and project-bound write warnings follow the
+   relevant verb into that projection. The project-bound warning applies to `session new` just as it does
+   to project-bound writes that change existing rows; creating a row does not create a second warning
+   policy.
 3. `spex guide [topic]` — the skill layer ([[guide]]): workflows, file formats, settings. **help
    answers "what do I type", guide answers "how do I work".**
 

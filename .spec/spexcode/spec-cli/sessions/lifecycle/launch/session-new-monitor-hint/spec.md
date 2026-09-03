@@ -30,7 +30,11 @@ new primitive.
 
 **Exact noun-verb help.** `spex session <verb> --help` is intercepted before dispatch and prints only that
 verb's syntax, output, side effects and blocking behaviour. It does not prescribe an orchestration workflow.
-The full `spex session` / `spex help session` drawer remains intact. Both views
+The full `spex session` / `spex help session` drawer remains intact. The interception itself is not session's
+to own: [[cli-surface]] hands EVERY noun's leading positionals to `commandHelp` as a verb phrase, and answers
+an undescribed verb with its drawer. What is session's is the CONTENT — these hand-authored definitions are
+consulted first and win wherever they exist, because the session verbs carry blocking behaviour, destructive
+scope, and edge semantics that no projection of a drawer paragraph can be trusted to reproduce. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
 send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule (including that `--thread` is an adapter-native
 conversation id rather than the SpexCode session id, and is omitted for Claude), selector grammar, and project-bound write warning cannot drift between a drawer

@@ -460,12 +460,14 @@ async function stateKit() {
 
 // a trailing --help/-h prints help and exits BEFORE any verb runs, so a help probe never fires a
 // streaming/mutating command. It prints THAT command's usage when an entry exists (the second layer
-// of the help journey — see help.ts); session noun-verb probes project the exact verb from the shared
-// drawer definition. Unknown tokens preserve the existing drawer/map fallback. (Removed spellings never
+// of the help journey — see help.ts). Every leading positional is handed over as the verb phrase, so a
+// noun-verb probe answers about the verb on ANY drawer (`eval scenario ls` included) and help.ts decides
+// whether a page exists; unknown tokens preserve the drawer/map fallback. (Removed spellings never
 // reach here — the signpost table above already exited.)
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
   const { commandHelp, overviewHelp } = await import('./help.js')
-  console.log(commandHelp(cmd, cmd === 'session' || cmd === 'doctor' ? process.argv[3] : undefined) ?? overviewHelp())
+  const phrase = process.argv.slice(3).filter((token) => !token.startsWith('-')).join(' ')
+  console.log(commandHelp(cmd, phrase || undefined) ?? overviewHelp())
   process.exit(0)
 }
 

@@ -27,6 +27,25 @@ scenarios:
       connection is another live gateway, and that case still refuses loudly.
     tags: [cli]
     code: spec-cli/src/machine-peer.ts
+  - name: far-gateway-forwarded-and-refreshed
+    description: >
+      Through the real CLI, run two host gateways in two isolated SPEXCODE_HOMEs and dial one from the other
+      with only the ssh binary substituted, so the accept handshake runs the real `spex internal peer-accept`
+      in the far home. Dial a far side that publishes a host record, re-dial with that same instance, re-dial
+      after the far gateway restarts on a different port, and dial a far gateway that is live but publishes
+      no record.
+    expected: >
+      The forwarded gateway leg is recorded from what the far side PUBLISHES and never inferred: its host
+      record's port and instance id, plus a port minted here, and the dial carries that third `-L` beside the
+      two control-plane legs. Re-running connect is the whole refresh: the same instance redials nothing, a
+      restarted far gateway repoints the far end while the port callers use here stays the same and the
+      superseded dial never marks the live tunnel failed, and a far side publishing no record records no leg
+      at all rather than a port no later reader could disprove.
+    tags: [cli]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: a dial forwards the far gateway only when the far side publishes one, and a restart rebuilds that leg
+    code: spec-cli/src/machine-peer.ts
   - name: linked-worktree-peer-return
     description: >
       Address a session stored under a Git common-dir runtime from a peer, where its active backend

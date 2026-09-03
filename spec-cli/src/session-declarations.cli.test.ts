@@ -88,7 +88,7 @@ test('merge declaration records without the removed acceptance configuration', (
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   try {
     process.env.SPEXCODE_HOME = home
-    mkdirSync(root, { recursive: true })
+    mkdirSync(join(root, '.spec'), { recursive: true })
     writeFileSync(join(root, '.spec/spexcode.json'), '{}\n')
     writeFileSync(join(root, 'README.md'), 'fixture\n')
     execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root })

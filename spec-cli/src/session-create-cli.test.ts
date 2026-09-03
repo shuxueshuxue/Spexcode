@@ -242,6 +242,7 @@ dns.lookup = function (hostname, options, callback) {
   execFileSync('git', ['-c', 'user.name=create-dispatch', '-c', 'user.email=create@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
   execFileSync('git', ['worktree', 'add', '-q', '-b', 'linked', linked, 'main'], { cwd: project })
   execFileSync('git', ['worktree', 'add', '-q', '-b', 'configured-main', configuredMain, 'main'], { cwd: project })
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ main: configuredMain }))
   mkdirSync(foreign)
   writeFileSync(join(foreign, 'README.md'), 'foreign\n')

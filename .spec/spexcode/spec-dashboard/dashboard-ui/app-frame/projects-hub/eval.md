@@ -21,10 +21,11 @@ scenarios:
       (PUT/DELETE) and the row's lock badge follows. More than ten reconciled rows page without dropping
       or reordering projects, and a registry change made outside the page lands via
       the poll without a reload. Open lands on /p/<id>/#/graph where the FULL classic dashboard renders
-      that project's board through the scoped /p/<id>/api lane. Its rail carries the current-project
-      chip and only the five project-owned page buttons; the chip's "All projects" action returns to
-      `/projects`. Zero loss = the whole admin loop (see fleet, gate it, enter a project, come back)
-      works in one tab through shareable pathname URLs, against the real gateway code.
+      that project's board through the scoped /p/<id>/api lane. Its rail carries only the five
+      project-owned page buttons; the current-project chip lives once in the status bar beside the other
+      ambient facts, and its switcher's "All projects" action returns to `/projects`. Zero loss = the
+      whole admin loop (see fleet, gate it, enter a project, come back) works in one tab through
+      shareable pathname URLs, against the real gateway code.
   - name: project-scope-unlock
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/CredentialGate.jsx, spec-dashboard/src/projects.js]

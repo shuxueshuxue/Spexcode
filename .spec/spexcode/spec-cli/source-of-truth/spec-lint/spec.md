@@ -52,7 +52,12 @@ locked replacement with its anchor engine; it never causes a hunk lookup to reop
 
 Before constructing history indexes, lint checks a worktree's adoption boundary. An untracked `.spec/` file
 or `.spec/spexcode.json` is an **integrity error** naming the untracked project source of truth and the ordinary
-`git add .spec` repair. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
+`git add .spec` repair. **What counts as source of truth follows the loader, never a second list.** Config
+resolution prefers `.spec/spexcode.json` and reads the root-level legacy `spexcode.json` only when that one is
+absent ([[portable-layout]]), so a legacy file the loader has already stopped reading is not source of truth and
+this check must not demand it — the repair names exactly the paths still in play. Two surfaces disagreeing about
+one path is the failure mode: integrity is the surface that blocks, so it, not the operator, must be the one that
+yields to the precedence. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
 are machine-local and are not part of this check. A staged candidate is judged from its candidate tree, so
 staged adoption data is valid; an untracked seed cannot masquerade as a clean graph. Bare receivers have no
 worktree state to inspect and continue with the immutable candidate tree.

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { readConfig, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
+import { readConfig, configPath, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
@@ -79,13 +79,23 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
 export type SpecLintOptions = { tip?: string }
 type SpecLintRun = { sourceFiles: string[]; findings: Finding[] }
 
-function untrackedAdoptionFiles(root: string): string[] {
+// @@@ what counts as source of truth follows the LOADER, never a second list - readProjectConfig
+// prefers `.spec/spexcode.json` and reads the root-level legacy file only when that one is absent, so a
+// legacy file the loader has already stopped reading is not source of truth and must not be demanded here.
+// Asking for it would make integrity and the loader say different things about the same file, and integrity
+// is the one that blocks.
+function adoptionPathspec(root: string): string[] {
+  const legacy = 'spexcode.json'
+  return existsSync(configPath(root)) ? ['.spec'] : ['.spec', legacy]
+}
+
+function untrackedAdoptionFiles(root: string, pathspec: string[]): string[] {
   if (git(['-C', root, 'rev-parse', '--is-inside-work-tree']).trim() !== 'true') return []
   const status = git([
     '-C', root,
     '-c', 'core.quotePath=false',
     'status', '--porcelain=v1', '-z', '--untracked-files=all',
-    '--', '.spec', 'spexcode.json',
+    '--', ...pathspec,
   ])
   return status.split('\0')
     .filter((entry) => entry.startsWith('?? '))
@@ -168,7 +178,8 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     : statSync(join(root, path)).isDirectory()
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
   const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
-  const untracked = untrackedAdoptionFiles(root)
+  const pathspec = adoptionPathspec(root)
+  const untracked = untrackedAdoptionFiles(root, pathspec)
   if (untracked.length) {
     const shown = untracked.slice(0, 6)
     const suffix = untracked.length > shown.length ? ` (+${untracked.length - shown.length} more)` : ''
@@ -177,7 +188,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
       findings: [{
         level: 'error',
         rule: 'integrity',
-        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec spexcode.json\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
+        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add ${pathspec.join(' ')}\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
       }],
     }
   }

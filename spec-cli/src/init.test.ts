@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -111,6 +111,41 @@ test('init adoption data cannot masquerade as a clean untracked project', { skip
   })
   assert.equal(after.status, 0, `tracked adoption data should leave lint advisory-only: ${after.stdout}\n${after.stderr}`)
   assert.doesNotMatch(after.stderr, /project source of truth is untracked/i)
+})
+
+test('a legacy root config the loader has stopped reading is not source of truth', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, env, spex } = freshRepo()
+  spex('init', '.', '--harness', 'codex')
+  g('add', '.spec')
+  execFileSync('git', ['-C', proj, 'commit', '-qm', 'adopt SpexCode seed'], {
+    env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
+  })
+  const lint = () => spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint'], { cwd: proj, env, encoding: 'utf8' })
+
+  // `.spec/spexcode.json` is tracked, so readProjectConfig never reads this root file. Integrity must not
+  // demand a file the loader has already ruled out — the two would say different things about one path.
+  writeFileSync(join(proj, 'spexcode.json'), '{"mainBranch":"main"}\n')
+  const dead = lint()
+  assert.equal(dead.status, 0, `a legacy file the loader ignores must not block: ${dead.stdout}\n${dead.stderr}`)
+  assert.doesNotMatch(dead.stderr, /source of truth is untracked/i)
+
+  // Now put the repo in the pre-migration shape: the root file is the ONLY config, so the loader reads it
+  // and it is source of truth again. Tracked, integrity is satisfied...
+  rmSync(join(proj, 'spexcode.json'))
+  g('mv', '.spec/spexcode.json', 'spexcode.json')
+  execFileSync('git', ['-C', proj, 'commit', '-qm', 'move config back to the root'], {
+    env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
+  })
+  const tracked = lint()
+  assert.equal(tracked.status, 0, `a tracked legacy config is source of truth, satisfied: ${tracked.stdout}\n${tracked.stderr}`)
+
+  // ...and untracked, integrity must demand it, naming it in the repair. This state is deliberately not
+  // committed: the commit gate runs this very lint, so the block under test would refuse the commit.
+  g('rm', '-q', '--cached', 'spexcode.json')
+  const live = lint()
+  assert.equal(live.status, 1, `the legacy file the loader reads must block: ${live.stdout}\n${live.stderr}`)
+  assert.match(live.stderr, /source of truth is untracked: spexcode\.json/i)
+  assert.match(live.stderr, /git add \.spec spexcode\.json/i)
 })
 
 test('adoption needs no vote: a host-TRACKED contract file goes straight through the filter — clean status, no hint, no honest-M', { skip: !gitAvailable() && 'git not available' }, () => {

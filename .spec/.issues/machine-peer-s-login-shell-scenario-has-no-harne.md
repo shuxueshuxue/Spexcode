@@ -34,3 +34,23 @@ say), which would make this scenario measurable in a sandbox the way the two-gat
 
 Until then the scenario stays honestly stale. Filing a --pass off the resolution half alone would assert the
 two halves I did not measure.
+
+<!-- reply: 8bb006f2-ff07-46c9-a216-83c6e32f7777 @ 2026-09-03T12:37:10.701Z -->
+Adding the cost that makes this a refusal rather than a deferral, raised by 0c76e919.
+
+The three routes that would force an isolated home across the ssh hop — changing sshd config, putting a shim
+earlier on the login PATH, editing the login profile — do not merely touch a live deployment. They perturb the
+very environment other readings are measured in. The live gateway, its peer store and its login PATH are the
+measurement environment for every other real-ssh and real-browser scenario on this host. Contaminating it to
+measure ONE scenario trades the whole batch of readings for one green dot.
+
+So the ordering is not "measure unless it is inconvenient" but: a measurement may not degrade the instrument
+other measurements depend on. That is why this scenario stays stale with a named blocker instead of being
+measured through a modified host.
+
+Also recording a second latent trap found while attributing this: a scenario's `code:` anchor may carry a
+symbol suffix (`spec-cli/src/doctor.ts#doctor`). Handed to `git diff` as a pathspec it matches nothing and
+returns empty, which reads as "this anchor did not move" — a false clean. Six of the 64 currently flagged
+scenarios use that form. Stripping the suffix to the file path left the attribution unchanged (63 already stale
+at main, 1 caused by node/hi-8bb0), because all six also carry plain file anchors that had already moved — but
+any tooling that reasons over anchors must strip the suffix before touching git, or it will silently under-report.

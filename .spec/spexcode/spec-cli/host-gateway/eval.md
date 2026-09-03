@@ -53,12 +53,15 @@ scenarios:
     tags: [backend-api, cli]
     test:
       path: spec-cli/src/host.test.ts
-      name: newly created projects have a committed source-of-truth before session creation
+      name: a host-created project can create its first real session from the committed base
     code: [spec-cli/src/host.ts, spec-cli/src/sessions.ts]
     description: >-
       Through the real host add transaction, create an absent project path with Git and SpexCode setup,
       inspect its source-of-truth branch and HEAD, then start its real backend and POST one session using
-      the configured launcher. Repeat the path-only new-project action and inspect its initial ref.
+      the configured launcher. Repeat the path-only new-project action and inspect its initial ref. The
+      seed contents, ignore policy, and unborn-repository recovery clauses are asserted by the sibling test
+      `directory browse reports folder state; explicit setup initializes Git then the real SpexCode CLI
+      before cataloging` in the same file, so the scenario is read from that file's whole run.
     expected: >-
       Every project created or re-registered by the host has a real initial commit before it is cataloged. A
       SpexCode setup commit contains the seed `.spec`, portable config, and ignore policy, and its `mainBranch`

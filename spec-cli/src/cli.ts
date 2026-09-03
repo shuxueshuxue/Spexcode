@@ -782,7 +782,12 @@ if (cmd === 'serve') {
       console.error(`ack failed: ${e?.message ?? e}`); process.exit(1)
     }
   } else {
-    console.error(`spex spec: unknown verb '${sub}' — search | owner | lint | ack  (spex help spec)`)
+    // A REJECTION'S ALTERNATIVES LIST IS A PROMISE ABOUT THE VOCABULARY, so it is wrong the moment a sibling
+    // branch above it is not in it: this list stayed at four verbs after `report` shipped, telling the one reader
+    // who mistyped `report` that it does not exist. A literal belongs here — it sits beside the branches it
+    // describes — but `drawer-verbs.test.ts` now reads both this list and those branches out of the source, so
+    // adding a verb without naming it here fails loudly instead of shipping a complete, loud, wrong list.
+    console.error(`spex spec: unknown verb '${sub}' — search | owner | lint | ack | report  (spex help spec)`)
     process.exit(2)
   }
 } else if (cmd === 'init') {
@@ -1418,7 +1423,7 @@ if (cmd === 'serve') {
       await assertLocalBackend()
       process.exit(await attachSession(await resolveSelectorOrExit(id)))
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | show | watch | wait | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | show | watch | wait | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | resources | quarantine | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }

@@ -15,6 +15,7 @@ related:
   - spec-cli/src/session-ls-cli.test.ts
   - spec-cli/src/session-declarations.cli.test.ts
   - spec-cli/src/unknown-command-cli.test.ts
+  - spec-cli/src/drawer-verbs.test.ts
 ---
 # cli-surface
 
@@ -201,6 +202,15 @@ sees it. The guide-topic list was the first kind written as the second and shipp
 ([[guide]] holds `TOPICS`, the hub held a copy), and nothing about the short list looked wrong: an
 enumeration cannot report what it is missing. That failure mode is silent by construction, which is why the
 rule is about where the list's truth LIVES rather than about keeping copies in step.
+
+A literal that stays literal still needs its drift to have a reader, because "it sits beside the branches"
+only helps the person who happens to look. Both drawer rejections drifted anyway: `spex spec` never learned
+`report`, and `spex session` never learned `resources` or `quarantine`, so the one reader who mistyped exactly
+those verbs was told they do not exist. So the literal keeps its place and gains a guard: a source-level test
+reads each drawer's region out of this file, collects the `sub === '<verb>'` branches it actually dispatches,
+parses the verbs out of that region's own rejection line, and fails when the two disagree in either direction —
+and then asks the real CLI for every advertised verb's help page, so the list cannot promise a page that is not
+there. Adding a branch without naming it is now loud at the same altitude the wrong list was silent.
 
 A machine dump names its human twin: `spex graph --json` is for programs, so when stdout is a tty a
 single stderr line points at the readable `spex graph`. The hint is stderr-only and tty-gated, so

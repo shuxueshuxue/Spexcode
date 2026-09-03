@@ -66,11 +66,26 @@ for agent-to-agent session control and is deliberately not a proxy; the gateway 
 already reverse-proxies a whole project — WebSocket upgrades and SSE included — so one forward yields the
 complete product on that machine, live terminals and all.
 
+That last sentence is measured rather than argued. Through a real `ssh -L` onto a throwaway hub, with no
+product code changed, a browser loaded the project SPA and its bundles, `GET /api/graph` returned the same
+599KB it returns locally, `/api/graph/stream` delivered SSE events, the terminal socket answered `101` and
+carried the backend's own `TERM_PING_MS` heartbeat as a frame, and the warm cost of the whole forward was
+single-digit milliseconds. One detail makes the deeper prefix free as well: the built `index.html`
+references its assets RELATIVELY, so it resolves them correctly under any prefix depth and a machine
+segment needs no build change, no `<base>`, and no absolute asset root.
+
 ### Authorization is explicit per machine, never inherited from loopback
 
 The chain is visitor → this gateway → forwarded loopback port → the remote gateway. The remote gateway
 sees loopback, and its implicit-loopback admin grant would then read "whoever can reach MY neighbour is
-an admin HERE". That is authorization laundering and this contract forbids it. A peer connection carries
+an admin HERE". That is authorization laundering and this contract forbids it. It is not a hypothesis:
+through a forward, a hub with no admin password answers its admin surface with `adminGated:false` and
+renders the sentence "management works from this machine only" to a reader who is not on that machine.
+Today that costs nothing, because opening the forward requires SSH to the host and such an operator
+already has a shell there — the grant is a PREMISE, not yet a hole. It becomes a hole on the day this
+gateway proxies `/m/:machineId/*` into that port, since the visitor on this side holds no credential on
+that side. Hence the ordering, and hence that the claim must stop being keyed on the peer address: a
+forwarded socket forges it, and no listener can tell that it has been forwarded. A peer connection carries
 its own machine-scoped credential, established at connect time over the authenticated SSH channel and
 stored beside the ssh options it is replayed with; the local gateway's own `spex_*` cookies stay stripped
 on the way out, as they already are for a local backend. **Implicit loopback trust authorizes a human at
@@ -89,7 +104,11 @@ shown without the machine it belongs to.
 A remote route crosses two proxy hops instead of one, so both must share one lifecycle: an abrupt visitor
 close tears down this gateway's exchange, the remote gateway's exchange, and the backend's, in that order.
 A closed browser tab that leaves a live terminal child alive on another machine is the failure this
-clause exists to prevent, and it is measured, not assumed.
+clause exists to prevent, and it is measured, not assumed. The lower half already measures clean: with an
+SSE stream and a terminal socket both open across the forward, a client kill with no close handshake
+returned the established-socket count to baseline at the forward, at the remote hub AND inside the backend
+within seconds, so neither the sshd forward nor the hub's raw proxy leaks the FIN. The hop this node adds
+is the one still to be proven the same way.
 
 ### The consequences that follow
 

@@ -67,8 +67,11 @@ malformed values fail loud rather than silently disabling governance.
 The config read is the ONE fail-loud seam here (`readJsonConfig`): `.spec/spexcode.json` is preferred, then
 `.spec/spexcode.local.json`; an absent pair is the legitimate default. For one migration release, a config found
 only at the repository root is accepted as a compatibility fallback and emits a loud stderr notice directing the
-operator to move it into `.spec/`. The fallback is intentionally temporary and does not change precedence: when
-both locations exist, `.spec/` wins. A **present-but-malformed** one is a user error we never swallow — a JSON typo
+operator to move it into `.spec/`. The two files are found independently, so the notice names ONLY the one that
+was actually there and only the move that file needs: the committed `spexcode.json` is moved with `git mv`, while
+`spexcode.local.json` is gitignored and therefore moved by hand. A notice that recited both halves told the
+operator to `git mv` a file they did not have. The fallback is intentionally temporary and does not change
+precedence: when both locations exist, `.spec/` wins. A **present-but-malformed** one is a user error we never swallow — a JSON typo
 would otherwise silently drop every tuned setting the file holds (layout, launchers, and the lint budgets
 [[spec-lint]]'s `loadConfig` reads through the same helper) and revert to defaults with no diagnostic. It
 fails LOUD instead, naming the file and the parse error, so the author sees exactly what broke.

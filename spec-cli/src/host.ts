@@ -475,7 +475,7 @@ function readProjectConfig(root: string): ProjectConfigSource {
     const legacy = join(root, 'spexcode.json')
     try {
       const content = readFileSync(legacy, 'utf8')
-      console.error(`Config moved to .spec/ — run \`git mv spexcode.json .spec/\` and move this host's spexcode.local.json by hand: ${legacy}`)
+      console.error(`Config moved to .spec/ — run \`git mv spexcode.json .spec/\`: ${legacy}`)
       return { content, revision: configRevision(content) }
     } catch (legacyError) {
       if ((legacyError as NodeJS.ErrnoException).code === 'ENOENT') return { content: '{}\n', revision: configRevision(null) }

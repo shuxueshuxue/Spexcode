@@ -119,7 +119,9 @@ function readProjectConfig(root: string, local: boolean): any {
   if (existsSync(preferred)) return readJsonConfig(preferred)
   const legacy = join(root, local ? 'spexcode.local.json' : 'spexcode.json')
   if (existsSync(legacy)) {
-    console.error(`Config moved to .spec/ — run \`git mv spexcode.json .spec/\` and move this host's spexcode.local.json by hand: ${legacy}`)
+    console.error(local
+      ? `Config moved to .spec/ — this file is gitignored, so move it by hand: \`mv spexcode.local.json .spec/\`: ${legacy}`
+      : `Config moved to .spec/ — run \`git mv spexcode.json .spec/\`: ${legacy}`)
     return readJsonConfig(legacy)
   }
   return {}

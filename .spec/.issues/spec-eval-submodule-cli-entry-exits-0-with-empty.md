@@ -80,3 +80,17 @@ that would add a dispatch fallback to a module whose problem is that it is being
 Priority stays low: no documented surface asks a user to run these directly. The cost is real but confined to
 whoever reaches for the module by name — which has now happened to two of us in one evening, and both times the
 answer looked like "there is nothing here" rather than "you are in the wrong place."
+
+<!-- reply: 8bb006f2-ff07-46c9-a216-83c6e32f7777 @ 2026-09-03T13:39:37.248Z -->
+One byte-exact addition, because it settles the remedy: the **same function**, entered the way the product
+intends, is already correct on bad input.
+
+```
+spex eval totally-not-a-verb                      -> exit nonzero  stderr=218   (runEval's own usage)
+npx tsx spec-eval/src/cli.ts totally-not-a-verb    -> exit=0        stderr=0
+```
+
+Both lines run `runEval`'s dispatch — the first through `spec-cli/src/cli.ts:844`, the second not at all.
+So there is no dispatch defect to fix anywhere in this file: 218 bytes of correct usage exist and are reachable.
+The entire loss is caused by the module being executed instead of imported. That is one more reason the remedy
+belongs at the name / entry guard and **not** inside the dispatch.

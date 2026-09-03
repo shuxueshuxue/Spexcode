@@ -14,7 +14,9 @@ scenarios:
       cross-scope access attempts, password rotation and clearing, hostile projectIds sent path-as-is, and
       a WebSocket upgrade with and without a session. Complete an ordinary scoped HTTP request, then open a
       scoped SSE response and abruptly close the downstream after its first event while counting the real
-      backend-side connection through a bounded settle.
+      backend-side connection through a bounded settle. A second listener on the same routes runs as the peer
+      ingress and is walked by a bare loopback caller, by the captured admin cookie, at /login and /logout,
+      with an issued credential, and after that credential is revoked.
     expected: |
       An ungated project proxies straight through, prefix stripped, query preserved, spex_* cookies removed
       while foreign cookies pass. /projects answers a loopback caller with the registry (non-loopback
@@ -30,6 +32,13 @@ scenarios:
       before any backend contact; with one it completes 101 and the backend sees only non-gateway cookies.
       Ordinary scoped HTTP completes with its body intact, and the abrupt SSE downstream close reclaims the
       corresponding upstream socket by the bounded settle instead of retaining one connection per subscriber.
+
+      The peer ingress answers a bare loopback caller 401 naming the credential header rather than granting
+      the implicit-loopback admin the console entry grants on its own port, and answers a valid admin cookie
+      the same 401 — a visitor's session on this machine is not a machine's credential. /login and /logout
+      404 there, GET and POST alike, so the door is no password oracle. With the issued credential the same
+      /projects answers 200 with the catalog and a scoped /p/:id/api request reaches the backend with every
+      spex_* cookie stripped. Revoking that machine closes the door on the next request.
 ---
 
 Measured through the product surface itself — the hub's public HTTP/WS face on a real port — via

@@ -9,7 +9,9 @@ scenarios:
       Run `tsx --test spec-cli/src/host.test.ts`: real HTTP/SSE/WS/TLS gateway sockets, instance-validated
       endpoint records, durable/offline catalog, a spawned real `spex serve` from a linked worktree,
       gateway/project structured icon writes, raw project config, host-directory browsing, explicit
-      Git/SpexCode setup, registration and host operations.
+      Git/SpexCode setup, registration and host operations. Also read the published host record back and probe
+      both of the gateway's doors on their own ports: the console with no admin password, and the peer ingress
+      bare and with an issued credential.
     expected: >-
       A versioned record claims the actual served git toplevel and resolved identity; a linked worktree gets
       its own slot and cannot replace main. Instance/root mismatches, dead/recycled URLs, mis-slotted and old
@@ -22,7 +24,11 @@ scenarios:
       returns directory metadata without file contents. A plain folder enters only after explicit Git
       initialization; requested setup runs the real `spex init`, and a failed init returns its transcript
       without writing the catalog. `/projects`, stream, scoped HTTP/WS, TLS, registration, raw config, and
-      shell routing retain their auth and transport contracts.
+      shell routing retain their auth and transport contracts. The published host record names both doors —
+      a `peerPort` that is a number and is not the console port — so an absent one reads as "no machine
+      entry" rather than "not published yet". On the console port a loopback caller with no admin password
+      still gets the registry with `adminGated:false`; the same caller on the peer port gets 401 naming the
+      credential header, and an issued credential reaches that same admin surface.
     related: [spec-cli/src/supervise.ts, spec-cli/src/gateway-hub.ts, spec-cli/src/host.test.ts]
   - name: post-init-harness-target-addition
     tags: [backend-api, cli]

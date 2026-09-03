@@ -70,7 +70,11 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
 test('init success message reports the governedRoots the template ACTUALLY ships — read from the planted file, drift-proof', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, spex } = freshRepo()
   const out = spex('init', '.', '--harness', 'claude,codex')
-  assert.match(readFileSync(join(proj, '.gitignore'), 'utf8'), /^\.spec\/spexcode\.local\.json$/m)
+  // the host-local overlay is checkout-invariant machine residue: it belongs to the common exclude that
+  // materialize writes, NOT to the tree's .gitignore ([[harness-delivery]]). Appending it there would make
+  // every adopted ignore look host-authored and cost it materialize's self-entry ([[spex-init]]).
+  assert.match(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8'), /^\.spec\/spexcode\.local\.json$/m)
+  assert.doesNotMatch(readFileSync(join(proj, '.gitignore'), 'utf8'), /^\.spec\/spexcode\.local\.json$/m)
   assert.ok(out.includes(`lint.governedRoots starts as ${TEMPLATE_ROOTS}`), `plant message names the template value ${TEMPLATE_ROOTS}: ${out}`)
   assert.ok(out.includes(`(currently ${TEMPLATE_ROOTS})`), 'next-steps names the LIVE planted value')
   assert.ok(!out.includes('["src"]') || TEMPLATE_ROOTS === '["src"]', 'no stale hardcoded ["src"] claim anywhere')

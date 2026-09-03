@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { repoRoot } from '@spexcode/spec-core'
 import { readJsonConfig, runtimeRoot } from '@spexcode/spec-core'
 import { processStartToken, writeDetachedRuntimeReceipt, type ProcessIdentity } from '@spexcode/spec-core'
+export { processStartToken } from '@spexcode/spec-core'
 
 export type BackendInstanceRecord = {
   version: 1

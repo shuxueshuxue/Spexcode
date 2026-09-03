@@ -61,7 +61,7 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     assert.equal(existsSync(join(project, '.git')), true)
     assert.equal(execFileSync('git', ['-C', project, 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim(), 'main')
     assert.match(execFileSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' }).trim(), /^[0-9a-f]{40,64}$/)
-    const config = JSON.parse(readFileSync(join(project, 'spexcode.json'), 'utf8'))
+    const config = JSON.parse(readFileSync(join(project, '.spec/spexcode.json'), 'utf8'))
     assert.equal(config.mainBranch, 'main')
     assert.deepEqual(config.harnesses, [])
     const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))

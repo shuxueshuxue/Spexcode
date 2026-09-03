@@ -21,9 +21,9 @@ related:
 whether the agent is Claude, Codex or pi. The same principle was never applied to the other axis — **what
 container a session runs in** — and so tmux is assumed everywhere: [[session-tmux]] is the declared transport,
 but `sessions.ts`, the liveness pollers in `graphStream.ts`, the quarantine witness in `session-record.ts`, the
-attach routes and the harness `liveness()` signature all know the host is tmux. Even the headless adapters run
-their controller inside a tmux window. `runtime-guard.ts` therefore refuses the whole session runtime on any host
-without tmux, which is every native Windows machine.
+attach routes and the harness `liveness()` signature all know the host is tmux. Even the headless adapters ran
+their controller inside a tmux window. `runtime-guard.ts` therefore needs host selection on machines without
+tmux, including native Windows.
 
 **tmux plays five roles, and only two are about terminals.** (1) Process host: the agent outlives the backend,
 which hot-reloads on every source change. (2) Name registry and base liveness: the window's existence. (3)
@@ -53,12 +53,13 @@ parity; then add process-host and prove a headless session's full loop on a host
 
 ## current state
 
-Phase 1 is implemented. `session-host.ts` exposes the `SessionHost` lifecycle/witness boundary plus optional
+Phase 2 is implemented. `session-host.ts` exposes the `SessionHost` lifecycle/witness boundary plus optional
 interactive operations and a narrow host command probe. `tmux-host` delegates to [[session-tmux]] without
-changing its socket, command arguments, probe timeouts, or witness value; lifecycle, graph pollers, record
-quarantine, attach/input routes, PTY probes, and resource accounting select that host rather than invoking
-tmux directly. `runtime-guard.ts` now exposes host selection and retains the existing loud refusal when tmux
-is unavailable. The invocation recorder is opt-in via `SPEXCODE_TMUX_RECORD` for the `tmux-host-parity` proof.
-Periodic poll cadence is timing, not a `SessionHost` contract; parity therefore compares poll command shape and
-order while collapsing only consecutive repeats of the same periodic poll invocation.
-Process-host remains intentionally unimplemented for phase 2.
+changing its socket, command arguments, probe timeouts, or witness value; `process-host` launches detached
+children with per-session stdout/stderr logs, records `{pid,startToken}`, and proves liveness and stop ownership
+with that exact identity. Process-host has no attach/sendKeys/command surface. `runtime-guard.ts` selects tmux
+when present and process-host otherwise; launcher resolution exposes only headless adapters on process-host and
+refuses TUI launchers loudly. Host facts report the active host and reason. Control socket helpers use Unix paths
+on POSIX and named pipes on Windows. Headless controllers are host-owned containers, so pane titles and tmux
+activity are explicitly unavailable on process-host. The invocation recorder remains opt-in via
+`SPEXCODE_TMUX_RECORD` for the `tmux-host-parity` proof.

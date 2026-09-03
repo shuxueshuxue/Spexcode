@@ -71,7 +71,7 @@ async function startProjectsHost() {
     const dir = join(repos, folder)
     mkdirSync(join(dir, '.spec', 'project'), { recursive: true })
     writeFileSync(join(dir, '.spec', 'project', 'spec.md'), `---\ntitle: ${title}\ndesc: page scroll fixture\n---\n# project\n\n${title} fixture.\n`)
-    writeFileSync(join(dir, 'spexcode.json'), `${JSON.stringify({ harnesses: ['codex'], dashboard: { title } }, null, 2)}\n`)
+    writeFileSync(join(dir, '.spec/spexcode.json'), `${JSON.stringify({ harnesses: ['codex'], dashboard: { title } }, null, 2)}\n`)
     execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir })
     execFileSync('git', ['config', 'user.email', 'page-scroll@test'], { cwd: dir })
     execFileSync('git', ['config', 'user.name', 'page-scroll'], { cwd: dir })

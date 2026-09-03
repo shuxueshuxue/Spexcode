@@ -30,7 +30,8 @@ commands, hook events, native-id capture, and `--resume <id>` / `--continue` dec
 changes only its id and runtime capabilities. There is no second plugin generator and no headless branch in
 materialize or session product code.
 
-Each governed session keeps one tmux window as the home for its current turn. A fresh launch runs
+Each governed session keeps one host-owned container as the home for its current turn. On tmux-host this is a tmux
+window; on process-host the detached process itself is the container and no window exists. A fresh launch runs
 `opencode run <configured flags> <prompt>` there: `run` is inserted immediately after the launcher executable,
 so the seeded `opencode --auto` becomes OpenCode's valid `opencode run --auto`, never the invalid
 `opencode --auto run`. OpenCode mints its native session id and the existing plugin reports the first

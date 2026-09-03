@@ -1,5 +1,16 @@
 ---
 scenarios:
+  - name: codex-generation-ledger-parse-cached
+    tags: [backend-api]
+    code: [spec-cli/src/codex-runtime-generations.ts#readCodexGenerationLedger]
+    description: >
+      Warm the same backend and capture a 5 s CDP CPU profile with the repository's profiler. Repeat the
+      profile after the ledger cache is warm, keeping the backend, store, and profiler interval identical.
+    expected: >
+      In the measured throwaway workload, the ledger parser is absent from the self-time and inclusive CPU
+      tops; unchanged `(path, mtimeNs, size)` signatures reuse the parsed value without a file read, and a
+      ledger replacement is observed on the next read. Production-load percentage validation is a live-backend
+      follow-up because the throwaway has no active SSE/poll demand.
   - name: worktree-thread-hooks-fire-from-the-root-checkout-shim
     tags: [backend-api, cli]
     code: [spec-cli/src/codex-harness.ts#codexHarness]

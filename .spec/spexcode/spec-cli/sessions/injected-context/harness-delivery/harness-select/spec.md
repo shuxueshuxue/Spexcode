@@ -2,7 +2,7 @@
 title: harness-select
 status: active
 hue: 280
-desc: Declarative choice of WHICH harness targets `spex materialize` delivers into — spexcode.json's `harnesses` set (native ids, or one plugin), validated fail-loud, honored on every materialize leg, self-healing through the gate; deselecting a harness prunes its artifacts.
+desc: Declarative choice of WHICH harness targets `spex materialize` delivers into — .spec/spexcode.json's `harnesses` set (native ids, or one plugin), validated fail-loud, honored on every materialize leg, self-healing through the gate; deselecting a harness prunes its artifacts.
 code:
   - spec-cli/src/harness-select.ts#resolveHarnessTargets
   - spec-cli/src/harness-select.ts#partitionHarnesses
@@ -14,7 +14,7 @@ related:
 # harness-select
 
 A project does not always want SpexCode delivered into every harness. `harness-select` is the ONE declarative
-knob for that choice: the `harnesses` field in `spexcode.json`. It is PERSISTENT config, never a one-shot flag,
+knob for that choice: the `harnesses` field in `.spec/spexcode.json`. It is PERSISTENT config, never a one-shot flag,
 because [[harness-delivery]]'s `materialize` re-runs at every git-native anchor ([[commit-surgery]]) —
 the intent must live where every re-materialize re-reads it, not in a command a human has to remember.
 
@@ -23,7 +23,7 @@ The vocabulary is small. Each member is either a NATIVE harness id (`claude`, `c
 set**: the field is REQUIRED, an
 explicit adopter choice that [[spex-init]] demands up front (`spex init --harness <ids>`, the CLI spelling
 `parseHarnessFlag` translates — `plugin:<folder>` for a bundle, `none` for the empty set) and stamps into
-`spexcode.json`. A missing
+`.spec/spexcode.json`. A missing
 field fails loud with that stamp as the named repair. The old zero-config "deliver to every native harness"
 was retired because it scales exactly wrong: every harness added to the registry would silently start
 littering every adopter's tree — and global tool configs (`~/.codex`, …) — with artifacts for CLIs they
@@ -62,7 +62,7 @@ therefore immediately self-healing for the current tree while every later materi
 the persisted set.
 
 **The chain contract — every materialize leg honors the persisted selection.** materialize is reached by four
-distinct legs, and ALL of them read the materialized tree's own `spexcode.json` set, never a
+distinct legs, and ALL of them read the materialized tree's own `.spec/spexcode.json` set, never a
 default full set: `spex init`'s adoption materialize, a manual `spex materialize`, the pre-commit anchor's
 unconditional materialize ([[commit-surgery]]), and the worktree materialize at session creation
 (`bootstrapMaterialize`). Concretely: a codex-only
@@ -78,7 +78,7 @@ but is inert because the final allowlist no longer names that dispatch family. T
 data are never touched. And that next materialize needs no human: the
 freshness key
 (`hp_config_hash`, [[harness-delivery]]) covers the persisted policy files (that tree's
-`spexcode.json` + `spexcode.local.json`), so a selection edit alone moves the key, and the very next
+`.spec/spexcode.json` + `.spec/spexcode.local.json`), so a selection edit alone moves the key, and the very next
 git-native anchor ([[commit-surgery]] — the commit/checkout/merge that carries the edit, or a manual
 `spex materialize`) re-materializes under the new set — a selection change SELF-HEALS through the product
 path, never via a harness event and never waiting for an unrelated `.plugins` edit.

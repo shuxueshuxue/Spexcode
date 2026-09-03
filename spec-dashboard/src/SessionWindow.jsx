@@ -23,12 +23,16 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// Reserve FoldPod's sibling slot here; a nested button would invalidate the row button.
-export function RowLead({ guides = [], expandable, kin = 0 }) {
+// Reserve FoldPod's sibling slot here; a nested button would invalidate the row button. While selecting
+// ([[session-multi-select]]) the slot is filled instead of reserved: the pick ring is the pod's own circle in
+// the pod's own place, so the column never holds two marks, and a leaf gets the same ring, empty.
+export function RowLead({ guides = [], expandable, kin = 0, pick = null }) {
   const reservesFoldColumn = expandable || guides.length > 0
   return (
     <span className="sess-lead">
-      {reservesFoldColumn && (
+      {pick ? (
+        <span className={`sess-fold pod sess-pick${pick.on ? ' on' : ''}`} style={pick.rollup ? { '--pick': pick.rollup } : undefined} aria-hidden="true">{expandable ? kin : null}</span>
+      ) : reservesFoldColumn && (
         <span className="sess-fold pod sess-fold-slot" aria-hidden="true">{kin}</span>
       )}
       {guides.map((cont, i) => {
@@ -65,10 +69,12 @@ export function SessionConsoleTreeRow({ item, activeId, selecting = false, picke
   const { s } = item
   const selected = activeId === s.id
   const isPicked = selecting && picked.has(s.id)
-  const lead = (item.expandable || item.depth)
-    ? <RowLead guides={item.guides} expandable={item.expandable} kin={item.kin} />
+  // While selecting, every row leads with the pick ring — a leaf too — and the fold control steps aside:
+  // the forest's shape is frozen while a set is being picked, so a picked row cannot fold out of sight.
+  const lead = (selecting || item.expandable || item.depth)
+    ? <RowLead guides={item.guides} expandable={item.expandable} kin={item.kin} pick={selecting ? { on: isPicked, rollup: item.rollup } : null} />
     : null
-  const fold = item.expandable ? { expanded: item.expanded, rollup: item.rollup, kin: item.kin } : null
+  const fold = item.expandable && !selecting ? { expanded: item.expanded, rollup: item.rollup, kin: item.kin } : null
   const treeClass = `sess-tree-row si-tree-row${dragging ? ' dragging' : ''}${dropTarget ? ' drop-target' : ''}${inert ? ' si-session-drag-ghost' : ''}`
   const itemClass = `si-item${selected && !selecting ? ' on' : ''}${isPicked ? ' picked' : ''}`
   const face = <>
@@ -77,8 +83,7 @@ export function SessionConsoleTreeRow({ item, activeId, selecting = false, picke
   const treeStyle = { '--ov': labelColor(s.id), '--sess-fold-indent': `${item.depth * 14}px`, ...style }
   return (
     <div className={treeClass} data-session-depth={item.depth} style={treeStyle} {...(!inert ? { 'data-session-drop-id': s.id } : { 'aria-hidden': 'true' })}>
-      <button type="button" className={itemClass} tabIndex={inert ? -1 : undefined} {...rowProps}>
-        {selecting && !inert && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
+      <button type="button" className={itemClass} tabIndex={inert ? -1 : undefined} aria-pressed={selecting && !inert ? isPicked : undefined} {...rowProps}>
         {face}
       </button>
       {fold && <FoldPod {...fold} inert={inert} onToggle={onToggleFold} />}

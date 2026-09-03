@@ -33,9 +33,9 @@ on a minified file).
 
 **One gate, not a second definition.** A path is readable exactly when `isSourceFile` says it is — the same
 predicate [[spec-lint]]'s coverage walk uses to decide what must be governed, driven by the same compiled
-`spexcode.json` source policy. This is deliberate and load-bearing: *what the product will show you* and
+`.spec/spexcode.json` source policy. This is deliberate and load-bearing: *what the product will show you* and
 *what the product will govern* are then the same set by construction, and cannot drift into two answers that
-disagree on a day nobody is looking. It follows without extra rules that the spec tree, `spexcode.json`, test
+disagree on a day nobody is looking. It follows without extra rules that the spec tree, `.spec/spexcode.json`, test
 files, binaries, and anything outside the include globs are all unreadable here.
 
 Escape is refused before any file is touched: an absolute path, a `..` segment, or anything normalising

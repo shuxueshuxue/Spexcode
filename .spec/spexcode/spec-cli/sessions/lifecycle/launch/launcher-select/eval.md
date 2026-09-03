@@ -4,7 +4,7 @@ scenarios:
     tags: [cli, backend-api]
     description: >-
       In fresh git repositories, run the real `spex init --harness <selection>` surface for each native
-      harness and for a multi-harness selection. Read each planted `spexcode.json`, then create a queued
+      harness and for a multi-harness selection. Read each planted `.spec/spexcode.json`, then create a queued
       session without an explicit launcher so creation resolves the planted `sessions.defaultLauncher` and
       pins its command without needing the harness binary to run.
     expected: >-
@@ -27,7 +27,7 @@ scenarios:
       New-Session box, and read the DOM: assert the trigger button `.si-launcher-btn` is present (wearing
       the selected launcher's harness glyph + name, with NO caret glyph), that the `.si-agent-picker`
       harness radiogroup is ABSENT, and that no native `.si-launcher-select` remains. Hover data: the
-      trigger's tooltip (`data-tip`) names the config file (`spexcode.json`) as where launchers change.
+      trigger's tooltip (`data-tip`) names the config file (`.spec/spexcode.json`) as where launchers change.
       Click the trigger: a
       viewport-CENTRED `.si-launcher-pop` dialog opens over a `.si-launcher-backdrop` (its box centres on
       the viewport midpoint — not anchored under the trigger), with exactly one `.si-launcher-row` per
@@ -42,7 +42,7 @@ scenarios:
       launcher carries `{ name, harness, cmd }`). Screenshot the opened pop.
     expected: >-
       Launchers configured → the New box shows the `.si-launcher-btn` pop-out trigger whose tooltip points
-      at `spexcode.json` / `spexcode.local.json`; clicking it opens
+      at `.spec/spexcode.json` / `.spec/spexcode.local.json`; clicking it opens
       the `.si-launcher-pop` centred dialog (over a light backdrop; backdrop click closes) with exactly one
       row per profile (harness glyph + name + the full cmd
       per row), the harness radiogroup and the old native select are gone, and the chosen launcher name is
@@ -88,7 +88,7 @@ scenarios:
       explicit `--launcher <name>`.
     expected: >-
       With no configured default, every no-choice create fails with an actionable error telling the human to
-      write `sessions.defaultLauncher` in `spexcode.json` or `spexcode.local.json`, creates no session/worktree,
+      write `sessions.defaultLauncher` in `.spec/spexcode.json` or `.spec/spexcode.local.json`, creates no session/worktree,
       and does not silently fall back to any launcher the human never named (there is no built-in `claude` to
       fall back to — `claude` is just another configured name). With a configured default, `spex new` without
       `--launcher` uses that configured profile. With an explicit `--launcher <name>`, create succeeds

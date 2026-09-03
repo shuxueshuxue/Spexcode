@@ -52,9 +52,10 @@ The governing human ruling is: “我们的显示模式一直都只看 parent se
 It replaces cross-zone root splitting and the `○`-out-of-zone partition rule. The stored parent relationship is
 the only nesting input, and the root alone chooses the family's zone.
 
-**The console projection.** The Sessions page's tree wrapper, item, shared row face, fold pod, selection check,
-and inert drag projection are one presentational tree. Multi-select is explicit row state entered from the row
-context menu; it is not graph marquee selection. Dragging keeps the source row marked, follows it with the same
+**The console projection.** The Sessions page's tree wrapper, item, shared row face, fold pod, and inert drag
+projection are one presentational tree. Multi-select is explicit row state entered from the row context menu;
+it is not graph marquee selection, and it draws no mark of its own: while selecting, the fold column carries
+the pick ring ([[session-multi-select]]). Dragging keeps the source row marked, follows it with the same
 tree-row presentation at a reduced scale, and highlights a valid target in the same tree, while the backend
 owns the reparent operation.
 
@@ -64,7 +65,9 @@ elbow and the earlier ones become rails or gaps. The lead always reserves one fi
 before those ancestry rails whenever the row is nested or expandable. That keeps a subtree count out of
 the rail columns while preserving one predictable indentation step per depth. The fold control is
 positioned in that reserved column, and remains a sibling of the row button because a nested button
-inside the row button would invalidate the row's own activation.
+inside the row button would invalidate the row's own activation. While the list is selecting, the lead
+fills that column instead of reserving it: every row, leaf or not, draws the pick ring there inside the
+row button, and no fold control is positioned over it.
 
 The row's overlay colour is a continuous 2px status thread on the leading edge: it spans the complete row
 height at the list's left edge — the ROW carries it, not the inset body, so a nested row's indent cannot step
@@ -74,7 +77,8 @@ or make it touch the fold/count column.
 
 **The fold.** `FoldPod` is the only disclosure a parent gets. It carries its own expanded state, shows
 the subtree count, and is pointer-only — `tabIndex={-1}` and a suppressed mousedown focus, so
-expanding a subtree never moves the keyboard surface sink. `useFold` holds that state.
+expanding a subtree never moves the keyboard surface sink. `useFold` holds that state. It is not rendered
+while the list is selecting; the pick ring holds its slot until selection ends.
 
 **The zone.** `SessionZone` groups a `sessionForest` into one rendered block.
 

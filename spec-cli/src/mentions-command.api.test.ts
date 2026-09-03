@@ -6,6 +6,7 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { processStartToken } from '@spexcode/spec-core'
 import { tsxBin } from './tsx-bin.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -30,6 +31,29 @@ function capture(child: ChildProcess): () => string {
   return () => output
 }
 
+async function stopBackend(child: ChildProcess): Promise<void> {
+  const pid = child.pid
+  const startToken = pid ? processStartToken(pid) : null
+  const signal = (name: 'SIGTERM' | 'SIGKILL'): void => {
+    if (!pid || !startToken || processStartToken(pid) !== startToken) return
+    if (process.platform !== 'win32') {
+      try { process.kill(-pid, name); return } catch { /* fall through to the exact child */ }
+    }
+    try { child.kill(name) } catch { /* already gone */ }
+  }
+  signal('SIGTERM')
+  if (child.exitCode !== null || child.signalCode !== null) return
+  const exited = new Promise<void>((resolve) => child.once('close', () => resolve()))
+  const timedOut = await Promise.race([
+    exited.then(() => false),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 3_000)),
+  ])
+  if (timedOut && child.exitCode === null && child.signalCode === null) {
+    signal('SIGKILL')
+    await exited
+  }
+}
+
 async function waitFor<T>(read: () => Promise<T>, accept: (value: T) => boolean, label: string, timeoutMs = 30_000): Promise<T> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
@@ -52,7 +76,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-passive-mention-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-passive-mention-project-'))
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')
@@ -74,7 +98,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
   delete env.SPEXCODE_SESSION_ID
   const base = `http://127.0.0.1:${port}`
   const backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   const logs = capture(backend)
   const created: string[] = []
@@ -111,10 +135,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
     assert.ok(!targetPane.includes('@-mentioned you'), `@ must not prompt the referenced session:\n${targetPane}`)
   } finally {
     for (const id of created.reverse()) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
-    if (backend.exitCode === null) {
-      backend.kill('SIGTERM')
-      await new Promise((resolve) => backend.once('close', resolve))
-    }
+    await stopBackend(backend)
     if (backend.exitCode && backend.exitCode !== 0) console.error(logs())
     rmSync(project, { recursive: true, force: true })
     rmSync(home, { recursive: true, force: true })
@@ -125,7 +146,7 @@ test('a Command Box @new creates a child under the selected session, optionally 
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-new-mention-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-new-mention-project-'))
-  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')
@@ -147,7 +168,7 @@ test('a Command Box @new creates a child under the selected session, optionally 
   delete env.SPEXCODE_SESSION_ID
   const base = `http://127.0.0.1:${port}`
   const backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
   const logs = capture(backend)
   const created: string[] = []
@@ -202,10 +223,7 @@ test('a Command Box @new creates a child under the selected session, optionally 
     await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes('REPLY TRANSPORT'), 'the note-reply insert rides the command delivery')
   } finally {
     for (const id of created.reverse()) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
-    if (backend.exitCode === null) {
-      backend.kill('SIGTERM')
-      await new Promise((resolve) => backend.once('close', resolve))
-    }
+    await stopBackend(backend)
     if (backend.exitCode && backend.exitCode !== 0) console.error(logs())
     rmSync(project, { recursive: true, force: true })
     rmSync(home, { recursive: true, force: true })

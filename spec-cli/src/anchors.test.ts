@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, extractors, extractorFor, resolveAnchor } from '@spexcode/spec-core'
+import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, extractors, extractorFor, resolveAnchor, blobShaForContent, extractCachedBlob, resetBlobExtractionCacheForTests } from '@spexcode/spec-core'
 import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
@@ -99,6 +99,23 @@ test('Tree-sitter is shipped with SpexCode rather than resolved from the governe
     { name: 'applyRate', kind: 'function', start: 1, end: 3 },
   ])
   rmSync(adopter, { recursive: true, force: true })
+})
+
+test('live anchor extraction cache reuses a blob and invalidates on a changed blob', async () => {
+  resetBlobExtractionCacheForTests()
+  let calls = 0
+  const x = {
+    id: 'counting', claims: () => true, ready: () => true,
+    memoKey: (filename: string) => filename,
+    extract: async (content: string) => { calls++; return [{ name: content, kind: 'function', start: 1, end: 1 }] },
+  }
+  const first = 'one\n', second = 'two\n'
+  const a = await extractCachedBlob(first, 'src/a.ts', x, blobShaForContent(first))
+  const b = await extractCachedBlob(first, 'src/a.ts', x, blobShaForContent(first))
+  assert.deepEqual(a, b)
+  assert.equal(calls, 1)
+  await extractCachedBlob(second, 'src/a.ts', x, blobShaForContent(second))
+  assert.equal(calls, 2)
 })
 
 test('the Tree-sitter registry extracts the shared declaration vocabulary for every shipped language', async () => {

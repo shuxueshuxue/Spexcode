@@ -46,7 +46,7 @@ advisory hypotheses, never lint findings, exit gates, or hidden plugin copies:
   budget, dense with code identifiers, or written as step-by-step how-to. Filename signals derive from the
   SAME git-tracked candidates and source policy [[spec-lint]] uses for coverage, so tracked languages and
   extensionless source participate while configured exclusions stay excluded. `doctor.altitude` in
-  `spexcode.json` is the sole threshold owner (`lineBudget`, `charBudget`, `sizeable`, `dense`, `steps`, and
+  `.spec/spexcode.json` is the sole threshold owner (`lineBudget`, `charBudget`, `sizeable`, `dense`, `steps`, and
   optional `identifierExtensions` compatibility rows).
 - **breadth** flags a node at or above `doctor.breadth.maxChildren` direct children (default 8), preserving
   the actual per-node child count as evidence and pointing at [[regroup]] for repair. A flat fan-out of real

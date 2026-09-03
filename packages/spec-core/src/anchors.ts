@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
 import { gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, withEventLedgerBuild, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
 
 const RS = '\x1e'
@@ -26,6 +27,34 @@ export type Extractor = {
   extract(content: string, filename: string): Unit[] | Promise<Unit[]>
   // Every input that can affect extract() must be represented here before its result enters the memo.
   memoKey: (filename: string) => string
+}
+
+export type CachedExtraction = { units: Unit[] } | { error: string }
+const liveBlobUnitMemo = new Map<string, Promise<CachedExtraction>>()
+const LIVE_BLOB_MEMO_MAX = 4096
+
+export function blobShaForContent(content: string, format: 'sha1' | 'sha256' = 'sha1'): string {
+  const bytes = Buffer.from(content)
+  return createHash(format).update(`blob ${bytes.byteLength}\0`).update(bytes).digest('hex')
+}
+
+// Live-tip extraction is immutable once identified by the Git blob id. The filename/extractor key remains part
+// of the memo because the same bytes can be interpreted by different grammars or path-sensitive extractors.
+export async function extractCachedBlob(content: string, filename: string, extractor: Extractor, blobSha: string): Promise<CachedExtraction> {
+  const key = `${blobSha}\0${extractor.memoKey(filename)}`
+  const hit = liveBlobUnitMemo.get(key)
+  if (hit) return hit
+  const pending = Promise.resolve().then(async () => {
+    try { return { units: await extractor.extract(content, filename) } }
+    catch (error: any) { return { error: error?.message ?? String(error) } }
+  })
+  if (liveBlobUnitMemo.size >= LIVE_BLOB_MEMO_MAX) liveBlobUnitMemo.clear()
+  liveBlobUnitMemo.set(key, pending)
+  return pending
+}
+
+export function resetBlobExtractionCacheForTests(): void {
+  liveBlobUnitMemo.clear()
 }
 
 export type CodeEntry = { path: string; anchor: string | null }

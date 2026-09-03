@@ -58,25 +58,26 @@ directory; a removed checkout/worktree disappears from `GET /projects` without m
 Explicit registration is one admin-scoped workflow over
 the real host filesystem: a read-only directory browser selects an existing folder or reports a typed absent
 path as a candidate, then `POST /projects` normalizes it to the repo's main checkout. An existing Git repo
-can be cataloged directly; a plain folder enters only after the user explicitly chooses the bounded `git init`
+can be cataloged directly; inside WSL, `POST /projects` refuses native drive paths and `/mnt/<drive>` roots
+before any Git or catalog work, with [[desktop-windows-wsl]] for the 9p reason. A plain folder enters only after the user explicitly chooses the bounded `git init`
 side effect. An absent candidate enters only through the explicit `createDir` + Git-initialization transaction,
 which creates the requested path before that same Git/catalog workflow. The add transaction establishes a
 branchable source-of-truth before it writes the catalog: a repository it initializes gets an initial commit
 on the conventional `main` branch, while an existing repository with an unborn `HEAD` gets an initial
-commit on its current branch. If an interrupted adoption already left `.spec` or `spexcode.json` on disk,
+commit on its current branch. If an interrupted adoption already left `.spec` or `.spec/spexcode.json` on disk,
 that SpexCode source is recovered into the same commit; only a repository with no seed at all receives an
 empty commit. A newly created path also runs the real `spex init --harness none` when no
 explicit SpexCode setup was requested, so the project is immediately usable by the session launcher picker
 and its later Harness-target `+` action. Optional SpexCode setup still runs the real `spex init` with an
 explicit harness choice, never a dashboard-owned initializer; after it succeeds, the transaction commits
-only the SpexCode seed (`.spec`, portable `spexcode.json`, and its ignore policy) with a tool-owned identity.
+only the SpexCode seed (`.spec`, portable `.spec/spexcode.json`, and its ignore policy) with a tool-owned identity.
 No user source path is staged by this baseline commit. A failed init or baseline commit returns its exit code
 and complete transcript and does not claim catalog success; the catalog write happens only after every
 requested setup step succeeds. Its project operations ride the same hub admin scope. `GET|PUT /projects/:id/config` is
 the narrow source-file seam for the project's raw,
-committed `spexcode.json`: it works while the backend is offline, treats an absent file as `{}`, accepts
+committed `.spec/spexcode.json`: it works while the backend is offline, treats an absent file as `{}`, accepts
 only a top-level JSON object, writes atomically, and rejects a stale revision rather than overwriting a
-concurrent edit. It never exposes `spexcode.local.json`, whose machine-specific layer may carry sensitive
+concurrent edit. It never exposes `.spec/spexcode.local.json`, whose machine-specific layer may carry sensitive
 paths. Sibling structured icon routes revision-check and update only the canonical project or host field;
 they never create another setting. Operations remain **spawned `spex` verbs, never forked logic**. A source
 host module invokes its source entry through the repository's development loader; a compiled or installed host

@@ -69,7 +69,7 @@ An agent therefore never receives a path to a partial file.
 The server streams each request directly to one staging file: memory is bounded by one chunk, rather than
 the attachment size. Incomplete transfer metadata and `.part` bytes stay under the upload sink's private
 staging directory, survive a backend hot replacement, and expire under the resolved transfer policy. That
-one policy is `uploads` in the existing `spexcode.json` / `spexcode.local.json` merge: the shipped template
+one policy is `uploads` in the existing `.spec/spexcode.json` / `.spec/spexcode.local.json` merge: the shipped template
 is its sole default source (including the default 2 GiB single-file ceiling), and it names every operational
 number — cap, chunk, concurrency, timeout, retry limit/delay, TTL/reaper, free-space reserve, and the older
 eval-evidence ceiling. The backend reads it for creation, streaming, status, and cleanup; the dashboard

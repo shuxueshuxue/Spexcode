@@ -249,6 +249,7 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
 function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [], quotes = [], onRemoveQuote }) {
   const t = useT()
   const readOnly = state !== 'live'
+  const restoring = actionOutcome?.phase === 'pending'
   // STOP IS IN THE COMPOSER, and only while there is something to stop: the square every chat reader knows,
   // beside send, shown while the agent is working and gone otherwise — a permanently visible disabled stop
   // would be chrome about a state the page is not in. One verb; the backend decides native vs the pane's key.
@@ -353,13 +354,13 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
           {readOnly && (
             <div className="m-coldline">
               <span className="m-coldline-text">{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>
-              {onRestore && <button type="button" className="m-coldline-action" disabled={actionOutcome?.phase === 'pending'} onClick={onRestore}>
-                <Icon name="play" size={12} />
-                {t(state === 'archived' ? 'session.shelfRestore' : 'session.relaunch')}
+              {onRestore && <button type="button" className="m-coldline-action" disabled={restoring} aria-busy={restoring || undefined} onClick={onRestore}>
+                <Icon name={restoring ? 'loader' : 'play'} size={12} className={restoring ? 'si-coldline-busy' : undefined} />
+                {restoring ? t('session.outcomeWorking') : t(state === 'archived' ? 'session.shelfRestore' : 'session.relaunch')}
               </button>}
             </div>
           )}
-          {readOnly && actionOutcome && (
+          {readOnly && actionOutcome && actionOutcome.phase !== 'pending' && (
             <div className={`si-action-outcome ${actionOutcome.phase}`} role={actionOutcome.phase === 'failed' ? 'alert' : 'status'}>
               {actionOutcome.message}
             </div>

@@ -12,6 +12,29 @@
 # `case "$SPEXCODE_HARNESS"` below routes all four through the claude branch via the default case; only codex
 # keeps parse arms of its own.
 
+# Startup surface gate shared by every materialized core hook. 0 means run, 1 means intentional no-op,
+# and 2 means the launch profile is malformed and must be repaired loudly.
+hp_profile_hook_enabled() {
+  local profile="${SPEX_PROFILE_VALUE:-${SPEX_PROFILE:-full}}" plugin="$1"
+  [ "$profile" = full ] && return 0
+  if [ "$profile" = repo ]; then
+    case "$plugin" in spec-first|spec-of-file|comment-altitude) return 0 ;; *) return 1 ;; esac
+  fi
+  node --input-type=module - "$profile" "$plugin" <<'NODE'
+import { readFileSync } from 'node:fs'
+const [profile, plugin] = process.argv.slice(2)
+try {
+  const value = JSON.parse(readFileSync(profile, 'utf8'))
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.commands)) throw new Error('commands must be an array')
+  if (value.hooks !== undefined && (!Array.isArray(value.hooks) || value.hooks.some((name) => typeof name !== 'string'))) throw new Error('hooks must be an array')
+  process.exit(value.hooks === undefined || value.hooks.includes(plugin) ? 0 : 1)
+} catch (error) {
+  console.error(`invalid SPEX_PROFILE '${profile}': ${error instanceof Error ? error.message : String(error)}`)
+  process.exit(2)
+}
+NODE
+}
+
 
 # the string value of a top-level JSON string field (first match). Harness-agnostic — both harnesses' payloads
 # carry session_id / tool_name as plain string fields. $1 = payload, $2 = field name. The value is scanned as a
@@ -170,8 +193,8 @@ hp_toolchain_version() {
 }
 
 # the deterministic content fingerprint of EVERYTHING the materialize is a function of: the EDITABLE config
-# roots (.plugins + plugin-system md/sh), the PERSISTED POLICY files (the MAIN checkout's spexcode.json +
-# spexcode.local.json — the `harnesses` set materialize reads via readConfig(mainCheckout)), and the
+# roots (.plugins + plugin-system md/sh), the PERSISTED POLICY files (the MAIN checkout's .spec/spexcode.json +
+# .spec/spexcode.local.json — the `harnesses` set materialize reads via readConfig(mainCheckout)), and the
 # toolchain version above. Since the dispatch-gate retired ([[commit-surgery]] — materialize anchors on
 # git-native events only), this is a FRESHNESS STAMP materialize records after each pass, a diagnostic
 # (is the last materialize current?) rather than a trigger. Run with cwd = the project. ONE definition:
@@ -183,7 +206,7 @@ hp_config_hash() {
   { hp_toolchain_version
     find .spec/*/.plugins .spec/*/plugin-system \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
       | sort -z | xargs -0 cat 2>/dev/null
-    [ -n "$gcd" ] && cat "$(dirname "$gcd")/spexcode.json" "$(dirname "$gcd")/spexcode.local.json" 2>/dev/null
+    [ -n "$gcd" ] && cat "$(dirname "$gcd")/.spec/spexcode.json" "$(dirname "$gcd")/.spec/spexcode.local.json" 2>/dev/null
   } | sha256sum | cut -d' ' -f1
 }
 

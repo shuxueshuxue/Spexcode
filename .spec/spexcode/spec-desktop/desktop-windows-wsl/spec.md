@@ -48,7 +48,9 @@ Attach-before-start reads the WSL-side records the same way.
 **Projects live on the Linux side.** A repo under `/mnt/c` goes through 9p, where git and inotify are slow or
 broken and the graph's live rebuild would suffer; the folder picker therefore browses `\\wsl$\<distro>\`,
 translates the UNC path to `/home/…` before `POST /projects`, and refuses a `/mnt/c` path with that one-line
-reason rather than accepting a slow project.
+reason rather than accepting a slow project. When the gateway is running inside WSL, the `POST /projects`
+registration boundary repeats that refusal for native drive paths and `/mnt/<drive>` paths:
+`Projects on Windows drives reach WSL through 9p, where git and inotify are slow or unreliable; choose a folder under \\wsl$\<distro>\home instead.`
 
 ## Implementation boundary
 
@@ -59,13 +61,21 @@ translates `\\wsl$\\<distro>\\home\\…` paths to `/home/…`. The Windows picke
 Native drive paths and `/mnt/*` are refused before
 the existing project POST with the 9p reason. A missing `wsl.exe` reports the install action; other probe spawn
 errors remain detection failures. `wsl-bootstrap.sh` is fed through `wsl.exe` with a piped stdin, so apt's
-single sudo prompt remains in the verbatim transcript; it uses a bundled tarball when supplied and otherwise
-reports its npm fallback before running the real `spex doctor`. `first-run.html` is a static `file://` transcript
+single sudo prompt remains in the verbatim transcript; the packaged app passes its complete local SpexCode
+tarball directory as a Windows resource path (translated to `/mnt/c/...`), and bootstrap refuses to run when
+that set is missing or empty before running the real `spex doctor`. `first-run.html` is a static `file://` transcript
 surface; the preload bridge only carries the sudo response back to the shell. Once `/health` responds, the shell
 closes that page and loads the same gateway URL used by a browser.
 
-The bootstrap must install a self-consistent SpexCode package set: either one tarball per package from the same
-commit or a pinned published set whose dependency versions agree; a thin root tarball must not mix release lines.
+The bootstrap must install the self-consistent SpexCode package set from [[desktop-packaging]]: one local tarball
+per package from the same commit. A thin root tarball must not mix release lines, and there is no registry fallback.
+
+The packaged command exports `SPEXCODE_BUNDLE_DIR` before invoking the unpacked bootstrap script, so the
+script sees the complete local tarball set rather than treating the directory as a transient `sed` input.
+When a project root is supplied, bootstrap changes into that WSL path before running `spex doctor`, keeping
+doctor's git/config probes on the selected project rather than the Windows launch directory.
+The bootstrap command exports both the bundle directory and project root inside the `wsl.exe` shell; relying
+on inherited Windows environment variables is insufficient because WSL does not forward arbitrary variables.
 
 **Stated constraints.** WSL's VM stops with the Windows session, so sessions stop at logout; records and
 worktrees persist on disk and resume after login — the same disk-not-process invariant as the host resource

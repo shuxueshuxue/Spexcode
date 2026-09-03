@@ -448,6 +448,10 @@ type PidEntry = { mtimeMs: number; pid: number; deadLatched: boolean }
 const pidRegistry = new Map<string, PidEntry>()
 function readAgentPid(p: string): number { try { return Number(readFileSync(p, 'utf8').trim()) } catch { return NaN } }
 function agentAlive(id: string): boolean | undefined {
+  if (sessionHost().kind === 'process-host') {
+    const identity = sessionHost().witness(id)
+    return !identity || typeof identity === 'string' ? false : processStartToken(identity.pid) === identity.startToken
+  }
   const pidPath = sessionArtifactPath(id, 'agent.pid')
   let mtimeMs: number
   try { mtimeMs = statSync(pidPath).mtimeMs } catch { pidRegistry.delete(id); return undefined }   // no pid file → pre-registration
@@ -471,6 +475,10 @@ export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean 
 async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
   const windows = new Map<string, PaneProbe>()
   const titles = new Map<string, string>()
+  if (sessionHost().kind === 'process-host') {
+    // process-host has no window/pane census. Per-session process identity is joined by liveness().
+    return { probeFailed: false, windows, titles, sockets: new Set(), unproven: new Set() }
+  }
   let out: string
   try {
     // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
@@ -522,6 +530,10 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
 }
 
 async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> {
+  if (sessionHost().kind === 'process-host') {
+    if (await sessionHost().alive(id)) throw new ResourceConflict(`refusing to stop ${id}: target process remains ${phase}`)
+    return
+  }
   const deadline = Date.now() + TARGET_TMUX_CLOSE_SETTLE_MS
   let probeFailed = false
   do {
@@ -618,7 +630,10 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
   // 'offline'.
   const h = harnessById(rec.harness || defaultHarness.id)
-  if (h.liveness(rec, snap.windows.has(rec.session), runtimeRoot(), snap.windows.get(rec.session), snap.sockets.has(rec.session)) === 'online') return 'online'
+  const processAlive = sessionHost().kind === 'process-host' ? agentAlive(rec.session) === true : false
+  const hostAlive = sessionHost().kind === 'process-host' ? processAlive : snap.windows.has(rec.session)
+  const pane = sessionHost().kind === 'process-host' ? { pidAlive: processAlive } : snap.windows.get(rec.session)
+  if (h.liveness(rec, hostAlive, runtimeRoot(), pane, snap.sockets.has(rec.session)) === 'online') return 'online'
   if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
   // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
   // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would
@@ -1621,7 +1636,7 @@ async function drainQueueUnlocked(): Promise<void> {
   if (draining) return
   draining = true
   try {
-    const cap = maxActive()   // read once per drain pass (spexcode.json → env → default); won't shift mid-burst
+    const cap = maxActive()   // read once per drain pass (.spec/spexcode.json → env → default); won't shift mid-burst
     for (;;) {
       const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
       for (const session of sessions) {
@@ -2211,7 +2226,7 @@ async function resetFailedMaterializeCandidate(rec: SessRec, signal: AbortSignal
     throw new SessionCreateError('session_create_failed', 'materialize',
       `materialize failed and its prepared worktree could not be restored: ${detail}`, 500)
   }
-  const clean = await gitTry(['-C', rec.worktreePath, '-c', 'core.hooksPath=/dev/null', 'clean', '-fd', '-e', 'spexcode.local.json'])
+  const clean = await gitTry(['-C', rec.worktreePath, '-c', 'core.hooksPath=/dev/null', 'clean', '-fd', '-e', '.spec/spexcode.local.json'])
   if (clean.ok) return
   const detail = (clean.stderr || clean.stdout || 'git clean failed without diagnostic').trim()
   throw new SessionCreateError('session_create_failed', 'materialize',
@@ -4330,6 +4345,29 @@ export function selectChildren(all: Session[], parent: string): Session[] {
   return all.filter((session) => session.parent === parent)
 }
 
+/** Read-time descendant closure; callers may filter terminal rows after traversing closed intermediates. */
+export function selectDescendants(all: Session[], parent: string): Session[] {
+  const byParent = new Map<string, Session[]>()
+  for (const session of all) {
+    if (!session.parent) continue
+    const children = byParent.get(session.parent) ?? []
+    children.push(session)
+    byParent.set(session.parent, children)
+  }
+  const out: Session[] = []
+  const seen = new Set<string>([parent])
+  const visit = (id: string): void => {
+    for (const child of byParent.get(id) ?? []) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      out.push(child)
+      visit(child.id)
+    }
+  }
+  visit(parent)
+  return out
+}
+
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
 // selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
 // ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a branch/
@@ -4416,17 +4454,30 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
   const label = scope.kind === 'children' ? `children of ${scope.parent.slice(0, 8)}` : 'sessions'
   const heading = c('1', `SpexCode ${label} (${sessions.length}${sessions.length ? `; ${statusSummary(sessions)}` : ''})`)
   if (!sessions.length) return [heading, c('90', `  no ${scope.kind === 'children' ? 'children' : 'living sessions'}`)].join('\n')
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'PARENT'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
+  const depthOf = (session: Session): number => {
+    let depth = 0
+    const ids = new Set(sessions.map((item) => item.id))
+    const seen = new Set<string>()
+    let parent = session.parent
+    while (parent && ids.has(parent) && !seen.has(parent)) {
+      seen.add(parent)
+      depth++
+      parent = sessions.find((item) => item.id === parent)?.parent ?? null
+    }
+    return depth
+  }
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'PARENT'.padEnd(8)} ${'DEPTH'.padEnd(5)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
     const title = padWidth(truncWidth(sessionTitle(s), 22), 22)
     const st = s.status.padEnd(13)
     const parent = c('90', (s.parent || '-').slice(0, 8).padEnd(8))
+    const depth = String(depthOf(s)).padEnd(5)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${parent} ${merges}${prompt}${note}`
+    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${parent} ${depth}${merges}${prompt}${note}`
   })
   return [heading, header, ...rows, statusLegend(color)].join('\n')
 }
@@ -4581,7 +4632,7 @@ export async function drainSession(id: string): Promise<void> {
 // `recipient` is the session this text is delivered TO; a state message speaks about its `sessionId`, the
 // watched subject, and the notice must name that subject — never the reader of the notice.
 export function canonicalMessageText(message: { kind: string; body: Uint8Array }, recipient: SessRec): string {
-  if (message.kind === 'session.prompt.v1') return Buffer.from(message.body).toString('utf8')
+  if (message.kind === 'session.prompt.v1' || message.kind === 'session.text.v1' || message.kind === 'spec.change-report.v1') return Buffer.from(message.body).toString('utf8')
   if (message.kind === 'session.state.changed.v1') {
     try {
       const change = JSON.parse(Buffer.from(message.body).toString('utf8')) as { sessionId?: string; status?: string; proposal?: Proposal | null; note?: string | null; parentSessionId?: string | null }

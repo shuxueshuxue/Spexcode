@@ -14,7 +14,7 @@ scenarios:
     description: >
       Flatten a repository whose file tree proposes a root that lint's source policy then rejects — a `tests/`
       directory holding enough files to clear the share threshold. Read the driver output and the
-      `spexcode.json` the run committed into the clone.
+      `.spec/spexcode.json` the run committed into the clone.
     expected: >
       The run names the dropped root, the committed config lists only roots that actually govern something,
       and the reported file count equals the gate's governed count. A config naming a root the gate ignores,
@@ -27,7 +27,7 @@ scenarios:
       status, its existing configuration, and the sibling flat record.
     expected: >
       The run uses the local launcher, adds and commits only `.spec` in the source repository, preserves the
-      existing `spexcode.json` byte-for-byte, creates no clone beneath the flat record, and converges only when
+      existing `.spec/spexcode.json` byte-for-byte, creates no clone beneath the flat record, and converges only when
       the ordinary lint gate does. A runner that writes a source file fails before Flatcode commits it.
     tags: [cli]
   - name: refuse-a-launcher-that-cannot-run-a-turn

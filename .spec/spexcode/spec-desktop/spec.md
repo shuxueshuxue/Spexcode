@@ -13,6 +13,8 @@ related:
   - spec-desktop/package.json
   - package.json
   - scripts/desktop-contract.test.mjs
+  - scripts/desktop-pack.mjs
+  - spec-desktop/electron-builder.config.cjs
   - spec-cli/src/host.ts
   - spec-cli/src/gateway-hub.ts
   - spec-cli/src/endpoint-record.ts
@@ -97,6 +99,10 @@ another project's endpoint. The routing variables are dropped at the fork.
 
 **Quitting is unconditional, including on macOS.** A resident process whose only purpose is to host a window it
 no longer has is not a feature; with the backends detached there is nothing to keep alive.
+
+Phase-one packaging is [[desktop-packaging]]: an unsigned electron-builder bundle carries the root and every
+`@spexcode/*` workspace from one monorepo commit, with built dist and production dependencies under
+`extraResources`. Linux AppImage/deb are the measured targets; dmg/nsis declarations exist for later lanes.
 
 The window is chrome-only in the other sense too: system-coloured to the board's own paper so there is no white
 flash before first paint, retrying the initial load because a listener and its first accepted connection are not

@@ -156,3 +156,8 @@ handover", whose answer is unconditionally yes — and it made every first Comma
 was still owed while the prompt reached the agent's pane milliseconds later. No transport state, harness, or
 runtime binding could change that answer, which is the tell that the field had lost its referent. A caller that
 does not measure the handover may not describe it.
+
+The CLI's explicit no-backend path still records the message through the local self-launch database and reports
+that it is queued for the recipient's turn boundary. `spex session send --children` resolves the caller's parent
+topology closure (or only direct children with `--direct`), excludes the caller and closed rows after traversing,
+and uses one application broadcast transaction before asking a live backend to push each queued message.

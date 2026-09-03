@@ -42,7 +42,10 @@ the `⚑` badge that says its worktree is gone and has no relaunch action. These
 component, not separate panels. The cold footer is a status line, not an empty input: the same card the live
 composer floats, collapsed to one control row, its statement in body ink, and its relaunch / restore action
 wearing the filled accent the live send mark wears — the card's one action in that state — rather than a hairline
-chip at the far edge of a tall empty sheet. The timeline remains
+chip at the far edge of a tall empty sheet. While relaunch/restore is in flight, that same action remains the
+single visible control and changes in place to a disabled loading mark with the working label; a second pending
+button or status chip is not rendered beneath it. A terminal failure may still use the footer's outcome line after
+the action settles. The timeline remains
 readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
 an offline record may still be written by an external `spex session send`, so archived is the only state that reads
 once when selected and does not poll.

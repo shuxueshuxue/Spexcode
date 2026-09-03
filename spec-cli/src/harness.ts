@@ -15,6 +15,7 @@ import { claudeTranscript, claudeTranscriptReader, opencodeTranscript, piTranscr
 import { harnessIdentity, type HarnessId } from '@spexcode/spec-core'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
 import { buildShim, cleanHarness, listenerAt, noLaunchEnv, pexec, SPEX } from './harness-shim.js'
+import { sessionHost } from './session-host.js'
 import type { ListenerProbe } from './harness-shim.js'
 export { buildShim, cleanHarness, headlessTurnFailureShell, listenerAt, noLaunchEnv, paneTreeRuns, procSnapshot, sessionIdentityEnvVars, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, isGeneratedArtifact } from './harness-shim.js'
 export type { ListenerProbe } from './harness-shim.js'
@@ -375,7 +376,7 @@ export interface Harness {
   // clean is the EXACT inverse of materialize's per-harness write: SURGICALLY remove ONLY SpexCode's own
   // artifacts — the managed contract block (sentinels), the generated shim file, the trust block, and the
   // skill/agent files named in `arts` — never the user's surrounding prose, their other settings, or any .spec
-  // data. materialize calls it for every UNSELECTED harness, so dropping a harness from spexcode.json's
+  // data. materialize calls it for every UNSELECTED harness, so dropping a harness from .spec/spexcode.json's
   // `harnesses` prunes that harness's products on the next re-materialize.
   clean(proj: string, arts: HarnessArtifacts, preserveProject?: boolean): void
   // the inverse of writeTrust: strip THIS project's spexcode trust block from the harness's global config.
@@ -433,7 +434,9 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // derivation can change again without stranding anything already running.
 // `legacyRvSock` is the answer for a session launched BEFORE the stamp existed — its agent really did bind
 // the unscoped path — so those keep working untouched, and the fallback retires as they turn over.
-export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+export const legacyRvSock = (id: string) => process.platform === 'win32'
+  ? `\\\\.\\pipe\\spexcode-rv-${id}`
+  : join(tmpdir(), `spexcode-rv-${id}.sock`)
 
 // @@@ scoped rendezvous path - a rendezvous endpoint IS this session's address, so it needs a durable home and
 // a bounded name. `<SPEXCODE_HOME>/s/<16hex>/c` is both: the store is SpexCode-owned (normally ~/.spexcode),
@@ -443,7 +446,9 @@ export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.so
 // their stamped old path through rvSock(); only a new stamp uses this derivation.
 const RENDEZVOUS_SUN_PATH_LIMIT = 104
 export const scopedRvSock = (id: string, dir = runtimeRoot()) =>
-  join(spexcodeHome(), 's', createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 16), 'c')
+  process.platform === 'win32'
+    ? `\\\\.\\pipe\\spexcode-rv-${createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 24)}`
+    : join(spexcodeHome(), 's', createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 16), 'c')
 export function assertRvSockPath(id: string, dir = runtimeRoot()): string {
   const path = scopedRvSock(id, dir)
   const bytes = Buffer.byteLength(path)
@@ -1142,7 +1147,7 @@ export function harnessById(id: string): Harness {
 }
 
 // --- named launcher profiles ([[launcher-select]]) ----------------------------------------------------------
-// a launcher = a `{ harness, cmd }` entry in spexcode.json's `sessions.launchers`, keyed by a
+// a launcher = a `{ harness, cmd }` entry in .spec/spexcode.json's `sessions.launchers`, keyed by a
 // human-chosen name. `claude` and `native adapter` are NOT special built-ins — `spex init` SEEDS them as ordinary named
 // launchers (with the regular command path), so they are edited like any other. harness defaults to claude.
 // resolveLauncher throws fail-loud on an unknown name (a session must never silently launch under the wrong
@@ -1151,7 +1156,7 @@ export function harnessById(id: string): Harness {
 export type Launcher = { name: string; harness: string; cmd: string; headless: boolean; configDir: string | null }
 export type LauncherDefault = { default: string | null; error: string | null }
 
-// the complete configured named launchers from spexcode.json, as a stable name-sorted list (for CLI/session
+// the complete configured named launchers from .spec/spexcode.json, as a stable name-sorted list (for CLI/session
 // resolution and downstream projections). Picking a launcher is the ONLY launch choice; the old separate
 // harness pick is gone.
 export function launcherList(root = mainCheckout()): Launcher[] {
@@ -1161,11 +1166,12 @@ export function launcherList(root = mainCheckout()): Launcher[] {
       const harness = harnessById(m[name].harness || defaultHarness.id)
       return { name, harness: harness.id, cmd: m[name].cmd, headless: harness.headless, configDir: m[name].configDir || null }
     })
+    .filter((launcher) => sessionHost().kind === 'tmux-host' || launcher.headless)
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export const MISSING_DEFAULT_LAUNCHER_ERROR =
-  'sessions.defaultLauncher is required for a launch without --launcher; set it in spexcode.json or spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
+  'sessions.defaultLauncher is required for a launch without --launcher; set it in .spec/spexcode.json or .spec/spexcode.local.json (for example {"sessions":{"defaultLauncher":"claude"}})'
 
 // the configured default launcher NAME ([[launcher-select]]) — the profile `spex session new`/a dropdown pick with no
 // explicit choice resolves. Missing config is a fail-loud setup error, never an implicit fallthrough to a
@@ -1191,5 +1197,7 @@ export function resolveLauncher(name: string, root = mainCheckout()): Launcher {
   if (!l) throw new Error(`unknown launcher '${name}' (configured: ${launcherList(root).map((x) => x.name).join(', ') || 'none'})`)
   if (!l.cmd) throw new Error(`launcher '${name}' is missing cmd`)
   const harness = harnessById(l.harness || defaultHarness.id)   // validate the harness id fail-loud
+  if (sessionHost().kind === 'process-host' && !harness.headless)
+    throw new Error(`launcher '${name}' uses ${harness.id}, which requires an attachable tmux host; process-host offers headless adapters only`)
   return { name, harness: harness.id, cmd: l.cmd, headless: harness.headless, configDir: l.configDir || null }
 }

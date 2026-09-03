@@ -2,19 +2,37 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import { spexcodeHome, encodeProject, readJsonConfig } from '@spexcode/spec-core'
+import { spexcodeHome, encodeProject, readConfig } from '@spexcode/spec-core'
 import { readHostRecord, type HostRecord } from './host-record.js'
 import { readEndpointRecord } from './endpoint-record.js'
+import { sessionHost } from './session-host.js'
 
 export type AgentFact = { installed: boolean; path: string | null; loggedIn: boolean; credential: string | null }
 export type LauncherFact = { projectId: string; project: string; name: string; harness: string; cmd: string; resolves: boolean; binary: string | null }
 export type HostFacts = {
+  host: { kind: 'tmux-host' | 'process-host'; reason: string }
   runtime: { kind: 'native-linux' | 'darwin' | 'wsl2'; label: string; distro?: string }
   versions: { node: string; tmux: string | null; git: string | null }
   agents: Record<'claude' | 'codex' | 'opencode' | 'pi', AgentFact>
   launchers: LauncherFact[]
   memory: { kind: 'wslconfig' | 'cgroup' | 'unknown'; present: boolean; path: string | null; limitBytes: number | null }
   gateway?: HostRecord
+}
+
+export type WslDetectionInput = {
+  platformName?: NodeJS.Platform
+  procVersion?: string
+  distroName?: string | null
+}
+
+export function isWsl(input: WslDetectionInput = {}): boolean {
+  if ((input.platformName ?? platform()) !== 'linux') return false
+  const distroName = input.distroName === undefined ? process.env.WSL_DISTRO_NAME : input.distroName
+  let procVersion = input.procVersion
+  if (procVersion === undefined) {
+    try { procVersion = readFileSync('/proc/version', 'utf8') } catch { procVersion = '' }
+  }
+  return /microsoft|wsl/i.test(procVersion) || !!distroName
 }
 
 function commandPath(command: string): string | null {
@@ -75,11 +93,10 @@ function discoverRoots(): string[] {
 function launcherFacts(roots: string[]): LauncherFact[] {
   const rows: LauncherFact[] = []
   for (const root of roots) {
-    const portable = readJsonConfig(join(root, 'spexcode.json'))
-    const local = readJsonConfig(join(root, 'spexcode.local.json'))
-    const merged = { ...(portable.sessions?.launchers ?? {}), ...(local.sessions?.launchers ?? {}) }
+    const merged = readConfig(root).sessions?.launchers ?? {}
     for (const [name, cfg] of Object.entries(merged as Record<string, any>)) {
       if (!cfg || typeof cfg.cmd !== 'string') continue
+      if (sessionHost().kind === 'process-host' && !['claude-headless', 'codex-headless', 'opencode-headless', 'pi-headless'].includes(cfg.harness || 'claude')) continue
       const binary = commandPath(cfg.cmd)
       rows.push({ projectId: encodeProject(root), project: basename(root), name, harness: cfg.harness || 'claude', cmd: cfg.cmd, resolves: !!binary, binary })
     }
@@ -88,8 +105,7 @@ function launcherFacts(roots: string[]): LauncherFact[] {
 }
 
 function memoryFact(): HostFacts['memory'] {
-  const isWsl = platform() === 'linux' && (() => { try { return /microsoft|wsl/i.test(readFileSync('/proc/version', 'utf8')) || !!process.env.WSL_DISTRO_NAME } catch { return !!process.env.WSL_DISTRO_NAME } })()
-  if (isWsl) {
+  if (isWsl()) {
     const path = join(homedir(), '.wslconfig')
     let limitBytes: number | null = null
     try {
@@ -108,13 +124,16 @@ function memoryFact(): HostFacts['memory'] {
 }
 
 export function collectHostFacts(roots = discoverRoots()): HostFacts {
-  const isWsl = platform() === 'linux' && (() => { try { return /microsoft|wsl/i.test(readFileSync('/proc/version', 'utf8')) || !!process.env.WSL_DISTRO_NAME } catch { return !!process.env.WSL_DISTRO_NAME } })()
+  const wsl = isWsl()
   const runtime = platform() === 'darwin'
     ? { kind: 'darwin' as const, label: 'darwin' }
-    : isWsl ? { kind: 'wsl2' as const, label: 'wsl2', distro: process.env.WSL_DISTRO_NAME || undefined }
+    : wsl ? { kind: 'wsl2' as const, label: 'wsl2', distro: process.env.WSL_DISTRO_NAME || undefined }
       : { kind: 'native-linux' as const, label: 'native linux' }
   const record = readHostRecord()
   return {
+    host: sessionHost().kind === 'tmux-host'
+      ? { kind: 'tmux-host', reason: 'tmux is available on PATH' }
+      : { kind: 'process-host', reason: 'tmux is absent from PATH; detached process hosting is active and only headless adapters are available' },
     runtime,
     versions: { node: process.version, tmux: commandVersion('tmux', ['-V']), git: commandVersion('git', ['--version']) },
     agents: agentFacts(),
@@ -125,7 +144,7 @@ export function collectHostFacts(roots = discoverRoots()): HostFacts {
 }
 
 export function formatHostFacts(facts: HostFacts): string {
-  const lines = [`Host facts`, `runtime: ${facts.runtime.label}${facts.runtime.distro ? ` (${facts.runtime.distro})` : ''}`, `node: ${facts.versions.node}`, `tmux: ${facts.versions.tmux || 'missing'}`, `git: ${facts.versions.git || 'missing'}`]
+  const lines = [`Host facts`, `host: ${facts.host.kind} (${facts.host.reason})`, `runtime: ${facts.runtime.label}${facts.runtime.distro ? ` (${facts.runtime.distro})` : ''}`, `node: ${facts.versions.node}`, `tmux: ${facts.versions.tmux || 'missing'}`, `git: ${facts.versions.git || 'missing'}`]
   for (const [name, value] of Object.entries(facts.agents)) lines.push(`${name}: ${value.installed ? 'installed' : 'missing'}; ${value.loggedIn ? 'logged in' : 'not logged in'}`)
   lines.push(`memory: ${facts.memory.kind} ${facts.memory.present ? 'present' : 'missing'}${facts.memory.limitBytes ? ` (${facts.memory.limitBytes} bytes)` : ''}`)
   lines.push('launchers:')

@@ -47,7 +47,7 @@ function fixture(): Fixture {
   writeFileSync(join(root, 'README.md'), 'fixture\n')
   writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
   writeFileSync(join(root, '.spec', 'project', 'calc', 'spec.md'), NODE)
-  writeFileSync(join(root, 'spexcode.json'), JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
+  writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
   git('add', '-A')
   git('commit', '-qm', 'seed contract')
   git('switch', '-qc', 'node/calc')

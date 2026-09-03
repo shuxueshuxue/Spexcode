@@ -7,7 +7,7 @@
 //   POST /projects {root, createDir?, initGit?, init?} explicitly create/initialize as requested, then register
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
-//   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
+//   GET|PUT /projects/:id/config          read/write the raw portable .spec/spexcode.json source
 //   POST /projects/:id/harnesses           add one validated harness target and materialize it
 //   DELETE /projects/:id                  remove catalog registration only (never the checkout); the
 //                                         server requires an exact `REMOVE <project title>` confirmation
@@ -229,9 +229,9 @@ export async function removeProject(id, confirmation) {
   return { ok: data?.ok === true, ...(data || {}) }
 }
 
-// Raw portable project settings — the host fixes the file at <root>/spexcode.json and serves it even
+// Raw portable project settings — the host fixes the file at <root>/.spec/spexcode.json and serves it even
 // while the project's backend is offline. `revision` is echoed on save to prevent lost concurrent edits.
-// The host-specific spexcode.local.json never crosses this browser surface.
+// The host-specific .spec/spexcode.local.json never crosses this browser surface.
 export async function loadProjectConfig(id) {
   let res
   try {
@@ -309,7 +309,7 @@ export const saveProjectIcon = (id, icon, revision) =>
 // run a host operation in a registered repo — POST /projects/:id/(init|doctor). These spawn the REAL
 // spex verb with cwd = the project root; the HTTP answer is 200 whether the verb succeeded or not, and
 // truth is the exit code + transcript: { ok, code, output }. init carries the EXPLICIT harness choice
-// (a comma list of ids — the CLI refuses to run without one); preset policy stays in spexcode.json.
+// (a comma list of ids — the CLI refuses to run without one); preset policy stays in .spec/spexcode.json.
 export async function runProjectOp(id, op, body = {}) {
   let res
   try {

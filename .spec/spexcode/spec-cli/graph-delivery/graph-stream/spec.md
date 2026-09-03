@@ -188,8 +188,9 @@ entry closes the old root and index handles before installing the replacement; w
 Changing the resolved session-store/git root closes every registry from the old source set, and an explicit
 `closeBoardFileWatchers()` drains all file handles, holds and the pending repair timer when the backend
 child/server ends, while a later ensure can open a clean era. Source failure does not crash the HTTP
-server, but it is never silent. Successful replacement is live before its hold is released and its
-authoritative rescan is triggered.
+server, but it is never silent. The served project root is the exception: when that root disappears, the backend
+names the missing root and exits instead of keeping repair timers and pollers alive against a deleted checkout.
+Successful replacement is live before its hold is released and its authoritative rescan is triggered.
 
 **The patrol is a self-heal authority, not a crutch — and it is accountable.** The delta-gated ~15s cold
 tick asks [[graph-cache]] for a patrol refresh and tags that refresh `patrol`; it does not mark the board

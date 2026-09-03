@@ -49,7 +49,7 @@ family is visible rather than silently disappearing; this is a read-time project
 
 **The CLI exposes the same provenance without pretending to be the dashboard tree.** `spex session ls` stays a
 flat project board, but every row prints its direct parent id and `--children` scopes the board to the caller's
-direct children. `--children=<PARENT-SEL>` chooses another parent in an attached value so a following positional
+all descendants. `--children=<PARENT-SEL>` chooses another parent in an attached value so a following positional
 remains a child-result filter. The direct pointer remains usable after a parent closes: children are still found
 by that durable id even though the dashboard's forest correctly auto-promotes them. A status summary describes
 only the displayed rows; it never turns child states into the parent's lifecycle state.
@@ -71,7 +71,7 @@ opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav gho
 
 The desktop sessions dock is the one mutable tree surface (the former full-width document list is retired). Its fixed registry bindings are ⌥+↑/↓ for moving the selected session through visible rows, and ⌥+Shift+↓/↑ for expanding/collapsing that selected parent; the latter are consumed as no-ops on a leaf and never move selection. A primary-pointer drag starts only after a small
 movement threshold, then the source row fades and its **whole console tree row** (headline, live status,
-selection reveal, nesting lead, fold pod, and checkbox included) follows the pointer as a fixed ghost at **75%**
+selection reveal, nesting lead, and fold pod included) follows the pointer as a fixed ghost at **75%**
 of its visual size, with its pointer anchor adjusted to the same scale. The
 ghost is rendered through the same tree-row projection from the current forest item, never from a copied
 appearance record or a hand-built second DOM tree; only its interaction semantics become inert. A compatible

@@ -44,21 +44,24 @@ fi
 nvm alias default "$node_version" >/dev/null
 nvm use "$node_version" >/dev/null
 
-bundle="${SPEXCODE_BUNDLE_TARBALL:-}"
-if [[ -n "$bundle" && -f "$bundle" ]]; then
-  say "Installing spexcode from the bundled tarball (offline-safe): $bundle"
-  npm install --global --force "$bundle" @spexcode/spec-dashboard
-else
-  if command -v spex >/dev/null 2>&1; then
-    say 'spexcode is already installed; nothing to change.'
-  else
-    say 'Installing spexcode from npm (the bundled tarball was not supplied).'
-    npm install --global spexcode @spexcode/spec-dashboard
-  fi
+bundle_dir="${SPEXCODE_BUNDLE_DIR:-}"
+if [[ -z "$bundle_dir" || ! -d "$bundle_dir" ]]; then
+  say 'The packaged SpexCode tarball directory is missing; refusing a registry install.'
+  exit 69
 fi
+mapfile -t tarballs < <(find "$bundle_dir" -maxdepth 1 -type f -name '*.tgz' -print | sort)
+if ((${#tarballs[@]} == 0)); then
+  say "The packaged SpexCode tarball directory is empty: $bundle_dir"
+  exit 69
+fi
+say "Installing the self-consistent SpexCode bundle from ${#tarballs[@]} local tarballs."
+npm install --global --force "${tarballs[@]}"
 
 if command -v spex >/dev/null 2>&1; then
   say 'Running the real spex doctor; its output is the final bootstrap step.'
+  if [[ -n "${SPEXCODE_PROJECT_ROOT:-}" && -d "$SPEXCODE_PROJECT_ROOT" ]]; then
+    cd "$SPEXCODE_PROJECT_ROOT"
+  fi
   spex doctor
 else
   say 'spex is not on PATH after installation.'

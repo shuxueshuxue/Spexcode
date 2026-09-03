@@ -24,12 +24,13 @@ renames it into the requested database path only after every record, edge, event
 database without a matching migration marker is ambiguous and is refused rather than appended to.
 
 Legacy `parent: ""` is the historical spelling of a root and is normalized to `null` before validation. A child may
-also point at a parent whose record was already retired from the JSON root. The default remains fail-closed for that
-orphan relation. The one-time importer may be explicitly run with `orphanParentPolicy: "tombstone"` (the CLI spelling
-is `--orphan-parent tombstone`); it creates a deterministic `archived` application address for each such parent and
-keeps the child-to-parent topology edge. The report and migration marker list those tombstones, so the data loss is
-visible and repeatable rather than silently detaching the child. This policy is migration-only; normal runtime never
-reads the JSON root or fabricates missing application state.
+also point at a parent whose record was already retired from the JSON root. The default is to create a deterministic
+`archived` application address for each such parent and keep the child-to-parent topology edge. The importer emits a
+loud stderr line naming every tombstoned parent and the backup path, and the report and migration marker list those
+tombstones, so the data loss is visible and repeatable rather than silently detaching the child. An operator may
+explicitly pass `orphanParentPolicy: "fail"` when refusal is required; the CLI spelling for the normal repair is
+`--orphan-parent tombstone`. This policy is migration-only; normal runtime never reads the JSON root or fabricates
+missing application state.
 
 Import creates protocol addresses, application state, parent/watch topology edges, and one deterministic state event per
 record (plus one deterministic archived event per explicit tombstone). The legacy conversation is replayed as
@@ -73,7 +74,6 @@ runner refuses a missing or unhealthy old server, stops only that pid, runs the 
 proves `/health` plus `/api/sessions?all=1` against the new process before reporting success. A failed migration or
 smoke check never deletes the source or target: it quarantines target/marker artifacts under the run directory and
 restarts the named old argv, then reports the rollback result. It must not guess a process, kill a process tree, or
-start a compatibility server. The plan carries `orphanParentPolicy` explicitly (default `fail`); `tombstone` is only
-valid after the inventory has identified retired-parent edges and preserves those edges with archived addresses. The
-runner never infers this policy from the source data. The old and new commands are explicit plan data; normal runtime
-has no knowledge of this operation.
+start a compatibility server. The plan may carry `orphanParentPolicy` explicitly; omitted policy uses the importer
+default `tombstone`, while `fail` is an intentional operator refusal. The runner never infers this policy from the
+source data. The old and new commands are explicit plan data; normal runtime has no knowledge of this operation.

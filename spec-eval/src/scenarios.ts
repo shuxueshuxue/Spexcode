@@ -437,10 +437,10 @@ export function validateScenarios(src: string, tagLibrary: string[] = [], pathRo
     }
     const tags = it.fields.tags ? parseCodeList(it.fields.tags) : []
     if (!tags.length) {
-      errs.push(`${label}: missing required field \`tags\` — every scenario needs ≥1 tag from the library${lib}; pick one, or add a new tag to lint.scenarioTags in spexcode.json to create it`)
+      errs.push(`${label}: missing required field \`tags\` — every scenario needs ≥1 tag from the library${lib}; pick one, or add a new tag to lint.scenarioTags in .spec/spexcode.json to create it`)
     } else if (tagLibrary.length) {
       for (const t of tags) if (!tagLibrary.includes(t)) {
-        errs.push(`${label}: tag \`${t}\` is not in the configured tag library${lib} — use an existing tag, or add \`${t}\` to lint.scenarioTags in spexcode.json to create it`)
+        errs.push(`${label}: tag \`${t}\` is not in the configured tag library${lib} — use an existing tag, or add \`${t}\` to lint.scenarioTags in .spec/spexcode.json to create it`)
       }
     }
     for (const entry of it.malformed) errs.push(`${label}: ${entry}`)

@@ -33,8 +33,9 @@ the headless adapter changes only its id and runtime half. The shared `.claude` 
 cleaned, and trusted by the already-proven Claude mechanism; there is no second materializer and no headless mode
 branch in product code.
 
-Each governed session still owns one tmux window, but the window houses a small controller rather than a TUI. The
-controller owns the stream-json child and a short per-session control socket. A fresh launch starts
+Each governed session owns a host container. On tmux-host that container is a tmux window; on process-host the
+detached controller process IS the container and no window exists. The controller owns the stream-json child and a
+short per-session control socket. A fresh launch starts
 `claude -p --session-id <id> --input-format stream-json --output-format stream-json --verbose`; after a completed
 turn the child exits and the controller remains. Delivery while a turn is active writes a native `type:user`
 event to that live child's stdin, so Claude injects it at the next tool boundary. Both the durable record and the

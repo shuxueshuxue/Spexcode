@@ -25,10 +25,14 @@ scenarios:
   - name: serve-failure-links-to-host
     tags: [frontend-e2e]
     description: >-
-      Remove tmux from PATH for the gateway, then press Open on an offline project.
+      Start the gateway with a PATH that cannot run a backend (hide `git`), then press start on an offline
+      project. Then repeat with only `tmux` hidden.
     expected: >-
-      The project's result block shows the serve failure naming tmux and links to the host card; no second
-      diagnosis UI appears and the project's settings page is unchanged.
+      The failing case shows the failure in the project's OWN row — the reason and its serve.log — with one
+      link into the host card ("see host facts"); exactly one host card exists on the page and no second
+      diagnosis UI appears. Hiding only tmux is NOT a failing case: process-host hosting takes over, the
+      backend comes online, and the row's action becomes open — so a scenario expecting a tmux-named serve
+      failure would be measuring behavior this product no longer has.
     related: [spec-dashboard/src/ProjectsPage.jsx]
   - name: gateway-record-published
     tags: [cli]

@@ -157,8 +157,10 @@ the same ownership split. Checkout-invariant machine residue (`.spec/spexcode.lo
 shims, bundles, skills/agents, and wholly-ours contract files are one managed block in that tree's working
 `.gitignore`. [[content-filter]] keeps a tracked host `.gitignore` pristine in the index, leaves an untracked
 host file honestly visible, and lets a wholly generated one ignore itself.
-One line is pruned on the way there: a repo adopted before the config moved under `.spec` carries a stale
-`.spec/spexcode.local.json` rule an older `init` appended as host text. By content it is indistinguishable from
+One line is pruned on the way there: a repo adopted while `init` appended `.spec/spexcode.local.json` to the
+ignore itself carries that rule as host text. The window is narrow and knowable — the append was introduced by
+the config move and removed two commits later, and the string is a post-move path, so no earlier generation of
+`init` can have written it and there is no older residue to hunt for. By content it is indistinguishable from
 a hand-written rule; by origin it is not — the ignore is untracked, so nobody committed it, and the common
 exclude already ignores that path. Left alone it counts as host authorship forever and costs a wholly generated
 ignore the self-entry, which is the one case self-hiding exists for, so materialize drops exactly that line

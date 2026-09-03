@@ -550,8 +550,9 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     .map((p) => relative(proj, p)).filter((p) => !p.startsWith('..'))
   const ignoreFile = join(proj, '.gitignore')
   const ignoreTracked = isTrackedHere(ignoreFile)
-  // A repo adopted before the config moved under .spec carries one stale line an older `spex init` appended
-  // as host text ([[spex-init]]). By CONTENT it is indistinguishable from a hand-written rule; by ORIGIN it is
+  // A repo adopted during the window where `spex init` appended .spec/spexcode.local.json to the ignore carries
+  // that line as host text ([[spex-init]]). The append arrived with the config move and left two commits later,
+  // and the string is a post-move path, so nothing older wrote it — there is no second generation to prune. By CONTENT it is indistinguishable from a hand-written rule; by ORIGIN it is
   // not: the ignore is untracked, so nobody committed it, and the same path is already ignored by the common
   // exclude. Left in place it counts as host authorship forever, which costs a wholly generated .gitignore the
   // self-entry below — the one case self-hiding exists for. Drop it once, here, where the ownership of this

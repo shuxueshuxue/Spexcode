@@ -9,9 +9,9 @@ scenarios:
       session tab is reused; ctrl-click a session row and confirm it adds a second session tab; open Settings and
       confirm its tab label is Settings.
     expected: >
-      The strip contains both a session and one resident Spec tab after the cross-kind navigation. A second
-      spec keeps the same `#/spec` tab identity while its detail address changes, and that tab face, tooltip,
-      accessible label, and visible title use the selected node title. Three plain session clicks leave one
+      The strip contains both a session and one Spec tab after the cross-kind navigation. A second spec replaces
+      that focused Spec tab rather than minting another, and the surviving tab is addressed by the selected
+      node's own `#/spec/<id>`; its face, tooltip, accessible label, and visible title use that node's title. Three plain session clicks leave one
       session tab whose address is the last session. Ctrl-click adds a second session tab. The Settings tab reads
       Settings, never the internal key tabs.settings.
     tags: [frontend-e2e]
@@ -21,13 +21,24 @@ scenarios:
       In a real Chromium dashboard, open two canonical `#/spec/<id>` detail URLs and inspect the workspace
       strip after each route settles; then open a `#/file/<path>` detail.
     expected: >-
-      Both Spec details keep one active top-level Spec tab with the Spec icon. The URL retains each selected
-      `#/spec/<id>` detail address, while its face, tooltip, accessible label, and visible title use that
-      node's title. The file route keeps the resident Spec slot and opens an independent File tab named by
-      its basename; it never mints a second Spec tab.
+      Plain navigation between the two spec details keeps exactly one active Spec tab, wearing the Spec kind
+      icon and addressed by the selected node's own `#/spec/<id>` — one tab because the focused same-kind tab is
+      replaced, which is the rule a file gets, not because two specs share an identity. Its face, tooltip,
+      accessible label, and visible title use that node's title. The file route preserves the Spec tab and opens
+      an independent File tab named by its basename; it never mints a second Spec tab.
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/views.jsx, spec-dashboard/src/tabModel.js, spec-dashboard/src/TabStrip.jsx]
     test: spec-dashboard/test/spec-resident-tab.e2e.mjs
+  - name: spec-open-in-new-tab-gesture
+    description: >-
+      In a real Chromium dashboard showing a spec document, use the product's own Explorer context menu on a
+      DIFFERENT spec node and choose "Open in a new tab", then read the rendered strip.
+    expected: >-
+      The strip holds two Spec tabs: the document the reader was reading, still at its own `#/spec/<id>` and now
+      inactive, and the newly opened node, active. The gesture never overwrites the spec already open, and each
+      tab is named by its own node's title.
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/tabModel.js, spec-dashboard/src/tabs.js]
   - name: divider-seam-and-group-head-geometry
     description: >-
       In a real Chromium dashboard, open a spec document with the Explorer dock and a session document with

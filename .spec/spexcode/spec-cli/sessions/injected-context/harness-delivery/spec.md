@@ -156,7 +156,13 @@ the same ownership split. Checkout-invariant machine residue (`.spec/spexcode.lo
 `.session`, and installed shared root transport) stays in the common `.git/info/exclude`. Selection-dependent local
 shims, bundles, skills/agents, and wholly-ours contract files are one managed block in that tree's working
 `.gitignore`. [[content-filter]] keeps a tracked host `.gitignore` pristine in the index, leaves an untracked
-host file honestly visible, and lets a wholly generated one ignore itself. Contract and ignore payloads live
+host file honestly visible, and lets a wholly generated one ignore itself.
+One line is pruned on the way there: a repo adopted before the config moved under `.spec` carries a stale
+`.spec/spexcode.local.json` rule an older `init` appended as host text. By content it is indistinguishable from
+a hand-written rule; by origin it is not — the ignore is untracked, so nobody committed it, and the common
+exclude already ignores that path. Left alone it counts as host authorship forever and costs a wholly generated
+ignore the self-entry, which is the one case self-hiding exists for, so materialize drops exactly that line
+from the host region of an UNTRACKED ignore, once, and touches nothing else the host wrote. Contract and ignore payloads live
 under the current tree slot; one common filter driver derives that slot from the invoking Git toplevel plus `%f`, so linked
 trees never overwrite one another's bytes and user global ignore configuration is untouched. The Codex trust
 hash remains global and project-scoped, and is removed by project-wide dematerialize/uninstall rather than a

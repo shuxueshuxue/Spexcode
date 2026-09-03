@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, rename
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from '@spexcode/spec-core'
+import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig, configPath } from '@spexcode/spec-core'
 import { compileManifest } from './hooks.js'
 import { writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, isGeneratedArtifact, GENERATED_MARK, HARNESSES, type HarnessArtifacts } from './harness.js'
 import { git, gitBinary } from '@spexcode/spec-core'
@@ -550,6 +550,25 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     .map((p) => relative(proj, p)).filter((p) => !p.startsWith('..'))
   const ignoreFile = join(proj, '.gitignore')
   const ignoreTracked = isTrackedHere(ignoreFile)
+  // A repo adopted before the config moved under .spec carries one stale line an older `spex init` appended
+  // as host text ([[spex-init]]). By CONTENT it is indistinguishable from a hand-written rule; by ORIGIN it is
+  // not: the ignore is untracked, so nobody committed it, and the same path is already ignored by the common
+  // exclude. Left in place it counts as host authorship forever, which costs a wholly generated .gitignore the
+  // self-entry below — the one case self-hiding exists for. Drop it once, here, where the ownership of this
+  // file is already being decided.
+  const staleLocalConfigRule = relative(proj, configPath(proj, true))
+  if (!ignoreTracked && existsSync(ignoreFile)) {
+    const raw = readFileSync(ignoreFile, 'utf8')
+    const host = stripSpexcodeBlock(raw, ['# ', ''])
+    if (host.split(/\r?\n/).includes(staleLocalConfigRule)) {
+      const kept = raw.split(/\r?\n/)
+      const managedFrom = kept.findIndex((l) => l.trim() === '# spexcode:start')
+      const managedTo = kept.findIndex((l) => l.trim() === '# spexcode:end')
+      const pruned = kept.filter((l, i) => l !== staleLocalConfigRule
+        || (managedFrom >= 0 && managedTo >= managedFrom && i > managedFrom && i < managedTo))
+      writeFileSync(ignoreFile, pruned.join('\n').replace(/^\n+/, ''))
+    }
+  }
   const ignoreHost = existsSync(ignoreFile) ? stripSpexcodeBlock(readFileSync(ignoreFile, 'utf8'), ['# ', '']) : ''
   // the self-entry only earns its keep alongside a real one: with NOTHING selected ("harnesses": []) there is
   // no artifact to hide, and a .gitignore whose whole content is a rule ignoring itself is pure footprint.

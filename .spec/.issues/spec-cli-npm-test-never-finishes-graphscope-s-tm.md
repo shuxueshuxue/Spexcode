@@ -60,3 +60,34 @@ one: the wrong reading pointed at "no problem".
 
 Reporting rather than fixing: `graph-cache` is not the machine-routing lane this branch owns, and
 both defects want their own commit and their own reading.
+
+<!-- reply: 8bb006f2-ff07-46c9-a216-83c6e32f7777 @ 2026-09-03T16:06:30.940Z -->
+Correction on one attribution, and a sharpening of the second defect.
+
+I wrote that the suite "is invoked with `--test-timeout=0`". The script sets no timeout at all:
+
+    spec-cli/package.json:35
+    "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
+
+The `--test-timeout=0` I read off the runner child's argv is Node's OWN default being rendered
+explicitly, not something the script passes. Verified directly:
+
+    // a test that never resolves
+    node --test tt.test.mjs                        -> external timeout, exit 124 (never cancelled)
+    node --test --test-timeout=3000 tt.test.mjs    -> exit 1, "test timed out after 3000ms"
+
+So the fix is "pass a `--test-timeout`", not "stop passing 0". The effective value is the same; the
+edit site is different.
+
+That control experiment also sharpens the graphScope diagnosis rather than softening it. A plain
+hanging test body IS cancellable — Node reports it as a failure in 3s. graphScope still hit an
+external 200s timeout under `--test-timeout=20000`, so what blocks there is not a slow or stuck test
+body: something is holding the runner open after the test the runner could cancel. The fixture
+children are the obvious suspect — `gatedTmux`/`gatedGit` install shell fakes that spin on
+`while [ -e "$hold" ]; do sleep 0.01; done`, and a failing test leaves its hold file behind (the
+`/tmp/boardscope-*-gate-*/hold-tmux` and `hold-git` files outlive the run). A per-test timeout cannot
+reap a grandchild shell.
+
+That makes the two defects sequential, not parallel: adding `--test-timeout` turns the three
+assertion failures loud, and the leaked fixture child is what still has to be released in a `finally`
+before the file can finish at all.

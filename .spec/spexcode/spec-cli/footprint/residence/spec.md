@@ -39,7 +39,7 @@ The four kinds, each with a FIXED track/transport fact (no votes anywhere):
   checkout-invariant residue (`.spec/spexcode.local.json`, `.worktrees/`, `.session`) keeps the common per-clone
   exclude. **A shim file is a machine fact only while it is WHOLLY OURS.** Some harnesses discover their hooks
   in a file that is also the user's project config — `.claude/settings.json`, `.codex/hooks.json`,
-  `.zcode/settings.json` carry their permissions, env, statusLine and their own hooks. There the shim is
+  and each other adapter's equivalent carry their permissions, env, statusLine and their own hooks. There the shim is
   co-owned, not owned ([[harness-adapter]]'s `shimOwnership`), and its residence is the SAME live content fact
   a contract file's is: nothing of theirs in it → hidden like any machine fact; their content present, or the
   file already tracked → left VISIBLE, because hiding a file the user owns is data-loss shaped. A visible shim

@@ -94,9 +94,19 @@ leg when the instance changed, keeping the LOCAL port stable across the rebuild 
 it keeps working. A refused ask leaves the recorded leg untouched rather than erasing it, so an unreachable
 peer can still have its tunnel kicked exactly as before.
 
-The leg now carries a credential and still carries no route. What remains absent is anything that proxies INTO
-the local end, so the port stays reachable only from this machine, by someone who already has a shell here —
-which is what makes the route clause safe to land last and unsafe to land first.
+The leg now carries a credential and a route. [[gateway-hub]] answers `GET /machines` with this machine's id
+and its peers' legs, and proxies `/m/:machineId/*` — HTTP, SSE and WebSocket upgrades alike — into the leg's
+local port with the leg credential attached and this gateway's own cookies stripped, admin scope only. The
+ordering held: the route reaches a door that refuses implicit loopback, so it grants nothing the credential does
+not, and an old host record with no peer ingress is simply a machine with no leg — 503 "no reachable gateway",
+which is a machine you cannot route to, not an error.
+
+One thing the implementation found that the design had not said: a hop must re-anchor what its upstream says
+about ITSELF. The far gateway names absolute paths because it believes it is root, so a passed-through
+`Location: /p/projA/login` silently changes machine, and a passed-through `Set-Cookie` lands under a name that
+carries only a port number — two gateways on the same port would clobber each other's session in one browser.
+So the machine hop prefixes a leading-slash `Location` with its own machine segment and drops `Set-Cookie`
+whole; the hop is authorized by the credential, never by a cookie, so there is nothing to preserve.
 
 ### Authorization is explicit per machine, never inherited from loopback
 

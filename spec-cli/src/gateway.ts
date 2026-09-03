@@ -227,7 +227,11 @@ function appendVary(current: string | string[] | undefined, token: string): stri
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
 // `path` and `headers` optionally override routing inputs (the host gateway strips its /p/:projectId
 // prefix and gateway cookies); transport ownership stays here once. Defaults pass the request through.
-export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1') {
+// `rewriteResponseHeaders` is the hop's chance to re-anchor what its upstream said about ITSELF. A proxy
+// that mounts an upstream under a prefix must fix up header values naming absolute paths, or the
+// upstream's `Location: /projects` sends the browser to THIS server's /projects — a different machine's
+// page at a URL that looked like the other one's. Omitted, the upstream's headers pass through verbatim.
+export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1', rewriteResponseHeaders?: (headers: http.IncomingHttpHeaders) => http.OutgoingHttpHeaders) {
   let upstreamResponse: http.IncomingMessage | null = null
   let transform: ReturnType<typeof createGzip> | null = null
   let settled = false
@@ -303,9 +307,10 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
 
     const type = String(received.headers['content-type'] || '')
     const eligible = !received.headers['content-encoding'] && COMPRESSIBLE.test(type) && !type.startsWith('text/event-stream')
+    const upstreamHeaders = rewriteResponseHeaders ? rewriteResponseHeaders(received.headers) : received.headers
     const responseHeaders: http.OutgoingHttpHeaders = eligible
-      ? { ...received.headers, vary: appendVary(received.headers.vary, 'Accept-Encoding') }
-      : received.headers
+      ? { ...upstreamHeaders, vary: appendVary(upstreamHeaders.vary as string | string[] | undefined, 'Accept-Encoding') }
+      : upstreamHeaders
     if (!eligible || !wantsGzip(req)) {
       res.writeHead(received.statusCode || 502, responseHeaders)
       received.pipe(res)

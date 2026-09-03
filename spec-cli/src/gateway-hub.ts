@@ -14,6 +14,8 @@
 //   DELETE /projects/:id                host extension: high-friction catalog registration removal
 //   /p/:projectId/login|logout          project session for that project
 //   ANY /p/:projectId/*  (+ WS upgrade) authorized → proxied, prefix-stripped, to that project's backend
+//   GET /machines                       admin: this machine's id + the peered machines and their legs
+//   ANY /m/:machineId/*  (+ WS upgrade) admin → proxied, segment-stripped, to that machine's gateway
 // Authorization never trusts the cookie's name or Path — the token's projectId claim is validated against
 // the :projectId in the URL on every request (see gateway-auth.ts).
 import http from 'node:http'
@@ -33,6 +35,7 @@ import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
 import { readEndpointRecord } from './endpoint-record.js'
 import { readGatewayIdentity, type ResolvedIdentity } from '@spexcode/spec-core'
 import { proxyHttp, proxySessionWeb, proxySessionWebUpgrade } from './gateway.js'
+import { listMachinePeers, readPeerMachineId, type MachinePeer } from './machine-peer.js'
 
 export type HubProject = { id: string; identity: ResolvedIdentity; url: string; port: number; gated: boolean }
 // @@@ extension seam - the hub stays the ONE routing+authorization server; a host-level caller
@@ -80,7 +83,8 @@ function upstreamOf(id: string): { url: string; port: number; root: string; iden
   return { url: rec.url, port, root: rec.root, identity: rec.identity }
 }
 
-// a projectId arrives as ONE url path segment; reject anything that could re-shape the registry path.
+// a projectId or machineId arrives as ONE url path segment; reject anything that could re-shape the registry
+// path (a projectId indexes a directory) or the peer lookup.
 function validProjectId(id: string): boolean {
   return id.length > 0 && id.length <= 256 && id !== '.' && id !== '..' &&
     !id.includes('/') && !id.includes('\\') && !id.includes('\0')
@@ -97,6 +101,38 @@ export function listHubProjects(store: AuthStore): HubProject[] {
     out.push({ id, identity: up.identity, url: up.url, port: up.port, gated: !!store.projects[id] })
   }
   return out.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+// ---- the machine registry ---------------------------------------------------------------------------
+// The machine dimension is ADDRESSING, never aggregation ([[machine-routing]]): this hub answers for its own
+// machine and forwards `/m/:machineId/*` into a peered machine's gateway, so one origin, one SPA and one set
+// of deep links reach the whole fleet while `/p/:projectId/*` keeps meaning THIS machine forever.
+export type MachineRow = { machineId: string; sshAddress: string; state: MachinePeer['state']; gateway: boolean; lastError: string | null }
+type MachineLeg = { port: number; credential: string }
+
+// Two different absences, answered differently, because they tell an operator different things: a machine
+// nobody here is linked to at all, versus a linked machine that publishes no gateway (its own is down, or its
+// host record predates the peer ingress — [[host-facts]]).
+function findMachine(machineId: string): MachinePeer | null {
+  return listMachinePeers().find((p) => p.machineId === machineId) ?? null
+}
+
+// A peer is ADDRESSABLE here only with both halves of its leg: the local forwarded port and the credential
+// that machine issued to this one. Either missing is an honest "no gateway on that machine" — never a guessed
+// port and never a credential-less forward into a console entry, which is the laundering [[machine-routing]]
+// outlaws.
+function legOf(peer: MachinePeer): MachineLeg | null {
+  if (!peer.gatewayPort || !peer.remoteGatewayCredential) return null
+  return { port: peer.gatewayPort, credential: peer.remoteGatewayCredential }
+}
+
+export function listMachineRows(): MachineRow[] {
+  return listMachinePeers()
+    .map((peer) => ({
+      machineId: peer.machineId, sshAddress: peer.sshAddress, state: peer.state,
+      gateway: !!(peer.gatewayPort && peer.remoteGatewayCredential), lastError: peer.lastError,
+    }))
+    .sort((a, b) => a.machineId.localeCompare(b.machineId))
 }
 
 // ---- helpers ----------------------------------------------------------------------------------------
@@ -269,6 +305,44 @@ export function startHubGateway(opts: HubOpts): http.Server {
       return sendJson(res, 404, { error: 'not found' })
     }
 
+    // ---- machine surface ----
+    // Neither route exists on the peer ingress. A machine that could ask this door for /machines would be
+    // reading OUR fleet, and a machine that could reach /m/* through it would be spending OUR credential on a
+    // third machine — a confused deputy one hop deeper than the trust this door was built to contain.
+    if (path === '/machines' || path === '/m' || path.startsWith('/m/')) {
+      if (entry === 'peer') return sendJson(res, 404, { error: 'not found' })
+      const d = adminz()
+      if (!d.ok) return d.reason === 'locked'
+        ? sendJson(res, 403, { error: 'admin surface is locked: no admin password is configured and this is not a loopback connection' })
+        : sendJson(res, 401, { error: 'authentication required', login: '/login' })
+      // Reaching another machine is an ADMIN act here, because the credential this hop spends is
+      // admin-equivalent THERE. A project-scoped visitor holds one project on one machine and gains nothing
+      // across the link; that is [[machine-routing]]'s "a visitor's scope on one machine grants nothing on
+      // another", read from this side.
+      if (path === '/machines') {
+        if (req.method !== 'GET') return sendJson(res, 405, { error: 'GET' })
+        return sendJson(res, 200, { machineId: readPeerMachineId(), machines: listMachineRows() })
+      }
+      const mm = path.match(/^\/m\/([^/]+)(\/.*)?$/)
+      if (!mm) return sendJson(res, 404, { error: 'unknown machine' })
+      const machineId = decodeURIComponent(mm[1])
+      if (!validProjectId(machineId)) return sendJson(res, 404, { error: 'unknown machine' })
+      const peer = findMachine(machineId)
+      if (!peer) return sendJson(res, 404, { error: 'unknown machine', machineId })
+      const leg = legOf(peer)
+      // A peer whose gateway is down is not a failed peer — its agent channel is unaffected — so this says
+      // "no gateway there" and never pretends the machine is gone.
+      if (!leg) return sendJson(res, 503, { error: 'that machine publishes no reachable gateway', machineId, state: peer.state })
+      const base = `/m/${encodeURIComponent(machineId)}`
+      const sub = mm[2] || '/'
+      if (!mm[2]) return redirect(res, `${base}/${query}`)
+      const headers: http.OutgoingHttpHeaders = { ...req.headers, [PEER_CREDENTIAL_HEADER]: leg.credential }
+      const kept = stripGatewayCookies(req.headers.cookie)
+      if (kept) headers.cookie = kept; else delete headers.cookie
+      return proxyHttp(req, res, leg.port, sub + query, headers, `machine ${machineId} is not reachable`, '127.0.0.1',
+        (upstream) => reanchorHeaders(upstream, base))
+    }
+
     // ---- project surface ----
     const pm = path.match(/^\/p\/([^/]+)(\/.*)?$/)
     if (pm) {
@@ -346,6 +420,22 @@ export function startHubGateway(opts: HubOpts): http.Server {
     const rawUrl = req.url || '/'
     const q = rawUrl.indexOf('?')
     const path = q >= 0 ? rawUrl.slice(0, q) : rawUrl
+    const query = q >= 0 ? rawUrl.slice(q) : ''
+    const mm = path.match(/^\/m\/([^/]+)(\/.*)?$/)
+    if (mm) {
+      // the terminal socket is the whole point of forwarding a GATEWAY rather than a route allowlist: one leg
+      // yields the live product on that machine. Same admin gate as the machine hop's HTTP half, same
+      // credential, and no machine route at all on the peer ingress.
+      if (entry === 'peer') return socket.destroy()
+      const machineId = decodeURIComponent(mm[1])
+      if (!validProjectId(machineId)) return socket.destroy()
+      const d = authorize(store, { kind: 'admin' }, req.headers.cookie, req.socket.remoteAddress, port, entry, null)
+      if (!d.ok) return socket.destroy()
+      const peer = findMachine(machineId)
+      const leg = peer && legOf(peer)
+      if (!leg) return socket.destroy()
+      return pipeUpgrade(req, socket, head, leg.port, (mm[2] || '/') + query, { [PEER_CREDENTIAL_HEADER]: leg.credential })
+    }
     const pm = path.match(/^\/p\/([^/]+)(\/.*)?$/)
     if (!pm) return socket.destroy()
     const id = decodeURIComponent(pm[1])
@@ -355,21 +445,9 @@ export function startHubGateway(opts: HubOpts): http.Server {
     const d = authorize(store, { kind: 'project', projectId: id }, req.headers.cookie, req.socket.remoteAddress, port,
       entry, entry === 'peer' ? headerValue(req, PEER_CREDENTIAL_HEADER) : null)
     if (!d.ok) return socket.destroy()
-    const sub = (pm[2] || '/') + (q >= 0 ? rawUrl.slice(q) : '')
+    const sub = (pm[2] || '/') + query
     if (proxySessionWebUpgrade(req, socket, head, sub, up.root)) return
-    const upstream = net.connect(up.port, '127.0.0.1', () => {
-      upstream.write(`${req.method} ${sub} HTTP/1.1\r\n` + filteredRawHeaders(req))
-      if (head && head.length) upstream.write(head)
-      socket.pipe(upstream); upstream.pipe(socket)
-    })
-    const bail = () => { socket.destroy(); upstream.destroy() }
-    socket.on('error', bail); upstream.on('error', bail)
-    // pair the halves fully (the supervisor's rule): an http server's sockets are allowHalfOpen, so a bare
-    // client FIN ('end') would otherwise leave a zombie socket the server can never close — an upgraded
-    // stream never half-closes legitimately, so either half's FIN or close tears down both.
-    socket.on('end', bail); upstream.on('end', bail)
-    socket.once('close', () => upstream.destroy())
-    upstream.once('close', () => socket.destroy())
+    pipeUpgrade(req, socket, head, up.port, sub)
   })
 
   const scheme = secure ? 'https' : 'http'
@@ -385,8 +463,28 @@ export function startHubGateway(opts: HubOpts): http.Server {
   return server
 }
 
-// replay an upgrade's headers with the Cookie header rewritten to exclude the gateway's own cookies.
-function filteredRawHeaders(req: http.IncomingMessage): string {
+// What a machine hop must fix in the far gateway's own words about itself.
+//   Location: the far side names absolute paths (`/projects`, `/p/<id>/`) because it believes it is the root.
+//     Passed through, the browser resolves them on THIS origin and silently changes machine — the exact bug a
+//     machine segment exists to prevent — so a leading-slash Location is re-anchored under the segment. A
+//     protocol-relative `//host` value becomes a path here rather than an off-origin jump, which is the safer
+//     of the two readings.
+//   Set-Cookie: dropped whole. This hop is authorized by the machine credential, not by a visitor session over
+//     there, so the far side's cookies have nothing to do here; and since a cookie name carries only the port
+//     ([[gateway-auth]]), two gateways on the same port number would otherwise clobber each other's session in
+//     one browser.
+function reanchorHeaders(upstream: http.IncomingHttpHeaders, base: string): http.OutgoingHttpHeaders {
+  const out: http.OutgoingHttpHeaders = { ...upstream }
+  delete out['set-cookie']
+  if (typeof out.location === 'string' && out.location.startsWith('/')) out.location = base + out.location
+  return out
+}
+
+// replay an upgrade's headers with the Cookie header rewritten to exclude the gateway's own cookies, and any
+// `extra` header stamped by this hop replacing whatever the client sent under that name — a client-supplied
+// duplicate would otherwise arrive upstream as a comma-joined pair and read as neither value.
+function filteredRawHeaders(req: http.IncomingMessage, extra: Record<string, string> = {}): string {
+  const stamped = new Set(Object.keys(extra).map((k) => k.toLowerCase()))
   let s = ''
   for (let i = 0; i < req.rawHeaders.length; i += 2) {
     const name = req.rawHeaders[i]
@@ -395,9 +493,29 @@ function filteredRawHeaders(req: http.IncomingMessage): string {
       if (kept) s += `Cookie: ${kept}\r\n`
       continue
     }
+    if (stamped.has(name.toLowerCase())) continue
     s += `${name}: ${req.rawHeaders[i + 1]}\r\n`
   }
+  for (const [name, value] of Object.entries(extra)) s += `${name}: ${value}\r\n`
   return s + '\r\n'
+}
+
+// ONE raw upgrade pipe for every hop that has one — a project backend on this machine, or a peered machine's
+// gateway. Both are a loopback port and a rewritten request line; nothing else about them differs.
+function pipeUpgrade(req: http.IncomingMessage, socket: import('node:stream').Duplex, head: Buffer, upstreamPort: number, sub: string, extra: Record<string, string> = {}): void {
+  const upstream = net.connect(upstreamPort, '127.0.0.1', () => {
+    upstream.write(`${req.method} ${sub} HTTP/1.1\r\n` + filteredRawHeaders(req, extra))
+    if (head && head.length) upstream.write(head)
+    socket.pipe(upstream); upstream.pipe(socket)
+  })
+  const bail = () => { socket.destroy(); upstream.destroy() }
+  socket.on('error', bail); upstream.on('error', bail)
+  // pair the halves fully (the supervisor's rule): an http server's sockets are allowHalfOpen, so a bare
+  // client FIN ('end') would otherwise leave a zombie socket the server can never close — an upgraded
+  // stream never half-closes legitimately, so either half's FIN or close tears down both.
+  socket.on('end', bail); upstream.on('end', bail)
+  socket.once('close', () => upstream.destroy())
+  upstream.once('close', () => socket.destroy())
 }
 
 // reverse-proxy one authorized request to a project's loopback backend, prefix already stripped.

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { encodeProject } from '@spexcode/spec-core'
@@ -95,6 +95,7 @@ test('harness target addition refuses a missing persisted selection instead of i
   freshHome('harness-target-missing')
   const repo = mkdtempSync(join(tmpdir(), 'spex-host-harness-target-missing-'))
   execFileSync('git', ['init', '-q'], { cwd: repo })
+  mkdirSync(join(repo, '.spec'), { recursive: true })
   writeFileSync(join(repo, '.spec/spexcode.json'), '{}\n')
   await assert.rejects(addHarnessTarget(repo, 'codex'), /no "harnesses" field.*spex init --harness/i)
   assert.deepEqual(JSON.parse(readFileSync(join(repo, '.spec/spexcode.json'), 'utf8')), {})

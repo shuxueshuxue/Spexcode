@@ -76,6 +76,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-passive-mention-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-passive-mention-project-'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
@@ -146,6 +147,7 @@ test('a Command Box @new creates a child under the selected session, optionally 
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-new-mention-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-new-mention-project-'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },

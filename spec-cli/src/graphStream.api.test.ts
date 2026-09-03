@@ -169,6 +169,7 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
     '',
   ].join('\n'))
   writeFileSync(join(project, 'src', 'nested', 'value.ts'), 'export const value = 1\n')
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
@@ -328,6 +329,7 @@ async function assertServedProjectTreeObservation(project: string, fixture: stri
       `# ${id}`, '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
     ].join('\n'))
   }
+  const removeSpecNode = (id: string): void => rmSync(join(project, '.spec', id), { recursive: true, force: true })
   const waitPromptly = async (predicate: () => boolean | Promise<boolean>, message: string): Promise<void> => {
     const started = Date.now()
     await waitFor(predicate, message, 3_000)
@@ -374,7 +376,7 @@ async function assertServedProjectTreeObservation(project: string, fixture: stri
     await waitForQuiet(events, 250)
 
     const deleteNoSseBefore = events.filter((event) => event === 'graph-changed').length
-    rmSync(join(project, '.spec'), { recursive: true, force: true })
+    removeSpecNode(noSseNode)
     await waitFor(() => events.filter((event) => event === 'graph-changed').length > deleteNoSseBefore,
       `plain graph stream did not signal the served-project .spec deletion:\n${serverLog}`, 3_000)
     await waitPromptly(() => graphLacks(noSseNode), `served-project .spec deletion did not converge through the plain stream:\n${serverLog}`)
@@ -387,7 +389,7 @@ async function assertServedProjectTreeObservation(project: string, fixture: stri
     await waitPromptly(() => graphHas(plainNode), `served-project .spec creation did not converge through the plain stream:\n${serverLog}`)
 
     const finalDeleteBefore = events.filter((event) => event === 'graph-changed').length
-    rmSync(join(project, '.spec'), { recursive: true, force: true })
+    removeSpecNode(plainNode)
     await waitFor(() => events.filter((event) => event === 'graph-changed').length > finalDeleteBefore,
       `plain graph stream did not signal the final served-project .spec deletion:\n${serverLog}`, 3_000)
     await waitPromptly(() => graphLacks(plainNode), `final served-project .spec deletion did not converge:\n${serverLog}`)
@@ -407,6 +409,7 @@ function prepareEmptyProject(fixture: string, name: string, commit = true): stri
   const project = join(fixture, name)
   mkdirSync(join(project, 'src'), { recursive: true })
   writeFileSync(join(project, 'src', 'value.ts'), 'export const value = 1\n')
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
@@ -510,6 +513,7 @@ test('a refused watcher source fails loud once and repairs on a bounded schedule
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: watcher hold fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
@@ -614,6 +618,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: patrol fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
@@ -843,6 +848,7 @@ test('a failed refresh keeps watcher causes through patrol recovery', { timeout:
     '---', 'title: Before failure', 'status: active', 'hue: 180', 'desc: recovery fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
@@ -1000,6 +1006,7 @@ test('a closed session delta overtakes an active route-owned full cache flight',
     '---', 'title: Before route-owned full', 'status: active', 'hue: 180', 'desc: route-owned fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
@@ -1213,6 +1220,7 @@ test('disabling the worktree leaf blinds it from every entry point', { timeout: 
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: blind fixture', '---',
     '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
   ].join('\n'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), '{}\n')
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')

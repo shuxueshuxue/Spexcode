@@ -92,7 +92,7 @@ function writePlugin(proj: string, host: string, dirName: string, name: string):
 test('init → materialize → uninstall forgets every derived artifact for Claude-only and Codex-only repos', async () => {
   const help = execFileSync(process.execPath, [CLI, 'uninstall', '--help'], { encoding: 'utf8' })
   assert.match(help, /remove all derived artifacts \+ local state; preserve tracked intent/)
-  assert.match(help, /\.spec including \.plugins, plus spexcode\.json/)
+  assert.match(help, /\.spec including \.plugins, plus \.spec\/spexcode\.json/)
   assert.match(help, /--hooks; that flag removes only unmodified canonical copies/)
 
   for (const row of CASES) {

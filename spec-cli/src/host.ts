@@ -961,11 +961,27 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   }
 
   const hostRecord = newHostRecord(`${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${opts.port}`)
+
+  // @@@one record, two doors - the single publish waits for BOTH binds. Which listener wins the race is not
+  // a promise Node makes, so counting them is what keeps a reader from ever seeing a record that omits a
+  // door this gateway has; reading no `peerPort` must mean "no machine entry", never "not published yet".
+  let bound = 0
+  const publishWhenBothBound = () => { if (++bound === 2) publishHostRecord(hostRecord) }
+
+  // The peer ingress is the second door: loopback and plain HTTP by construction — the ssh tunnel is the
+  // transport's encryption, and `--host` widens the console entry only. Requests arriving here are decided
+  // as `entry: 'peer'`, so the implicit loopback grant the console entry gives a human at this machine is
+  // never reachable through a forward.
+  const peerIngress = startHubGateway({
+    port: 0, host: '127.0.0.1', tls: null, extensions, entry: 'peer', label: 'peer ingress',
+    onListen: (actualPort) => { hostRecord.peerPort = actualPort; publishWhenBothBound() },
+  })
+
   const server = startHubGateway({
     port: opts.port, host: opts.host ?? '127.0.0.1', tls: opts.tls ?? null, extensions,
     onListen: (actualPort) => {
       hostRecord.url = `${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${actualPort}`
-      publishHostRecord(hostRecord)
+      publishWhenBothBound()
     },
     onBindFail: () => dropOwnHostRecord(hostRecord.instanceId),
   })
@@ -985,6 +1001,8 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
       for (const c of sseClients) c.destroy()
       sseClients.clear()
       await peers.close()
+      await new Promise<void>((resolve) => peerIngress.close(() => resolve()))
+      peerIngress.closeAllConnections?.()
       await new Promise<void>((resolve) => server.close(() => resolve()))
       server.closeAllConnections?.()
       dropOwnHostRecord(hostRecord.instanceId)

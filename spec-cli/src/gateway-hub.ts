@@ -23,7 +23,8 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   adminCookieName, authorize, clearAdminPassword, clearProjectPassword, loadAuthStore, mintToken,
-  projectCookieName, setAdminPassword, setProjectPassword, verifyPassword, type AuthStore,
+  projectCookieName, setAdminPassword, setProjectPassword, verifyPassword, PEER_CREDENTIAL_HEADER,
+  type AuthStore, type Entry,
 } from './gateway-auth.js'
 import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
@@ -51,7 +52,11 @@ export type HubExtensions = {
   // the authorized routes.
   fallback?: (req: http.IncomingMessage, res: http.ServerResponse, path: string) => void
 }
-export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; onListen?: (port: number) => void; extensions?: HubExtensions }
+// `entry` is which LISTENER this server is: the console entry a human reaches, or the peer ingress a
+// linked machine's forward lands on. It is a property of the SOCKET, chosen here at construction, never
+// read from a request — see [[gateway-auth]]. A peer-ingress server is bound to loopback by its caller
+// and `--host` has no say in it.
+export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; onListen?: (port: number) => void; extensions?: HubExtensions; entry?: Entry }
 
 // ---- registry ---------------------------------------------------------------------------------------
 // A project = a live backend record under ~/.spexcode/projects/<enc>/backend.json (written by supervise.ts
@@ -118,6 +123,11 @@ function readBody(req: http.IncomingMessage, limit = 4096): Promise<string> {
   })
 }
 
+function headerValue(req: http.IncomingMessage, name: string): string | null {
+  const v = req.headers[name]
+  return typeof v === 'string' && v ? v : null
+}
+
 // the login POST accepts the designed page's form encoding or JSON (the future admin UI)
 function passwordOf(req: http.IncomingMessage, body: string): string {
   try {
@@ -144,6 +154,7 @@ function cookieAttrs(secure: boolean): string {
 export function startHubGateway(opts: HubOpts): http.Server {
   const secure = !!opts.tls
   const port = opts.port
+  const entry: Entry = opts.entry ?? 'console'
   const ext = opts.extensions ?? {}
   const attrs = cookieAttrs(secure)
   const clearCookie = (name: string) => `${name}=; HttpOnly; Path=/; Max-Age=0`
@@ -158,10 +169,18 @@ export function startHubGateway(opts: HubOpts): http.Server {
     const query = q >= 0 ? rawUrl.slice(q) : ''
     const remote = req.socket.remoteAddress
     const cookies = req.headers.cookie
-    const adminz = () => authorize(store, { kind: 'admin' }, cookies, remote, port)
+    const peerToken = entry === 'peer' ? headerValue(req, PEER_CREDENTIAL_HEADER) : null
+    const adminz = () => authorize(store, { kind: 'admin' }, cookies, remote, port, entry, peerToken)
+    // a peer proves itself with its issued credential and nothing else; answering an unauthorized machine
+    // with a login page (or accepting a password from it) would turn this door into a password oracle.
+    const needsCredential = (res: http.ServerResponse) => sendJson(res, 401, { error: 'peer credential required', header: PEER_CREDENTIAL_HEADER })
+    const denied = (res: http.ServerResponse, login: string) => entry === 'peer' ? needsCredential(res) : redirect(res, login)
 
     // ---- admin surface ----
     if (path === '/') return redirect(res, '/projects')
+    if (entry === 'peer' && (path === '/login' || path === '/logout')) {
+      return sendJson(res, 404, { error: 'the peer ingress carries no visitor login' })
+    }
     if (path === '/login') {
       if (!store.admin) return req.method === 'POST'
         ? sendJson(res, 403, { error: 'no admin password is configured — /projects is manageable from loopback only' })
@@ -186,6 +205,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
       }
       const d = adminz()
       if (!d.ok) {
+        if (d.reason === 'peer-credential') return needsCredential(res)
         return d.reason === 'locked'
           ? sendJson(res, 403, { error: 'admin surface is locked: no admin password is configured and this is not a loopback connection' })
           : sendJson(res, 401, { error: 'authentication required', login: '/login' })
@@ -292,10 +312,10 @@ export function startHubGateway(opts: HubOpts): http.Server {
         }
         if (sub.startsWith('/assets/')) return ext.fallback(req, res, sub)
       }
-      const d = authorize(store, { kind: 'project', projectId: id }, cookies, remote, port)
+      const d = authorize(store, { kind: 'project', projectId: id }, cookies, remote, port, entry, peerToken)
       if (!d.ok) {
-        if (sub.startsWith('/api')) return sendJson(res, 401, { error: 'authentication required', login: `${base}/login` })
-        return redirect(res, `${base}/login`)
+        if (entry === 'console' && sub.startsWith('/api')) return sendJson(res, 401, { error: 'authentication required', login: `${base}/login` })
+        return denied(res, `${base}/login`)
       }
       if (proxySessionWeb(req, res, sub + query, up.root)) return
       return proxyTo(req, res, up.port, sub + query)
@@ -332,7 +352,8 @@ export function startHubGateway(opts: HubOpts): http.Server {
     if (!validProjectId(id)) return socket.destroy()
     const up = upstreamOf(id)
     if (!up) return socket.destroy()
-    const d = authorize(store, { kind: 'project', projectId: id }, req.headers.cookie, req.socket.remoteAddress, port)
+    const d = authorize(store, { kind: 'project', projectId: id }, req.headers.cookie, req.socket.remoteAddress, port,
+      entry, entry === 'peer' ? headerValue(req, PEER_CREDENTIAL_HEADER) : null)
     if (!d.ok) return socket.destroy()
     const sub = (pm[2] || '/') + (q >= 0 ? rawUrl.slice(q) : '')
     if (proxySessionWebUpgrade(req, socket, head, sub, up.root)) return
@@ -357,7 +378,9 @@ export function startHubGateway(opts: HubOpts): http.Server {
     label: opts.label ?? 'hub gateway',
     cleanup: opts.onBindFail,
     onListen: opts.onListen,
-    ready: (actualPort) => `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${actualPort} — /projects + /p/:projectId/*`,
+    ready: (actualPort) => entry === 'peer'
+      ? `[hub] peer ingress on ${scheme}://127.0.0.1:${actualPort} — linked machines only, credential required`
+      : `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${actualPort} — /projects + /p/:projectId/*`,
   })
   return server
 }

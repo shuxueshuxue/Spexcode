@@ -14,12 +14,13 @@ import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'n
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startHubGateway } from './gateway-hub.js'
-import { authStorePath } from './gateway-auth.js'
+import { authStorePath, grantPeer, PEER_CREDENTIAL_HEADER, revokePeer } from './gateway-auth.js'
 
 let home = ''
 let hubPort = 0
 let hubWidePort = 0
 let fallbackHubPort = 0
+let peerHubPort = 0
 const servers: http.Server[] = []
 let adminCookie = ''   // captured as the story progresses
 let projACookie = ''
@@ -107,6 +108,9 @@ before(async () => {
   servers.push(startHubGateway({ port: hubPort, host: '127.0.0.1' }))
   hubWidePort = await freePort()
   servers.push(startHubGateway({ port: hubWidePort, host: '0.0.0.0' })) // for the non-loopback tests only
+  // the second door: same routes, a listener that decides as `entry: 'peer'` ([[gateway-auth]])
+  peerHubPort = await freePort()
+  servers.push(startHubGateway({ port: peerHubPort, host: '127.0.0.1', entry: 'peer' }))
   fallbackHubPort = await freePort()
   servers.push(startHubGateway({
     port: fallbackHubPort,
@@ -340,4 +344,39 @@ test('WebSocket upgrade: destroyed without a session on a gated project; piped (
   const granted = await upgrade(adminCookie)
   assert.match(granted, /101 Switching Protocols/)
   assert.match(granted, /x-seen-cookie: theme=dark/, 'the backend saw the visitor cookie but not the gateway session')
+})
+
+test('the peer ingress refuses a loopback caller with no credential and admits the machine it issued one to', async () => {
+  const MACHINE = '11111111-2222-3333-4444-555555555555'
+  const peer = (path: string, init: RequestInit = {}) =>
+    fetch(`http://127.0.0.1:${peerHubPort}${path}`, { redirect: 'manual', ...init })
+
+  // this connection IS loopback — that is the whole point. On the console entry loopback is a grant path;
+  // on this one it is nothing, so a forward cannot launder the console's trust.
+  const bare = await peer('/projects')
+  assert.equal(bare.status, 401)
+  assert.equal((await bare.json() as any).header, PEER_CREDENTIAL_HEADER, 'the refusal names the one channel that works')
+
+  // nor does a visitor's admin cookie: it belongs to a browser on the far side, not to the machine
+  const laundered = await peer('/projects', { headers: { cookie: adminCookie } })
+  assert.equal(laundered.status, 401)
+
+  // and there is no password door here to knock on
+  assert.equal((await peer('/login')).status, 404)
+  assert.equal((await peer('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"password":"pw"}' })).status, 404)
+
+  const { token } = grantPeer(MACHINE)
+  const admitted = await peer('/projects', { headers: { [PEER_CREDENTIAL_HEADER]: token } })
+  assert.equal(admitted.status, 200)
+  assert.ok(Array.isArray((await admitted.json() as any).projects))
+
+  // a linked machine reaches a project the same way, and the credential never reaches the backend
+  const proxied = await peer('/p/projA/api/thing', { headers: { [PEER_CREDENTIAL_HEADER]: token, cookie: adminCookie } })
+  assert.equal(proxied.status, 200)
+  const body = await proxied.json() as any
+  assert.equal(body.who, 'A')
+  assert.equal(body.cookie, null, 'the visitor\'s gateway cookies are stripped before the backend sees them')
+
+  revokePeer(MACHINE)
+  assert.equal((await peer('/projects', { headers: { [PEER_CREDENTIAL_HEADER]: token } })).status, 401, 'revoking the link closes the door at once')
 })

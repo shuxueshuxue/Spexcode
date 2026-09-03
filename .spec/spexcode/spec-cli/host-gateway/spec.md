@@ -117,11 +117,17 @@ option and hands it through unchanged, so an operator deployment runs the ONE ho
 HTTPS — every surface (admin list, /p proxying, the shell) on that one TLS port, no second proxy in front,
 and a plaintext client on the TLS port is refused, never silently downgraded. Absent `tls`, `spex
 dashboard` stays plain loopback HTTP; `--host` widens the bind, behind whatever gates the operator
-configured.
+configured. It widens the CONSOLE listener alone: this same process also binds a second, always-loopback
+**peer ingress** — plain HTTP, no TLS, the ssh tunnel being the transport's encryption — which no flag can
+widen. The single host-record publish waits until both doors are bound, so a reader never sees a record that
+omits a door this gateway has and an absent peer port means no machine entry rather than a moment too early.
+Requests arriving there are decided as [[gateway-auth]]'s peer entry, so the implicit admin grant a human at
+this machine gets from its own loopback is unreachable through a forward.
 
 [[machine-peer]] is a second, private lifetime owned by this same host process. The gateway owns each
 machine-peer SSH process and the pair of loopback-only peer ports it forwards; the dashboard shell is not a
 participant in an individual message. A local CLI may dial the outgoing peer port directly, while the remote
 gateway owns the incoming peer port and forwards the accepted envelope into its ordinary local project
-backend. This keeps the public `/p/:projectId/*` proxy and backend contract unchanged, while making the
+backend. A link's gateway leg forwards to the far gateway's peer ingress, never to its console port, and a far
+side publishing no ingress is recorded as no leg at all rather than as a leg into the console. This keeps the public `/p/:projectId/*` proxy and backend contract unchanged, while making the
 gateway — not a session, project, or one-shot CLI child — the owner of a durable machine link.

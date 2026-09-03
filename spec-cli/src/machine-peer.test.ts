@@ -456,7 +456,7 @@ test('a dial forwards the far gateway only when the far side publishes one, and 
     return dials()
   }
   const legs = (argv: string[]): string[] => argv.filter((arg, index) => argv[index - 1] === '-L')
-  const publish = (gateway: { port: number; instanceId: string } | null) => writeFileSync(reply, `${JSON.stringify({
+  const publish = (gateway: { port: number; instanceId: string; credential?: string } | null) => writeFileSync(reply, `${JSON.stringify({
     ok: true, machineId: SESSION, peer: { inboundPort: 41001, outboundPort: 41002 }, ...(gateway ? { gateway } : {}),
   })}\n`)
 
@@ -478,12 +478,23 @@ test('a dial forwards the far gateway only when the far side publishes one, and 
     const first = await dialCount(1)
     assert.deepEqual(legs(first[0]), [`127.0.0.1:${bare.peer.outboundPort}:127.0.0.1:41001`], 'only the control-plane leg')
 
-    // once it publishes one, re-running connect adopts it and rebuilds the dial
+    // a far side naming a port but issuing no credential publishes no INGRESS: the leg stays absent rather
+    // than forwarding a port whose loopback trust it would launder
     publish({ port: 9443, instanceId: 'instance-a' })
+    const uncredentialed = await control({ op: 'connect', sshAddress: 'gw-peer' })
+    assert.ok(uncredentialed.ok && uncredentialed.peer)
+    assert.equal(uncredentialed.peer.remoteGatewayPort, null)
+    assert.equal(uncredentialed.peer.gatewayPort, null)
+    assert.equal(uncredentialed.peer.remoteGatewayCredential, null)
+    assert.equal(dials().length, 1, 'nothing to rebuild, so nothing redials')
+
+    // once it publishes one, re-running connect adopts it and rebuilds the dial
+    publish({ port: 9443, instanceId: 'instance-a', credential: 'cred-a' })
     const adopted = await control({ op: 'connect', sshAddress: 'gw-peer' })
     assert.ok(adopted.ok && adopted.peer)
     assert.equal(adopted.peer.remoteGatewayPort, 9443)
     assert.equal(adopted.peer.remoteGatewayInstanceId, 'instance-a')
+    assert.equal(adopted.peer.remoteGatewayCredential, 'cred-a', 'the issued credential is recorded beside the leg')
     const forwarded = adopted.peer.gatewayPort
     assert.ok(forwarded && forwarded > 0, 'a local port is minted for the gateway leg')
     assert.equal(adopted.peer.state, 'connected')
@@ -498,12 +509,13 @@ test('a dial forwards the far gateway only when the far side publishes one, and 
     assert.equal(dials().length, 2, 'an unchanged instance redials nothing')
 
     // a restarted far gateway is a new instance on a new port: the local port is kept, the far end is repointed
-    publish({ port: 9444, instanceId: 'instance-b' })
+    publish({ port: 9444, instanceId: 'instance-b', credential: 'cred-b' })
     const restarted = await control({ op: 'connect', sshAddress: 'gw-peer' })
     assert.ok(restarted.ok && restarted.peer)
     assert.equal(restarted.peer.gatewayPort, forwarded, 'the forwarded local port is stable across a far restart')
     assert.equal(restarted.peer.remoteGatewayPort, 9444)
     assert.equal(restarted.peer.remoteGatewayInstanceId, 'instance-b')
+    assert.equal(restarted.peer.remoteGatewayCredential, 'cred-b', 'a restart re-issues the credential with the leg')
     const third = await dialCount(3)
     assert.deepEqual(legs(third[2]), [`127.0.0.1:${restarted.peer.outboundPort}:127.0.0.1:41001`, `127.0.0.1:${forwarded}:127.0.0.1:9444`])
     assert.equal(listMachinePeers()[0].lastError, null)

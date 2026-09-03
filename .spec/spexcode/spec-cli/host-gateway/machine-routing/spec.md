@@ -94,9 +94,9 @@ leg when the instance changed, keeping the LOCAL port stable across the rebuild 
 it keeps working. A refused ask leaves the recorded leg untouched rather than erasing it, so an unreachable
 peer can still have its tunnel kicked exactly as before.
 
-The leg deliberately carries no route and no credential yet. A forwarded port that nothing proxies into is
-reachable only from this machine, by someone who already has a shell here — which is what makes it safe to
-land before the two clauses below, and unsafe to land them in the other order.
+The leg now carries a credential and still carries no route. What remains absent is anything that proxies INTO
+the local end, so the port stays reachable only from this machine, by someone who already has a shell here —
+which is what makes the route clause safe to land last and unsafe to land first.
 
 ### Authorization is explicit per machine, never inherited from loopback
 
@@ -115,6 +115,19 @@ stored beside the ssh options it is replayed with; the local gateway's own `spex
 on the way out, as they already are for a local backend. **Implicit loopback trust authorizes a human at
 a console, never a peer** — the remote gateway must be able to tell those apart, and a visitor's scope on
 one machine grants nothing on another.
+
+Telling them apart cannot rest on anything IN the request. A header is the caller's to write, and a
+forwarded socket's remote address is not merely hard to distinguish from a console socket's — it is the
+same loopback address. So the discriminator is the LISTENER: each gateway binds a second, always-loopback
+peer ingress that no `--host` widens, publishes its port in its own host record, and decides every request
+arriving there as a peer rather than a console. Implicit loopback trust is not granted on that door, a
+visitor cookie arriving there settles nothing, and it carries no login page to redirect a machine to. The
+credential is what does open it: issued by the answering gateway to the asking machine during the accept
+handshake, named by that machine id, refreshed without invalidating what the caller already holds, and
+destroyed for that machine alone when the link is dropped. Its reach is stated rather than hidden — on the
+issuing machine it reaches what an admin reaches — which is exactly why it is per machine and revocable.
+A gateway publishing no ingress is recorded as no leg at all, because a forward into the console port would
+launder the trust this clause outlaws.
 
 ### What each machine answers for itself
 

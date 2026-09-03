@@ -63,7 +63,10 @@ cgroup and no `.wslconfig`, and `formatHostFacts` prints no cap line. No credent
 the flag is documented in `spex help doctor`.
 
 `spex dashboard` publishes `~/.spexcode/host.json` only from the listener's post-bind callback. The record is
-`{version:1,url,pid,instanceId,startedAt}`; `readHostRecord` validates its shape, URL, and live PID, while
+`{version:1,url,pid,instanceId,startedAt}` plus an optional `peerPort` naming the gateway's always-loopback peer
+ingress ([[gateway-auth]]'s second door); the one publish waits until both doors are bound, so an absent `peerPort`
+means this gateway offers no machine entry and never means "not published yet";
+`readHostRecord` validates its shape, URL, and live PID and drops a malformed `peerPort` to absent, while
 `dropOwnHostRecord` removes it only when the instance id still matches. A killed dashboard therefore leaves at
 most a stale file that readers treat as absent. The ProjectsPage renders one host card above project rows —
 toolchain and agent CLIs — reuses the existing transcript result block for host doctor, and links a serve

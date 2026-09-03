@@ -72,8 +72,13 @@ response, socket, and transform, so a scoped SSE subscription cannot survive its
 The raw WebSocket upgrade, including the posted-web route, keeps its existing paired FIN/close/error lifecycle
 at the upgrade seam.
 
-**Launch seam.** `startHubGateway({port, host, tls})` is the engine, TLS-capable via the same
-resolved-cert posture as [[public-mode]]. The operator verb is `spex dashboard` ([[host-gateway]]), which
+**Launch seam.** `startHubGateway({port, host, tls, entry})` is the engine, TLS-capable via the same
+resolved-cert posture as [[public-mode]]. `entry` is which of [[gateway-auth]]'s two doors this listener IS —
+`'console'` by default, so every existing caller keeps its behaviour — and it is fixed at construction, never
+read from a request: a forwarded socket and a console socket are the same loopback address, so the listener is
+the one fact the caller cannot forge. A `'peer'` listener carries no visitor login at all (`/login` and
+`/logout` answer 404 there), reads the peer credential from a header, and answers every refusal as a 401
+naming that header instead of redirecting a machine to a login page it cannot fill in. The operator verb is `spex dashboard` ([[host-gateway]]), which
 mounts the host registry/catalog/operations onto the hub's **extension seam** — three optional hooks, all
 inert when absent: `listProjects` enriches the `GET /projects` rows (the hub keeps the envelope and the
 admin gate), `adminRoute` handles extra `/projects/*` routes only AFTER admin authorization, and

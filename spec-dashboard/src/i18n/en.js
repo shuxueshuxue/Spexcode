@@ -245,9 +245,11 @@ export default {
     },
     hostFactsTitle: 'Host facts', hostDoctor: 'run host doctor', hostDoctorRunning: 'running…',
     hostDoctorOk: 'host doctor: exit 0 — succeeded', hostDoctorFail: ({ code }) => `host doctor: exit ${code} — failed`,
-    hostVersions: 'toolchain', hostAgents: 'agent CLIs', hostMemory: 'memory envelope', hostLaunchers: 'launchers',
-    installed: 'installed', missing: 'missing', loggedIn: 'logged in', notLoggedIn: 'not logged in', present: 'present',
-    resolves: 'resolves', broken: 'broken', seeHostFacts: 'see host facts',
+    hostVersions: 'toolchain', hostAgents: 'agent CLIs', hostMemory: 'memory cap',
+    memoryNoCap: 'no cap on this host', memoryNoLimit: ({ kind }) => `${kind} · no cap set`,
+    memoryLimit: ({ kind, size }) => `${kind} · ${size}`,
+    installed: 'installed', missing: 'missing', loggedIn: 'logged in', notLoggedIn: 'not logged in',
+    seeHostFacts: 'see host facts',
   },
 
   credential: {

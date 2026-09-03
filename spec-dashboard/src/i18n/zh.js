@@ -240,9 +240,11 @@ export default {
     },
     hostFactsTitle: '主机事实', hostDoctor: '运行主机诊断', hostDoctorRunning: '运行中…',
     hostDoctorOk: '主机诊断：退出 0 — 成功', hostDoctorFail: ({ code }) => `主机诊断：退出 ${code} — 失败`,
-    hostVersions: '工具链', hostAgents: '代理 CLI', hostMemory: '内存边界', hostLaunchers: '启动器',
-    installed: '已安装', missing: '缺失', loggedIn: '已登录', notLoggedIn: '未登录', present: '存在',
-    resolves: '可解析', broken: '损坏', seeHostFacts: '查看主机事实',
+    hostVersions: '工具链', hostAgents: '代理 CLI', hostMemory: '内存上限',
+    memoryNoCap: '此主机无上限', memoryNoLimit: ({ kind }) => `${kind} · 未设上限`,
+    memoryLimit: ({ kind, size }) => `${kind} · ${size}`,
+    installed: '已安装', missing: '缺失', loggedIn: '已登录', notLoggedIn: '未登录',
+    seeHostFacts: '查看主机事实',
   },
 
   credential: {

@@ -7,7 +7,6 @@ code:
   - docs/session-protocol-sqlite-engine.md
 related:
   - .spec/spexcode/session-protocol/spec.md
-  - docs/session-architecture-concept-map.md
 ---
 # sqlite-engine
 
@@ -16,8 +15,8 @@ directly beneath it: the exact SQLite engine details an implementation must repr
 governs one document, which is the contract itself. The M2 spike that produced its figures was executable
 evidence, never the product, and no longer ships in this tree; it is reachable only through git history.
 
-The engine contract closes implementation items the architecture review deliberately left open. It never
-widens the protocol vocabulary, adds an operation, or reopens a decision frozen above it. Adding an outbox,
+The engine contract closes implementation items left open by the protocol contract. It never widens the protocol
+vocabulary, adds an operation, or reopens a decision frozen above it. Adding an outbox,
 a keyed replay dispatcher, an observer correctness path, or a cross-database fallback stays out of scope
 regardless of what the engine details say.
 

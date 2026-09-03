@@ -8,8 +8,6 @@ code:
 related:
   - .spec/spexcode/session-runtime/spec.md
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
-  - .spec/spexcode/session-protocol/concept-map/m1-production/spec.md
-  - .spec/spexcode/session-protocol/concept-map/legacy-deletion-gate/spec.md
 ---
 # self-launch-cutover
 
@@ -18,7 +16,7 @@ adopter with a complete, backend-free message loop. The loop is fixed: adopt the
 one owned, prove the new path with the old facilities sabotaged, and delete what was actually replaced.
 
 The fourth step has to be settled before construction rather than after it, and by measurement rather than by
-wording. [[construction-roadmap]] defines the removal set; applied here it is empty, and the emptiness is the
+wording. The adopter cutover contract defines the removal set; applied here it is empty, and the emptiness is the
 claim this node must defend. Self-launch never had a message facility to cut over from, because the governed send
 path refuses a session with no record, and the facilities it does consume — a storage root derived from the
 repository, the materialized manifest, and the sentinels the retained governance hooks write — are ones this

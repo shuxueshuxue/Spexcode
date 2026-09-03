@@ -425,3 +425,29 @@ test('a scenario with no own code: inherits the node axis and is not reported tw
   assert.equal(dead.length, 1, `one selector = one finding, whoever inherits it: ${out}`)
   assert.match(dead[0], /\('calc'\)/)
 })
+
+// The armed pre-commit hook judges a TREE, not the working copy, so it reads the config out of that tree.
+// After the config moved into .spec/, reading only the legacy root path put pending lint on DEFAULT policy:
+// the blocking gate and `spex spec lint` then answer differently about the same repo, and a repo whose
+// governedRoots differ from the defaults governs NOTHING at the one moment that blocks.
+test('pending lint reads the config from .spec/ in the tree, so the gate judges the authored policy', { skip }, () => {
+  const fx = fixture()
+  fx.commit('v1') // .spec/spexcode.json governs ['src']; src/calc.ts is claimed by no node
+  const tip = fx.g('rev-parse', 'HEAD')
+  const pending = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint', '--pending', tip], { cwd: fx.proj, encoding: 'utf8' })
+  const out = `${pending.stdout}${pending.stderr}`
+  assert.match(out, /coverage: no spec governs: src\/calc\.ts/, out)
+  assert.ok(!out.includes('governing NOTHING'), `the authored governedRoots must survive into pending: ${out}`)
+  assert.equal(out.includes('[spec-dashboard/src, spec-cli/src]'), false, `defaults must not stand in: ${out}`)
+})
+
+test('pending lint still honours a legacy root-level config, so an unmigrated repo keeps its gate', { skip }, () => {
+  const fx = fixture()
+  rmSync(join(fx.proj, '.spec/spexcode.json'))
+  writeFileSync(join(fx.proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
+  fx.commit('v1')
+  const tip = fx.g('rev-parse', 'HEAD')
+  const pending = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint', '--pending', tip], { cwd: fx.proj, encoding: 'utf8' })
+  const out = `${pending.stdout}${pending.stderr}`
+  assert.match(out, /coverage: no spec governs: src\/calc\.ts/, out)
+})

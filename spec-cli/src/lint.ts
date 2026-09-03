@@ -177,7 +177,13 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     ? !files.has(path) && directories.has(path.replace(/\/+$/, ''))
     : statSync(join(root, path)).isDirectory()
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
-  const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
+  // @@@config lives in .spec/ - read the tip the same way readConfig reads disk: preferred path first,
+  // legacy root second. Reading only the legacy path leaves a migrated repo's pending lint on DEFAULTS,
+  // which silently un-governs every root the author declared - the blocking gate would judge a different
+  // policy than `spex spec lint` does, and a repo whose roots differ from the defaults governs NOTHING.
+  const pendingConfigSource = () =>
+    treeFileText(root, tip, '.spec/spexcode.json') ?? treeFileText(root, tip, 'spexcode.json')
+  const cfg = loadConfig(root, pending ? pendingConfigSource() : undefined)
   const pathspec = adoptionPathspec(root)
   const untracked = untrackedAdoptionFiles(root, pathspec)
   if (untracked.length) {

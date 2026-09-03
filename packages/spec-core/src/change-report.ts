@@ -43,7 +43,7 @@ export function buildChangeReport(options: ChangeReportOptions): string {
   const lines: string[] = []
   lines.push(`spec change report ${sha}`)
   if (onlyAck) {
-    lines.push('仅 ack/eval，正文未变 (empty=true)')
+    lines.push('ack/eval only, no body change (empty=true)')
   } else {
     const limit = Math.max(0, options.maxHunkLines ?? 40)
     const specPaths = run(root, ['ls-tree', '-r', '--name-only', tip, '--', '.spec']).split('\n').filter(path => path.endsWith('/spec.md'))
@@ -70,10 +70,10 @@ export function buildChangeReport(options: ChangeReportOptions): string {
     if (!path || path.endsWith('/spec.md')) continue
     const a = add === '-' ? 0 : Number(add), d = del === '-' ? 0 : Number(del)
     const governing = ownersFor(path, root, tip)
-    lines.push(`文件 ${path} (+${a} −${d})，由节点 ${governing || '未声明'} 治理`)
+    lines.push(`file ${path} (+${a} −${d}), governed by node ${governing || 'unclaimed'}`)
   }
-  lines.push(`\n${options.note ?? '发送者未说明原因'}`)
-  lines.push(`父 session ${options.parentSessionId ?? '未提供'} 在 ${sha} 改了以上节点，你依赖的契约可能已变；做完手头这一步后重读它们，需要返工就返工，有异议用 spex session send ${options.parentSessionId ?? '<parent>'} 回我。这是请求不是命令。`)
+  lines.push(`\n${options.note ?? 'the sender gave no reason'}`)
+  lines.push(`parent session ${options.parentSessionId ?? 'not given'} changed the nodes above at ${sha}; a contract you depend on may have moved. Finish the step in your hands, then reread them and rework if you must. Disagree by replying with spex session send ${options.parentSessionId ?? '<parent>'}. This is a request, not an order.`)
   return lines.join('\n')
 }
 

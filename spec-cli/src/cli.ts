@@ -730,8 +730,8 @@ if (cmd === 'serve') {
       ...(flag('note') !== undefined ? { note: flag('note') } : {}),
       parentSessionId: (await import('./sessions.js')).ownSessionId() ?? undefined,
     })
-    if (!has('always') && /仅 ack\/eval，正文未变 \(empty=true\)/u.test(report)) {
-      console.log('无正文变化')
+    if (!has('always') && /ack\/eval only, no body change \(empty=true\)/.test(report)) {
+      console.log('no body change')
     } else {
       process.stdout.write(`${report}\n`)
     }
@@ -1302,7 +1302,7 @@ if (cmd === 'serve') {
           }
         }
         if (pushed < descendants.length) {
-          console.error('已入队，等接收方在回合边界取走；backend 不在，无法推送')
+          console.error('queued for the receiver to take at its turn boundary; the backend is down, so it cannot be pushed')
         }
         console.log(`sent to ${descendants.length} descendant${descendants.length === 1 ? '' : 's'}`)
         process.exit(0)
@@ -1363,7 +1363,7 @@ if (cmd === 'serve') {
           body: Buffer.from(text),
           senderSessionId: from ?? null,
         })
-        console.error('已入队，等接收方在回合边界取走；backend 不在，无法推送')
+        console.error('queued for the receiver to take at its turn boundary; the backend is down, so it cannot be pushed')
         console.log('sent')
         process.exit(0)
       }

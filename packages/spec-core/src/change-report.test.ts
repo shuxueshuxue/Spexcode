@@ -27,6 +27,6 @@ test('buildChangeReport is deterministic and includes spec, code, and parent req
   assert.match(report, /alpha/)
   assert.match(report, /First contract/)
   assert.match(report, /src\/app\.ts \(\+1 −0\)/)
-  assert.match(report, /父 session parent-1/)
+  assert.match(report, /parent session parent-1/)
   assert.equal(report, buildChangeReport({ repoRoot: root, rev: 'HEAD', parentSessionId: 'parent-1', note: 'why' }))
 })

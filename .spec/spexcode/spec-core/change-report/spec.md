@@ -15,8 +15,10 @@ tree and revision window. It emits stable text with one section per changed `.sp
 one-line description, status, additions/removals in `code:` and `related:` frontmatter (and status changes), and
 body diff hunks capped at `maxHunkLines`, with an explicit `git show` path when truncated. Non-spec files are shown
 with Git numstat and the governing node resolved from the tip tree's `code:` claims. A change touching only ack
-stamps or `evals.ndjson` emits one line stating `仅 ack/eval，正文未变 (empty=true)`. The report ends with the
-fixed parent-session reread request; `note` is copied verbatim, or `发送者未说明原因` when absent. No semantic
+stamps or `evals.ndjson` emits one line stating `ack/eval only, no body change (empty=true)`. The report ends with
+the fixed parent-session reread request; `note` is copied verbatim, or `the sender gave no reason` when absent. The
+report is machine-facing product output, so it is written in English like every other line the CLI and backend
+print — the reader's own language belongs to authored content, never to tool output. No semantic
 interpretation or generated explanation is added.
 
 The porcelain `spex spec report` is a thin projection of this function. It names the report node on the CLI

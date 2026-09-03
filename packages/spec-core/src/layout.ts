@@ -119,7 +119,7 @@ function readProjectConfig(root: string, local: boolean): any {
   if (existsSync(preferred)) return readJsonConfig(preferred)
   const legacy = join(root, local ? 'spexcode.local.json' : 'spexcode.json')
   if (existsSync(legacy)) {
-    console.error(`配置已迁到 .spec/，请移动（git mv spexcode.json .spec/；本机的 spexcode.local.json 手动移）：${legacy}`)
+    console.error(`Config moved to .spec/ — run \`git mv spexcode.json .spec/\` and move this host's spexcode.local.json by hand: ${legacy}`)
     return readJsonConfig(legacy)
   }
   return {}

@@ -26,7 +26,7 @@ test('readConfig accepts a root-only legacy config and warns loudly', () => {
   console.error = (...args: unknown[]) => errors.push(args.join(' '))
   try { assert.equal(readConfig(root).dashboard?.title, 'legacy') }
   finally { console.error = original }
-  assert.ok(errors.some((line) => line.includes('配置已迁到 .spec/')))
+  assert.ok(errors.some((line) => line.includes('Config moved to .spec/')))
 })
 
 test('readConfig prefers .spec config when both locations exist', () => {

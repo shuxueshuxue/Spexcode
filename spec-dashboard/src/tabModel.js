@@ -5,21 +5,26 @@ import { routeHash } from './route.js'
 // checked without a browser. It is here rather than in `tabs.js` for exactly that reason: the hook needs
 // the view registry, the registry is JSX, and a rule nobody can test in isolation is a rule that drifts.
 
-// A tab's identity is the object address unless the view is resident. Base session faces are selectors on
-// that object, not different documents: changing `?surface=conversation|terminal|diff` must update the URL
-// without replacing or multiplying the session tab. Resident Spec/Evals/Issues/Settings details canonicalize
-// to their top-level address. Published resources are the exception: they are file-class workspace objects,
-// so their resource selector remains in the identity — a resource and its session are two tabs, not two faces.
+// A tab's identity is the object address, minus whatever part of that address is a SELECTOR rather than a
+// document. Base session faces are selectors: changing `?surface=conversation|terminal|diff` must update the
+// URL without replacing or multiplying the session tab. A resident BOARD's detail is a selector too — the
+// strip names the board, never the selection, so two "Evals" tabs would be a strip nobody can read.
+// Published resources are the exception among session queries: they are file-class workspace objects, so
+// their resource selector remains in the identity — a resource and its session are two tabs, not two faces.
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
   && route.query.surface.startsWith('resource:')
 export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
-// Board details share one top-level identity, but that identity is still a normal workspace tab. The view
-// registry's `resident` flag describes URL canonicalization; it does not seed or pin the tab.
-const TOP_LEVEL_PAGES = new Set(['spec', 'evals', 'issues', 'settings'])
-export const tabRoute = (route) => route?.page === 'sessions' && route?.param && !isResourceRoute(route)
-  ? { ...route, query: null }
-  : TOP_LEVEL_PAGES.has(route?.page)
-    ? { ...route, param: null, query: null }
+// A BOARD collapses its detail; SPEC DOES NOT. `#/spec/<id>` is a document — the strip already names it by
+// the node's own title — so its id belongs in its identity exactly as a file's path does. Collapsing it was
+// redundant with `placeTab`'s focused-same-kind replacement, which is what actually keeps browsing the graph
+// from minting a tab per node, and it cost the strip its headline law: no gesture could mint a second Spec
+// tab, so "open in a new tab" on a spec silently overwrote the document the reader was reading. A spec
+// carries no face selector of its own, so its query is still dropped.
+const RESIDENT_BOARDS = new Set(['evals', 'issues', 'settings'])
+export const tabRoute = (route) => RESIDENT_BOARDS.has(route?.page)
+  ? { ...route, param: null, query: null }
+  : (route?.page === 'spec' && route?.param) || (route?.page === 'sessions' && route?.param && !isResourceRoute(route))
+    ? { ...route, query: null }
     : route
 export const tabKey = (t) => {
   const route = tabRoute(t)
@@ -61,11 +66,12 @@ export function placeTab(tabs, route, mode = 'slot', activeKey = null) {
   const key = tabKey(normalized)
   const open = tabs.find((t) => tabKey(t) === key)
   if (open) {
-    const faceChanged = normalized.page === 'sessions' && !isResourceRoute(normalized)
-      && JSON.stringify(open.query || null) !== JSON.stringify(normalized.query || null)
-    const residentChanged = TOP_LEVEL_PAGES.has(normalized.page)
-      && (open.param !== original.param || JSON.stringify(open.query || null) !== JSON.stringify(original.query || null))
-    if (!faceChanged && !residentChanged) return tabs
+    // The address matched a tab that is already open, so nothing is placed. If it differs at all, it differs
+    // only in a part the identity DROPPED — a session face, a board's detail selector — and that tab takes
+    // the new address where it sits: the same document, seen through a different selector.
+    const sameAddress = (open.param ?? null) === original.param
+      && JSON.stringify(open.query || null) === JSON.stringify(original.query || null)
+    if (sameAddress) return tabs
     return tabs.map((t) => (tabKey(t) === key ? { ...t, param: original.param, query: original.query } : t))
   }
   const entry = { page: original.page, param: original.param, query: original.query }

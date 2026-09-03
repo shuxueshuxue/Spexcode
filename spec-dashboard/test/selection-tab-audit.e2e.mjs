@@ -68,29 +68,31 @@ try {
   assert.deepEqual(spec.tabs, [{ key: '#/spec', selected: true }])
   assert.deepEqual(spec.sections, ['Specs', 'Files'])
   assert.equal(spec.graphActions, 0, 'rejected graph marquee toolbar stays absent')
-  await visit('#/spec/root', '.viewhost.view-spec .specview')
+  // the focused Spec tab takes the node's own address: a spec is a document, not a selection inside a board
+  const detail = await visit('#/spec/root', '.viewhost.view-spec .specview')
+  assert.deepEqual(detail.tabs, [{ key: '#/spec/root', selected: true }])
   const file = await visit('#/file/src/app.js', '.viewhost.view-file .cm-editor')
   assert.deepEqual(file.tabs, [
-    { key: '#/spec', selected: false }, { key: '#/file/src/app.js', selected: true },
+    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: true },
   ])
   assert.ok(file.specHosts.length >= 1, 'Spec host remains in the pool beside the file')
   assert.ok(file.specHosts.some((host) => host.id === spec.specHosts[0].id), 'Spec host identity survives opening a file')
   const evals = await visit('#/evals', '.viewhost.view-evals')
   assert.deepEqual(evals.tabs, [
-    { key: '#/spec', selected: false }, { key: '#/file/src/app.js', selected: false }, { key: '#/evals', selected: true },
+    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false }, { key: '#/evals', selected: true },
   ])
   const issues = await visit('#/issues', '.viewhost.view-issues')
   assert.deepEqual(issues.tabs, [
-    { key: '#/spec', selected: false }, { key: '#/file/src/app.js', selected: false },
+    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false },
     { key: '#/evals', selected: false }, { key: '#/issues', selected: true },
   ])
   const settings = await visit('#/settings', '.viewhost.view-settings')
   assert.deepEqual(settings.tabs, [
-    { key: '#/spec', selected: false }, { key: '#/file/src/app.js', selected: false },
+    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false },
     { key: '#/evals', selected: false }, { key: '#/issues', selected: false }, { key: '#/settings', selected: true },
   ])
-  const specAgain = await visit('#/spec', '.viewhost.view-spec .graphview')
-  assert.deepEqual(specAgain.tabs, settings.tabs.map((tab) => ({ ...tab, selected: tab.key === '#/spec' })))
+  const specAgain = await visit('#/spec/root', '.viewhost.view-spec .specview')
+  assert.deepEqual(specAgain.tabs, settings.tabs.map((tab) => ({ ...tab, selected: tab.key === '#/spec/root' })))
   assert.equal(specAgain.specHosts.length, 2, 'Spec graph/detail hosts remain pooled after board switches')
   assert.ok(specAgain.specHosts.some((host) => host.id === spec.specHosts[0].id), 'Spec host survives board switches without remount')
   const sessionsAgain = await visit('#/sessions', '.viewhost.view-sessions')

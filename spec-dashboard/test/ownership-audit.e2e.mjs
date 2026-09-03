@@ -101,11 +101,11 @@ try {
 
   await page.goto(`${base}/#/spec/node-1`, { waitUntil: 'domcontentloaded' })
   await page.locator('.viewhost.view-spec').waitFor({ state: 'visible' })
-  await page.locator('.tab[data-tab-key="#/spec"] .tab-face').waitFor({ state: 'visible' })
+  await page.locator('.tab[data-tab-key="#/spec/node-1"] .tab-face').waitFor({ state: 'visible' })
   const spec = await page.evaluate(() => {
-    const face = document.querySelector('.tab[data-tab-key="#/spec"] .tab-face')
+    const face = document.querySelector('.tab[data-tab-key="#/spec/node-1"] .tab-face')
     return {
-      tabCount: document.querySelectorAll('.tab[data-tab-key="#/spec"]').length,
+      tabCount: document.querySelectorAll('.tab[data-tab-key="#/spec/node-1"]').length,
       text: face?.textContent.trim() || null,
       tip: face?.getAttribute('data-tip') || null,
       label: face?.getAttribute('aria-label') || null,
@@ -113,11 +113,11 @@ try {
       rail: [...document.querySelectorAll('.side-rail a.rail-btn')].map((link) => link.getAttribute('href')),
     }
   })
-  assert.equal(spec.tabCount, 1, 'Spec detail stays in one resident slot')
+  assert.equal(spec.tabCount, 1, 'the spec document has exactly one tab')
   assert.equal(spec.text, 'Concrete Spec Document')
   assert.equal(spec.tip, 'Concrete Spec Document')
   assert.equal(spec.label, 'Concrete Spec Document')
-  assert.equal(spec.icon, true, 'Spec slot keeps the resident page icon')
+  assert.equal(spec.icon, true, 'a spec tab keeps the Spec kind icon')
   assert.deepEqual(spec.rail, ['#/spec', '#/sessions', '#/evals', '#/issues', '#/settings'])
   await page.screenshot({ path: join(out, 'spec-detail-title.png'), fullPage: true })
 
@@ -126,7 +126,7 @@ try {
   const file = await page.evaluate(() => ({
     text: document.querySelector('.tab[data-tab-key="#/file/src/app.js"] .tab-face')?.textContent.trim() || null,
     tip: document.querySelector('.tab[data-tab-key="#/file/src/app.js"] .tab-face')?.getAttribute('data-tip') || null,
-    specTabs: document.querySelectorAll('.tab[data-tab-key="#/spec"]').length,
+    specTabs: document.querySelectorAll('.tab[data-tab-key="#/spec/node-1"]').length,
     specRailSelected: document.querySelector('.side-rail a[href="#/spec"]')?.getAttribute('aria-current') === 'page',
   }))
   assert.equal(file.text, 'app.js', 'file focus names the file document')

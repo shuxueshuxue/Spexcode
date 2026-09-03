@@ -18,9 +18,12 @@ related:
 # tab-routing
 
 Tab identity is the canonical object address. Session terminal, conversation, and diff faces share one session
-identity; a published resource is a separate file-class identity. Spec, Evals, Issues, and Settings details share
-one resident page identity, while their selected detail remains in the URL. Graph, bare Sessions, New Session,
-and empty workspace routes are not documents and never enter the strip.
+identity; a published resource is a separate file-class identity. Evals, Issues, and Settings details share one
+resident page identity, while their selected detail remains in the URL. A spec node is not such a detail: it is a
+document, addressed by its own id exactly as a file is addressed by its path, so a gesture can open a second spec
+beside the one being read. Browsing the graph still holds one Spec tab, by the same focused-same-kind replacement
+every document gets, not by collapsing two specs into one identity. Graph, bare Sessions, New Session, and empty
+workspace routes are not documents and never enter the strip.
 
 Opening an already-open address focuses that tab. Ordinary navigation replaces only the currently focused tab,
 and only when the new address is of the same kind. When another kind is focused, when the focused route is not a

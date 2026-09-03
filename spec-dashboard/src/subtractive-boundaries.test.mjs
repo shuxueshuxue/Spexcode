@@ -143,7 +143,8 @@ test('board details focus one dynamic top-level tab without evicting documents',
 
   assert.equal(tabKey(evalDetail), '#/evals')
   assert.equal(tabKey(issueDetail), '#/issues')
-  assert.deepEqual(tabs.map(tabKey), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
+  // the spec detail is a document and keeps its own address; only the two board details collapse
+  assert.deepEqual(tabs.map(tabKey), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
   assert.deepEqual(tabs.slice(2), [
     { page: 'evals', param: 'node/scenario', query: null },
     { page: 'issues', param: '42', query: null },

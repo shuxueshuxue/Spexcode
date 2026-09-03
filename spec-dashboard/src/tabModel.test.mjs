@@ -37,10 +37,10 @@ test('plain navigation never replaces an inactive tab of the same kind', () => {
   let tabs = browse([], session('s1'), specDocument('node'))
   // The session tab is no longer focused; opening another session preserves it and appends a new tab.
   tabs = placeTab(tabs, session('s2'), 'slot', tabKey(specDocument('node')))
-  assert.deepEqual(keys(tabs), ['#/sessions/s1', '#/spec', '#/sessions/s2'])
+  assert.deepEqual(keys(tabs), ['#/sessions/s1', '#/spec/node', '#/sessions/s2'])
   // Once the new session is focused, same-kind navigation replaces that focused tab.
   tabs = placeTab(tabs, session('s3'), 'slot', tabKey(session('s2')))
-  assert.deepEqual(keys(tabs), ['#/sessions/s1', '#/spec', '#/sessions/s3'])
+  assert.deepEqual(keys(tabs), ['#/sessions/s1', '#/spec/node', '#/sessions/s3'])
 })
 
 test('with no focused tab, a new address is appended — never a guess at which tab to evict', () => {
@@ -148,26 +148,51 @@ test('board details normalize to one top-level identity', () => {
     { page: 'spec', param: 'node', pinned: false },
   ]
   const tabs = normalizeTabs(raw, isDocument)
-  assert.deepEqual(keys(tabs), ['#/evals', '#/issues', '#/settings', '#/spec'])
+  // The two board details collapse onto their boards; the spec detail keeps its own document address.
+  assert.deepEqual(keys(tabs), ['#/evals', '#/issues', '#/settings', '#/spec/node'])
 })
 
 test('cold workspace has no board tabs until a route is opened', () => {
   assert.deepEqual(normalizeTabs([]), [])
 })
 
-test('opening a spec keeps its detail address while focusing the one Spec tab', () => {
+test('browsing specs keeps one Spec tab, and each spec is addressed as the document it is', () => {
   let tabs = placeTab([], specDocument('first'))
-  assert.deepEqual(keys(tabs), ['#/spec'])
+  assert.deepEqual(keys(tabs), ['#/spec/first'])
   assert.deepEqual(tabs[0], { page: 'spec', param: 'first', query: null })
-  tabs = placeTab(tabs, specDocument('second'), 'slot', '#/spec')
+  // A spec node is a document, not a selection inside a board: browsing does not mint a tab because the
+  // focused same-kind tab is REPLACED, which is the same rule a file gets — not because the two specs share
+  // one identity.
+  tabs = placeTab(tabs, specDocument('second'), 'slot', '#/spec/first')
+  assert.deepEqual(keys(tabs), ['#/spec/second'])
+  // The bare `#/spec` canvas is same-kind too, so it lands in the focused Spec tab rather than beside it.
+  tabs = placeTab(tabs, { page: 'spec', param: null, query: null }, 'slot', '#/spec/second')
   assert.deepEqual(keys(tabs), ['#/spec'])
-  assert.equal(tabs[0].param, 'second')
+})
+
+test('an explicit gesture opens a SECOND spec tab; the identity that forbade it was redundant', () => {
+  // "open in a new tab" on a spec used to be a silent no-op: every `#/spec/<id>` collapsed to the key
+  // `#/spec`, so the gesture found the key already open, dropped its mark, and overwrote the document the
+  // reader was reading. Two specs are two documents.
+  let tabs = browse([], specDocument('reading'), append(specDocument('beside')))
+  assert.deepEqual(keys(tabs), ['#/spec/reading', '#/spec/beside'])
+  // and the appended tab is an ordinary tab: the next plain spec navigation replaces IT, not the first
+  tabs = browse(tabs, specDocument('next'))
+  assert.deepEqual(keys(tabs), ['#/spec/reading', '#/spec/next'])
+})
+
+test('a spec carries no face selector, so a query change stays in one tab', () => {
+  const withQuery = { page: 'spec', param: 'node', query: { from: 'search' } }
+  assert.equal(tabKey(withQuery), '#/spec/node')
+  const tabs = placeTab([specDocument('node')], withQuery, 'slot', '#/spec/node')
+  assert.deepEqual(keys(tabs), ['#/spec/node'])
+  assert.deepEqual(tabs[0].query, { from: 'search' })
 })
 
 test('opening a scenario or issue creates focused top-level tabs without evicting documents', () => {
   let tabs = browse([], specDocument('node'), append(session('s1')))
   tabs = browse(tabs, { page: 'evals', param: 'node/scenario', query: null }, { page: 'issues', param: '42', query: null })
-  assert.deepEqual(keys(tabs), ['#/spec', '#/sessions/s1', '#/evals', '#/issues'])
+  assert.deepEqual(keys(tabs), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
   assert.deepEqual(tabs.slice(2).map(({ page, param }) => ({ page, param })), [
     { page: 'evals', param: 'node/scenario' },
     { page: 'issues', param: '42' },

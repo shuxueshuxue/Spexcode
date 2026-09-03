@@ -28,9 +28,11 @@ related:
 # tab-strip
 
 The strip is the workspace working set. It is present on every route, uses the shared `page + param + query`
-address grammar, and never creates a second navigation model. Object documents include sessions and files;
-resident boards use one canonical tab identity while their detail remains route state. Graph, empty workspace,
-bare Sessions, and the New Session form have no document identity and therefore do not become tabs.
+address grammar, and never creates a second navigation model. Object documents include sessions, files, and
+spec nodes, each addressed by its own identity; a resident board (Evals, Issues, Settings) uses one canonical tab
+identity while its detail remains route state, because the strip names the board and not the selection inside it.
+Graph, empty workspace, bare Sessions, and the New Session form have no document identity and therefore do not
+become tabs.
 
 The open list is local workspace state; the active tab is the URL. A tab click and an ordinary link use the same
 navigation path, so the strip, deep links, and browser history agree. Session base faces are URL selectors on one

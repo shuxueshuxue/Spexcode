@@ -86,8 +86,11 @@ scenarios:
       from /api/evidence/<hash> — frames decode (readyState ≥ HAVE_CURRENT_DATA, currentTime advances
       after play()), never a broken `<img>` and never raw markdown in the prose. The image link still
       renders as an image (click-to-enlarge), and the absent blob renders the honest miss sentinel. The
-      element is the SAME shared-renderer output the eval tab and eval detail produce for the same hash —
-      one evidence renderer, every home.
+      element is the SAME shared-renderer output the node-info eval tab produces for the same hash — one
+      evidence renderer, every home that shows evidence plainly. The eval DETAIL is the deliberate
+      exception: its main column is an annotation workspace, so the same hash plays under the custom
+      review-track scrubber there ([[event-detail]]), with galleries, transcripts and data still coming
+      from the one Evidence renderer.
   - name: composer-docked-autogrow
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/Thread.jsx, spec-dashboard/src/textarea.js]

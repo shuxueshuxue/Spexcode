@@ -283,7 +283,9 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
       writeViewport(target)
       return
     }
-    const start = getViewport()
+    // React Flow can lag one render behind our RAF writes; continue from the
+    // locally tracked frame so rapid keyboard navigation never jumps backward.
+    const start = viewportRef.current || getViewport()
     const t0 = performance.now()
     cancelAnimationFrame(animRef.current)
     const step = (now) => {

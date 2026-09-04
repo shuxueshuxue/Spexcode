@@ -84,7 +84,10 @@ prints the bare, parseable session **JSON to STDOUT** exactly as before, then pr
   creation, first delivering the child's current-state snapshot and then every declared state except routine
   working. `spex session reparent <id> --to <parent>` moves that source; `watch cancel` affects only an independent manual watch. A caller without a governed session
   address backgrounds `spex session wait <id>` to observe a non-actionable to actionable edge and exits as the
-  wake-up. `spex session watch stream <id>` is the continuous human stream and never exits;
+  wake-up. When the prompt explicitly addresses a different supervisor with `@parent:<selector>`, the receipt
+  names that supervisor as the managed-watch owner and describes `spex session wait <id>` only as an independent
+  caller-side observation option, never as the parent attach mechanism. `spex session watch stream <id>` is the
+  continuous human stream and never exits;
 - **response channel** — `spex session send <id> "<msg>"` is the ordinary path and succeeds once it appends
   the message to the target timeline; an unavailable adapter may delay the target context but does not undo
   that send. `send --keys` remains an unstable last resort only after plain text cannot reach the needed TUI

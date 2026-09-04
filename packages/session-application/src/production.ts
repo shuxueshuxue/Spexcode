@@ -234,10 +234,10 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
   if (existing) return existing
 
   const protocol = openProtocolOnce(options.databasePath, options.now)
-  applyComponentMigrations(protocol, 'session-application', SESSION_APPLICATION_MIGRATIONS)
   const topology = openTopology(protocol)
   const events = openSessionEvents(protocol)
   const runtimeBindings = openRuntimeBindings(protocol)
+  applyComponentMigrations(protocol, 'session-application', SESSION_APPLICATION_MIGRATIONS)
   const now = options.now ?? (() => Date.now())
   const initialized = new Set<string>()
 
@@ -495,7 +495,21 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       requireId(subjectSessionId, 'subjectSessionId')
       initialize(watcherSessionId)
       initialize(subjectSessionId)
-      return protocol.withTransaction(tx => topology.subscribe(tx, watcherSessionId, subjectSessionId, channel))
+      return protocol.withTransaction(tx => {
+        const edge = topology.subscribe(tx, watcherSessionId, subjectSessionId, channel)
+        tx.exec(
+          `INSERT INTO session_follow_cursors (watcher_session_id, subject_session_id, event_seq)
+           SELECT ?, ?, COALESCE(MAX(event_seq), 0)
+             FROM session_events
+            WHERE subject_session_id=?
+           ON CONFLICT(watcher_session_id, subject_session_id) DO UPDATE
+             SET event_seq=MAX(session_follow_cursors.event_seq, excluded.event_seq)`,
+          watcherSessionId,
+          subjectSessionId,
+          subjectSessionId,
+        )
+        return edge
+      })
     },
 
     detachWatcher(watcherSessionId, subjectSessionId, channel = WATCH_RELATION) {

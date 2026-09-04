@@ -31,8 +31,11 @@ TTL to expire — a reader that dies and restarts opens the same file and resume
 ## expanded spec
 
 A position is an **event sequence** in [[session-events]]: the greatest event sequence already consumed, so the
-next read starts after that sequence and a fresh reader starts at `0`. One counter covers
-both event kinds, since a follower reads a log rather than a kind.
+next read starts after that sequence. For a durable watch relation, the cursor is initialized to the subject's
+current head when the relation is established (and an installation migration seeds the same head for existing
+relations): a missing cursor never means "from the beginning", it means "from the moment this relation was created".
+Only a genuinely new subject with no events therefore starts at `0`. One counter covers both event kinds, since a
+follower reads a log rather than a kind.
 
 The cursor row is advanced in the same SQLite store as canonical events. It is monotonic and transactional; there
 is no cursor file, partial rewrite, or second JSON authority.

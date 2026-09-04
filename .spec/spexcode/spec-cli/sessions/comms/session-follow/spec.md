@@ -50,8 +50,11 @@ path projects those rows to unique watcher ids, appends one normal `sent` event 
 enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
 exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
 Installing a source or reparenting a child directly enqueues the child's current authored state — a new supervisor
-needs that context even when it is routine `active`/working. Creation uses the same canonical queue handoff; it does
-not own a deferred snapshot token or a second launch-delivery protocol. Later state writes take the transition path instead:
+needs that context even when it is routine `active`/working. Establishing the relation also initializes its durable
+follow cursor to the subject's current event head, so the relation begins "from now" and does not replay history;
+the installation migration performs the same head seeding for watch edges that already exist. A missing cursor is
+therefore never interpreted as "nothing has ever been delivered" or as a request to start at sequence zero. Creation
+uses the same canonical queue handoff; it does not own a deferred snapshot token or a second launch-delivery protocol. Later state writes take the transition path instead:
 a parent-only watch suppresses routine working, while a `manual` source explicitly asks for the complete feed and
 includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
 manual's complete-feed policy winning for later state changes. Thus a one-shot `ls` remains a current-state read,

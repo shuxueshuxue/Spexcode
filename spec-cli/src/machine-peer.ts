@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { runtimeRoot, spexcodeHome } from '@spexcode/spec-core'
 import { readEndpointRecord } from './endpoint-record.js'
+import { readHostRecord } from './host-record.js'
+import { grantPeer, revokePeer } from './gateway-auth.js'
 
 const execFileAsync = promisify(execFile)
 const PEER_VERSION = 1
@@ -21,6 +23,12 @@ export type MachinePeer = {
   outboundPort: number
   remoteInboundPort: number
   remoteOutboundPort: number
+  gatewayPort: number | null
+  remoteGatewayPort: number | null
+  remoteGatewayInstanceId: string | null
+  // the credential that far machine ISSUED to this one during the accept handshake — what this machine
+  // presents on that gateway's peer ingress. Absent means the far side published no ingress to reach.
+  remoteGatewayCredential: string | null
   owner: boolean
   state: 'connecting' | 'connected'
   createdAt: string
@@ -28,6 +36,7 @@ export type MachinePeer = {
   lastError: string | null
 }
 type PeerStore = { version: typeof PEER_VERSION; machineId: string; peers: MachinePeer[] }
+export type PeerGatewayFacts = { port: number; instanceId: string; credential: string }
 
 export const peerStorePath = (): string => join(spexcodeHome(), 'gateway', 'peers.json')
 export const peerSocketPath = (): string => join(spexcodeHome(), 'gateway', 'peer.sock')
@@ -43,12 +52,28 @@ function validMachineId(value: unknown): value is string {
 function validSshOptions(value: unknown): boolean {
   return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === 'string'))
 }
+function validGatewayFacts(value: unknown): value is PeerGatewayFacts {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const facts = value as Record<string, unknown>
+  return validPort(facts.port) && typeof facts.instanceId === 'string' && facts.instanceId.length > 0 &&
+    typeof facts.credential === 'string' && facts.credential.length > 0
+}
+// @@@absent gateway leg is legacy, not malformed - two ordinary peers carry none: one minted before the leg
+// existed, and one whose far side had not published a host record when it answered. Both load and normalize to
+// "no gateway leg", the same way sshOptions normalizes to no options.
+function validGatewayLeg(peer: Record<string, unknown>): boolean {
+  const optionalPort = (value: unknown) => value === undefined || value === null || validPort(value)
+  const optionalString = (value: unknown) => value === undefined || value === null || typeof value === 'string'
+  return optionalPort(peer.gatewayPort) && optionalPort(peer.remoteGatewayPort) &&
+    optionalString(peer.remoteGatewayInstanceId) && optionalString(peer.remoteGatewayCredential)
+}
 function validPeer(value: unknown): value is MachinePeer {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const peer = value as Record<string, unknown>
   return validMachineId(peer.machineId) && typeof peer.sshAddress === 'string' && peer.sshAddress.length > 0 &&
     validSshOptions(peer.sshOptions) &&
     validPort(peer.inboundPort) && validPort(peer.outboundPort) && validPort(peer.remoteInboundPort) && validPort(peer.remoteOutboundPort) &&
+    validGatewayLeg(peer) &&
     typeof peer.owner === 'boolean' && (peer.state === 'connecting' || peer.state === 'connected') &&
     typeof peer.createdAt === 'string' && (typeof peer.lastOkAt === 'string' || peer.lastOkAt === null) &&
     (typeof peer.lastError === 'string' || peer.lastError === null)
@@ -66,7 +91,14 @@ function readStore(): PeerStore {
   const store = parsed as Omit<PeerStore, 'machineId'>
   return {
     ...store,
-    peers: store.peers.map((peer) => ({ ...peer, sshOptions: peer.sshOptions ?? [] })),
+    peers: store.peers.map((peer) => ({
+      ...peer,
+      sshOptions: peer.sshOptions ?? [],
+      gatewayPort: peer.gatewayPort ?? null,
+      remoteGatewayPort: peer.remoteGatewayPort ?? null,
+      remoteGatewayInstanceId: peer.remoteGatewayInstanceId ?? null,
+      remoteGatewayCredential: peer.remoteGatewayCredential ?? null,
+    })),
     machineId: typeof (parsed as any).machineId === 'string' ? (parsed as any).machineId : '',
   }
 }
@@ -348,7 +380,7 @@ export type PeerRpcRequest =
   | { op: 'accept'; sourceMachineId: string; sshAddress: string; remoteInboundPort: number; remoteOutboundPort: number }
   | { op: 'disconnect'; sshAddress: string }
   | { op: 'drop'; machineId: string }
-type RpcResponse = { ok: true; peer?: MachinePeer; peers?: MachinePeer[]; machineId?: string } | { ok: false; error: string }
+type RpcResponse = { ok: true; peer?: MachinePeer; peers?: MachinePeer[]; machineId?: string; gateway?: PeerGatewayFacts } | { ok: false; error: string }
 
 function validRpc(value: unknown): value is PeerRpcRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -379,12 +411,29 @@ function parseRemoteReply(sshAddress: string, stdout: string, stderr: string): R
   throw new Error(`remote peer accept produced no peer reply from ${sshAddress}: spex must be on the login PATH of that ssh user (fix the remote login shell's PATH, then rerun spex peer connect). Remote output: ${lines.join(' | ') || stderr.trim() || '(none)'}`)
 }
 
+// @@@own gateway is read live, never captured - the peer service claims its control socket before
+// `spex dashboard` binds and publishes the host record, so at startup there is no gateway to name yet. Reading it
+// when a peer actually asks means the answer is either today's gateway or an honest absence.
+// The leg targets the PEER INGRESS, never the console port: a forward into the console entry would arrive as
+// a loopback socket and inherit the implicit trust this machine's own console has ([[gateway-auth]]), so a
+// gateway publishing no ingress is answered as no gateway at all. The credential is minted here for the
+// asking machine — the ssh login that carried this RPC is the authentication behind it.
+function localGatewayFacts(machineId: string): PeerGatewayFacts | null {
+  const record = readHostRecord()
+  if (!record || !validPort(record.peerPort)) return null
+  return { port: record.peerPort, instanceId: record.instanceId, credential: grantPeer(machineId).token }
+}
+
 function sshArgs(peer: MachinePeer): string[] {
   return [
     ...peer.sshOptions,
     '-N', '-o', 'ExitOnForwardFailure=yes',
     '-L', `127.0.0.1:${peer.outboundPort}:127.0.0.1:${peer.remoteInboundPort}`,
     '-R', `127.0.0.1:${peer.remoteOutboundPort}:127.0.0.1:${peer.inboundPort}`,
+    // @@@the gateway leg is omitted, never guessed - `-L` listens locally and sshd connects lazily, so a leg
+    // built for a gateway that has since died costs one refused proxy attempt and never the tunnel. A leg built
+    // for a gateway that was never published would cost a wrong port, which no later reader could detect.
+    ...(peer.gatewayPort && peer.remoteGatewayPort ? ['-L', `127.0.0.1:${peer.gatewayPort}:127.0.0.1:${peer.remoteGatewayPort}`] : []),
     '--', peer.sshAddress,
   ]
 }
@@ -463,7 +512,11 @@ export class MachinePeerGateway {
     try {
       if (request.op === 'list') return { ok: true, peers: listMachinePeers() }
       if (request.op === 'connect') return { ok: true, peer: await this.connect(request.sshAddress, request.sshOptions ?? []) }
-      if (request.op === 'accept') return { ok: true, peer: await this.accept(request), machineId: readPeerMachineId() }
+      // the accepting machine answers for its OWN gateway; the caller stores it as this peer's remote gateway
+      if (request.op === 'accept') {
+        const gateway = localGatewayFacts(request.sourceMachineId)
+        return { ok: true, peer: await this.accept(request), machineId: readPeerMachineId(), ...(gateway ? { gateway } : {}) }
+      }
       if (request.op === 'disconnect') {
         const peer = await this.disconnect(request.sshAddress)
         if (!peer) throw new Error(`no communication tunnel for SSH address ${JSON.stringify(request.sshAddress)}`)
@@ -493,13 +546,16 @@ export class MachinePeerGateway {
     this.startInbound(peer)
     const child = spawn('ssh', sshArgs(peer), { stdio: 'ignore' })
     this.children.set(peer.machineId, child)
-    child.once('error', (error) => this.tunnelEnded(peer.machineId, (error as Error).message))
-    child.once('exit', (code, signal) => this.tunnelEnded(peer.machineId, `ssh exited (${code ?? signal ?? 'unknown'})`))
+    child.once('error', (error) => this.tunnelEnded(peer.machineId, child, (error as Error).message))
+    child.once('exit', (code, signal) => this.tunnelEnded(peer.machineId, child, `ssh exited (${code ?? signal ?? 'unknown'})`))
     const next = { ...peer, state: 'connected' as const, lastOkAt: new Date().toISOString(), lastError: null }
     replacePeer(next)
   }
 
-  private tunnelEnded(machineId: string, error: string): void {
+  // @@@only the CURRENT dial reports - a superseded child (its leg was rebuilt) exits after its replacement is
+  // already registered, so accepting its exit would mark a live tunnel `connecting` and record a false error.
+  private tunnelEnded(machineId: string, child: ChildProcess, error: string): void {
+    if (this.children.get(machineId) !== child) return
     this.children.delete(machineId)
     if (this.closing) return
     const peer = listMachinePeers().find((item) => item.machineId === machineId)
@@ -510,8 +566,8 @@ export class MachinePeerGateway {
   private async connect(sshAddress: string, sshOptions: string[]): Promise<MachinePeer> {
     const existing = findMachinePeer(sshAddress)
     if (existing) {
-      if (existing.owner) this.ensureTunnel(existing)
-      return existing
+      if (existing.owner) await this.refreshGatewayLeg(existing)
+      return findMachinePeer(sshAddress) ?? existing
     }
     if (sshAddress.startsWith('-')) throw new Error('SSH address must not begin with -')
     const inboundPort = await freePort()
@@ -522,15 +578,48 @@ export class MachinePeerGateway {
     })], { maxBuffer: 64 * 1024 })
     const reply = parseRemoteReply(sshAddress, remote.stdout, remote.stderr)
     if (!reply.ok || !reply.peer || !validMachineId(reply.machineId)) throw new Error(reply.ok ? 'remote peer accept returned no machine identity' : reply.error)
+    const gateway = validGatewayFacts(reply.gateway) ? reply.gateway : null
     const peer: MachinePeer = {
       machineId: reply.machineId, sshAddress, sshOptions, inboundPort, outboundPort,
       remoteInboundPort: reply.peer.inboundPort, remoteOutboundPort: reply.peer.outboundPort,
+      gatewayPort: gateway ? await freePort() : null,
+      remoteGatewayPort: gateway?.port ?? null, remoteGatewayInstanceId: gateway?.instanceId ?? null,
+      remoteGatewayCredential: gateway?.credential ?? null,
       owner: true, state: 'connecting', createdAt: new Date().toISOString(), lastOkAt: null, lastError: null,
     }
     replacePeer(peer)
     this.startInbound(peer)
     this.ensureTunnel(peer)
     return findMachinePeer(sshAddress) ?? peer
+  }
+
+  // @@@an explicit refresh, not a heartbeat - the retry loop redials ssh with no remote RPC at all, so a far
+  // gateway that restarted on a different port would keep a forward aimed at a dead instance forever. Re-running
+  // `spex peer connect` is that refresh: it re-asks the far side which gateway it publishes now and rebuilds the
+  // leg when the instance changed. A refused ask leaves the recorded leg alone instead of erasing it, so an
+  // offline peer can still have its tunnel kicked the way it always could.
+  private async refreshGatewayLeg(peer: MachinePeer): Promise<void> {
+    const gateway = await this.askGatewayFacts(peer)
+    if (!gateway || gateway.instanceId === peer.remoteGatewayInstanceId) { this.ensureTunnel(peer); return }
+    const next = {
+      ...peer, gatewayPort: peer.gatewayPort ?? await freePort(),
+      remoteGatewayPort: gateway.port, remoteGatewayInstanceId: gateway.instanceId,
+      remoteGatewayCredential: gateway.credential,
+    }
+    replacePeer(next)
+    this.dropChild(peer.machineId)
+    this.ensureTunnel(next)
+  }
+
+  private async askGatewayFacts(peer: MachinePeer): Promise<PeerGatewayFacts | null> {
+    try {
+      const remote = await execFileAsync('ssh', [...peer.sshOptions, '--', peer.sshAddress, remoteCommand('peer-accept', {
+        sourceMachineId: readPeerMachineId(), sshAddress: peer.sshAddress,
+        remoteInboundPort: peer.inboundPort, remoteOutboundPort: peer.outboundPort,
+      })], { maxBuffer: 64 * 1024 })
+      const reply = parseRemoteReply(peer.sshAddress, remote.stdout, remote.stderr)
+      return reply.ok && validGatewayFacts(reply.gateway) ? reply.gateway : null
+    } catch { return null }
   }
 
   private async accept(request: Extract<PeerRpcRequest, { op: 'accept' }>): Promise<MachinePeer> {
@@ -540,6 +629,8 @@ export class MachinePeerGateway {
       machineId: request.sourceMachineId, sshAddress: request.sshAddress, sshOptions: [],
       inboundPort: await freePort(), outboundPort: await freePort(),
       remoteInboundPort: request.remoteInboundPort, remoteOutboundPort: request.remoteOutboundPort,
+      // the accepting side opens no ssh child, so it holds no forwarded port to the machine that dialled it
+      gatewayPort: null, remoteGatewayPort: null, remoteGatewayInstanceId: null, remoteGatewayCredential: null,
       owner: false, state: 'connected', createdAt: new Date().toISOString(), lastOkAt: new Date().toISOString(), lastError: null,
     }
     replacePeer(peer)
@@ -547,10 +638,19 @@ export class MachinePeerGateway {
     return peer
   }
 
-  private async drop(machineId: string): Promise<MachinePeer | null> {
+  private dropChild(machineId: string): void {
     const child = this.children.get(machineId)
-    if (child) { this.children.delete(machineId); try { child.kill('SIGTERM') } catch { /* already gone */ } }
+    if (!child) return
+    this.children.delete(machineId)
+    try { child.kill('SIGTERM') } catch { /* already gone */ }
+  }
+
+  private async drop(machineId: string): Promise<MachinePeer | null> {
+    this.dropChild(machineId)
     this.stopInbound(machineId)
+    // dropping the link destroys the generation behind any credential this machine issued to that one, so
+    // an unlinked machine holds nothing that still opens this gateway's peer ingress.
+    revokePeer(machineId)
     return removePeer((peer) => peer.machineId === machineId)
   }
 

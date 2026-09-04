@@ -49,6 +49,17 @@ internal services; the hub owns the outside.
   extensionless backend routes likewise remain proxied. A bare `/p/:projectId`
   navigation redirects to the slash-terminated scope before the shell is served, so relative assets resolve
   inside the project scope.
+- `/machines`, `/m/:machineId/*` — the machine surface ([[machine-routing]]): `GET /machines` names this
+  machine and lists the peered ones with whether each publishes a reachable gateway, and
+  `/m/:machineId/*` reverse-proxies — WebSocket upgrades included — into that machine's gateway over
+  [[machine-peer]]'s forwarded leg, with the `/m/:machineId` segment stripped and the leg credential
+  attached. Admin scope only, because that credential is admin-equivalent on the far machine, so a
+  project-scoped visitor gains nothing across the link; a bare `/m/:machineId` redirects to the
+  slash-terminated scope so relative assets resolve under the machine prefix. Two absences answer
+  differently because they mean different things: a machine nobody is linked to is 404, while a linked
+  machine with no gateway leg is 503 — its agent channel is unaffected. Both routes answer 404 on a
+  `'peer'` listener: a machine reading this fleet, or spending this machine's credential on a third one,
+  is a confused deputy one hop deeper.
 - `/login`, `/logout` — the admin session, same designed page.
 
 **The registry is the endpoint records, not a second config.** A project = a live
@@ -61,6 +72,13 @@ other host is ignored loudly and never proxied, so a crafted record cannot turn 
 proxy. A projectId arrives as one URL path segment and is validated explicitly (shape + registry
 membership) before any lookup; unknown or hostile ids answer 404 before any upstream contact.
 
+**A proxied hop re-anchors what its upstream said about ITSELF.** The far gateway on a machine route
+believes it is root, so an absolute path in its own response headers — `Location: /p/projA/login` — would
+send the browser to THIS machine's page at a URL that looked like the other machine's. The machine hop
+therefore prefixes a leading-slash `Location` with `/m/:machineId` and drops `Set-Cookie` whole: the hop is
+authorized by the leg credential and never by a cookie, and a gateway cookie name carries only the port, so
+two gateways sharing a port number would otherwise clobber each other's session in one browser.
+
 **Backends never see the gateway's credentials.** The hub's own cookies (`spex_*`) are stripped from every
 proxied request and upgrade — a visitor's other cookies pass through untouched. Combined with
 [[gateway-auth]]'s store, no password material ever crosses into a repo, a backend, or a backend log.
@@ -72,8 +90,16 @@ response, socket, and transform, so a scoped SSE subscription cannot survive its
 The raw WebSocket upgrade, including the posted-web route, keeps its existing paired FIN/close/error lifecycle
 at the upgrade seam.
 
-**Launch seam.** `startHubGateway({port, host, tls})` is the engine, TLS-capable via the same
-resolved-cert posture as [[public-mode]]. The operator verb is `spex dashboard` ([[host-gateway]]), which
+**Launch seam.** `startHubGateway({port, host, tls, entry})` is the engine, TLS-capable via the same
+resolved-cert posture as [[public-mode]]. `host` is REQUIRED, not defaulted: the hub is a multi-project
+front door, so which interface it faces is the caller's declaration and never something the engine picks on
+the caller's behalf ([[listener-readiness]]). The console ready line therefore names the face actually bound,
+with no default re-applied at the point of printing. `entry` is which of [[gateway-auth]]'s two doors this listener IS —
+`'console'` by default, so every existing caller keeps its behaviour — and it is fixed at construction, never
+read from a request: a forwarded socket and a console socket are the same loopback address, so the listener is
+the one fact the caller cannot forge. A `'peer'` listener carries no visitor login at all (`/login` and
+`/logout` answer 404 there), reads the peer credential from a header, and answers every refusal as a 401
+naming that header instead of redirecting a machine to a login page it cannot fill in. The operator verb is `spex dashboard` ([[host-gateway]]), which
 mounts the host registry/catalog/operations onto the hub's **extension seam** — three optional hooks, all
 inert when absent: `listProjects` enriches the `GET /projects` rows (the hub keeps the envelope and the
 admin gate), `adminRoute` handles extra `/projects/*` routes only AFTER admin authorization, and

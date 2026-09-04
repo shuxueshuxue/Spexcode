@@ -4,12 +4,16 @@ import { dirname, join } from 'node:path'
 import { spexcodeHome } from '@spexcode/spec-core'
 
 export type Verifier = { algo: 'scrypt'; N: number; r: number; p: number; salt: string; hash: string; gen: string }
-export type AuthStore = { v: 1; secret: string; admin?: Verifier; projects: Record<string, Verifier> }
-export type Scope = { s: 'admin' } | { s: 'project'; p: string }
-export type Claims = { v: 1; s: 'admin' | 'project'; p?: string; g: string; t: number }
+export type PeerGrant = { machineId: string; gen: string; createdAt: number }
+export type AuthStore = { v: 1; secret: string; admin?: Verifier; projects: Record<string, Verifier>; peers: Record<string, PeerGrant> }
+export type Scope = { s: 'admin' } | { s: 'project'; p: string } | { s: 'peer'; m: string }
+export type Claims = { v: 1; s: 'admin' | 'project' | 'peer'; p?: string; m?: string; g: string; t: number }
 export type Decision =
-  | { ok: true; via: 'admin' | 'project' | 'open' | 'loopback' }
-  | { ok: false; reason: 'admin-login' | 'locked' | 'project-login' }
+  | { ok: true; via: 'admin' | 'project' | 'open' | 'loopback' | 'peer'; machineId?: string }
+  | { ok: false; reason: 'admin-login' | 'locked' | 'project-login' | 'peer-credential' }
+// Which LISTENER a request arrived on. A forwarded socket and a console socket are the same loopback
+// address, so nothing IN the request can separate them; the entry is the one fact the caller cannot forge.
+export type Entry = 'console' | 'peer'
 
 const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000 // matches the single-project gateway's 30-day cookie
 const SCRYPT = { N: 16384, r: 8, p: 1 } as const
@@ -25,9 +29,9 @@ export function authStorePath(): string {
 export function loadAuthStore(): AuthStore {
   try {
     const raw = JSON.parse(readFileSync(authStorePath(), 'utf8'))
-    if (raw?.v === 1 && typeof raw.secret === 'string' && raw.secret) return { v: 1, secret: raw.secret, admin: raw.admin, projects: raw.projects ?? {} }
+    if (raw?.v === 1 && typeof raw.secret === 'string' && raw.secret) return { v: 1, secret: raw.secret, admin: raw.admin, projects: raw.projects ?? {}, peers: raw.peers ?? {} }
   } catch { /* absent or unreadable → fresh below; malformed secrets must not be half-trusted */ }
-  const fresh: AuthStore = { v: 1, secret: randomBytes(32).toString('base64url'), projects: {} }
+  const fresh: AuthStore = { v: 1, secret: randomBytes(32).toString('base64url'), projects: {}, peers: {} }
   saveAuthStore(fresh)
   return fresh
 }
@@ -88,6 +92,31 @@ export function clearProjectPassword(projectId: string): AuthStore {
   return store
 }
 
+// ---- peer grants ------------------------------------------------------------------------------------
+// A peer credential is ISSUED, not inherited: it names one machine id and there is no password behind it —
+// the SSH-authenticated accept handshake IS the authentication, and this is the credential it hands back.
+// Granting is idempotent in the GENERATION: re-accepting hands that machine a fresh token on the same gen,
+// so an ordinary refresh never invalidates the credential the caller already holds. Only `revokePeer`
+// destroys the generation, and destroying it is what ends every token that machine was ever handed.
+
+export function grantPeer(machineId: string, nowMs = Date.now()): { store: AuthStore; token: string } {
+  const store = loadAuthStore()
+  store.peers[machineId] ??= { machineId, gen: randomBytes(8).toString('base64url'), createdAt: nowMs }
+  saveAuthStore(store)
+  return { store, token: mintToken(store, { s: 'peer', m: machineId }, nowMs) }
+}
+
+export function revokePeer(machineId: string): AuthStore {
+  const store = loadAuthStore()
+  delete store.peers[machineId]
+  saveAuthStore(store)
+  return store
+}
+
+export function listPeerGrants(store = loadAuthStore()): PeerGrant[] {
+  return Object.values(store.peers).sort((a, b) => a.machineId.localeCompare(b.machineId))
+}
+
 // ---- signed session tokens --------------------------------------------------------------------------
 
 function sign(secret: string, payload: string): string {
@@ -96,9 +125,9 @@ function sign(secret: string, payload: string): string {
 
 // a token exists only for a scope that has a verifier — its `g` claim is that verifier's current gen.
 export function mintToken(store: AuthStore, scope: Scope, nowMs = Date.now()): string {
-  const v = scope.s === 'admin' ? store.admin : store.projects[scope.p]
-  if (!v) throw new Error(`gateway-auth: cannot mint a ${scope.s} token with no verifier configured`)
-  const claims: Claims = { v: 1, s: scope.s, ...(scope.s === 'project' ? { p: scope.p } : {}), g: v.gen, t: nowMs }
+  const gen = scope.s === 'admin' ? store.admin?.gen : scope.s === 'project' ? store.projects[scope.p]?.gen : store.peers[scope.m]?.gen
+  if (!gen) throw new Error(`gateway-auth: cannot mint a ${scope.s} token with no verifier configured`)
+  const claims: Claims = { v: 1, s: scope.s, ...(scope.s === 'project' ? { p: scope.p } : scope.s === 'peer' ? { m: scope.m } : {}), g: gen, t: nowMs }
   const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
   return `${payload}.${sign(store.secret, payload)}`
 }
@@ -118,6 +147,12 @@ export function verifyToken(store: AuthStore, token: string, nowMs = Date.now())
   if (claims.s === 'project' && typeof claims.p === 'string') {
     const v = store.projects[claims.p]
     return v && constEq(claims.g, v.gen) ? claims : null
+  }
+  // a peer's gen lives in its own grant, so revoking one machine leaves every other machine's credential
+  // valid and leaves no valid credential for the machine that was dropped.
+  if (claims.s === 'peer' && typeof claims.m === 'string') {
+    const grant = store.peers[claims.m]
+    return grant && constEq(claims.g, grant.gen) ? claims : null
   }
   return null
 }
@@ -156,7 +191,20 @@ export function isLoopback(addr: string | null | undefined): boolean {
 
 export type Route = { kind: 'admin' } | { kind: 'project'; projectId: string }
 
-export function authorize(store: AuthStore, route: Route, cookieHeader: string | undefined, remoteAddr: string | null | undefined, port: number): Decision {
+// A peer credential travels as a HEADER, never a cookie: it belongs to the calling machine, not to the
+// browser being proxied, and a cookie would be attached to unrelated requests by the visitor's own agent.
+export const PEER_CREDENTIAL_HEADER = 'x-spex-peer-credential'
+
+export function authorize(store: AuthStore, route: Route, cookieHeader: string | undefined, remoteAddr: string | null | undefined, port: number, entry: Entry = 'console', peerToken?: string | null): Decision {
+  // The peer ingress is a different door, so it decides first and alone. Implicit loopback trust is never
+  // granted here: a machine has no console, and its socket is loopback only because a forward made it so.
+  // Cookies arriving on this entry belong to the far side's visitor and settle nothing about the machine.
+  if (entry === 'peer') {
+    const claims = peerToken ? verifyToken(store, peerToken) : null
+    if (claims?.s === 'peer' && typeof claims.m === 'string') return { ok: true, via: 'peer', machineId: claims.m }
+    return { ok: false, reason: 'peer-credential' }
+  }
+
   const adminTok = cookieOf(cookieHeader, adminCookieName(port))
   const adminClaims = adminTok ? verifyToken(store, adminTok) : null
   const adminOk = adminClaims?.s === 'admin'

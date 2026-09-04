@@ -6,9 +6,15 @@ scenarios:
       Compile the surface:hook nodes to the persistent manifest (`spex materialize`) and compare to the
       registered event→script surface.
     expected: >-
-      The manifest is exactly UserPromptSubmit→mark-active; PreToolUse→mark-active(order 10)+spec-first(order
-      20, block) in that order; PostToolUse→spec-of-file; Stop→stop-gate(block); StopFailure→session-fail;
-      Notification→idle — one line per (node × event), sorted by event then order.
+      The manifest is exactly the compiled projection of the tree's `surface: hook` nodes: one
+      `event·order·block·script` line per (node × event), sorted by event then order, each row's block flag
+      and order taken from that node's own declaration and its co-located `.sh` named as the handler. A
+      `surface: system` node (a config plugin such as comment-altitude) never appears. Byte-diffing the file
+      against a derivation from the nodes' frontmatter shows no difference — so adding or retiring a hook node
+      moves the manifest with it, rather than the manifest being a frozen list that drifts. On the stock seed
+      that projection is UserPromptSubmit→mark-active(10)+session-listen(20, block); PreToolUse→mark-active(10)
+      +spec-first(20, block); PostToolUse→spec-of-file; SessionStart→session-listen(20, block); Stop→stop-gate
+      (block); StopFailure→session-fail; Notification→idle.
   - name: per-tree-manifest-isolation
     tags: [backend-api]
     description: >-
@@ -26,7 +32,11 @@ scenarios:
     description: >-
       Simulate a tree without a per-tree manifest while a stale global manifest exists. Fire a dispatch from that tree.
     expected: >-
-      Dispatch exits with the installation error and does not execute the stale global manifest.
+      Dispatch exits 78 with `dispatch.sh: current tree has no hook manifest` on stderr and does not execute
+      the stale global manifest — a tree that published a harness selection but lost its slot manifest is a
+      broken installation, not a silent no-op. (A tree with no published selection at all is the separate
+      INERT path: the allowlist gate exits 0 before the manifest is consulted.) One `spex materialize` in that
+      tree restores its slot, and the stale global file is still never read.
   - name: block-decision-passes-through
     tags: [backend-api]
     description: >-

@@ -75,9 +75,11 @@ scenarios:
       contract/filter/ignore output, the shared Codex shim/trust, and dispatch from an unselected tree.
     expected: >-
       Checkout method changes nothing: the candidate reads its own codex selection and materializes
-      successfully in both shapes. Each tree keeps only its selected local artifacts and its own filter payload;
-      the first upgraded tree does not expose an older sibling, and the legacy common entries retire after the
-      last registered tree publishes its local receipt. A later sibling materialize cannot rewrite local bytes.
+      successfully in both shapes. Each tree keeps only its selected local artifacts and its own filter payload,
+      and the shared block collapses to checkout-invariant residue as soon as ANY tree materializes — so a
+      sibling still on a retired common projection then shows its OWN untracked artifacts, and that tree's own
+      materialize is the entire repair; no pass imports a sibling's projection. A later sibling materialize
+      cannot rewrite local bytes.
       Project-scoped Codex transport survives a sibling materialize, while the final per-tree allowlist makes
       dispatch in an unselected tree a no-op. Git status/index keep host prose honest and no user global ignore
       configuration is replaced.

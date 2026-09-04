@@ -20,7 +20,8 @@ import {
 import { isWsl } from './host-facts.js'
 import { encodeProject } from '@spexcode/spec-core'
 import { tsxBin } from './tsx-bin.js'
-import { setAdminPassword, setProjectPassword, loadAuthStore } from './gateway-auth.js'
+import { setAdminPassword, setProjectPassword, loadAuthStore, grantPeer, PEER_CREDENTIAL_HEADER } from './gateway-auth.js'
+import { readHostRecord } from './host-record.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -787,5 +788,52 @@ test('a linked-worktree `spex serve` registers its actual served root without re
   } finally {
     try { child.kill('SIGKILL') } catch { /* already gone */ }
     dropOwnEndpoint('main-generation', canonicalRepo)
+  }
+})
+
+// The gateway has TWO doors ([[gateway-auth]]): the console a human reaches and the always-loopback peer
+// ingress a linked machine's forward lands on ([[machine-routing]]). This measures the host wiring end to
+// end: one published record naming both, the console's implicit-loopback admin grant intact on its own port,
+// and that grant NOT reachable on the other port without an issued credential.
+test('the host gateway publishes both doors and its peer ingress needs an issued credential', async () => {
+  const home = freshHome('peer-door')
+  const rootLive = join(home, 'peer-live')
+  mkdirSync(rootLive, { recursive: true })
+  const backend = await fakeBackend({ instanceId: 'inst-peer', root: rootLive })
+  publishEndpoint(rec({ root: rootLive, url: backend.url, instanceId: 'inst-peer' }))
+  const dist = mkdtempSync(join(tmpdir(), 'spex-host-dist-'))
+  writeFileSync(join(dist, 'index.html'), '<html>shell</html>')
+
+  const gwPort = await freePort()
+  const gw = startHostDashboard({ port: gwPort, host: '127.0.0.1', distDir: dist })
+  await new Promise<void>((res) => gw.server.once('listening', () => res()))
+  try {
+    // the ONE record names both doors — an absent peerPort would read as "no machine entry", so the publish
+    // may not happen until the second bind lands, whichever order the two listeners get there in
+    const record = readHostRecord()
+    assert.ok(record, 'the gateway published its host record')
+    assert.equal(typeof record!.peerPort, 'number')
+    assert.notEqual(record!.peerPort, gwPort, 'the peer ingress is its own listener, not the console port')
+    const peerPort = record!.peerPort!
+
+    // the console door is unchanged: loopback with no admin password is still implicitly admin
+    const console_ = await getJson(`http://127.0.0.1:${gwPort}/projects`)
+    assert.equal(console_.status, 200)
+    assert.equal(console_.body.adminGated, false)
+
+    // the same loopback caller on the OTHER door gets nothing — this is the laundering the ingress exists to
+    // stop: a forwarded socket is loopback too, so implicit trust may never be granted here
+    const bare = await getJson(`http://127.0.0.1:${peerPort}/projects`)
+    assert.equal(bare.status, 401)
+    assert.equal(bare.body.header, PEER_CREDENTIAL_HEADER)
+
+    const token = grantPeer('44444444-3333-2222-1111-000000000000').token
+    const admitted = await fetch(`http://127.0.0.1:${peerPort}/projects`, { headers: { [PEER_CREDENTIAL_HEADER]: token } })
+    assert.equal(admitted.status, 200)
+    assert.ok(Array.isArray((await admitted.json()).projects), 'the credential reaches the same admin surface')
+  } finally {
+    await gw.close()
+    backend.server.close()
+    dropOwnEndpoint('inst-peer', rootLive)
   }
 })

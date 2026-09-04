@@ -9,6 +9,10 @@ export type HostRecord = {
   pid: number
   instanceId: string
   startedAt: string
+  // the always-loopback peer ingress ([[gateway-auth]]'s second door). Absent means this gateway publishes
+  // no machine-to-machine entry, and a caller must record no gateway leg rather than aim one at the console
+  // port — a forward into the console port would launder that port's loopback trust.
+  peerPort?: number
 }
 
 export const hostRecordPath = (): string => join(spexcodeHome(), 'host.json')
@@ -40,6 +44,9 @@ export function readHostRecord(file = hostRecordPath()): HostRecord | null {
     const url = new URL(record.url)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
     try { process.kill(record.pid, 0) } catch { return null }
-    return record as HostRecord
+    // a malformed peer port is OVERWRITTEN with absent, never spread through: no leg beats a leg pointing
+    // somewhere nobody can disprove.
+    const peerPort = Number.isInteger(record.peerPort) && record.peerPort > 0 && record.peerPort <= 65535 ? record.peerPort : undefined
+    return { ...(record as HostRecord), peerPort }
   } catch { return null }
 }

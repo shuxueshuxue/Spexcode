@@ -29,6 +29,7 @@ import { cliEntrypointArgs } from './tsx-bin.js'
 import { clearProjectPassword } from './gateway-auth.js'
 import { resolveHarnessTargets } from './harness-select.js'
 import { collectHostFacts, isWsl } from './host-facts.js'
+import { ALL_INTERFACES, LOOPBACK_HOST, resolveConfiguredHost } from './listen.js'
 import { dropOwnHostRecord, newHostRecord, publishHostRecord, type HostRecord } from './host-record.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -960,12 +961,37 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
     fallback: (req, res, path) => serveStatic(req, res, distDir, path),
   }
 
-  const hostRecord = newHostRecord(`${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${opts.port}`)
+  // The face this console binds, resolved ONCE, and the address a reader must DIAL to reach it. They differ for
+  // exactly one value: a wide bind is not an address anything can connect to, so the record names loopback.
+  const consoleHost = resolveConfiguredHost(opts.host)
+  const dialable = consoleHost === ALL_INTERFACES ? LOOPBACK_HOST : consoleHost
+  const recordUrl = (port: number) => `${opts.tls ? 'https' : 'http'}://${dialable}:${port}`
+
+  const hostRecord = newHostRecord(recordUrl(opts.port))
+
+  // @@@one record, two doors - the single publish waits for BOTH binds. Which listener wins the race is not a
+  // promise Node makes, so counting them is what keeps this process from ever publishing a record that omits a
+  // door it has: a failed bind exits the process (listenOrExit), so a record reaches disk only with both ports
+  // in it. An absent `peerPort` therefore has exactly one source — a record left by an OLDER binary that had
+  // no peer ingress — and its one honest reading is "that gateway offers no machine entry", not a timing
+  // window here.
+  let bound = 0
+  const publishWhenBothBound = () => { if (++bound === 2) publishHostRecord(hostRecord) }
+
+  // The peer ingress is the second door: loopback and plain HTTP by construction — the ssh tunnel is the
+  // transport's encryption, and `--host` widens the console entry only. Requests arriving here are decided
+  // as `entry: 'peer'`, so the implicit loopback grant the console entry gives a human at this machine is
+  // never reachable through a forward.
+  const peerIngress = startHubGateway({
+    port: 0, host: LOOPBACK_HOST, tls: null, extensions, entry: 'peer', label: 'peer ingress',
+    onListen: (actualPort) => { hostRecord.peerPort = actualPort; publishWhenBothBound() },
+  })
+
   const server = startHubGateway({
-    port: opts.port, host: opts.host ?? '127.0.0.1', tls: opts.tls ?? null, extensions,
+    port: opts.port, host: consoleHost, tls: opts.tls ?? null, extensions,
     onListen: (actualPort) => {
-      hostRecord.url = `${opts.tls ? 'https' : 'http'}://${opts.host && opts.host !== '0.0.0.0' ? opts.host : '127.0.0.1'}:${actualPort}`
-      publishHostRecord(hostRecord)
+      hostRecord.url = recordUrl(actualPort)
+      publishWhenBothBound()
     },
     onBindFail: () => dropOwnHostRecord(hostRecord.instanceId),
   })
@@ -985,6 +1011,8 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
       for (const c of sseClients) c.destroy()
       sseClients.clear()
       await peers.close()
+      await new Promise<void>((resolve) => peerIngress.close(() => resolve()))
+      peerIngress.closeAllConnections?.()
       await new Promise<void>((resolve) => server.close(() => resolve()))
       server.closeAllConnections?.()
       dropOwnHostRecord(hostRecord.instanceId)

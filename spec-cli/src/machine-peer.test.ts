@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -427,6 +427,103 @@ test('ordinary ssh options are parsed in ssh grammar, recorded on the peer, and 
   } finally {
     if (previous === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('a dial forwards the far gateway only when the far side publishes one, and a restart rebuilds that leg', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-peer-gateway-leg-'))
+  const bin = join(home, 'bin')
+  mkdirSync(bin, { recursive: true })
+  const log = join(home, 'ssh-argv.log')
+  const reply = join(home, 'reply.json')
+  // a dial is the invocation carrying -N; every other invocation is the remote peer-accept RPC, which answers
+  // with whatever the far side is currently publishing
+  writeFileSync(join(bin, 'ssh'), [
+    '#!/bin/sh',
+    `{ printf '%s\\t' "$@"; echo; } >> ${log}`,
+    'for arg in "$@"; do if [ "$arg" = "-N" ]; then exec sleep 30; fi; done',
+    `cat ${reply}`,
+    '',
+  ].join('\n'), { mode: 0o755 })
+  const dials = (): string[][] => {
+    let lines: string[] = []
+    try { lines = readFileSync(log, 'utf8').split('\n').filter((line) => line.length > 0) } catch { /* not dialled yet */ }
+    return lines.map((line) => line.split('\t')).filter((argv) => argv.includes('-N'))
+  }
+  const dialCount = async (want: number): Promise<string[][]> => {
+    for (let attempt = 0; attempt < 200 && dials().length < want; attempt++) await new Promise((r) => setTimeout(r, 10))
+    return dials()
+  }
+  const legs = (argv: string[]): string[] => argv.filter((arg, index) => argv[index - 1] === '-L')
+  const publish = (gateway: { port: number; instanceId: string; credential?: string } | null) => writeFileSync(reply, `${JSON.stringify({
+    ok: true, machineId: SESSION, peer: { inboundPort: 41001, outboundPort: 41002 }, ...(gateway ? { gateway } : {}),
+  })}\n`)
+
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  process.env.SPEXCODE_HOME = home
+  process.env.PATH = `${bin}:${previousPath ?? ''}`
+  const gateway = new MachinePeerGateway()
+  try {
+    await gateway.start()
+
+    // a far side with no published host record leaves the leg absent rather than guessing a port
+    publish(null)
+    const bare = await control({ op: 'connect', sshAddress: 'gw-peer' })
+    assert.ok(bare.ok && bare.peer)
+    assert.equal(bare.peer.remoteGatewayPort, null)
+    assert.equal(bare.peer.gatewayPort, null)
+    assert.equal(bare.peer.remoteGatewayInstanceId, null)
+    const first = await dialCount(1)
+    assert.deepEqual(legs(first[0]), [`127.0.0.1:${bare.peer.outboundPort}:127.0.0.1:41001`], 'only the control-plane leg')
+
+    // a far side naming a port but issuing no credential publishes no INGRESS: the leg stays absent rather
+    // than forwarding a port whose loopback trust it would launder
+    publish({ port: 9443, instanceId: 'instance-a' })
+    const uncredentialed = await control({ op: 'connect', sshAddress: 'gw-peer' })
+    assert.ok(uncredentialed.ok && uncredentialed.peer)
+    assert.equal(uncredentialed.peer.remoteGatewayPort, null)
+    assert.equal(uncredentialed.peer.gatewayPort, null)
+    assert.equal(uncredentialed.peer.remoteGatewayCredential, null)
+    assert.equal(dials().length, 1, 'nothing to rebuild, so nothing redials')
+
+    // once it publishes one, re-running connect adopts it and rebuilds the dial
+    publish({ port: 9443, instanceId: 'instance-a', credential: 'cred-a' })
+    const adopted = await control({ op: 'connect', sshAddress: 'gw-peer' })
+    assert.ok(adopted.ok && adopted.peer)
+    assert.equal(adopted.peer.remoteGatewayPort, 9443)
+    assert.equal(adopted.peer.remoteGatewayInstanceId, 'instance-a')
+    assert.equal(adopted.peer.remoteGatewayCredential, 'cred-a', 'the issued credential is recorded beside the leg')
+    const forwarded = adopted.peer.gatewayPort
+    assert.ok(forwarded && forwarded > 0, 'a local port is minted for the gateway leg')
+    assert.equal(adopted.peer.state, 'connected')
+    assert.equal(adopted.peer.lastError, null, 'the superseded dial does not report a failure over the live one')
+    const second = await dialCount(2)
+    assert.deepEqual(legs(second[1]), [`127.0.0.1:${adopted.peer.outboundPort}:127.0.0.1:41001`, `127.0.0.1:${forwarded}:127.0.0.1:9443`])
+
+    // the same instance is not a change, so the live tunnel is left alone
+    const unchanged = await control({ op: 'connect', sshAddress: 'gw-peer' })
+    assert.ok(unchanged.ok && unchanged.peer)
+    assert.equal(unchanged.peer.gatewayPort, forwarded)
+    assert.equal(dials().length, 2, 'an unchanged instance redials nothing')
+
+    // a restarted far gateway is a new instance on a new port: the local port is kept, the far end is repointed
+    publish({ port: 9444, instanceId: 'instance-b', credential: 'cred-b' })
+    const restarted = await control({ op: 'connect', sshAddress: 'gw-peer' })
+    assert.ok(restarted.ok && restarted.peer)
+    assert.equal(restarted.peer.gatewayPort, forwarded, 'the forwarded local port is stable across a far restart')
+    assert.equal(restarted.peer.remoteGatewayPort, 9444)
+    assert.equal(restarted.peer.remoteGatewayInstanceId, 'instance-b')
+    assert.equal(restarted.peer.remoteGatewayCredential, 'cred-b', 'a restart re-issues the credential with the leg')
+    const third = await dialCount(3)
+    assert.deepEqual(legs(third[2]), [`127.0.0.1:${restarted.peer.outboundPort}:127.0.0.1:41001`, `127.0.0.1:${forwarded}:127.0.0.1:9444`])
+    assert.equal(listMachinePeers()[0].lastError, null)
+  } finally {
+    await gateway.close()
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
     rmSync(home, { recursive: true, force: true })
   }
 })

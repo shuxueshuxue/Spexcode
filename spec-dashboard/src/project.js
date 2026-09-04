@@ -8,15 +8,24 @@
 // Outside the gateway (vite dev, a single-project `spex serve ui`) the pathname has no /p/ prefix, the
 // base is '' and every URL is byte-identical to the pre-multi-project app.
 
-// '/p/<id>' or '/p/<id>/anything' → that id; anything else → null. The id segment is URI-decoded for
-// display/API use; the RAW segment is kept for prefix building so the base always matches the address
-// the page was actually served under.
+// '/p/<id>' or '/p/<id>/anything' → that id; anything else → null, optionally behind a machine segment
+// ('/m/<machineId>/p/<id>/…' — [[machine-routing]]). Segments are URI-decoded for display/API use; the RAW
+// segments are kept for prefix building so the base always matches the address the page was actually served
+// under. The machine prefix needs no other module to know it exists: it simply becomes part of the base, and
+// every `/api` call, terminal socket and SSE stream a scoped page makes rides the same prefix it was served
+// under — which is the whole reason the machine dimension lives in the ADDRESS rather than in a client.
+const decodeSegment = (raw) => {
+  try { return decodeURIComponent(raw) } catch { return raw } // malformed escape — use the raw segment
+}
 export function parseProjectPath(pathname) {
-  const m = /^\/p\/([^/]+)(?:\/|$)/.exec(pathname || '')
-  if (!m) return { id: null, base: '' }
-  let id = m[1]
-  try { id = decodeURIComponent(id) } catch { /* malformed escape — use the raw segment */ }
-  return { id, base: `/p/${m[1]}` }
+  const m = /^(?:\/m\/([^/]+))?\/p\/([^/]+)(?:\/|$)/.exec(pathname || '')
+  if (!m) return { machineId: null, id: null, base: '' }
+  const machinePrefix = m[1] ? `/m/${m[1]}` : ''
+  return {
+    machineId: m[1] ? decodeSegment(m[1]) : null,
+    id: decodeSegment(m[2]),
+    base: `${machinePrefix}/p/${m[2]}`,
+  }
 }
 
 const scope = parseProjectPath(typeof location !== 'undefined' ? location.pathname : '')
@@ -24,6 +33,9 @@ const scope = parseProjectPath(typeof location !== 'undefined' ? location.pathna
 // the current project scope: null/'' at the hub root (and in every pre-gateway serving mode).
 export const PROJECT_ID = scope.id
 export const PROJECT_BASE = scope.base
+// the machine this page's project lives on, or null for the bare form — which permanently means THIS
+// machine. A remote scope is not a different app: it is this app at a deeper prefix.
+export const PROJECT_MACHINE_ID = scope.machineId
 
 // the ONE URL builder every backend call routes through: `/api/...` paths get the scope prefix; anything
 // else (the root-scoped /projects catalog, an absolute URL) passes through untouched. Exported as a pure
@@ -34,7 +46,8 @@ export const apiUrl = (path) => scopedApiUrl(path, PROJECT_BASE)
 // Hash-preserving project addresses for cross-scope navigation (the selector, the hub's Open action).
 // The id is encoded per-segment so a path-derived id with awkward chars survives the address bar. The
 // hub itself is one global pathname, never an in-shell hash route.
-export const projectHref = (id, hash = '#/graph') => `/p/${encodeURIComponent(id)}/${hash}`
+export const projectHref = (id, hash = '#/graph', machineId = null) =>
+  `${machineId ? `/m/${encodeURIComponent(machineId)}` : ''}/p/${encodeURIComponent(id)}/${hash}`
 export const hubHref = () => '/projects'
 
 // The retired scoped admin route crosses from a project pathname into the global hub. Resolve it before

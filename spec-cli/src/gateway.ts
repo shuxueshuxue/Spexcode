@@ -9,7 +9,7 @@ import { gzipSync, createGzip } from 'node:zlib'
 import { join, normalize, extname } from 'node:path'
 import { homedir } from 'node:os'
 import { loginPage } from './login-page.js'
-import { listenOrExit } from './listen.js'
+import { listenOrExit, LOOPBACK_HOST } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
 import { postedSessionWeb, SessionWebError } from './session-web.js'
 import { ensureDashboardArtifact } from './dashboard-assets.js'
@@ -109,7 +109,7 @@ export type GatewayOpts = {
   password: string
   tls: { cert: string; key: string } | null
   distDir: string
-  host?: string
+  host: string
   label?: string
   onBindFail?: () => void
   projectRoot?: string
@@ -168,17 +168,16 @@ export function startGateway(opts: GatewayOpts): void {
     up.once('close', () => socket.destroy())
   })
 
-  // `spex serve ui` passes an explicit host (loopback by default, --host to widen); `--public` passes
-  // none → bind ALL interfaces (the original behaviour, IPv4+IPv6), so adding the local path never
-  // narrows the public gateway's reach. The gate note keys on LOOPBACK, not on host-being-explicit:
-  // an ungated loopback bind is normal, an ungated wide bind is announced — never silent.
-  const isLoopback = opts.host === '127.0.0.1' || opts.host === 'localhost' || opts.host === '::1'
+  // Every caller states its face ([[listener-readiness]]): `spex serve ui` declares loopback, `--public`
+  // declares ALL_INTERFACES, and --host moves either one. The gate note keys on LOOPBACK, not on how the
+  // host arrived: an ungated loopback bind is normal, an ungated wide bind is announced — never silent.
+  const isLoopback = opts.host === LOOPBACK_HOST || opts.host === 'localhost' || opts.host === '::1'
   const scheme = secure ? 'https' : 'http'
   const label = opts.label ?? 'public mode'
   const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
   const ready = (port: number) => {
-    const lines = [...(opts.readyLines ?? []), `[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${port}${gate}, proxying /api to :${opts.upstreamPort}`]
-    if (!secure && !isLoopback && !opts.host) lines.push('[gateway] (TLS off — --http)')
+    const lines = [...(opts.readyLines ?? []), `[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : opts.host}:${port}${gate}, proxying /api to :${opts.upstreamPort}`]
+    if (!secure && !isLoopback) lines.push('[gateway] (TLS off — --http)')
     return lines
   }
   // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
@@ -227,7 +226,11 @@ function appendVary(current: string | string[] | undefined, token: string): stri
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
 // `path` and `headers` optionally override routing inputs (the host gateway strips its /p/:projectId
 // prefix and gateway cookies); transport ownership stays here once. Defaults pass the request through.
-export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1') {
+// `rewriteResponseHeaders` is the hop's chance to re-anchor what its upstream said about ITSELF. A proxy
+// that mounts an upstream under a prefix must fix up header values naming absolute paths, or the
+// upstream's `Location: /projects` sends the browser to THIS server's /projects — a different machine's
+// page at a URL that looked like the other one's. Omitted, the upstream's headers pass through verbatim.
+export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1', rewriteResponseHeaders?: (headers: http.IncomingHttpHeaders) => http.OutgoingHttpHeaders) {
   let upstreamResponse: http.IncomingMessage | null = null
   let transform: ReturnType<typeof createGzip> | null = null
   let settled = false
@@ -303,9 +306,10 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
 
     const type = String(received.headers['content-type'] || '')
     const eligible = !received.headers['content-encoding'] && COMPRESSIBLE.test(type) && !type.startsWith('text/event-stream')
+    const upstreamHeaders = rewriteResponseHeaders ? rewriteResponseHeaders(received.headers) : received.headers
     const responseHeaders: http.OutgoingHttpHeaders = eligible
-      ? { ...received.headers, vary: appendVary(received.headers.vary, 'Accept-Encoding') }
-      : received.headers
+      ? { ...upstreamHeaders, vary: appendVary(upstreamHeaders.vary as string | string[] | undefined, 'Accept-Encoding') }
+      : upstreamHeaders
     if (!eligible || !wantsGzip(req)) {
       res.writeHead(received.statusCode || 502, responseHeaders)
       received.pipe(res)
@@ -462,10 +466,10 @@ function sendHtml(res: http.ServerResponse, status: number, html: string) {
 // It serves the bundled dist and proxies /api + the terminal socket to a separately-run `spex serve`.
 // This is the post-install replacement for the dogfood-only `npm run web` (a vite dev server an
 // installed user has no source tree for). See [[packaging]].
-export function serveDashboardLocal(opts: { port: number; apiPort: number; host?: string; projectRoot?: string }): void {
+export function serveDashboardLocal(opts: { port: number; apiPort: number; host: string; projectRoot?: string }): void {
   const distDir = resolveDistDir()
   startGateway({
-    host: opts.host ?? '127.0.0.1',
+    host: opts.host,
     publicPort: opts.port,
     upstreamPort: opts.apiPort,
     password: '',

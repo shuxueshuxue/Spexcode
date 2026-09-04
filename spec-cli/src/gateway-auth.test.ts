@@ -9,9 +9,9 @@ import { mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  adminCookieName, authorize, authStorePath, clearAdminPassword, clearProjectPassword, loadAuthStore,
-  makeVerifier, mintToken, projectCookieName, setAdminPassword, setProjectPassword, verifyPassword,
-  verifyToken,
+  adminCookieName, authorize, authStorePath, clearAdminPassword, clearProjectPassword, grantPeer,
+  listPeerGrants, loadAuthStore, makeVerifier, mintToken, projectCookieName, revokePeer, setAdminPassword,
+  setProjectPassword, verifyPassword, verifyToken,
 } from './gateway-auth.js'
 
 const PORT = 9443
@@ -137,4 +137,76 @@ test('scope swap: an admin-shaped claim minted as project (and vice versa) does 
   assert.equal(authorize(store, { kind: 'project', projectId: 'projB' }, projAsAdmin, '203.0.113.9', PORT).ok, true, 'projB is open — open stays open')
   const adminUnderProj = `${projectCookieName(PORT, 'projA')}=${adminTok}`
   assert.equal(authorize(store, { kind: 'project', projectId: 'projA' }, adminUnderProj, '203.0.113.9', PORT).ok, false, 'admin token in a project mailbox is not a project claim')
+})
+
+// ---- the peer entry ---------------------------------------------------------------------------------
+// The forward that carries a linked machine's request lands on loopback, so on the CONSOLE entry it would
+// inherit the implicit-admin grant meant for a human sitting at this machine. These pin the second door:
+// the entry is what decides, and on it an issued credential is the only key.
+
+const MACHINE_A = '11111111-2222-3333-4444-555555555555'
+const MACHINE_B = '99999999-8888-7777-6666-555555555555'
+
+test('peer entry: loopback grants nothing there, and an issued credential is the only key', () => {
+  // the laundering case: no admin password (so the console entry DOES trust loopback), request from
+  // loopback, nothing presented. The console entry says yes; the peer entry must not.
+  const empty = loadAuthStore()
+  assert.deepEqual(authorize(empty, { kind: 'admin' }, undefined, '127.0.0.1', PORT), { ok: true, via: 'loopback' })
+  assert.deepEqual(authorize(empty, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer'), { ok: false, reason: 'peer-credential' })
+  assert.deepEqual(authorize(empty, { kind: 'admin' }, undefined, '::1', PORT, 'peer', ''), { ok: false, reason: 'peer-credential' })
+
+  const { store, token } = grantPeer(MACHINE_A)
+  assert.deepEqual(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', token), { ok: true, via: 'peer', machineId: MACHINE_A })
+  // admin-equivalent reach, stated plainly: a linked machine also reaches every project, gated or not
+  const gated = setProjectPassword('projA', 'apw')
+  assert.deepEqual(authorize(gated, { kind: 'project', projectId: 'projA' }, undefined, '127.0.0.1', PORT, 'peer', token), { ok: true, via: 'peer', machineId: MACHINE_A })
+  // a tampered or truncated credential is no credential
+  assert.equal(authorize(gated, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', token.slice(0, -1)).ok, false)
+})
+
+test('peer credential: a cookie is not a channel for it, and the console entry ignores one entirely', () => {
+  const { token } = grantPeer(MACHINE_A)
+  const store = setAdminPassword('pw')
+  // presented as the admin cookie on the console entry: an admin-shaped mailbox holding a peer claim
+  assert.equal(authorize(store, { kind: 'admin' }, `${adminCookieName(PORT)}=${token}`, '127.0.0.1', PORT).ok, false)
+  // and the console entry never reads the header argument at all, even when handed a valid one
+  assert.deepEqual(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'console', token), { ok: false, reason: 'admin-login' })
+  // conversely an admin session token is not a machine credential on the peer entry
+  const adminTok = mintToken(store, { s: 'admin' })
+  assert.deepEqual(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', adminTok), { ok: false, reason: 'peer-credential' })
+})
+
+test('peer grants: re-granting keeps the machine authorized, revoking one machine ends only that one', () => {
+  const first = grantPeer(MACHINE_A).token
+  const second = grantPeer(MACHINE_A).token
+  const other = grantPeer(MACHINE_B).token
+  let store = loadAuthStore()
+  // a refresh hands back a fresh token on the same generation: the one the caller already stored still works
+  assert.equal(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', first).ok, true)
+  assert.equal(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', second).ok, true)
+  assert.deepEqual(listPeerGrants(store).map((g) => g.machineId), [MACHINE_A, MACHINE_B].sort())
+
+  store = revokePeer(MACHINE_A)
+  assert.deepEqual(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', first), { ok: false, reason: 'peer-credential' })
+  assert.deepEqual(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', second), { ok: false, reason: 'peer-credential' })
+  assert.deepEqual(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', other), { ok: true, via: 'peer', machineId: MACHINE_B })
+  assert.deepEqual(listPeerGrants(store).map((g) => g.machineId), [MACHINE_B])
+  // and a re-grant after a revoke is a NEW generation: the revoked credential never comes back
+  const revived = grantPeer(MACHINE_A).token
+  store = loadAuthStore()
+  assert.equal(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', first).ok, false, 'a revoked credential stays dead')
+  assert.equal(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', revived).ok, true)
+})
+
+test('peer credential: a machine claim is confined to the machine it was issued to', () => {
+  grantPeer(MACHINE_A)
+  const b = grantPeer(MACHINE_B)
+  const store = loadAuthStore()
+  const decision = authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', b.token)
+  assert.deepEqual(decision, { ok: true, via: 'peer', machineId: MACHINE_B }, 'the decision names the issuing machine, never the other grant')
+  // a peer claim minted for one machine and re-signed for another is impossible without the secret; a
+  // cross-store forgery is the closest an attacker gets, and it does not verify.
+  const foreign = { ...store, secret: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }
+  const forged = mintToken(foreign as typeof store, { s: 'peer', m: MACHINE_A })
+  assert.equal(authorize(store, { kind: 'admin' }, undefined, '127.0.0.1', PORT, 'peer', forged).ok, false)
 })

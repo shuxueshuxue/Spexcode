@@ -485,7 +485,8 @@ if (cmd === 'serve') {
     const { serveDashboardLocal } = await import('./gateway.js')
     const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
     const apiPort = Number(flag('api-port') ?? process.env.PORT ?? 8787)
-    const host = flag('host') ?? '127.0.0.1'
+    const { resolveConfiguredHost } = await import('./listen.js')
+    const host = resolveConfiguredHost(flag('host') ?? process.env.SPEXCODE_HOST)
     if (!Number.isInteger(port) || !Number.isInteger(apiPort)) { console.error('spex serve ui: --port and --api-port must be integers'); process.exit(2) }
     serveDashboardLocal({ port, apiPort, host })
   } else if (target === undefined || target === 'api') {
@@ -504,6 +505,10 @@ if (cmd === 'serve') {
       if (!Number.isInteger(Number(portArg))) { console.error('spex serve: --port must be an integer'); process.exit(2) }
       process.env.PORT = portArg
     }
+    // --host is sugar over SPEXCODE_HOST the same way --port is sugar over PORT, so all three serving verbs
+    // take the same option and the backend's bind face is stated rather than inherited from Node.
+    const hostArg = flag('host')
+    if (hostArg !== undefined) process.env.SPEXCODE_HOST = hostArg
     await import('./supervise.js')
   } else {
     console.error(`spex serve: unknown target '${target}' — spex serve [api] (the backend) | spex serve ui (the dashboard)`)
@@ -522,7 +527,8 @@ if (cmd === 'serve') {
   // `spex serve ui` remains the explicit one-backend pairing; this verb is the zero-config many-project face.
   const { startHostDashboard } = await import('./host.js')
   const port = Number(flag('port') ?? process.env.SPEXCODE_DASHBOARD_PORT ?? 5173)
-  const host = flag('host') ?? '127.0.0.1'
+  const { resolveConfiguredHost } = await import('./listen.js')
+  const host = resolveConfiguredHost(flag('host') ?? process.env.SPEXCODE_HOST)
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
   startHostDashboard({ port, host })
 } else if (cmd === 'open') {

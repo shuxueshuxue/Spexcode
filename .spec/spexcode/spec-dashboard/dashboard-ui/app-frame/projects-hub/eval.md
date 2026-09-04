@@ -21,10 +21,11 @@ scenarios:
       (PUT/DELETE) and the row's lock badge follows. More than ten reconciled rows page without dropping
       or reordering projects, and a registry change made outside the page lands via
       the poll without a reload. Open lands on /p/<id>/#/graph where the FULL classic dashboard renders
-      that project's board through the scoped /p/<id>/api lane. Its rail carries the current-project
-      chip and only the five project-owned page buttons; the chip's "All projects" action returns to
-      `/projects`. Zero loss = the whole admin loop (see fleet, gate it, enter a project, come back)
-      works in one tab through shareable pathname URLs, against the real gateway code.
+      that project's board through the scoped /p/<id>/api lane. Its rail carries only the five
+      project-owned page buttons; the current-project chip lives once in the status bar beside the other
+      ambient facts, and its switcher's "All projects" action returns to `/projects`. Zero loss = the
+      whole admin loop (see fleet, gate it, enter a project, come back) works in one tab through
+      shareable pathname URLs, against the real gateway code.
   - name: project-scope-unlock
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/CredentialGate.jsx, spec-dashboard/src/projects.js]
@@ -112,6 +113,29 @@ scenarios:
       A successful `DELETE /projects/:id` removes only the catalog registration and its gateway credential; the
       checkout, `.git`, and source files remain. A live backend or active/unreadable session is refused with
       its repair reason and leaves the catalog unchanged.
+  - name: fleet-groups-and-remote-open
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/project.js, spec-dashboard/src/projects.js, spec-dashboard/src/styles.css]
+    description: >-
+      Stand up TWO real gateways with separate `SPEXCODE_HOME`s and therefore separate auth stores, and join
+      them with a real leg credential issued by the far gateway to the near one, aimed at the far gateway's
+      loopback peer ingress — the shape `spex peer connect`'s ssh forward produces. Give the near machine one
+      local project and the far machine two (one live, one stopped), and record a third peer whose host record
+      publishes no peer ingress. Open the near gateway's `/projects` in a real browser, read what each group
+      renders and which actions each row carries, then click the live remote project's Open and observe every
+      request the loaded page makes.
+    expected: >-
+      The page keeps this machine's own list unchanged under a `this machine` heading, and renders one group per
+      peer under `other machines` — each headed by the machine, each row read live from THAT machine's hub
+      through `/m/<machineId>/projects`. A remote row carries exactly one action, Open, and only while the
+      project is live: an offline remote row carries none, because the management cluster would write another
+      machine's config and an Open link would address a downed backend. The peer publishing no gateway is LISTED
+      with no rows at all, its state reading `no gateway` and its note naming the gateway absence — the link's
+      own last ssh error may accompany it but never stands in as the answer. Clicking Open lands on
+      `/m/<machineId>/p/<projectId>/#/graph` with the FAR project's own graph rendered, and every scoped request
+      the page makes — `/api` calls and the SSE stream alike — rides the machine prefix, because the machine is
+      folded into the one base by the scope parser and no other module knows it exists. Zero loss = one click
+      switches machines with no second origin, no second SPA and no second auth boundary.
 ---
 # projects-hub — measurement
 

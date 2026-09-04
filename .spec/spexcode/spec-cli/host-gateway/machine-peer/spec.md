@@ -47,6 +47,27 @@ the initiator. The peer has a stable randomly-minted machine id for semantic nam
 mutable reachability hint. A hostname, gateway URL, and backend `instanceId` are neither an identity nor an
 authorization proof.
 
+**The peer also forwards the far gateway.** Beyond the two communication forwards, an owned peer carries a
+gateway leg — a local loopback port, the far gateway's published **peer-ingress** port, the instance id that port
+was published under, and the credential that gateway issued to this machine — so the machine on the other end is
+addressable here as an ordinary loopback upstream. The leg targets that ingress and never the console port: a
+forward into the console would arrive as a loopback socket and inherit the trust [[gateway-auth]] grants a human
+sitting at that machine, so a gateway publishing no ingress is answered as no gateway at all. Those far facts come
+from that machine's own host record, read when it answers the dial and never inferred from a default: with no
+record published, no ingress in it, or no credential issued, the leg is simply absent, because a
+recorded-but-wrong port is a lie no later reader could detect. The credential is minted by the answering machine
+for the asking one during the accept handshake — the SSH login that carried the request IS the authentication
+behind it — and it is named by machine id and revocable per machine, so re-connecting refreshes it without
+invalidating what the caller already holds and disconnecting destroys every credential that machine was handed. The leg is directional, since only the connecting side runs an SSH child and the accepting side therefore
+records none of its own. And because the reconnect loop redials without asking the far side anything, re-running
+connect is the explicit refresh: it adopts a restarted far gateway, keeps the local port stable across that
+rebuild so existing addressing survives it, and leaves a recorded leg untouched when the far side cannot be
+reached at all. A superseded dial reports nothing, because the child that replaced it already owns the peer's
+state and an old child's exit must not mark a live tunnel broken. What may be routed INTO that port is
+[[machine-routing]]'s contract rather than this node's. The leg is reachable only from this machine, and the
+credential beside it is stated plainly rather than hidden: on the issuing machine it reaches what an admin
+reaches, which is why it is issued per machine and destroyed with the link.
+
 **The remote command resolves in the remote's own environment.** The accept handshake and the remote cleanup run
 `spex` on the far machine, and where a program lives is that machine's own configuration rather than something this
 side may assume from its own: the dial resolves them through the remote user's login shell, never the bare

@@ -14,12 +14,14 @@ import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'n
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startHubGateway } from './gateway-hub.js'
-import { authStorePath } from './gateway-auth.js'
+import { authStorePath, grantPeer, PEER_CREDENTIAL_HEADER, revokePeer } from './gateway-auth.js'
+import { peerStorePath, readPeerMachineId } from './machine-peer.js'
 
 let home = ''
 let hubPort = 0
 let hubWidePort = 0
 let fallbackHubPort = 0
+let peerHubPort = 0
 const servers: http.Server[] = []
 let adminCookie = ''   // captured as the story progresses
 let projACookie = ''
@@ -107,6 +109,9 @@ before(async () => {
   servers.push(startHubGateway({ port: hubPort, host: '127.0.0.1' }))
   hubWidePort = await freePort()
   servers.push(startHubGateway({ port: hubWidePort, host: '0.0.0.0' })) // for the non-loopback tests only
+  // the second door: same routes, a listener that decides as `entry: 'peer'` ([[gateway-auth]])
+  peerHubPort = await freePort()
+  servers.push(startHubGateway({ port: peerHubPort, host: '127.0.0.1', entry: 'peer' }))
   fallbackHubPort = await freePort()
   servers.push(startHubGateway({
     port: fallbackHubPort,
@@ -340,4 +345,132 @@ test('WebSocket upgrade: destroyed without a session on a gated project; piped (
   const granted = await upgrade(adminCookie)
   assert.match(granted, /101 Switching Protocols/)
   assert.match(granted, /x-seen-cookie: theme=dark/, 'the backend saw the visitor cookie but not the gateway session')
+})
+
+test('the peer ingress refuses a loopback caller with no credential and admits the machine it issued one to', async () => {
+  const MACHINE = '11111111-2222-3333-4444-555555555555'
+  const peer = (path: string, init: RequestInit = {}) =>
+    fetch(`http://127.0.0.1:${peerHubPort}${path}`, { redirect: 'manual', ...init })
+
+  // this connection IS loopback — that is the whole point. On the console entry loopback is a grant path;
+  // on this one it is nothing, so a forward cannot launder the console's trust.
+  const bare = await peer('/projects')
+  assert.equal(bare.status, 401)
+  assert.equal((await bare.json() as any).header, PEER_CREDENTIAL_HEADER, 'the refusal names the one channel that works')
+
+  // nor does a visitor's admin cookie: it belongs to a browser on the far side, not to the machine
+  const laundered = await peer('/projects', { headers: { cookie: adminCookie } })
+  assert.equal(laundered.status, 401)
+
+  // and there is no password door here to knock on
+  assert.equal((await peer('/login')).status, 404)
+  assert.equal((await peer('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"password":"pw"}' })).status, 404)
+
+  const { token } = grantPeer(MACHINE)
+  const admitted = await peer('/projects', { headers: { [PEER_CREDENTIAL_HEADER]: token } })
+  assert.equal(admitted.status, 200)
+  assert.ok(Array.isArray((await admitted.json() as any).projects))
+
+  // a linked machine reaches a project the same way, and the credential never reaches the backend
+  const proxied = await peer('/p/projA/api/thing', { headers: { [PEER_CREDENTIAL_HEADER]: token, cookie: adminCookie } })
+  assert.equal(proxied.status, 200)
+  const body = await proxied.json() as any
+  assert.equal(body.who, 'A')
+  assert.equal(body.cookie, null, 'the visitor\'s gateway cookies are stripped before the backend sees them')
+
+  revokePeer(MACHINE)
+  assert.equal((await peer('/projects', { headers: { [PEER_CREDENTIAL_HEADER]: token } })).status, 401, 'revoking the link closes the door at once')
+})
+
+// The machine dimension is ADDRESSING, not aggregation ([[machine-routing]]): /m/:machineId/* forwards into a
+// peered machine's gateway over the ssh leg. The far machine is played by this suite's OWN peer ingress —
+// pointing a peer record's gatewayPort at a loopback peer entry is exactly the shape `ssh -L` produces, so the
+// hop is exercised end to end. One SPEXCODE_HOME means one auth store stands in for both machines' stores.
+test('the machine route forwards into a peered gateway, spends the leg credential, and re-anchors what comes back', async () => {
+  const FAR = '77777777-8888-9999-aaaa-bbbbbbbbbbbb'
+  const LEGLESS = '66666666-8888-9999-aaaa-bbbbbbbbbbbb'
+  const { token: farToken } = grantPeer(FAR)
+  const basePeer = {
+    sshAddress: 'far.example', inboundPort: 40001, outboundPort: 40002,
+    remoteInboundPort: 40003, remoteOutboundPort: 40004,
+    owner: true, state: 'connected' as const, createdAt: 'test', lastOkAt: null, lastError: null,
+  }
+  mkdirSync(join(home, 'gateway'), { recursive: true })
+  writeFileSync(peerStorePath(), JSON.stringify({
+    version: 1, machineId: readPeerMachineId(), peers: [
+      // the reachable leg: local forwarded port + the credential that machine issued to this one
+      { ...basePeer, machineId: FAR, gatewayPort: peerHubPort, remoteGatewayPort: 40005, remoteGatewayInstanceId: 'far-inst', remoteGatewayCredential: farToken },
+      // a linked machine with no leg — an older host record with no peerPort, or its gateway is down
+      { ...basePeer, machineId: LEGLESS, sshAddress: 'legless.example', inboundPort: 40011, outboundPort: 40012, remoteInboundPort: 40013, remoteOutboundPort: 40014 },
+    ],
+  }) + '\n')
+
+  // the fleet list is admin-only: reaching another machine spends a credential that is admin-equivalent there
+  assert.equal((await hub('/machines')).status, 401)
+  const listed = await hub('/machines', { headers: { cookie: adminCookie } })
+  assert.equal(listed.status, 200)
+  const fleet = await listed.json() as any
+  assert.equal(fleet.machineId, readPeerMachineId(), 'the hub names itself, so a client can tell local from remote')
+  const rows = new Map(fleet.machines.map((m: any) => [m.machineId, m]))
+  assert.equal((rows.get(FAR) as any).gateway, true)
+  assert.equal((rows.get(LEGLESS) as any).gateway, false, 'a linked machine with no leg is listed, not hidden')
+
+  // a project-scoped visitor gains nothing across the link
+  assert.equal((await hub(`/m/${FAR}/projects`, { headers: { cookie: projACookie } })).status, 401)
+
+  // ...and an admin does: a 200 here is itself the proof the leg credential was attached, because the far
+  // entry is a peer ingress that 401s any caller without it (the test above).
+  const remoteProjects = await hub(`/m/${FAR}/projects`, { headers: { cookie: adminCookie } })
+  assert.equal(remoteProjects.status, 200)
+  assert.ok(Array.isArray((await remoteProjects.json() as any).projects))
+
+  // both hops strip their own cookies: this machine's admin session never leaves, the far gateway's never
+  // reaches the far backend
+  const deep = await hub(`/m/${FAR}/p/projA/api/thing?x=1`, { headers: { cookie: `${adminCookie}; theme=dark` } })
+  assert.equal(deep.status, 200)
+  const body = await deep.json() as any
+  assert.equal(body.who, 'A')
+  assert.equal(body.path, '/api/thing?x=1', 'both prefixes are stripped, query preserved')
+  assert.equal(body.cookie, 'theme=dark', 'only the foreign cookie survives the two hops')
+
+  // the far gateway believes it is root, so every absolute path it names about ITSELF must be re-anchored, or
+  // the browser silently changes machine. Its logout answers 302 + Set-Cookie, proving both transforms at once.
+  const out = await hub(`/m/${FAR}/p/projA/logout`, { headers: { cookie: adminCookie } })
+  assert.equal(out.status, 302)
+  assert.equal(out.headers.get('location'), `/m/${FAR}/p/projA/login`, "the far side's /p/projA/login is re-anchored under this machine")
+  assert.equal(out.headers.getSetCookie().length, 0, 'the far gateway may not set a cookie in this browser — same cookie names, different machine')
+
+  // a bare machine root gets a trailing slash so the SPA resolves relative assets under the machine prefix
+  const bare = await hub(`/m/${FAR}`, { headers: { cookie: adminCookie } })
+  assert.equal(bare.status, 302)
+  assert.equal(bare.headers.get('location'), `/m/${FAR}/`)
+
+  // two different absences, answered differently, because they tell an operator different things
+  assert.equal((await hub('/m/99999999-8888-9999-aaaa-bbbbbbbbbbbb/projects', { headers: { cookie: adminCookie } })).status, 404)
+  const legless = await hub(`/m/${LEGLESS}/projects`, { headers: { cookie: adminCookie } })
+  assert.equal(legless.status, 503)
+  assert.match((await legless.json() as any).error, /no reachable gateway/)
+
+  // no chaining: a machine reading our fleet, or spending our credential on a third machine, is a confused
+  // deputy one hop deeper — so the peer ingress has no machine surface at all
+  const peerFetch = (path: string) => fetch(`http://127.0.0.1:${peerHubPort}${path}`, {
+    redirect: 'manual', headers: { [PEER_CREDENTIAL_HEADER]: farToken },
+  })
+  assert.equal((await peerFetch('/machines')).status, 404)
+  assert.equal((await peerFetch(`/m/${FAR}/projects`)).status, 404)
+
+  // a live socket crosses the machine hop too — the terminal is the point of reaching another machine
+  const upgraded = await new Promise<string>((resolve) => {
+    const s = net.connect(hubPort, '127.0.0.1', () => {
+      s.write(`GET /m/${FAR}/p/projB/api/sessions/x/socket HTTP/1.1\r\nHost: h\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n` +
+        `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nCookie: ${adminCookie}; theme=dark\r\n\r\n`)
+    })
+    let buf = ''
+    s.on('data', (d) => { buf += d })
+    s.on('close', () => resolve(buf))
+    s.on('error', () => resolve(buf))
+    setTimeout(() => { s.destroy(); resolve(buf) }, 1500)
+  })
+  assert.match(upgraded, /101 Switching Protocols/)
+  assert.match(upgraded, /x-seen-cookie: theme=dark/, 'neither gateway leaks its session cookie into the far backend')
 })

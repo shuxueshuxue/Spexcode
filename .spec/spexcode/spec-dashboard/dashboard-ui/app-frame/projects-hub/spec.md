@@ -109,6 +109,26 @@ defines the full viewport while the shared primitive owns its inset scrollbar, o
 phone geometry. Drawers and bounded editors retain their own local overflow and never become competing
 full-page scroll owners.
 
+**A machine is a deeper address, not a second page.** The pathname scope rule extends one segment:
+`/m/<machineId>/p/<id>/…` is the same SPA at a deeper prefix ([[machine-routing]]), so `parseProjectPath`
+returns the machine alongside the project and folds it into the ONE base every scoped `/api` call, SSE
+stream and terminal socket is built from. No other module learns that machines exist — that is the whole
+reason the machine dimension lives in the address rather than in a client. `/projects` groups by machine:
+this machine's rows keep the page they always had, and each peer `GET /machines` names becomes its own
+group whose catalog is read from THAT machine's hub through the `/m/<machineId>` route — same loader, same
+normalizer, same rows. A group's read failing empties it rather than keeping what it had: the read that
+just failed was the only evidence of the far state, so a machine with no routable gateway, an unreachable
+one, and one that refuses this gateway's credential each render as a headed group with its reason and no
+rows at all. The local list is deliberately not held to that rule — the page you are reading was served by
+that gateway, so a blip in its own catalog read does not put its projects in doubt. The heading appears
+only once a peer exists, because with no fleet "this machine" is the only machine and naming it is noise.
+
+A remote row is the same row minus every claim this page cannot support. Its identity, health dot and
+address are identical; the management cluster (config · setup · password · remove · start) is absent
+because those write another machine's config, catalog and passwords, which is wider than switching between
+machines. `Open` is the one remaining action and only while the project is LIVE — an offline remote project
+offers nothing, since its dot already says stopped and an Open link would address a backend that is down.
+
 **One credential card, two doors, no catalog leak.** `CredentialGate` is the single credential
 experience: the global `/projects` admin sign-in (`POST /login`) and a project unlock
 (`POST /p/<id>/login`) are the same

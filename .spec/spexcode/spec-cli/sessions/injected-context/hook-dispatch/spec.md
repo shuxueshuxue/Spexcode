@@ -31,9 +31,14 @@ does exactly ONE job: it dispatches the event's handlers from the persistent man
 NOT a materialize trigger — the old content-hash gate (an auto-`spex materialize` on every event when the
 config fingerprint moved, serialized by a mkdir mutex) is RETIRED ([[commit-surgery]]): a harness event
 never materializes. The manifest and every other artifact refresh at the git-native anchors (the spex verbs,
-session-worktree creation, the pre-commit / post-checkout / post-merge hooks), which keeps the hook hot
-path pure bash with zero node boots and makes `.plugins` edits git-transactional — they take effect at the
-commit/checkout/merge that carries them, like any other source change.
+session-worktree creation, the pre-commit / post-checkout / post-merge hooks), which keeps the DISPATCH
+path itself pure bash with zero node boots and makes `.plugins` edits git-transactional — they take effect
+at the commit/checkout/merge that carries them, like any other source change. The no-node property is the
+dispatcher's, not the whole event's: reading the manifest, detecting the harness and selecting handlers boot
+nothing, and with an empty manifest an event costs zero node processes. What a handler then does is the
+handler's own cost — the seeded session handlers call the CLI to record session state, so a session-bearing
+event does boot the toolchain. Delivery is what a harness event never pays for; bookkeeping a handler asks
+for is not smuggled delivery.
 
 **Materialization boundary.** A tree must have its own slot manifest before hooks can execute. A missing slot
 is an installation error; dispatch never reads a shared global manifest and never silently inherits another

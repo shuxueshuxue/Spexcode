@@ -3,13 +3,44 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { readConfig } from '@spexcode/spec-core'
+import { isAdopted, readConfig } from '@spexcode/spec-core'
 
 function project() {
   const root = mkdtempSync(join(tmpdir(), 'spex-config-'))
   mkdirSync(join(root, '.spec'), { recursive: true })
   return root
 }
+
+test('isAdopted follows the committed config priority without migration warnings', () => {
+  const cases = [
+    { name: 'only .spec', spec: true, legacy: false, expected: true },
+    { name: 'only root', spec: false, legacy: true, expected: true },
+    { name: 'both', spec: true, legacy: true, expected: true },
+    { name: 'neither', spec: false, legacy: false, expected: false },
+  ]
+  for (const { name, spec, legacy, expected } of cases) {
+    const root = mkdtempSync(join(tmpdir(), 'spex-adopted-'))
+    if (spec) {
+      mkdirSync(join(root, '.spec'), { recursive: true })
+      writeFileSync(join(root, '.spec', 'spexcode.json'), '{}')
+    }
+    if (legacy) writeFileSync(join(root, 'spexcode.json'), '{}')
+    assert.equal(isAdopted(root), expected, name)
+  }
+})
+
+test('isAdopted fails closed for an invalid preferred config without warning or legacy fallback', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-adopted-invalid-'))
+  mkdirSync(join(root, '.spec'), { recursive: true })
+  writeFileSync(join(root, '.spec', 'spexcode.json'), '{broken')
+  writeFileSync(join(root, 'spexcode.json'), '{}')
+  const errors: string[] = []
+  const original = console.error
+  console.error = (...args: unknown[]) => errors.push(args.join(' '))
+  try { assert.equal(isAdopted(root), false) }
+  finally { console.error = original }
+  assert.deepEqual(errors, [])
+})
 
 test('readConfig reads committed and local config from .spec', () => {
   const root = project()

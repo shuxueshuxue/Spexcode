@@ -11,6 +11,7 @@ code:
   - packages/spec-core/src/layout.ts#mainBranch
   - packages/spec-core/src/layout.ts#readJsonConfig
   - packages/spec-core/src/layout.ts#readUploadPolicy
+  - packages/spec-core/src/layout.ts#isAdopted
 related:
   - packages/spec-core/src/harness-identity.ts
   - spec-cli/src/layout-session-id.test.ts
@@ -75,6 +76,15 @@ precedence: when both locations exist, `.spec/` wins. A **present-but-malformed*
 would otherwise silently drop every tuned setting the file holds (layout, launchers, and the lint budgets
 [[spec-lint]]'s `loadConfig` reads through the same helper) and revert to defaults with no diagnostic. It
 fails LOUD instead, naming the file and the parse error, so the author sees exactly what broke.
+
+Adoption is a public cross-repository contract, answered by `isAdopted(root)` from the spec-core package. It uses
+the same committed-config precedence as `readProjectConfig`: `.spec/spexcode.json` first, then the legacy root
+`spexcode.json` only when the preferred path is absent. Downstream consumers must call this predicate rather than
+constructing a config filename themselves, so a layout migration cannot make their adoption gates drift. The
+predicate is deliberately silent: it returns `false` when neither candidate exists, when the first existing candidate
+is not a regular file or cannot be read, or when its contents are not a valid JSON object; it never falls through to
+the legacy path after an invalid preferred candidate. These states are treated as not adopted because no trustworthy
+project configuration can be established, while `readConfig` remains the fail-loud diagnostic path for operators.
 
 The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is a
 stable project fact, never the mutable branch currently checked out in a particular directory. `spex init`

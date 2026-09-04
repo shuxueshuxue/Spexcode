@@ -10,7 +10,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -50,6 +50,7 @@ test('a real StopFailure drives a live session to error through the shipped shim
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-failchain-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-failchain-project-'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },

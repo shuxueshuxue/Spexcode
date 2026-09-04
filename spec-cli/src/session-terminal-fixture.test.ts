@@ -48,6 +48,7 @@ test('external fake harness proves the managed terminal lifecycle without a mode
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-fake-terminal-home-'))
   const project = mkdtempSync(join(tmpdir(), 'spex-fake-terminal-project-'))
+  mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],
     sessions: {

@@ -100,6 +100,9 @@ function gatedTmux(root: string): { bin: string; hold: string; claimed: string }
   mkdirSync(bin, { recursive: true })
   const tmux = join(bin, 'tmux')
   writeFileSync(tmux, `#!/bin/sh
+if [ "\$1" = "-V" ]; then
+  exit 0
+fi
 if [ -e "${hold}" ] && [ ! -e "${claimed}" ]; then
   : > "${claimed}"
   while [ -e "${hold}" ]; do sleep 0.01; done

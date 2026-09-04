@@ -114,8 +114,8 @@ surface:
 - **shimOwnership** — WHO owns `shimFile`. `exclusive`: a spexcode-named source file of our own
   (`.opencode/plugins/spexcode.ts`, `.pi/extensions/spexcode.ts`) — whole-file write, whole-file delete.
   `shared-json`: a config file the HOST AGENT shares with the user (`.claude/settings.json`,
-  `.codex/hooks.json`, `.zcode/settings.json` also carry their permissions, env, statusLine and their own
-  hooks), where a whole-file write is silent data loss and a whole-file delete makes it permanent for an
+  `.codex/hooks.json`, and each other adapter's equivalent also carry their permissions, env, statusLine
+  and their own hooks), where a whole-file write is silent data loss and a whole-file delete makes it permanent for an
   untracked file. There we co-own only identity-stamped ENTRIES: JSON has no comment syntax, so the stamp is
   the hook COMMAND — every entry we write invokes `dispatch.sh`, and only such entries are ever written or
   removed. Everything else round-trips: other keys, other events, foreign hook groups, and the user's half of

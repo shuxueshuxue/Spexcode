@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,7 @@ test('doctor repair app-server reads launcher configuration from the project, no
   const home = mkdtempSync(`${tmpdir()}/spex-runtime-rotate-`)
   const project = mkdtempSync(`${tmpdir()}/spex-runtime-rotate-project-`)
   try {
+    mkdirSync(join(project, '.spec'), { recursive: true })
     writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
       sessions: {
         launchers: { codex: { harness: 'codex', cmd: 'codex' } },

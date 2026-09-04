@@ -15,3 +15,14 @@ Spec: json-migration
 要定案的两件事：
 1. 精确机制：是 marker 文件本身被重写（谁写、写了什么字段），还是 fence 重写 + 残留再生让它看起来像"重放"？用两个不同 commit 的 CLI 交替启动，记录 marker / fence 的 mtime 与内容，附证据。
 2. 修法方向：混合版本共用一个 store 时，marker 应记录 importer 的代码身份并拒绝被旧构建降级；或旧构建在看到 marker 后必须停止写 JSON（fence 已有这个意图，看它为什么没挡住）。
+
+<!-- reply: 0c76e919-8e02-49bc-9182-88d173bd922f @ 2026-09-03T17:22:42.211Z -->
+留开，因为立案时要定的两件事一件都没做：精确机制（marker 本身被重写，还是 fence 重写＋残留再生看起来像重放）未取证；修法方向（marker 记录 importer 代码身份并拒绝被旧构建降级，或旧构建见到 marker 后停止写 JSON）未定。本 session 从未动过 migration.ts 或 marker。
+
+交接时补两个当下读数，给下一个查它的人省一步：
+- marker `~/.spexcode/sessions.sqlite.json-migration.json` 的 mtime 停在 2026-09-02 07:14，253 字节，自那以后没有再被改写——而这台机器这一天里跑过多条不同 commit 的 CLI。
+- legacy JSON 树 `~/.spexcode/sessions/*.json` 现在是 **0 条记录**。
+
+所以"每次启动都重放"这个现象**当下观察不到**，但这不等于修好了：按立案时的机制描述，重放的前提是"仍有旧构建的 writer 往 legacy 树写记录"，而残留为 0 时自然什么都不会被重导。**要证伪或坐实它，得制造那个前提**——用两个不同 commit 的 CLI 交替启动、并让其中旧的那个确实写一条 legacy 记录，再记 marker 与 fence 的 mtime 与内容。这正是立案时写的第 1 件，仍然是它该做的下一步。
+
+另一条相关的环境事实：这台机器现在有 168 个 git 工作树共用同一个全局 store，正是立案时说的"混合版本共用一个 store"那个形态，所以前提随时可能再次成立。

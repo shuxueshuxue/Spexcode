@@ -63,8 +63,8 @@ plugin node. This replaces the launch-time
   `--append-system-prompt` for self-launch (at user-message level — the ceiling for a discovered file, not
   system-prompt level);
 - **the shims** — each adapter's shim landed at its `shimFile()`, whatever ARTIFACT that harness
-  auto-discovers to wire events to the dispatcher: a hooks JSON for claude/codex/zcode (`.claude/settings.json`
-  / `.codex/hooks.json` / `.zcode/settings.json`, one entry per event), a generated event-bus plugin for opencode
+  auto-discovers to wire events to the dispatcher: a hooks JSON for the Claude-family adapters (`.claude/settings.json`
+  / `.codex/hooks.json` and each sibling's equivalent, one entry per event), a generated event-bus plugin for opencode
   (`.opencode/plugins/spexcode.ts` — [[opencode-harness]]), or a generated extension for pi
   (`.pi/extensions/spexcode.ts` — [[pi-harness]]). The shape is the adapter's fact, not this pipeline's, and so
   is WHO OWNS the file: a spexcode-named file of ours is written verbatim, while a config file the host agent
@@ -141,7 +141,7 @@ anchors, before its manifest can dispatch a mixed handler generation.
 
 **It refreshes what the tree has; it never plants what the tree omitted.** [[init-preset]]'s event gate leaves
 out a hook node whose events no selected adapter can emit, so an ABSENT core node is a decision, not rot. Read
-the other way, this pass handed a zcode-only adoption `core/idle/idle.sh` — an executable waiting on a
+the other way, this pass handed an adapter-specific adoption `core/idle/idle.sh` — an executable waiting on a
 `Notification` that harness never sends, sitting in a directory with no `spec.md` to govern it, recreated on
 every materialize. A handler is therefore reconciled only where its node directory already exists.
 

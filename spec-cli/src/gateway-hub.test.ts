@@ -12,7 +12,9 @@ import http from 'node:http'
 import net from 'node:net'
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { encodeProject, runtimeRoot } from '@spexcode/spec-core'
 import { startHubGateway } from './gateway-hub.js'
 import { authStorePath, grantPeer, PEER_CREDENTIAL_HEADER, revokePeer } from './gateway-auth.js'
 import { peerStorePath, readPeerMachineId } from './machine-peer.js'
@@ -37,7 +39,7 @@ function freePort(): Promise<number> {
 // a stand-in project backend: echoes what it saw (so cookie-stripping is observable) and completes
 // WebSocket-style upgrades reporting the Cookie header it received.
 function fakeBackend(who: string, port: number): http.Server {
-  const s = http.createServer((req, res) => {
+  const s = http.createServer(async (req, res) => {
     if (req.url === '/api/stream') {
       activeSseConnections++
       req.socket.once('close', () => { activeSseConnections-- })
@@ -45,8 +47,15 @@ function fakeBackend(who: string, port: number): http.Server {
       res.write('data: ready\n\n')
       return
     }
+    // the request body is echoed verbatim, so a rewritten field is observable exactly where the backend reads it
+    const chunks: Buffer[] = []
+    for await (const chunk of req) chunks.push(Buffer.from(chunk))
+    const raw = Buffer.concat(chunks).toString('utf8')
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ who, method: req.method, path: req.url, cookie: req.headers.cookie ?? null }))
+    res.end(JSON.stringify({
+      who, method: req.method, path: req.url, cookie: req.headers.cookie ?? null,
+      body: raw ? JSON.parse(raw) : null, length: req.headers['content-length'] ?? null,
+    }))
   })
   s.on('upgrade', (req, socket) => {
     socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
@@ -66,14 +75,24 @@ async function waitFor(predicate: () => boolean, label: string, timeoutMs = 1500
   }
 }
 
-function registerProject(id: string, url: string): void {
+function registerProject(id: string, url: string, root = id): void {
   const dir = join(home, 'projects', id)
   mkdirSync(dir, { recursive: true })
   // the canonical instance-shaped record supervise.ts publishes ([[host-gateway]]); the hub honors only
-  // this shape, and only in the slot the record's own root encodes to (here root === id — no [/.] chars).
+  // this shape, and only in the slot the record's own root encodes to (by default root === id — no [/.] chars).
   writeFileSync(join(dir, 'backend.json'), JSON.stringify({
-    version: 2, url, pid: process.pid, instanceId: `inst-${id}`, root: id,
+    version: 2, url, pid: process.pid, instanceId: `inst-${id}`, root,
     identity: { title: id, icon: id === 'projA' ? 'compass' : 'spark' }, startedAt: 'test',
+  }) + '\n')
+}
+
+// one session record in one project's store — the shape sessions.ts writes, and the only thing
+// /s/:sessionId reads to decide which project owns the id.
+function registerSession(projectId: string, sessionId: string, worktreePath = ''): void {
+  const dir = join(home, 'projects', projectId, 'sessions', sessionId)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'runtime.json'), JSON.stringify({
+    session_id: sessionId, governed: true, worktree_path: worktreePath, status: 'active',
   }) + '\n')
 }
 
@@ -382,6 +401,126 @@ test('the peer ingress refuses a loopback caller with no credential and admits t
   assert.equal((await peer('/projects', { headers: { [PEER_CREDENTIAL_HEADER]: token } })).status, 401, 'revoking the link closes the door at once')
 })
 
+// A session id is the OTHER way to name a project ([[gateway-hub]]): the caller knows a session, this machine
+// knows which of its project stores holds that session's record, and /s/:sessionId/* is the alias that says so.
+// It is the same project route underneath — same authorization, same prefix stripping, same upstream — so it
+// exists on every entry rather than only on the one that currently needs it.
+test('a session id addresses the project whose store holds its record, and each way of failing says which', async () => {
+  const OWNED = '11111111-2222-4333-8444-000000000001'
+  const AMBIGUOUS = '11111111-2222-4333-8444-000000000002'
+  const OFFLINE = '11111111-2222-4333-8444-000000000003'
+  const LINKED = '11111111-2222-4333-8444-000000000004'
+
+  registerSession('projA', OWNED)
+  const direct = await hub(`/s/${OWNED}/api/thing?x=1`)
+  assert.equal(direct.status, 200)
+  const body = await direct.json() as any
+  assert.equal(body.who, 'A', 'the session resolved to the project whose store holds it')
+  assert.equal(body.path, '/api/thing?x=1', 'the /s/:id prefix is stripped exactly like /p/:id, query preserved')
+
+  // it is an ALIAS, not a second door: authorization still decides it, on whichever entry it is spelled
+  const unauthorized = await fetch(`http://127.0.0.1:${peerHubPort}/s/${OWNED}/api/thing`, { redirect: 'manual' })
+  assert.equal(unauthorized.status, 401, 'the peer entry admits no session spelling without its credential')
+
+  // a session no local project owns, a session two of them own, and a session whose backend is down are three
+  // different facts an operator must be able to tell apart
+  assert.equal((await hub(`/s/99999999-2222-4333-8444-555555555555/api/thing`)).status, 404)
+  assert.equal((await hub('/s/not-a-session-id/api/thing')).status, 404, 'the id grammar is checked before any store is read')
+  registerSession('projA', AMBIGUOUS)
+  registerSession('projB', AMBIGUOUS)
+  const amb = await hub(`/s/${AMBIGUOUS}/api/thing`)
+  assert.equal(amb.status, 409)
+  assert.match((await amb.json() as any).error, /ambiguous/)
+  mkdirSync(join(home, 'projects', 'projDark'), { recursive: true })
+  registerSession('projDark', OFFLINE)
+  const dark = await hub(`/s/${OFFLINE}/api/thing`)
+  assert.equal(dark.status, 502)
+  assert.match((await dark.json() as any).error, /offline/)
+
+  // the case that makes the derivation more than a directory lookup: a linked worktree's session record lives in
+  // the COMMON project store, while the backend serving it publishes under the WORKTREE's own slot. The record's
+  // worktree_path is what joins the two, so the alias lands on the tree that is actually running the session.
+  const tree = fileURLToPath(new URL('..', import.meta.url))
+  registerSession(basename(runtimeRoot(tree)), LINKED, tree)
+  registerProject(encodeProject(tree), `http://127.0.0.1:${(servers[0].address() as net.AddressInfo).port}`, tree)
+  const linked = await hub(`/s/${LINKED}/api/thing`)
+  assert.equal(linked.status, 200)
+  assert.equal((await linked.json() as any).who, 'A', 'the linked worktree’s own backend answered, not the common store’s')
+
+  // and a live socket takes the alias too, since a terminal is addressed by the session it belongs to
+  const upgraded = await new Promise<string>((resolve) => {
+    const s = net.connect(hubPort, '127.0.0.1', () => {
+      s.write(`GET /s/${OWNED}/api/sessions/x/socket HTTP/1.1\r\nHost: h\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n` +
+        `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nCookie: ${adminCookie}\r\n\r\n`)
+    })
+    let buf = ''
+    s.on('data', (d) => { buf += d })
+    s.on('close', () => resolve(buf))
+    s.on('error', () => resolve(buf))
+    setTimeout(() => { s.destroy(); resolve(buf) }, 1500)
+  })
+  assert.match(upgraded, /101 Switching Protocols/)
+})
+
+// The one invariant that had to MOVE rather than vanish when the per-peer listener was deleted
+// ([[machine-peer]]): a remote caller may not claim to be a local session. It now lives where the remote route
+// is AUTHORIZED — the peer entry knows which machine presented the credential, so it stamps the sender there.
+// This is strictly wider than the deleted listener, which left /m/:machineId/p/... unstamped.
+test('the peer entry stamps the sender on the two routes that carry a sender claim, and touches nothing else', async () => {
+  const MACHINE = '22222222-3333-4444-5555-666666666666'
+  const OTHER = '33333333-4444-5555-6666-777777777777'
+  const SESSION = '11111111-2222-4333-8444-000000000005'
+  const { token } = grantPeer(MACHINE)
+  registerSession('projA', SESSION)
+
+  const post = (port: number, path: string, payload: unknown, headers: Record<string, string> = {}) =>
+    fetch(`http://127.0.0.1:${port}${path}`, {
+      method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(payload),
+    })
+  const asPeer = (path: string, payload: unknown) => post(peerHubPort, path, payload, { [PEER_CREDENTIAL_HEADER]: token })
+
+  // an unverifiable claim is REPLACED by the machine's own ref, never trusted and never refused
+  const forged = await asPeer(`/s/${SESSION}/api/sessions/${SESSION}/input`, { kind: 'text', text: 'hi', from: '../../not-a-session' })
+  assert.equal(forged.status, 200)
+  assert.deepEqual((await forged.json() as any).body, { kind: 'text', text: 'hi', from: `peer_${MACHINE}` })
+
+  // a claim that is honestly the presenting machine's own survives intact, so a real remote session keeps its name
+  const honest = await asPeer(`/s/${SESSION}/api/sessions/${SESSION}/input`, { kind: 'text', text: 'hi', from: `peer_${MACHINE}_${OTHER}` })
+  assert.deepEqual((await honest.json() as any).body, { kind: 'text', text: 'hi', from: `peer_${MACHINE}_${OTHER}` })
+
+  // ...and a claim naming a DIFFERENT machine is not that machine's to make
+  const stolen = await asPeer(`/s/${SESSION}/api/sessions/${SESSION}/input`, { kind: 'text', from: `peer_${OTHER}_${OTHER}` })
+  assert.deepEqual((await stolen.json() as any).body, { kind: 'text', from: `peer_${MACHINE}` })
+
+  // close carries the same claim in its own spelling; across a machine the only honest source is the person
+  const closed = await asPeer(`/s/${SESSION}/api/sessions/${SESSION}/close`, { source: { kind: 'unverified-session-claim', id: OTHER } })
+  assert.deepEqual((await closed.json() as any).body, { source: { kind: 'user' } })
+
+  // the stamp rewrites the body, so the hop must re-declare its length rather than forward a stale one
+  const measured = await asPeer(`/s/${SESSION}/api/sessions/${SESSION}/input`, { kind: 'text', text: 'x'.repeat(64) })
+  const seen = await measured.json() as any
+  assert.equal(Number(seen.length), Buffer.byteLength(JSON.stringify(seen.body)))
+
+  // and it rewrites ONLY those two: every other peer POST streams through untouched
+  const untouched = await asPeer(`/s/${SESSION}/api/sessions/${SESSION}/stop`, { from: 'whatever-i-like' })
+  assert.deepEqual((await untouched.json() as any).body, { from: 'whatever-i-like' })
+
+  // a peer POST the stamp cannot read is refused at the gateway rather than forwarded half-understood
+  const notJson = await fetch(`http://127.0.0.1:${peerHubPort}/s/${SESSION}/api/sessions/${SESSION}/input`, {
+    method: 'POST', headers: { 'content-type': 'application/json', [PEER_CREDENTIAL_HEADER]: token }, body: 'not json',
+  })
+  assert.equal(notJson.status, 400)
+
+  // the stamp belongs to the PEER entry: a browser on this machine talks to its own backend unrewritten, because
+  // `from` there is a local session's own honest claim and the backend is the thing that verifies it
+  const local = await post(hubPort, `/s/${SESSION}/api/sessions/${SESSION}/input`, { kind: 'text', from: 'anything' }, { cookie: adminCookie })
+  assert.deepEqual((await local.json() as any).body, { kind: 'text', from: 'anything' })
+
+  revokePeer(MACHINE)
+})
+
 // The machine dimension is ADDRESSING, not aggregation ([[machine-routing]]): /m/:machineId/* forwards into a
 // peered machine's gateway over the ssh leg. The far machine is played by this suite's OWN peer ingress —
 // pointing a peer record's gatewayPort at a loopback peer entry is exactly the shape `ssh -L` produces, so the
@@ -391,17 +530,16 @@ test('the machine route forwards into a peered gateway, spends the leg credentia
   const LEGLESS = '66666666-8888-9999-aaaa-bbbbbbbbbbbb'
   const { token: farToken } = grantPeer(FAR)
   const basePeer = {
-    sshAddress: 'far.example', inboundPort: 40001, outboundPort: 40002,
-    remoteInboundPort: 40003, remoteOutboundPort: 40004,
+    sshAddress: 'far.example', sshOptions: [], remoteBackPort: null,
     owner: true, state: 'connected' as const, createdAt: 'test', lastOkAt: null, lastError: null,
   }
   mkdirSync(join(home, 'gateway'), { recursive: true })
   writeFileSync(peerStorePath(), JSON.stringify({
-    version: 1, machineId: readPeerMachineId(), peers: [
+    version: 2, machineId: readPeerMachineId(), peers: [
       // the reachable leg: local forwarded port + the credential that machine issued to this one
       { ...basePeer, machineId: FAR, gatewayPort: peerHubPort, remoteGatewayPort: 40005, remoteGatewayInstanceId: 'far-inst', remoteGatewayCredential: farToken },
       // a linked machine with no leg — an older host record with no peerPort, or its gateway is down
-      { ...basePeer, machineId: LEGLESS, sshAddress: 'legless.example', inboundPort: 40011, outboundPort: 40012, remoteInboundPort: 40013, remoteOutboundPort: 40014 },
+      { ...basePeer, machineId: LEGLESS, sshAddress: 'legless.example', gatewayPort: null, remoteGatewayPort: null, remoteGatewayInstanceId: null, remoteGatewayCredential: null },
     ],
   }) + '\n')
 

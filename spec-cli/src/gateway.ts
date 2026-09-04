@@ -230,7 +230,7 @@ function appendVary(current: string | string[] | undefined, token: string): stri
 // that mounts an upstream under a prefix must fix up header values naming absolute paths, or the
 // upstream's `Location: /projects` sends the browser to THIS server's /projects — a different machine's
 // page at a URL that looked like the other one's. Omitted, the upstream's headers pass through verbatim.
-export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1', rewriteResponseHeaders?: (headers: http.IncomingHttpHeaders) => http.OutgoingHttpHeaders) {
+export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1', rewriteResponseHeaders?: (headers: http.IncomingHttpHeaders) => http.OutgoingHttpHeaders, body?: Buffer) {
   let upstreamResponse: http.IncomingMessage | null = null
   let transform: ReturnType<typeof createGzip> | null = null
   let settled = false
@@ -330,7 +330,10 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
   res.once('error', abortFromDownstream)
   res.once('close', onResponseClose)
   res.once('finish', onResponseFinish)
-  req.pipe(up)
+  // @@@a rewritten body replaces the pipe, never joins it - a caller that had to READ the request to rewrite it
+  // has already drained `req`, so piping would forward nothing. Everything else about the hop is unchanged,
+  // which is the point: rewriting one field must not fork a second forwarding path.
+  if (body) up.end(body); else req.pipe(up)
 }
 
 type WebRoute = { sessionId: string; key: string; tail: string; query: string }

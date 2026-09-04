@@ -10,6 +10,7 @@ import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
 import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult } from './sessions.js'
 import { fromRaw } from './session-record.js'
 import { resolveMachinePeer } from './machine-peer.js'
+import { PEER_CREDENTIAL_HEADER } from './gateway-auth.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number, readonly transport?: unknown) {
@@ -294,19 +295,25 @@ export async function clientPushQueued(id: string): Promise<{ ok: boolean; error
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as { ok: boolean; error?: string }
 }
 
-// A machine peer's outbound loopback port is an SSH forward into the remote gateway's dedicated ingress.
-// It exposes only the small session-id allowlist the gateway can safely route to a derived local project.
-async function peerFetch(sshAddress: string, path: string, init?: RequestInit): Promise<Response> {
+// @@@--ssh is spelling, the route is the mechanism - a peer's loopback port is an SSH forward onto that
+// machine's gateway peer ingress, and these verbs ride `/s/<sessionId>/...`: the ordinary project route
+// addressed by a session, which the far gateway resolves to its owning project. There is no second protocol
+// here to keep in step, so `--ssh` gains whatever the route gains.
+async function peerFetch(sshAddress: string, sessionId: string, path: string, init?: RequestInit): Promise<Response> {
   const peer = resolveMachinePeer(sshAddress)
+  if (!peer.gatewayPort || !peer.remoteGatewayCredential) {
+    throw new BackendError(`machine ${peer.machineId} publishes no reachable gateway — run \`spex peer connect ${sshAddress}\` once that machine's \`spex dashboard\` is up`)
+  }
+  const headers = { ...(init?.headers as Record<string, string> | undefined), [PEER_CREDENTIAL_HEADER]: peer.remoteGatewayCredential }
   try {
-    return await fetch(`http://127.0.0.1:${peer.outboundPort}${path}`, init)
+    return await fetch(`http://127.0.0.1:${peer.gatewayPort}/s/${seg(sessionId)}${path}`, { ...init, headers })
   } catch (error) {
     throw new BackendError(`communication tunnel for SSH address ${JSON.stringify(sshAddress)} is unreachable — run \`spex peer connect ${sshAddress}\` to repair it (${(error as Error).message})`, undefined, error)
   }
 }
 
 export async function clientSendThroughPeer(sshAddress: string, id: string, text: string, from?: string): Promise<DispatchResult> {
-  const response = await peerFetch(sshAddress, `/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
+  const response = await peerFetch(sshAddress, id, `/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
   const body = await response.json().catch(() => ({ ok: false, error: `bad peer response (${response.status})` })) as DispatchResult | { error?: unknown }
   const peerBody = body as { ok?: unknown; error?: unknown }
   if (!response.ok && peerBody.ok !== false) {
@@ -315,10 +322,10 @@ export async function clientSendThroughPeer(sshAddress: string, id: string, text
   return body as DispatchResult
 }
 
-// The full id is the peer gateway's project anchor. Peer lists deliberately use the default board projection:
-// archives would need a new allowlisted operation, not an unreviewed query-string tunnel.
+// The full id is the project anchor the far gateway resolves against. Peer lists take the default board
+// projection because that is what `spex session ls` asks for, not because the route could carry no more.
 export async function clientListSessionsThroughPeer(sshAddress: string, projectAnchor: string): Promise<Session[]> {
-  const response = await peerFetch(sshAddress, `/api/sessions/${seg(projectAnchor)}/project/sessions`)
+  const response = await peerFetch(sshAddress, projectAnchor, '/api/sessions')
   if (!response.ok) throw new BackendError(`remote backend refused to list sessions for ${projectAnchor}: ${await response.text()}`, response.status)
   return await response.json() as Session[]
 }
@@ -326,13 +333,13 @@ export async function clientListSessionsThroughPeer(sshAddress: string, projectA
 export type PeerSessionCreateInput = { prompt: string; launcher?: string; name?: string; base?: string }
 
 // Peer creation is deliberately separate from sessions.ts createSession: that function's proven-local-refusal
-// fallback would launch on THIS machine. The closed body lets the peer gateway recreate the normal backend
-// idempotency header without becoming a general header proxy.
+// fallback would launch on THIS machine. The body is the backend's own create body and the retry key is the
+// backend's own idempotency header — there is nothing left in between to translate.
 export async function clientCreateThroughPeer(sshAddress: string, projectAnchor: string, input: PeerSessionCreateInput): Promise<Session> {
-  const response = await peerFetch(sshAddress, `/api/sessions/${seg(projectAnchor)}/project/sessions`, post({
-    ...input,
-    requestKey: randomUUID(),
-  }))
+  const response = await peerFetch(sshAddress, projectAnchor, '/api/sessions', {
+    ...post(input),
+    headers: { 'content-type': 'application/json', 'Idempotency-Key': randomUUID() },
+  })
   if (!response.ok) {
     const text = await response.text().catch(() => '')
     let message = text
@@ -456,7 +463,7 @@ export async function clientClose(id: string): Promise<boolean> {
 // POST /api/sessions/:id/close through a known peer. The local project guard is inapplicable: the peer is
 // already the caller's explicit remote transport, and the remote gateway derives the owning project by id.
 export async function clientCloseThroughPeer(sshAddress: string, id: string): Promise<boolean> {
-  const r = await peerFetch(sshAddress, `/api/sessions/${seg(id)}/close`, post({ source: { kind: 'user' } }))
+  const r = await peerFetch(sshAddress, id, `/api/sessions/${seg(id)}/close`, post({ source: { kind: 'user' } }))
   if (!r.ok) throw new BackendError(`remote backend refused to close ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
@@ -521,7 +528,7 @@ export async function clientShow(id: string): Promise<ShowResult> {
 }
 
 export async function clientShowThroughPeer(sshAddress: string, id: string): Promise<ShowResult> {
-  const r = await peerFetch(sshAddress, `/api/sessions/${seg(id)}`)
+  const r = await peerFetch(sshAddress, id, `/api/sessions/${seg(id)}`)
   if (r.ok) return { ok: true, session: await r.json() as Session & { prompt: string | null } }
   if (r.status === 404) return { ok: false, status: 404 }
   throw new BackendError(`remote backend refused to show ${id}: ${await r.text()}`, r.status)

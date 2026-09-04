@@ -1,6 +1,6 @@
 ---
 title: machine-routing
-status: pending
+status: active
 hue: 178
 desc: One origin addresses projects on every peered machine — the hub grows a machine segment, so a browser and the desktop switch machines through the same route grammar.
 related:
@@ -61,10 +61,11 @@ gateway" and never to a wrong one. A machine whose gateway is not running is a p
 unavailable, not a failed peer: the agent channel keeps working and the fleet view says that machine has
 no gateway.
 
-The forward targets the remote GATEWAY, never the peer listener. The listener is a five-route allowlist
-for agent-to-agent session control and is deliberately not a proxy; the gateway is the surface that
-already reverse-proxies a whole project — WebSocket upgrades and SSE included — so one forward yields the
-complete product on that machine, live terminals and all.
+The forward targets the remote GATEWAY, and nothing else is left for it to target. Agent-to-agent session
+control once had a door of its own beside the gateway — a five-route allowlist with its own request parser and
+its own forwarding path — while the gateway was already the surface that reverse-proxies a whole project,
+WebSocket upgrades and SSE included. One forward therefore yields the complete product on that machine, live
+terminals and all, which is why that second door is gone rather than kept beside this one.
 
 That last sentence is measured rather than argued. Through a real `ssh -L` onto a throwaway hub, with no
 product code changed, a browser loaded the project SPA and its bundles, `GET /api/graph` returned the same
@@ -82,10 +83,13 @@ never guessed — the accepting machine reads its own host record when it answer
 the gateway it runs right now or an honest absence, and an absence records no leg at all rather than a port
 nobody could later prove wrong. A leg is therefore always either correct-as-of-its-instance or missing.
 
-The leg is directional, and the record says so instead of pretending otherwise. `spex peer connect` opens the
-forward, so it makes the TARGET addressable HERE; the accepting side runs no ssh child of its own and so holds
-no leg back, which is why its own gateway fields stay empty and the reverse view is one `peer connect` run on
-that machine. Nothing here is symmetric that the transport is not.
+The leg used to be directional and is no longer. `spex peer connect` opens the forward, so it makes the TARGET
+addressable HERE; the accepting side runs no ssh child of its own and so could never build a leg back. That is
+precisely why the same dial publishes one for it — a reverse forward landing on the dialler's own peer ingress,
+whose port the accepting side names and whose credential the dialler mints and hands over in the second half of
+the accept handshake. One `peer connect` therefore leaves both ends addressable. What stays asymmetric is the
+transport underneath, one SSH child owned by the connecting side, and the record says that plainly rather than
+pretending the two ends are the same kind of thing.
 
 Staleness has one repair, and it is explicit. The retry loop redials ssh without asking the far side anything,
 so a gateway that restarted on another port would otherwise keep a forward aimed at a dead instance forever.
@@ -174,14 +178,18 @@ is the one still to be proven the same way.
 
 Deep links gain the same segment: `spexcode://m/<machineId>/p/<projectId>/…`, with the bare form meaning
 this machine, resolved by the shell against its one local gateway — which is why the shell still needs no
-machine list. And once machine-qualified routing and explicit peer credentials both exist, the five
-hand-written `--ssh` verbs are addressing a subset of a route that now carries everything: `--ssh` becomes
-spelling sugar over a machine-qualified route, and the allowlist listener with its five-route parser and
-its own forwarding path can go. That collapse is sequenced strictly AFTER the credential work, because
-doing it first would trade a deliberate allowlist for the inherited loopback trust this node just
-outlawed. One guarantee must survive it: a remote caller may never claim to be a local session, so the
-sender rewrite that stamps a peer's input with its machine and session identity moves to wherever the
-remote route is authorized rather than disappearing with its current host.
+machine list. And once machine-qualified routing and explicit peer credentials both existed, the five
+hand-written `--ssh` verbs were addressing a subset of a route that already carried everything, so they became
+spelling sugar over it: each verb now builds the same authorized request over the peer leg, and the allowlist
+listener with its five-route parser and its own forwarding path is deleted. That collapse was sequenced strictly
+AFTER the credential work, because doing it first would have traded a deliberate allowlist for the inherited
+loopback trust this node outlaws. Two things the listener owned had to move rather than go with it, and both
+did. Deriving the project that owns a full session UUID is now a hub route — a session-addressed path resolves
+to the same project route, offered at every entry rather than only the peer one, because a correct derivation is
+correct for whoever asks. And the guarantee that a remote caller may never claim to be a local session now holds
+where the request is AUTHORIZED, so the sender stamp covers every project route a peer can reach instead of five
+hand-listed ones. That is a widening rather than a preservation, and it is the honest reading: through
+`/m/:machineId/*` those five were already bypassable, so the door being deleted was not the thing enforcing it.
 
 This node governs no source file. It is the routing contract the hub, the peer, and the auth store each
 implement in their own body, so a change to any of them is that node's drift and never a phantom warning

@@ -60,8 +60,9 @@ counts (`total/pass/fail/stalePass/staleFail/empty`). It carries no `issues`, `o
 `scenarios` arrays and no row title/body/evidence from which either main review list could be reconstructed.
 Tile badges, popup captions, graph stats, the CLI tree, and any other first-paint glance consume only this
 projection. The complete local/forge Issue population and current Eval population stay in one server-only
-snapshot produced atomically with the graph build; the Issue half carries the resident forge content revision
-it was built from, so a late resident reconcile can be republished without putting rows on the graph wire.
+snapshot produced atomically with the graph build; the Issue half carries one content revision per issue store
+it was built from — the resident forge slice and the local store alike — so a late write to any of them can be
+republished without putting rows on the graph wire, and no store's write is invisible to the read.
 [[paged-review]] filters/counts/slices that snapshot when a row surface actually opens. Server memory is not
 serialized by graph JSON, graph SSE, or delta units.
 

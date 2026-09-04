@@ -177,8 +177,8 @@ test('revision fence consumes a fresh publication after a held stale flight', { 
   const heldStaleFlight = new Promise<void>((resolve) => { releaseHeld = resolve })
   let waits = 0
 
-  const pending = cache.waitForPublishedRevision(1, {
-    revision: () => publishedRevision,
+  const pending = cache.waitForPublishedRevision({
+    satisfied: () => publishedRevision >= 1,
     invalidate: () => { invalidations++ },
     wait: async () => {
       waits++

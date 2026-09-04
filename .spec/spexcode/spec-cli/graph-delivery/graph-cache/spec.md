@@ -35,11 +35,14 @@ The graph is built **once per change, not once per poll — and only as much of 
   Under `SPEXCODE_BOARD_DEBUG=1`, each successful full or sessions cache publication emits one structured
   `cache-commit` row after its anchor is committed, carrying `stage=cache-commit`, `at`, `scope` and `buildMs`; validation hits,
   stale reads and failed, aborted or timed-out producers emit no such row.
-- **Revision-fenced publication.** A consumer that has observed a newer resident-forge content revision asks
-  the cache for a board that carries at least that revision. The cache records a full invalidation and waits
-  for publication, but an already-running flight that captured an older forge slice cannot discharge that
-  obligation: it may settle normally, then the still-owed full producer publishes the required revision.
-  This is one cache-owned publication fence, not API polling or a forge-specific retry path; failure from
+- **Revision-fenced publication.** A consumer that has observed a newer content revision on any source it
+  reads asks the cache for a board whose publication has reached at least that revision. The fence asks the
+  publication one question — is what is published new enough — and never how freshness is numbered, so a
+  consumer with several sources ([[review-snapshot]] carries one revision per issue store) fences on all of
+  them without folding them into one counter. The cache records a full invalidation and waits for
+  publication, but an already-running flight that captured older source state cannot discharge that
+  obligation: it may settle normally, then the still-owed full producer publishes what was required.
+  This is one cache-owned publication fence, not API polling or a source-specific retry path; failure from
   either flight remains loud through the existing build/watchdog path.
 - **Verification is cache-owned, and it is the FIRST step of every refresh.** A change signal names the leaf a
   watcher saw; that is not evidence the board moved. So every refresh — graph-stream's ~15s patrol, an HTTP

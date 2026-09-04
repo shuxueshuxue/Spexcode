@@ -1,6 +1,6 @@
 import { deriveStatus } from './specs.js'
 import { resolveProjectIdentity } from './project-identity.js'
-import { publishReviewSnapshot } from './reviewSnapshot.js'
+import { publishReviewSnapshot, type IssueSourceRevision } from './reviewSnapshot.js'
 import { evalReviewState } from './review/reviewFilters.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
@@ -25,7 +25,7 @@ export type BoardSnapshot = {
   sessions: any[]
   issues: any[]
   issuesStamp: string
-  forgeRevision: number
+  issueSource: IssueSourceRevision
   evalTimelines: Map<string, any>
   sessionEvalProjections: Map<string, any>
 }
@@ -56,7 +56,7 @@ export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) 
 const rowOps = (s: { path: string; archived?: boolean }, opsByPath: Record<string, any[]>): any[] =>
   (s.archived ? [] : opsByPath[s.path] || [])
 
-export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, forgeRevision, evalTimelines, sessionEvalProjections }: BoardSnapshot) {
+export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, issueSource, evalTimelines, sessionEvalProjections }: BoardSnapshot) {
   const worktrees = layout.worktrees.filter((w) => !w.isMain)
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
@@ -146,7 +146,7 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
     return [{ id: n.id, hue: n.hue, scenarios: timeline.scenarios, evals: latest, readings: timeline.readings }]
   })
 
-  publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes, forgeRevision })
+  publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes, issueSource })
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })

@@ -7,6 +7,7 @@ import { driftIndex, historyIndex, pruneHistoryCaches, repoRoot } from '@spexcod
 import { residentForgeRevision, residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { boardThreads } from './issues.js'
+import { localIssueRevision } from './localIssues.js'
 import { buildBoard as assembleBoard, spliceSessions as spliceBoardSessions, type BoardSnapshot } from '@spexcode/spec-core'
 import { evalContext, evalTimelines } from '@spexcode/spec-eval/evaltab'
 import { evalNodesAsync } from '@spexcode/spec-eval/scenarios'
@@ -70,6 +71,11 @@ export async function boardSnapshot(): Promise<BoardSnapshot> {
     ...specs.map((node) => node.id),
     ...layout.worktrees.flatMap((worktree) => (worktree.ops || []).map((op: any) => op.nodeId)),
   ].filter((id): id is string => typeof id === 'string' && id.length > 0))]
+  // Sample every issue-store revision BEFORE reading the stores. Sampling after would let a write that
+  // landed between the read and the sample be certified as contained in this snapshot, so a reader waiting
+  // for that write would be answered with a generation that predates it. Sampling before can only
+  // under-claim — the cost is one extra rebuild, never a stale answer presented as current.
+  const issueSource = { forge: residentForgeRevision(), local: localIssueRevision() }
   const { issues, stamp: issuesStamp } = boardThreads(
     { host: resolveForgeHost(), state: residentForgeState() },
     nodeIds,
@@ -90,7 +96,7 @@ export async function boardSnapshot(): Promise<BoardSnapshot> {
     timelineCache = { key, timelines }
   }
   return {
-    root, specs, layout, sessions, issues, issuesStamp, forgeRevision: residentForgeRevision(),
+    root, specs, layout, sessions, issues, issuesStamp, issueSource,
     evalTimelines: new Map(nodeIds.map((nodeId, index) => [nodeId, timelines[index]])),
     sessionEvalProjections: sessionEvalProjections(sessions),
   }

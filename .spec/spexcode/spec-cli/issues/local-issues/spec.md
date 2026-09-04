@@ -114,6 +114,11 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   success**: when the requested state already IS the stored state (a duplicate close), the
   write detects the no-op after staging and skips the commit — the verb reports success and exits
   0, never surfacing git's nothing-to-commit failure as an error for a store that is exactly as asked.
+  That same changed/no-op decision is **this store's own freshness carrier**: the store publishes a monotonic
+  content revision that advances on exactly the writes that moved its bytes, so a reader that must not answer
+  from a pre-write generation ([[review-snapshot]]) has one number to require of this store, and an idempotent
+  no-op leaves nothing to wait for. The number is per store because it answers only for this store's bytes;
+  merging it into a shared counter would let another store's write stand in for one of these.
 - **Nudged AFTER the work lands, not during it.** The agent's own task is what matters most, so the local issue store is
   never raised while it is still finishing — it is raised the moment the work **merges**. A **`post-merge`
   git hook** (harness-side gates live in [[state]]; this one is git-side) fires in the doer's dispatched

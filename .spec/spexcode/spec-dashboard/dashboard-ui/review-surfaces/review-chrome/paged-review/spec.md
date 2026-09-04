@@ -60,9 +60,12 @@ or crawling it. Node timeline mode loads only its addressed node before filterin
 
 Forge resident refresh may use native host pagination and incremental windows at the adapter boundary; a
 browser review request reads that resident snapshot and never starts a host-wide or per-row N+1 crawl. When
-that resident state advances after a snapshot publication, the next Issue read requests a graph publication
-at least at that content revision before paging. A held graph flight with an older resident slice cannot
-satisfy the request; equal resident state stays on the cached snapshot path.
+the content of ANY issue store this read merges advances after a snapshot publication, the next Issue read
+requests a graph publication that has reached at least that content revision on every store before paging.
+Every store is asked, not just the resident forge one: a store left out of that comparison is a store whose
+writes this page cannot see, so its own close would stay visible in the list until an unrelated rebuild
+happened to republish. A held graph flight that captured older source state cannot satisfy the request;
+source state already at the required revision stays on the cached snapshot path.
 
 The same protocol family owns Eval detail without reopening a full-list channel. One bounded detail request
 names `(scope?, node, scenario)` and returns the selected current row, that scenario's complete newest-first

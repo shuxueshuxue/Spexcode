@@ -10,7 +10,7 @@ import { boardThreads } from './issues.js'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
-import { readReviewSnapshot } from '@spexcode/spec-core'
+import { issueSourceCurrent, readReviewSnapshot, type IssueSourceRevision } from '@spexcode/spec-core'
 import { sessionEvalProjection } from '@spexcode/spec-eval/sessioneval'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 
@@ -23,8 +23,11 @@ export type BoardRead = { board: Board; freshness: 'fresh' | 'stale'; refreshing
 export type BoardIdentity = { json: string; units: Units; ok: boolean; tag: string }
 // `tag` is null exactly when the identity is not faithful, so a caller cannot accidentally publish one.
 export type BoardJsonRead = BoardRead & { json: string; tag: string | null }
+// The fence asks the publication ONE question — is what is published new enough? — and never how it is
+// numbered. Freshness carriers are per source (see [[review-snapshot]]'s IssueSourceRevision), so a scalar
+// comparison here would force every source to share one counter.
 export type RevisionPublication = {
-  revision: () => number
+  satisfied: () => boolean
   invalidate: () => void
   wait: () => Promise<void>
 }
@@ -683,19 +686,20 @@ export function getBoard(): Promise<Board> {
   return Promise.reject(lastFailure ?? new Error('graph build retry is temporarily backing off'))
 }
 
-export async function waitForPublishedRevision(required: number, publication: RevisionPublication): Promise<void> {
-  while (publication.revision() < required) {
+export async function waitForPublishedRevision(publication: RevisionPublication): Promise<void> {
+  while (!publication.satisfied()) {
     publication.invalidate()
     await publication.wait()
   }
 }
 
-// A board flight can have captured a resident forge slice before its reconcile publishes a newer revision.
-// That older flight may settle, but cannot discharge this request: its invalidation stays owed and the fence
-// consumes the next publication instead of letting a fresh /api/issues read return the old review snapshot.
-export async function getBoardForForgeRevision(required: number): Promise<Board> {
-  await waitForPublishedRevision(required, {
-    revision: () => readReviewSnapshot().forgeRevision,
+// A board flight can have read an issue store before a write lands, or captured a resident forge slice
+// before its reconcile publishes a newer revision. That older flight may settle, but cannot discharge this
+// request: its invalidation stays owed and the fence consumes the next publication instead of letting a
+// fresh /api/issues read return the old review snapshot.
+export async function getBoardForIssueSource(required: IssueSourceRevision): Promise<Board> {
+  await waitForPublishedRevision({
+    satisfied: () => issueSourceCurrent(readReviewSnapshot().issueSource, required),
     invalidate: () => invalidateBoard('full'),
     wait: async () => {
       const current = inflight

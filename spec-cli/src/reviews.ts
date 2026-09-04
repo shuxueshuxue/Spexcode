@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { listSessions } from './sessions.js'
-import { getBoard, getBoardForForgeRevision } from './graphCache.js'
+import { getBoard, getBoardForIssueSource } from './graphCache.js'
 import { type SessionEvalOrderRow, buildSessionEvals, type SessionEvals } from '@spexcode/spec-eval/sessioneval'
 import { evalTimeline } from '@spexcode/spec-eval/evaltab'
-import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
+import { issuesEnabled as issuesEnabledForReview, localIssueRevision } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
-import { hasReviewSnapshot, readReviewSnapshot } from '@spexcode/spec-core'
+import { hasReviewSnapshot, issueSourceCurrent, readReviewSnapshot } from '@spexcode/spec-core'
 import { residentForgeRevision, residentForgeState } from '@spexcode/spec-forge/resident'
 import { EVAL_FILTER_KIND, evalFilterModel, evalReviewState, issueFilterModel, tokenFilterState } from '@spexcode/spec-core/review'
 import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, readToken } from '@spexcode/spec-core/review'
@@ -135,10 +135,15 @@ export async function issuesReview(query: string | undefined, requestedPage: unk
   // The first request must wait for the first atomic publication. Once one exists, a graph refresh may be
   // rebuilding unrelated board/session state; the published review source remains a valid answer and its
   // revision/poll path will deliver the next generation without making this page join that flight.
+  // A newer revision on ANY issue store is a different thing entirely — it is a source change this page is
+  // about, so the read waits for a publication that contains it. Every store is asked, because a store left
+  // out of this comparison is a store whose writes this page cannot see: a local close stayed invisible in
+  // the list until some unrelated graph build happened to republish.
   residentForgeState()
+  const required = { forge: residentForgeRevision(), local: localIssueRevision() }
   if (!hasReviewSnapshot()) await getBoard()
-  else if (readReviewSnapshot().forgeRevision < residentForgeRevision()) {
-    await getBoardForForgeRevision(residentForgeRevision())
+  else if (!issueSourceCurrent(readReviewSnapshot().issueSource, required)) {
+    await getBoardForIssueSource(required)
   }
   const sessions = await listSessions()
   const issues = readReviewSnapshot().issues.slice().sort(issueOrder)

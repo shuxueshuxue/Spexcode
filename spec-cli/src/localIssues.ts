@@ -247,6 +247,20 @@ function ensureStoreMigrated(): void {
   })
 }
 
+// @@@ the local store's content revision — this store's own freshness carrier
+// A reader that must not answer from a pre-write generation needs a monotonic number per ISSUE STORE, the
+// same way the resident forge cache carries one for its own. This counter advances on exactly the writes
+// that moved store bytes, so it is bumped by the one function below that decides `changed`.
+let storeRevision = 0
+
+export function localIssueRevision(): number { return storeRevision }
+
+function writeStoreFile(p: Issue, message: string): boolean {
+  const changed = writeStoreBytes(p, message)
+  if (changed) storeRevision += 1
+  return changed
+}
+
 // write + commit ONE store file STRAIGHT to the trunk. The commit is `--no-verify`: the file is DATA,
 // structurally invisible to spec-lint, and the commit is provably store-only (one .spec/.issues/ path), so the
 // pre-commit gate would only pass anyway — running it just burns seconds (tsx cold-start) holding the lock.
@@ -256,7 +270,7 @@ function ensureStoreMigrated(): void {
 // and skip the commit. Returns whether the store actually changed, so a caller can say 'already <state>'.
 // MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
 // (commitStore, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
-function writeStoreFile(p: Issue, message: string): boolean {
+function writeStoreBytes(p: Issue, message: string): boolean {
   const override = overrideStoreDir()
   if (override) {                                          // disposable store: a plain file, never a commit, never a shared main
     mkdirSync(override, { recursive: true })

@@ -84,7 +84,7 @@ function loadSqlite(): { DatabaseSync: DatabaseConstructor } {
 }
 
 const { DatabaseSync } = loadSqlite()
-const JOURNAL_MODE = 'delete'
+const JOURNAL_MODE = 'wal'
 
 const SELECT_COLUMNS = `enqueue_seq, message_id, target_session_id, sender_session_id, protocol_version,
   kind, body, headers_json, idempotency_key, payload_hash, enqueued_at_ms, dequeued_at_ms`
@@ -567,7 +567,10 @@ export function openProtocol(databasePath: string, options: OpenOptions = {}): S
       fail('PROTOCOL_PRAGMA_UNSUPPORTED', 'foreign_keys could not be enabled')
     }
 
-    const mode = String(database.prepare('PRAGMA journal_mode').get()?.journal_mode)
+    let mode = String(database.prepare('PRAGMA journal_mode').get()?.journal_mode)
+    if (mode === 'delete' && !readOnly) {
+      mode = retryWhileBusy(busyTimeoutMs, () => String(database.prepare('PRAGMA journal_mode=WAL').get()?.journal_mode))
+    }
     if (mode !== JOURNAL_MODE) {
       fail(
         'PROTOCOL_JOURNAL_MODE_UNSUPPORTED',

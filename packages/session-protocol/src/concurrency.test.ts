@@ -207,22 +207,22 @@ test('busy_timeout must be the connection\'s first statement, or the version pro
   }
 })
 
-test('SIGKILL before commit leaves the message pending and the rollback journal is recovered', async () => {
+test('SIGKILL before commit leaves the message pending and WAL is recovered', async () => {
   const path = freshDb()
   const setup = openProtocol(path)
   setup.initialize('crash')
   setup.close()
   await killAfterSignal([path, 'crash-precommit', 0, 'crash'], 'staged')
   const sidecars = (): string[] => readdirSync(dirname(path)).filter(name => name !== 'protocol.sqlite').sort()
-  assert.deepEqual(sidecars(), ['protocol.sqlite-journal'])
+  assert.deepEqual(sidecars(), ['protocol.sqlite-shm', 'protocol.sqlite-wal'])
   const reader = openProtocol(path, { readOnly: true })
   assert.deepEqual(reader.listPending('crash'), [])
   reader.close()
   const after = openProtocol(path)
   assert.deepEqual(after.listPending('crash'), [])
-  assert.deepEqual(sidecars(), ['protocol.sqlite-journal'])
+  assert.deepEqual(sidecars(), ['protocol.sqlite-shm', 'protocol.sqlite-wal'])
   after.enqueue('crash', { kind: 'after.v1', body: Buffer.from('after') })
-  assert.deepEqual(sidecars(), [])
+  assert.deepEqual(sidecars(), ['protocol.sqlite-shm', 'protocol.sqlite-wal'])
   assert.equal(after.readMessages('crash').length, 1)
   after.close()
 })

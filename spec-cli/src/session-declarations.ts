@@ -29,6 +29,7 @@ function nothingProposalTrap(): never {
 // diagnostic rules, but they do not own any porcelain declaration verb.
 export async function sessionStateKit(sessionId?: string) {
   const s = await import('./sessions.js')
+  const t = await import('./session-table.js')
   const l = await import('@spexcode/spec-core')
   const { existsSync, writeFileSync } = await import('node:fs')
   // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
@@ -70,7 +71,7 @@ export async function sessionStateKit(sessionId?: string) {
   // Taught once per record: the CLI's explicit NOTE column is the only note display that cuts prose.
   const noteEcho = (note?: string): string => {
     if (!note) return ''
-    const tableCut = s.displayWidth(note) > s.NOTE_BOARD_LIMIT
+    const tableCut = t.displayWidth(note) > t.NOTE_BOARD_LIMIT
     if (!tableCut) return ''
     const wid = sess || s.ownSessionId()
     const rid = wid ? (l.readAliasedRawRecord(wid)?.session_id ?? wid) : null   // sentinel lives in the RECORD's dir, so an aliased codex id lands on the same file
@@ -81,7 +82,7 @@ export async function sessionStateKit(sessionId?: string) {
         writeFileSync(sentinel, `${new Date().toISOString()}\n`)   // only reached on a successful declaration (the echo rides the success branch)
       } catch { /* unreadable/unwritable store dir → fall through and teach again; never block the echo */ }
     }
-    return `\nyour note is ${note.length} chars — the session table's NOTE column shows only the first ${s.NOTE_BOARD_LIMIT} display columns. the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later cut notes won't repeat this.)`
+    return `\nyour note is ${note.length} chars — the session table's NOTE column shows only the first ${t.NOTE_BOARD_LIMIT} display columns. the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later cut notes won't repeat this.)`
   }
   return { s, sess, noRecord, mark, noteEcho }
 }
@@ -95,7 +96,7 @@ export async function runSessionDeclaration(verb: DeclarationVerb, argv: readonl
     if (proposal === 'nothing') nothingProposalTrap()
     const { s, sess, mark, noRecord, noteEcho } = await sessionStateKit(sessionId)
     if (proposal === 'merge') {
-      const readiness = s.mergeReadiness('merge')
+      const readiness = (await import('./session-review.js')).mergeReadiness('merge')
       if (!readiness.ready) {
         console.error(`review declaration refused: ${readiness.reason}`)
         process.exitCode = 1

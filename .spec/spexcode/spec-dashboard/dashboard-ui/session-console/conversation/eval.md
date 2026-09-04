@@ -25,12 +25,14 @@ scenarios:
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/TimelineChat.jsx]
     related: [spec-dashboard/src/data.js]
+    test: spec-dashboard/test/timeline-load-earlier-position.e2e.mjs
     description: >-
       Against a real backend, seed one governed session with MORE history than a window holds — several
       hundred authored events, past whatever tail the surface reads — and open it in a real browser. Scroll to
       the TOP of the conversation and read what is there. Then take the way back, if there is one: press it,
-      and measure (a) how many rows the page holds before and after, (b) the viewport position of a row that
-      was on screen across the press, and (c) the count the top edge states. Separately, watch the network for
+      and measure (a) how many rows the page holds before and after, (b) the viewport position of the pressed
+      way-in across the press, and (c) the count the top edge states. Include the text-bounded shape where the
+      current window has only five events while 395 are omitted. Separately, watch the network for
       a quiet stretch of polling and read what each timeline request asks for and how many bytes come back.
     expected: >-
       The count names the earlier history and offers the way in — the record's own count, not a guess from
@@ -38,9 +40,9 @@ scenarios:
       row. Press it repeatedly and scroll to the top each time: the count falls, and the first row BELOW it
       moves further back in time on every press. Measured from the top of the page instead, the prompt is
       always the first thing there — it is outside the window and never changes — so a count placed above it
-      would leave a reader unable to tell the window had moved at all. The row the reader was on does not
-      move: growth arrives above it and the scroll absorbs exactly that height. The press is the only thing
-      that walks back; reaching the top does not fetch by itself. On a quiet record the poll asks only for
+      would leave a reader unable to tell the window had moved at all. The pressed way-in does not move and
+      the newly revealed page begins immediately after it; the short-window shape does not jump to the tail.
+      The press is the only thing that walks back; reaching the top does not fetch by itself. On a quiet record the poll asks only for
       GROWTH and comes back with none — a few hundred bytes, not the window again.
   - name: a-window-is-measured-in-what-the-reader-faces
     tags: [frontend-e2e, desktop]

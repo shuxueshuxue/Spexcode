@@ -44,8 +44,14 @@ in the server-only snapshot used by [[paged-review]] for the node-info **Issues 
 canonical list. This node
 owns the forge slice into that fold; the merge itself is
 [[issues]]'s. Closed forge issues link by the explicit `Spec:` marker (the transitive PR path sees only
-open PRs). The slice is **silent by construction**: with no `gh`/repo/auth the reconcile throws,
-is swallowed, and the cache stays empty — the fold carries the local slice alone, no error. One exception: a store-routed reply to a forge issue ([[issues]]) forces one refresh past
+open PRs). The slice **never fails a read**: when the reconcile throws, the cache stays
+empty and the fold carries the local slice alone, so a broken forge costs a reader nothing. That absorb is
+about the READER, not about the record: no forge configured at all is silence with nothing to say — the
+driver is absent and no reconcile is attempted — but a forge that IS configured and then refused the read is
+a fact, and swallowing it is what makes an hour-old auth failure look identical to a repository with no
+issues. So a failed reconcile is absorbed from the caller and REPORTED on the process's error channel, once
+per distinct message: the refresh retries every TTL, so repeating an unchanged message is noise, while a new
+message — or the same one after a success — is a new fact and says itself again. One exception: a store-routed reply to a forge issue ([[issues]]) forces one refresh past
 the TTL and AWAITS it (`refreshForgeNow`), so the next read carries the real read-back; the forced cycle is
 a FULL re-list, never the incremental window — a since-read can lag a just-posted write, advancing the
 watermark past it. Read-only throughout — the resident module never writes the forge (writes are the

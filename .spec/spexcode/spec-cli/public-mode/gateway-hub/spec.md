@@ -49,6 +49,15 @@ internal services; the hub owns the outside.
   extensionless backend routes likewise remain proxied. A bare `/p/:projectId`
   navigation redirects to the slash-terminated scope before the shell is served, so relative assets resolve
   inside the project scope.
+- `/s/:sessionId/*` — the SAME project surface, addressed by a session this machine owns. An agent that has
+  been handed a full session UUID holds no project id, so the hub derives one instead of making the caller
+  guess: it scans its own per-project session stores for that UUID (no match is 404, several are 409), then
+  selects the live backend whose served root equals the record's `worktree_path`, falling back to the unique
+  live backend sharing that record's Git common directory, answering 409 when several qualify and 502 when the
+  target backend is simply not up. From there the request continues as `/p/<derived>/…` in every respect —
+  same gate, same scope, same cookie stripping, WebSocket upgrades included. The alias is offered at BOTH
+  doors rather than only the peer one: a correct derivation is correct for whoever asks, and a rule that
+  existed only for peers would be a special case for one current caller rather than a route.
 - `/machines`, `/m/:machineId/*` — the machine surface ([[machine-routing]]): `GET /machines` names this
   machine and lists the peered ones with whether each publishes a reachable gateway, and
   `/m/:machineId/*` reverse-proxies — WebSocket upgrades included — into that machine's gateway over
@@ -78,6 +87,17 @@ send the browser to THIS machine's page at a URL that looked like the other mach
 therefore prefixes a leading-slash `Location` with `/m/:machineId` and drops `Set-Cookie` whole: the hop is
 authorized by the leg credential and never by a cookie, and a gateway cookie name carries only the port, so
 two gateways sharing a port number would otherwise clobber each other's session in one browser.
+
+**A peer-authorized request may never claim to be a local session.** [[machine-peer]] runs no door of its own
+any more, so this is where that guarantee lives. On the two routes that carry a sender claim — `POST
+/api/sessions/:id/input`'s `from` and `POST /api/sessions/:id/close`'s `source` — a request the `'peer'` entry
+authorized has its claim rewritten to the machine identity that authorization already established:
+`peer_<machineId>_<sessionId>`, or `peer_<machineId>` when the sender named no session, and a close becomes an
+ordinary user close. Rewriting a body means reading it, so those two routes alone are read to a 1MB ceiling,
+re-serialized, and forwarded with a corrected `content-length`; a body that is not a JSON object is a 400
+rather than a silent pass. Every other route, and every request through the console entry, streams untouched.
+The stamp keys on the LISTENER's verdict rather than on a hand-listed set of paths, which is why it covers
+every project route a peer can reach.
 
 **Backends never see the gateway's credentials.** The hub's own cookies (`spex_*`) are stripped from every
 proxied request and upgrade — a visitor's other cookies pass through untouched. Combined with

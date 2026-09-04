@@ -1,34 +1,32 @@
 import { randomUUID } from 'node:crypto'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection, createServer as createNetServer, type Server as NetServer } from 'node:net'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { runtimeRoot, spexcodeHome } from '@spexcode/spec-core'
-import { readEndpointRecord } from './endpoint-record.js'
+import { spexcodeHome } from '@spexcode/spec-core'
 import { readHostRecord } from './host-record.js'
 import { grantPeer, revokePeer } from './gateway-auth.js'
 
 const execFileAsync = promisify(execFile)
-const PEER_VERSION = 1
+const PEER_VERSION = 2
 const PEER_RETRY_MS = 2_000
-const PEER_BODY_LIMIT = 1_048_576
 
 export type MachinePeer = {
   machineId: string
   sshAddress: string
   sshOptions: string[]
-  inboundPort: number
-  outboundPort: number
-  remoteInboundPort: number
-  remoteOutboundPort: number
+  // The local port that reaches that machine's gateway. On the DIALLING side it is the listening end of an
+  // `-L` forward; on the ACCEPTING side it is a port the dialler's `-R` publishes here. Either way it means
+  // the same thing to every reader, which is why both sides now hold one.
   gatewayPort: number | null
   remoteGatewayPort: number | null
   remoteGatewayInstanceId: string | null
   // the credential that far machine ISSUED to this one during the accept handshake — what this machine
   // presents on that gateway's peer ingress. Absent means the far side published no ingress to reach.
   remoteGatewayCredential: string | null
+  // the port THERE that our reverse forward publishes onto our own peer ingress. Only the dialler builds it.
+  remoteBackPort: number | null
   owner: boolean
   state: 'connecting' | 'connected'
   createdAt: string
@@ -37,6 +35,7 @@ export type MachinePeer = {
 }
 type PeerStore = { version: typeof PEER_VERSION; machineId: string; peers: MachinePeer[] }
 export type PeerGatewayFacts = { port: number; instanceId: string; credential: string }
+type AcceptReply = { machineId: string; gateway: PeerGatewayFacts | null; backPort: number | null }
 
 export const peerStorePath = (): string => join(spexcodeHome(), 'gateway', 'peers.json')
 export const peerSocketPath = (): string => join(spexcodeHome(), 'gateway', 'peer.sock')
@@ -64,16 +63,14 @@ function validGatewayFacts(value: unknown): value is PeerGatewayFacts {
 function validGatewayLeg(peer: Record<string, unknown>): boolean {
   const optionalPort = (value: unknown) => value === undefined || value === null || validPort(value)
   const optionalString = (value: unknown) => value === undefined || value === null || typeof value === 'string'
-  return optionalPort(peer.gatewayPort) && optionalPort(peer.remoteGatewayPort) &&
+  return optionalPort(peer.gatewayPort) && optionalPort(peer.remoteGatewayPort) && optionalPort(peer.remoteBackPort) &&
     optionalString(peer.remoteGatewayInstanceId) && optionalString(peer.remoteGatewayCredential)
 }
 function validPeer(value: unknown): value is MachinePeer {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const peer = value as Record<string, unknown>
   return validMachineId(peer.machineId) && typeof peer.sshAddress === 'string' && peer.sshAddress.length > 0 &&
-    validSshOptions(peer.sshOptions) &&
-    validPort(peer.inboundPort) && validPort(peer.outboundPort) && validPort(peer.remoteInboundPort) && validPort(peer.remoteOutboundPort) &&
-    validGatewayLeg(peer) &&
+    validSshOptions(peer.sshOptions) && validGatewayLeg(peer) &&
     typeof peer.owner === 'boolean' && (peer.state === 'connecting' || peer.state === 'connected') &&
     typeof peer.createdAt === 'string' && (typeof peer.lastOkAt === 'string' || peer.lastOkAt === null) &&
     (typeof peer.lastError === 'string' || peer.lastError === null)
@@ -84,6 +81,17 @@ function readStore(): PeerStore {
   if (!existsSync(file)) return { version: PEER_VERSION, machineId: '', peers: [] }
   let parsed: unknown
   try { parsed = JSON.parse(readFileSync(file, 'utf8')) } catch (error) { throw new Error(`malformed ${file}: ${(error as Error).message}`) }
+  // @@@v1 peers do not survive the collapse - each one records a forward pair aimed at a per-peer listener
+  // this gateway no longer runs, so carrying one forward would be a link that quietly forwards into nothing.
+  // Dropping them costs one `spex peer connect` per machine and says so; keeping them would cost silence.
+  const legacy = parsed as { version?: unknown; machineId?: unknown; peers?: unknown }
+  if (legacy?.version === 1 && Array.isArray(legacy.peers)) {
+    const dropped = legacy.peers.length
+    const next: PeerStore = { version: PEER_VERSION, machineId: typeof legacy.machineId === 'string' ? legacy.machineId : '', peers: [] }
+    writeStore(next)
+    if (dropped) console.error(`[peer] dropped ${dropped} peer link${dropped === 1 ? '' : 's'} recorded before the single-door tunnel — run \`spex peer connect <address>\` once per machine to relink`)
+    return next
+  }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || (parsed as any).version !== PEER_VERSION ||
     (typeof (parsed as any).machineId !== 'string' && (parsed as any).machineId !== undefined) || !Array.isArray((parsed as any).peers) || !(parsed as any).peers.every(validPeer)) {
     throw new Error(`malformed ${file}: expected {version:${PEER_VERSION},peers:[...]}`)
@@ -94,6 +102,7 @@ function readStore(): PeerStore {
     peers: store.peers.map((peer) => ({
       ...peer,
       sshOptions: peer.sshOptions ?? [],
+      remoteBackPort: peer.remoteBackPort ?? null,
       gatewayPort: peer.gatewayPort ?? null,
       remoteGatewayPort: peer.remoteGatewayPort ?? null,
       remoteGatewayInstanceId: peer.remoteGatewayInstanceId ?? null,
@@ -135,7 +144,7 @@ export function peerSenderRef(machineId: string, sessionId?: string): string {
   return sessionId && validMachineId(sessionId) ? `peer_${machineId}_${sessionId}` : `peer_${machineId}`
 }
 
-function validPeerSender(value: unknown, machineId: string): value is string {
+export function validPeerSender(value: unknown, machineId: string): value is string {
   if (typeof value !== 'string') return false
   const match = value.match(/^peer_([0-9a-f-]{36})(?:_([0-9a-f-]{36}))?$/i)
   return !!match && match[1] === machineId && (match[2] === undefined || validMachineId(match[2]))
@@ -207,180 +216,13 @@ async function freePort(): Promise<number> {
   return address.port
 }
 
-function readRequest(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = ''
-    req.setEncoding('utf8')
-    req.on('data', (chunk) => {
-      body += chunk
-      if (Buffer.byteLength(body, 'utf8') > PEER_BODY_LIMIT) {
-        req.destroy()
-        reject(new Error('peer envelope exceeds 1 MiB'))
-      }
-    })
-    req.once('end', () => resolve(body))
-    req.once('error', reject)
-  })
-}
-
-function json(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json' })
-  res.end(JSON.stringify(body))
-}
-
-type PeerProject = { id: string; url: string | null; endpointConflict?: string }
-type PeerSessionRequest =
-  | { kind: 'show'; sessionId: string }
-  | { kind: 'input'; sessionId: string }
-  | { kind: 'close'; sessionId: string }
-  | { kind: 'list'; sessionId: string }
-  | { kind: 'create'; sessionId: string }
-
-type PeerCreate = {
-  requestKey: string
-  body: { prompt: string; launcher?: string; name?: string; base?: string }
-}
-
-// Session records live under the shared Git common-dir store, whereas a running backend publishes under
-// the worktree root it serves. A direct endpoint beside the session remains the simple case; linked
-// worktrees use the record's worktree_path to find their own published endpoint.
-function peerProjectsForSession(sessionId: string): PeerProject[] {
-  const projects = join(spexcodeHome(), 'projects')
-  let ids: string[] = []
-  try { ids = readdirSync(projects) } catch { return [] }
-  const endpointRecords = ids.flatMap((id) => {
-    const endpoint = readEndpointRecord(join(projects, id, 'backend.json'))
-    return endpoint ? [{ id, endpoint }] : []
-  })
-  const hits: PeerProject[] = []
-  for (const id of ids) {
-    const root = join(projects, id)
-    const record = join(root, 'sessions', sessionId, 'runtime.json')
-    if (!existsSync(record)) continue
-    const direct = readEndpointRecord(join(root, 'backend.json'))
-    if (direct) { hits.push({ id, url: direct.url }); continue }
-    let worktree = ''
-    try {
-      const parsed = JSON.parse(readFileSync(record, 'utf8'))
-      if (typeof parsed?.worktree_path === 'string' && parsed.worktree_path) worktree = resolve(parsed.worktree_path)
-    } catch { /* the backend gives the record's named error after routing reaches it */ }
-    const exact = worktree ? endpointRecords.filter(({ endpoint }) => resolve(endpoint.root) === worktree) : []
-    if (exact.length === 1) { hits.push({ id, url: exact[0].endpoint.url }); continue }
-    if (exact.length > 1) {
-      hits.push({ id, url: null, endpointConflict: `session ${sessionId} has ${exact.length} live backends for worktree ${worktree}` })
-      continue
-    }
-    const common = endpointRecords.filter(({ endpoint }) => {
-      try { return runtimeRoot(endpoint.root) === root } catch { return false }
-    })
-    if (common.length === 1) hits.push({ id, url: common[0].endpoint.url })
-    else if (common.length > 1) hits.push({ id, url: null, endpointConflict: `session ${sessionId} has ${common.length} live backends in its Git project` })
-    else hits.push({ id, url: null })
-  }
-  return hits
-}
-
-function peerSessionRequest(req: IncomingMessage): PeerSessionRequest | null {
-  const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-  if (url.search) return null
-  const base = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})$/i)
-  if (req.method === 'GET' && base) return { kind: 'show', sessionId: base[1] }
-  const input = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/input$/i)
-  if (req.method === 'POST' && input) return { kind: 'input', sessionId: input[1] }
-  const close = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/close$/i)
-  if (req.method === 'POST' && close) return { kind: 'close', sessionId: close[1] }
-  const projectSessions = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/project\/sessions$/i)
-  if (req.method === 'GET' && projectSessions) return { kind: 'list', sessionId: projectSessions[1] }
-  if (req.method === 'POST' && projectSessions) return { kind: 'create', sessionId: projectSessions[1] }
-  return null
-}
-
-async function peerCreateRequest(req: IncomingMessage): Promise<PeerCreate> {
-  const raw = await readRequest(req)
-  let parsed: unknown
-  try { parsed = JSON.parse(raw) } catch { throw new Error('session create body must be JSON') }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('session create body must be a JSON object')
-  const input = parsed as Record<string, unknown>
-  const unknown = Object.keys(input).filter((key) => !['prompt', 'launcher', 'name', 'base', 'requestKey'].includes(key)).sort()
-  if (unknown.length) throw new Error(`unknown peer session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`)
-  if (typeof input.prompt !== 'string') throw new Error('session-create prompt must be a string')
-  if (input.launcher !== undefined && typeof input.launcher !== 'string') throw new Error('session-create launcher must be a string')
-  if (input.name !== undefined && typeof input.name !== 'string') throw new Error('session-create name must be a string')
-  if (input.base !== undefined && typeof input.base !== 'string') throw new Error('session-create base must be a string')
-  if (typeof input.requestKey !== 'string' || !/^[\x21-\x7e]{1,128}$/.test(input.requestKey)) {
-    throw new Error('session-create requestKey must be 1-128 visible ASCII characters')
-  }
-  return {
-    requestKey: input.requestKey,
-    body: {
-      prompt: input.prompt,
-      ...(input.launcher !== undefined ? { launcher: input.launcher } : {}),
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.base !== undefined ? { base: input.base } : {}),
-    },
-  }
-}
-
-async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const request = peerSessionRequest(req)
-  if (!request) {
-    json(res, 404, { error: 'peer accepts GET /api/sessions/<full-id>, POST /api/sessions/<full-id>/input, POST /api/sessions/<full-id>/close, GET /api/sessions/<full-id>/project/sessions, or POST /api/sessions/<full-id>/project/sessions only' })
-    return
-  }
-  const { sessionId } = request
-  const projects = peerProjectsForSession(sessionId)
-  if (!projects.length) { json(res, 404, { error: `no local project owns session ${sessionId}` }); return }
-  if (projects.length > 1) { json(res, 409, { error: `session ${sessionId} is ambiguous across ${projects.length} local projects` }); return }
-  if (projects[0].endpointConflict) { json(res, 409, { error: projects[0].endpointConflict }); return }
-  if (!projects[0].url) { json(res, 502, { error: `target backend for session ${sessionId} is offline` }); return }
-  let path = request.kind === 'list' || request.kind === 'create'
-    ? '/api/sessions'
-    : `/api/sessions/${encodeURIComponent(sessionId)}`
-  let init: RequestInit = { method: 'GET' }
-  if (request.kind === 'input') {
-    let body: Record<string, unknown>
-    try {
-      const parsed = JSON.parse(await readRequest(req))
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.kind !== 'text' || typeof parsed.text !== 'string') throw new Error('input must be {kind:"text",text:"..."}')
-      body = {
-        kind: 'text', text: parsed.text,
-        from: validPeerSender(parsed.from, peer.machineId) ? parsed.from : peerSenderRef(peer.machineId),
-      }
-    } catch (error) { json(res, 400, { error: (error as Error).message }); return }
-    path += '/input'
-    init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
-  } else if (request.kind === 'close') {
-    try { await readRequest(req) } catch (error) { json(res, 400, { error: (error as Error).message }); return }
-    // A peer cannot claim to be a local session on the receiving machine. Close is the backend's ordinary
-    // external-user operation, authorized here solely by the SSH-created loopback listener.
-    path += '/close'
-    init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: { kind: 'user' } }) }
-  } else if (request.kind === 'create') {
-    let create: PeerCreate
-    try { create = await peerCreateRequest(req) }
-    catch (error) { json(res, 400, { error: (error as Error).message }); return }
-    init = {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': create.requestKey },
-      body: JSON.stringify(create.body),
-    }
-  }
-  let upstream: Response
-  try {
-    upstream = await fetch(`${projects[0].url}${path}`, init)
-  } catch (error) { json(res, 502, { error: `target backend is unreachable: ${(error as Error).message}` }); return }
-  const text = await upstream.text()
-  res.writeHead(upstream.status, { 'content-type': upstream.headers.get('content-type') ?? 'application/json' })
-  res.end(text)
-}
-
 export type PeerRpcRequest =
   | { op: 'list' }
   | { op: 'connect'; sshAddress: string; sshOptions?: string[] }
-  | { op: 'accept'; sourceMachineId: string; sshAddress: string; remoteInboundPort: number; remoteOutboundPort: number }
+  | { op: 'accept'; sourceMachineId: string; sshAddress: string; credential?: string; instanceId?: string }
   | { op: 'disconnect'; sshAddress: string }
   | { op: 'drop'; machineId: string }
-type RpcResponse = { ok: true; peer?: MachinePeer; peers?: MachinePeer[]; machineId?: string; gateway?: PeerGatewayFacts } | { ok: false; error: string }
+type RpcResponse = { ok: true; peer?: MachinePeer; peers?: MachinePeer[]; machineId?: string; gateway?: PeerGatewayFacts; backPort?: number } | { ok: false; error: string }
 
 function validRpc(value: unknown): value is PeerRpcRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -389,8 +231,9 @@ function validRpc(value: unknown): value is PeerRpcRequest {
   if (request.op === 'connect') return typeof request.sshAddress === 'string' && request.sshAddress.length > 0 && validSshOptions(request.sshOptions)
   if (request.op === 'disconnect') return typeof request.sshAddress === 'string' && request.sshAddress.length > 0
   if (request.op === 'drop') return validMachineId(request.machineId)
+  const optionalString = (value: unknown) => value === undefined || (typeof value === 'string' && value.length > 0)
   return request.op === 'accept' && validMachineId(request.sourceMachineId) && typeof request.sshAddress === 'string' && request.sshAddress.length > 0 &&
-    validPort(request.remoteInboundPort) && validPort(request.remoteOutboundPort)
+    optionalString(request.credential) && optionalString(request.instanceId)
 }
 
 // @@@login-shell dial - PATH is per-machine config, so the remote command is resolved by the remote
@@ -424,16 +267,20 @@ function localGatewayFacts(machineId: string): PeerGatewayFacts | null {
   return { port: record.peerPort, instanceId: record.instanceId, credential: grantPeer(machineId).token }
 }
 
+// One SSH connection still has two directions, and both of them now land on a GATEWAY peer ingress rather
+// than on a hand-written listener: `-L` reaches theirs, `-R` publishes ours over there. The reverse leg is
+// what keeps the accepting side able to reach back at all — it opens no ssh child of its own, so the port it
+// holds is one the dialler published for it.
 function sshArgs(peer: MachinePeer): string[] {
+  const ingress = readHostRecord()?.peerPort
   return [
     ...peer.sshOptions,
     '-N', '-o', 'ExitOnForwardFailure=yes',
-    '-L', `127.0.0.1:${peer.outboundPort}:127.0.0.1:${peer.remoteInboundPort}`,
-    '-R', `127.0.0.1:${peer.remoteOutboundPort}:127.0.0.1:${peer.inboundPort}`,
-    // @@@the gateway leg is omitted, never guessed - `-L` listens locally and sshd connects lazily, so a leg
-    // built for a gateway that has since died costs one refused proxy attempt and never the tunnel. A leg built
-    // for a gateway that was never published would cost a wrong port, which no later reader could detect.
+    // @@@a leg is omitted, never guessed - `-L`/`-R` bind eagerly but connect lazily, so a leg built for a
+    // gateway that has since died costs one refused proxy attempt and never the tunnel. A leg built for a
+    // gateway that was never published would cost a wrong port, which no later reader could detect.
     ...(peer.gatewayPort && peer.remoteGatewayPort ? ['-L', `127.0.0.1:${peer.gatewayPort}:127.0.0.1:${peer.remoteGatewayPort}`] : []),
+    ...(peer.remoteBackPort && validPort(ingress) ? ['-R', `127.0.0.1:${peer.remoteBackPort}:127.0.0.1:${ingress}`] : []),
     '--', peer.sshAddress,
   ]
 }
@@ -449,7 +296,6 @@ function probeUnixListener(path: string): Promise<boolean> {
 }
 
 export class MachinePeerGateway {
-  private readonly inbound = new Map<string, HttpServer>()
   private readonly children = new Map<string, ChildProcess>()
   private control: NetServer | null = null
   private retry: NodeJS.Timeout | null = null
@@ -459,7 +305,6 @@ export class MachinePeerGateway {
   // listener is issued before the promise settles, so callers may issue control RPCs right away); a leftover path
   // is probed first, which is the only asynchronous branch.
   start(): Promise<void> {
-    for (const peer of listMachinePeers()) this.startInbound(peer)
     return this.startControl().then(() => {
       for (const peer of listMachinePeers()) if (peer.owner) this.ensureTunnel(peer)
       this.retry = setInterval(() => {
@@ -515,7 +360,13 @@ export class MachinePeerGateway {
       // the accepting machine answers for its OWN gateway; the caller stores it as this peer's remote gateway
       if (request.op === 'accept') {
         const gateway = localGatewayFacts(request.sourceMachineId)
-        return { ok: true, peer: await this.accept(request), machineId: readPeerMachineId(), ...(gateway ? { gateway } : {}) }
+        const peer = await this.accept(request)
+        return {
+          ok: true, peer, machineId: readPeerMachineId(),
+          ...(gateway ? { gateway } : {}),
+          // the port the caller's reverse forward should publish HERE, so this side gains a leg back
+          ...(peer.gatewayPort ? { backPort: peer.gatewayPort } : {}),
+        }
       }
       if (request.op === 'disconnect') {
         const peer = await this.disconnect(request.sshAddress)
@@ -526,24 +377,8 @@ export class MachinePeerGateway {
     } catch (error) { return { ok: false, error: (error as Error).message } }
   }
 
-  private startInbound(peer: MachinePeer): void {
-    if (this.inbound.has(peer.machineId)) return
-    const server = createHttpServer((req, res) => void forwardToProject(peer, req, res))
-    server.on('error', (error) => console.error(`[peer] ${peer.machineId} inbound port ${peer.inboundPort}: ${(error as Error).message}`))
-    server.listen(peer.inboundPort, '127.0.0.1')
-    this.inbound.set(peer.machineId, server)
-  }
-
-  private stopInbound(machineId: string): void {
-    const server = this.inbound.get(machineId)
-    if (!server) return
-    this.inbound.delete(machineId)
-    server.close()
-  }
-
   private ensureTunnel(peer: MachinePeer): void {
     if (this.closing || this.children.has(peer.machineId)) return
-    this.startInbound(peer)
     const child = spawn('ssh', sshArgs(peer), { stdio: 'ignore' })
     this.children.set(peer.machineId, child)
     child.once('error', (error) => this.tunnelEnded(peer.machineId, child, (error as Error).message))
@@ -563,78 +398,91 @@ export class MachinePeerGateway {
     replacePeer({ ...peer, state: 'connecting', lastError: error })
   }
 
+  // @@@connect is one code path, first link or refresh - the retry loop redials ssh with no remote RPC at
+  // all, so a far gateway that restarted on a different port would keep a forward aimed at a dead instance
+  // forever. Re-running `spex peer connect` IS that refresh: it re-asks the far side what it publishes now
+  // and rebuilds the legs when anything moved. A refused ask leaves the recorded leg alone instead of erasing
+  // it, so an offline peer can still have its tunnel kicked the way it always could.
   private async connect(sshAddress: string, sshOptions: string[]): Promise<MachinePeer> {
     const existing = findMachinePeer(sshAddress)
-    if (existing) {
-      if (existing.owner) await this.refreshGatewayLeg(existing)
-      return findMachinePeer(sshAddress) ?? existing
+    if (!existing && sshAddress.startsWith('-')) throw new Error('SSH address must not begin with -')
+    const options = existing?.sshOptions ?? sshOptions
+    let reply: AcceptReply
+    try { reply = await this.askAccept(sshAddress, options) }
+    catch (error) {
+      if (!existing) throw error
+      this.ensureTunnel(existing)
+      return existing
     }
-    if (sshAddress.startsWith('-')) throw new Error('SSH address must not begin with -')
-    const inboundPort = await freePort()
-    const outboundPort = await freePort()
-    const sourceMachineId = readPeerMachineId()
-    const remote = await execFileAsync('ssh', [...sshOptions, '--', sshAddress, remoteCommand('peer-accept', {
-      sourceMachineId, sshAddress, remoteInboundPort: inboundPort, remoteOutboundPort: outboundPort,
-    })], { maxBuffer: 64 * 1024 })
-    const reply = parseRemoteReply(sshAddress, remote.stdout, remote.stderr)
-    if (!reply.ok || !reply.peer || !validMachineId(reply.machineId)) throw new Error(reply.ok ? 'remote peer accept returned no machine identity' : reply.error)
-    const gateway = validGatewayFacts(reply.gateway) ? reply.gateway : null
+    // @@@settled compares what would be RECORDED, not what was replied - the back port is gated by whether
+    // this machine publishes an ingress at all, so comparing the raw reply would call an unchanged link
+    // changed on every dial and rebuild a healthy tunnel for nothing.
+    const ingress = readHostRecord()
+    const backPort = ingress && validPort(ingress.peerPort) ? reply.backPort : null
+    const settled = existing && existing.machineId === reply.machineId &&
+      existing.remoteGatewayInstanceId === (reply.gateway?.instanceId ?? null) &&
+      existing.remoteGatewayPort === (reply.gateway?.port ?? null) &&
+      existing.remoteBackPort === backPort
+    if (existing && settled) { this.ensureTunnel(existing); return existing }
+    // @@@the credential the FAR side will verify is minted HERE - a grant only means anything to the machine
+    // that issues it, so each side mints for the other and the exchange needs two calls: the first learns who
+    // answered (we cannot mint for a machine we cannot yet name), the second hands over what we minted for
+    // them. `accept` is idempotent so the second call refines the record the first one created.
+    if (backPort) await this.tellAccept(sshAddress, options, { credential: grantPeer(reply.machineId).token, instanceId: ingress!.instanceId })
     const peer: MachinePeer = {
-      machineId: reply.machineId, sshAddress, sshOptions, inboundPort, outboundPort,
-      remoteInboundPort: reply.peer.inboundPort, remoteOutboundPort: reply.peer.outboundPort,
-      gatewayPort: gateway ? await freePort() : null,
-      remoteGatewayPort: gateway?.port ?? null, remoteGatewayInstanceId: gateway?.instanceId ?? null,
-      remoteGatewayCredential: gateway?.credential ?? null,
-      owner: true, state: 'connecting', createdAt: new Date().toISOString(), lastOkAt: null, lastError: null,
+      machineId: reply.machineId, sshAddress, sshOptions: options,
+      gatewayPort: reply.gateway ? existing?.gatewayPort ?? await freePort() : null,
+      remoteGatewayPort: reply.gateway?.port ?? null,
+      remoteGatewayInstanceId: reply.gateway?.instanceId ?? null,
+      remoteGatewayCredential: reply.gateway?.credential ?? null,
+      remoteBackPort: backPort,
+      owner: true, state: 'connecting',
+      createdAt: existing?.createdAt ?? new Date().toISOString(), lastOkAt: null, lastError: null,
     }
     replacePeer(peer)
-    this.startInbound(peer)
+    if (existing) this.dropChild(peer.machineId)
     this.ensureTunnel(peer)
     return findMachinePeer(sshAddress) ?? peer
   }
 
-  // @@@an explicit refresh, not a heartbeat - the retry loop redials ssh with no remote RPC at all, so a far
-  // gateway that restarted on a different port would keep a forward aimed at a dead instance forever. Re-running
-  // `spex peer connect` is that refresh: it re-asks the far side which gateway it publishes now and rebuilds the
-  // leg when the instance changed. A refused ask leaves the recorded leg alone instead of erasing it, so an
-  // offline peer can still have its tunnel kicked the way it always could.
-  private async refreshGatewayLeg(peer: MachinePeer): Promise<void> {
-    const gateway = await this.askGatewayFacts(peer)
-    if (!gateway || gateway.instanceId === peer.remoteGatewayInstanceId) { this.ensureTunnel(peer); return }
-    const next = {
-      ...peer, gatewayPort: peer.gatewayPort ?? await freePort(),
-      remoteGatewayPort: gateway.port, remoteGatewayInstanceId: gateway.instanceId,
-      remoteGatewayCredential: gateway.credential,
+  private async askAccept(sshAddress: string, sshOptions: string[], extra: object = {}): Promise<AcceptReply> {
+    const remote = await execFileAsync('ssh', [...sshOptions, '--', sshAddress, remoteCommand('peer-accept', {
+      sourceMachineId: readPeerMachineId(), sshAddress, ...extra,
+    })], { maxBuffer: 64 * 1024 })
+    const reply = parseRemoteReply(sshAddress, remote.stdout, remote.stderr)
+    if (!reply.ok) throw new Error(reply.error)
+    if (!validMachineId(reply.machineId)) throw new Error('remote peer accept returned no machine identity')
+    return {
+      machineId: reply.machineId,
+      gateway: validGatewayFacts(reply.gateway) ? reply.gateway : null,
+      backPort: validPort(reply.backPort) ? reply.backPort : null,
     }
-    replacePeer(next)
-    this.dropChild(peer.machineId)
-    this.ensureTunnel(next)
   }
 
-  private async askGatewayFacts(peer: MachinePeer): Promise<PeerGatewayFacts | null> {
-    try {
-      const remote = await execFileAsync('ssh', [...peer.sshOptions, '--', peer.sshAddress, remoteCommand('peer-accept', {
-        sourceMachineId: readPeerMachineId(), sshAddress: peer.sshAddress,
-        remoteInboundPort: peer.inboundPort, remoteOutboundPort: peer.outboundPort,
-      })], { maxBuffer: 64 * 1024 })
-      const reply = parseRemoteReply(peer.sshAddress, remote.stdout, remote.stderr)
-      return reply.ok && validGatewayFacts(reply.gateway) ? reply.gateway : null
-    } catch { return null }
+  // handing over our credential must not fail the link: the outward leg is already usable without it, and the
+  // far side simply holds no leg back until a later connect succeeds.
+  private async tellAccept(sshAddress: string, sshOptions: string[], extra: object): Promise<void> {
+    try { await this.askAccept(sshAddress, sshOptions, extra) }
+    catch (error) { console.error(`[peer] ${sshAddress} did not take this machine's gateway credential: ${(error as Error).message}`) }
   }
 
+  // Idempotent and refining: the dialler calls this twice, and a later `spex peer connect` calls it again.
+  // Each call keeps the port this side already published and takes whatever new facts arrived.
   private async accept(request: Extract<PeerRpcRequest, { op: 'accept' }>): Promise<MachinePeer> {
     const existing = listMachinePeers().find((peer) => peer.machineId === request.sourceMachineId)
-    if (existing) return existing
     const peer: MachinePeer = {
-      machineId: request.sourceMachineId, sshAddress: request.sshAddress, sshOptions: [],
-      inboundPort: await freePort(), outboundPort: await freePort(),
-      remoteInboundPort: request.remoteInboundPort, remoteOutboundPort: request.remoteOutboundPort,
-      // the accepting side opens no ssh child, so it holds no forwarded port to the machine that dialled it
-      gatewayPort: null, remoteGatewayPort: null, remoteGatewayInstanceId: null, remoteGatewayCredential: null,
-      owner: false, state: 'connected', createdAt: new Date().toISOString(), lastOkAt: new Date().toISOString(), lastError: null,
+      machineId: request.sourceMachineId, sshAddress: request.sshAddress, sshOptions: existing?.sshOptions ?? [],
+      // this side opens no ssh child, so its handle on that machine is a port the DIALLER publishes here
+      gatewayPort: existing?.gatewayPort ?? await freePort(),
+      remoteGatewayPort: null,
+      remoteGatewayInstanceId: request.instanceId ?? existing?.remoteGatewayInstanceId ?? null,
+      remoteGatewayCredential: request.credential ?? existing?.remoteGatewayCredential ?? null,
+      remoteBackPort: null,
+      owner: false, state: 'connected',
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      lastOkAt: new Date().toISOString(), lastError: null,
     }
     replacePeer(peer)
-    this.startInbound(peer)
     return peer
   }
 
@@ -647,7 +495,6 @@ export class MachinePeerGateway {
 
   private async drop(machineId: string): Promise<MachinePeer | null> {
     this.dropChild(machineId)
-    this.stopInbound(machineId)
     // dropping the link destroys the generation behind any credential this machine issued to that one, so
     // an unlinked machine holds nothing that still opens this gateway's peer ingress.
     revokePeer(machineId)
@@ -670,8 +517,6 @@ export class MachinePeerGateway {
     if (this.retry) clearInterval(this.retry)
     for (const child of this.children.values()) try { child.kill('SIGTERM') } catch { /* already gone */ }
     this.children.clear()
-    for (const server of this.inbound.values()) server.close()
-    this.inbound.clear()
     const control = this.control
     this.control = null
     if (control) await new Promise<void>((resolve) => control.close(() => resolve()))

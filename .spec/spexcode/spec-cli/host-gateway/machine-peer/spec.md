@@ -40,14 +40,14 @@ states those options once at connect, and the peer records them and replays them
 the tunnel, the accept handshake, and the remote cleanup — so no later cross-machine command repeats them and
 disconnect accepts none. They are ssh's grammar rather than SpexCode's own flag space, and they are a
 reachability hint exactly like the address: never an identity and never an authorization proof. A peer minted
-before options existed carries none, which is a legacy record to normalize rather than a malformed store. It
-establishes one local-to-remote forward and one remote-to-local forward. The receiver replies on
-the reverse forward of that same connection; it never opens a second SSH connection or requires credentials for
-the initiator. The peer has a stable randomly-minted machine id for semantic naming; an SSH address is only a
+before options existed carries none, which is a legacy record to normalize rather than a malformed store. The dial
+establishes one forward toward the far gateway and one reverse forward publishing this machine's own gateway over
+there, so each side reaches the other through that single SSH child. The receiver never opens a second SSH
+connection of its own and never requires credentials for the initiator. The peer has a stable randomly-minted machine id for semantic naming; an SSH address is only a
 mutable reachability hint. A hostname, gateway URL, and backend `instanceId` are neither an identity nor an
 authorization proof.
 
-**The peer also forwards the far gateway.** Beyond the two communication forwards, an owned peer carries a
+**The peer forwards the far gateway, and offers this one back.** An owned peer carries a
 gateway leg — a local loopback port, the far gateway's published **peer-ingress** port, the instance id that port
 was published under, and the credential that gateway issued to this machine — so the machine on the other end is
 addressable here as an ordinary loopback upstream. The leg targets that ingress and never the console port: a
@@ -58,8 +58,13 @@ record published, no ingress in it, or no credential issued, the leg is simply a
 recorded-but-wrong port is a lie no later reader could detect. The credential is minted by the answering machine
 for the asking one during the accept handshake — the SSH login that carried the request IS the authentication
 behind it — and it is named by machine id and revocable per machine, so re-connecting refreshes it without
-invalidating what the caller already holds and disconnecting destroys every credential that machine was handed. The leg is directional, since only the connecting side runs an SSH child and the accepting side therefore
-records none of its own. And because the reconnect loop redials without asking the far side anything, re-running
+invalidating what the caller already holds and disconnecting destroys every credential that machine was handed. Only the connecting side runs an SSH child, so a
+leg is the one thing the accepting side cannot build for itself; the reverse forward of that same dial is how it
+gets one. The accepting side names the local port its leg should arrive on, and the dialler mints a credential for
+it and hands it over — which is why the accept handshake runs twice and is idempotent: a credential only means
+something to the machine that issues it, so the first call is what tells the dialler whom it is minting for. A
+dialler publishing no ingress of its own offers nothing back, and a refused handover is logged rather than fatal,
+because the outward leg is already usable without it. And because the reconnect loop redials without asking the far side anything, re-running
 connect is the explicit refresh: it adopts a restarted far gateway, keeps the local port stable across that
 rebuild so existing addressing survives it, and leaves a recorded leg untouched when the far side cannot be
 reached at all. A superseded dial reports nothing, because the child that replaced it already owns the peer's
@@ -76,29 +81,39 @@ reply is read off the last line of the reply stream rather than the whole stream
 failure is named and states that `spex` must be on that SSH user's login PATH, instead of passing the remote shell's
 raw not-found text back as malformed JSON.
 
-**The gateway is the transport endpoint; the backend remains ordinary.** A dedicated loopback listener accepts five
-full-id peer requests: `GET /api/sessions/:id` (show), `POST /api/sessions/:id/input` (text send), `POST
-/api/sessions/:id/close` (close), `GET /api/sessions/:id/project/sessions` (the selected project's default session
-projection), and `POST /api/sessions/:id/project/sessions` (create in that selected project). The full UUID is the
-project anchor for the last two routes, not a list selector or a parent. The listener is a short allowlist, never a
-generic proxy: query strings remain rejected, so a peer list has only the ordinary default projection rather than a
-hidden route to archives. Its reachability is authorized by the authenticated SSH connection which created the
-listener; it does not add a third [[gateway-auth]] scope or expose a public route. The receiver derives the target
-project by scanning its own per-project session stores for the full UUID: no match is a named not-found failure and
-more than one match is a loud ambiguity. Session records are grouped by Git common directory, while backend endpoint
-records are keyed by the worktree they serve, so after finding one session record the gateway selects the endpoint
-whose published root equals that record's `worktree_path`. A direct endpoint in the session slot remains valid; a
-unique endpoint sharing the same common-dir store is the retired-session fallback, while several candidates are a loud
-ambiguity. It invokes that project's normal local detail, text-input, close, list, or create path; input rewrites an
-untrusted sender claim to the authenticated peer identity — spelled `peer_<machineId>_<sessionId>` (or
-`peer_<machineId>` when the sender named no session), because that identity travels as the message's ordinary
-`senderSessionId` and must therefore fit [[session-protocol]]'s frozen `session_id` grammar, which admits neither `:`
-nor a leading `-` and expects namespaces to be encoded into the id — and close is an ordinary user close. Peer create
-takes only `{prompt, launcher?, name?, base?, requestKey}`: the gateway turns `requestKey` into the normal internal
-`Idempotency-Key`, rejects `parent` and every project/filesystem field, and forwards no caller headers. A remote new
-is therefore parentless, admission-controlled by the remote backend, and idempotent across the tunnel; it never falls
-back to launching on the initiating machine. The backend never parses SSH addresses, holds peer state, or gains a
-cross-machine code path.
+**The gateway is the whole door; there is no second one.** A cross-machine call is an ordinary [[gateway-hub]]
+request over the peer leg, carrying the credential that gateway issued this machine. There is no per-peer listener,
+no route allowlist, and no second request parser. The hub already carries HTTP, SSE, WebSocket upgrades, and live
+terminals, so a hand-written door beside it could only ever be the smaller, staler half of the same thing — and was.
+What a peer credential admits is [[gateway-auth]]'s and [[machine-routing]]'s contract rather than this node's.
+
+Two things that door owned had to move rather than vanish with it. **Addressing by session** is one: the hub speaks
+projects and an agent holds a session UUID, so the hub answers a session-addressed path as the same project route,
+deriving the project from this machine's own per-project session stores exactly as before — no match is a named
+not-found, more than one is a loud ambiguity, and the endpoint is chosen by the record's `worktree_path`, with the
+unique endpoint sharing its common-dir store as the retired-session fallback and several candidates a loud
+ambiguity. That derivation is offered at every entry rather than only the peer one, because a derivation that is
+correct is correct for whoever asks. **The sender stamp** is the other: on the two routes that carry a sender claim
+— text input's `from` and close's `source` — a request authorized as a peer has its claim rewritten to the
+authenticated machine identity, spelled `peer_<machineId>_<sessionId>` (or `peer_<machineId>` when the sender named
+no session) because that identity travels as the message's ordinary `senderSessionId` and must therefore fit
+[[session-protocol]]'s frozen `session_id` grammar, which admits neither `:` nor a leading `-`; close becomes an
+ordinary user close. The stamp is applied where the request is authorized, so it now covers every project route a
+peer can reach instead of five hand-listed ones. That is a widening, and honestly so: those five were already
+bypassable through the machine route, where a peer could reach the same backend under any sender claim it liked.
+
+What that door's closed create body was NOT is a boundary — for the same reason. It rejected `parent` and every
+project and filesystem field, but a peer could always post whatever body it wanted through the machine route, so
+that clause described the CLI verb's shape rather than the door's. It still does: `spex session new --ssh` sends
+`{prompt, launcher?, name?, base?}` under an ordinary `Idempotency-Key` header, so a remote new stays parentless,
+admission-controlled by the remote backend, and idempotent across the tunnel, and never falls back to launching on
+the initiating machine. The backend still never parses SSH addresses, holds peer state, or gains a cross-machine
+code path.
+
+A peer record written before this single door names forwarded ports for a listener no gateway runs any more.
+Carrying one would be a link that quietly forwards into nothing, so such records are dropped at read, once, with a
+named relink command, rather than migrated into a shape they were never measured in. A peer link only lives while
+its SSH child does, so the whole recovery is one `spex peer connect` per machine.
 
 **Acceptance preserves the existing definition.** A cross-machine send reports `sent` only when the remote
 backend accepted the normal timeline append. Establishing SSH, reaching a peer port, or obtaining an HTTP
@@ -117,5 +132,5 @@ the project anchor, so remote `ls` accepts exactly that one positional and never
 Remote creation appends the ordinary peer reply hint to its prompt, but installs neither a cross-machine parent
 nor a watch. Incoming text envelopes carry the sender's stable machine id, full session id, display label, and
 the opaque peer address needed for a runnable reply insert.
-Those values make a reply semantically addressable and unique, but only the SSH-created loopback listener
-authorizes delivery.
+Those values make a reply semantically addressable and unique; what authorizes delivery is the credential the
+receiving gateway issued over the SSH-created leg, and nothing else.

@@ -12,8 +12,10 @@ let overrides = load()
 
 // resolved keyboard keys for an action: the override's keys if set, else the registry default.
 export function keysOf(id) {
+  const action = byId[id]
+  if (!action) return []
   const o = overrides[id]
-  return (o && o.keys) || byId[id]?.keys || []
+  return (action.rebind === false ? null : o)?.keys || action.keys || []
 }
 // true when a user has changed this action away from its registry default.
 export function isCustom(id) {

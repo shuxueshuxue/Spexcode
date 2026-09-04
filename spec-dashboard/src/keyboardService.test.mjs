@@ -11,6 +11,7 @@ const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 
 const escStack = readFileSync(new URL('./escStack.js', import.meta.url), 'utf8')
 const service = readFileSync(new URL('./KeyboardService.jsx', import.meta.url), 'utf8')
 const keymap = readFileSync(new URL('./keymap.js', import.meta.url), 'utf8')
+const bindings = readFileSync(new URL('./bindings.js', import.meta.url), 'utf8')
 const publicAbout = readFileSync(new URL('./PublicGraphAbout.jsx', import.meta.url), 'utf8')
 const evidence = readFileSync(new URL('./Evidence.jsx', import.meta.url), 'utf8')
 const projects = readFileSync(new URL('./ProjectsPage.jsx', import.meta.url), 'utf8')
@@ -86,6 +87,10 @@ test('fixed chord display is complete while rebindable display follows live keys
   assert.deepEqual(displayKeysOf(child), ['nn'])
   assert.deepEqual(displayKeysOf(del), ['dd'])
   assert.deepEqual(displayKeysOf(settings, [';']), [';'])
+})
+
+test('structural navigation ignores stale local keybinding overrides', () => {
+  assert.match(bindings, /action\.rebind === false \? null : o/)
 })
 
 test('structural chord dispatch is registry-owned, not a second literal grammar', () => {

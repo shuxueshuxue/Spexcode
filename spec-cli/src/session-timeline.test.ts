@@ -17,14 +17,8 @@ import {
   timelineEvents,
   timelineStamp,
 } from './session-timeline.js'
-import {
-  cancelSessionWatch,
-  composeSessionPrompt,
-  listSessionWatches,
-  subscribeSessionWatch,
-  withNoteReplyHint,
-  withTerminalReplyHint,
-} from './sessions.js'
+import { cancelSessionWatch, listSessionWatches, subscribeSessionWatch } from './sessions.js'
+import { composeSessionPrompt, withNoteReplyHint, withTerminalReplyHint } from './session-prompt.js'
 
 const ID = 'timeline-session'
 const PARENT = 'timeline-parent'

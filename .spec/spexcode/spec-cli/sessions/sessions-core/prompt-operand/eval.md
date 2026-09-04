@@ -2,7 +2,7 @@
 scenarios:
   - name: a-dash-leading-prompt-is-delivered-not-parsed
     tags: [cli]
-    code: [spec-cli/src/sessions.ts#launchScript]
+    code: [spec-cli/src/session-prompt.ts#launchScript]
     description: >
       Launch and send prompts that begin with `-`, with `--`, and with the literal resume marker each launcher
       script recognizes, on more than one harness; read the generated launch script and what the agent received.

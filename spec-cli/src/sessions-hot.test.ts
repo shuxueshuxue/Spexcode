@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { hotSignature, parseLivePanes, needsCodexProcScan, TMUX_PANE_FORMAT } from './sessions.js'
+import { hotSignature, parseLivePanes, needsCodexProcScan, TMUX_PANE_FORMAT } from './session-liveness.js'
 import { sessionStoreDir, sessionArtifactPath } from '@spexcode/spec-core'
 
 // The 100ms hot tier is a launch-registered-pid death detector with a permanent pid-reuse latch, plus the

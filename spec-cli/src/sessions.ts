@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitTry, withGitAbortSignal, isGitObjectId } from '@spexcode/spec-core'
-import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
-import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { loadSpecsLite } from '@spexcode/spec-core'
+import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
@@ -19,12 +19,19 @@ import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
 import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
 import { shQuote } from './sh.js'
+import {
+  composeSessionPrompt, launchScript, launchShellCommand, nodeFromPrompt, slugify, titleFromPrompt,
+} from './session-prompt.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, collectResourceReport, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
-import { lastHumanSendVia } from './session-timeline.js'
-import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, sessionHost, probeTimedOut } from './session-host.js'
+import { TMUX_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, sessionHost } from './session-host.js'
+import {
+  agentAlive, clearLaunched, forgetAgentPid, liveness, liveSnapshot, markLaunched, paneActivity,
+  readAgentPid,
+  type Liveness, type LiveSnap,
+} from './session-liveness.js'
 
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
@@ -97,27 +104,6 @@ function maxActive(): number {
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
-const rvEnv = (id: string, harness = HARNESS, nativeStartToken?: string | null) => {
-  // SPEXCODE_SESSION_ID is the governed record id, and it is the SESSION'S OWN — so the launch STRIPS every
-  // session-identity variable it may have inherited (the pane inherits the tmux SERVER's env, which may carry
-  // a foreign session's ids from whoever started it) before setting this one. Identity is established HERE,
-  // once, at the boundary; nothing downstream re-verifies it, because after this a session-identity variable
-  // exists in a process only if that process belongs to that session — either set right here, or stamped by
-  // the harness itself for its own acting conversation ([[harness-adapter]]). The same strip runs on the one
-  // other process we own that is NOT a session's own — codex's shared app-server, whose leaked inherited id
-  // was github#76.
-  const scrub = sessionIdentityEnvVars().map((v) => `-u ${v}`)
-  const homeVars = ['SPEXCODE_HOME', 'CODEX_HOME'].flatMap((v) => {
-    const value = process.env[v]
-    return value ? [`${v}=${value}`] : []
-  })
-  return [...scrub,
-    `SPEXCODE_SESSION_ID=${id}`,
-    `SPEXCODE_SESSION_IDENTITY_VARS=${shQuote(sessionIdentityEnvVars().join(','))}`,
-    `SPEXCODE_PROJECT_ROOT=${shQuote(mainRoot())}`,
-    ...(nativeStartToken ? [`SPEXCODE_NATIVE_START_TOKEN=${shQuote(nativeStartToken)}`] : []),
-    ...harness.launchEnv(id), ...homeVars].join(' ')
-}
 
 // Re-exported for existing importers.
 export type { DispatchResult }
@@ -125,7 +111,6 @@ export type { DispatchResult }
 type Lifecycle = SessionLifecycle
 export type Proposal = SessionProposal
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown' | 'corrupt' | 'retired'
-export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 // Awaiting is the durable lifecycle row; its proposal selects the user-facing display status. Keep this
@@ -411,121 +396,6 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
   return { children, parent, notified }
 }
 
-// Share one liveness snapshot rather than spawning tmux for every displayed session.
-export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
-
-// tmux rewrites CONTROL characters in a format string before printing them — 3.6a turns both a tab and a raw
-// 0x1f into `_`, while 3.4 turns a raw 0x1f into the printable escape `\037`. So the field separator is ASKED
-// FOR as that printable text, which every supported version passes through untouched, and the format is built
-// from the same constant the parser splits on: the two can no longer disagree about what tmux actually emits.
-const TMUX_PANE_SEPARATOR = '\\037'
-export const TMUX_PANE_FORMAT = `#{session_name}${TMUX_PANE_SEPARATOR}#{pane_pid}${TMUX_PANE_SEPARATOR}#{pane_title}`
-
-// First pane per session wins; split only twice so titles may contain the field separator.
-export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
-  const m = new Map<string, { panePid?: number; title?: string }>()
-  for (const line of out.split('\n')) {
-    if (!line) continue
-    // Accept the former tab shape for callers replaying old snapshots; tmux itself emits TMUX_PANE_SEPARATOR.
-    const separator = line.includes(TMUX_PANE_SEPARATOR) ? TMUX_PANE_SEPARATOR : '\t'
-    const t1 = line.indexOf(separator)
-    const name = (t1 < 0 ? line : line.slice(0, t1)).trim()
-    if (!name || m.has(name)) continue   // first pane per session wins
-    if (t1 < 0) { m.set(name, {}); continue }
-    const rest = line.slice(t1 + separator.length)
-    const t2 = rest.indexOf(separator)
-    const pid = Number((t2 < 0 ? rest : rest.slice(0, t2)).trim())
-    const title = t2 < 0 ? '' : rest.slice(t2 + separator.length)
-    m.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, title: title || undefined })
-  }
-  return m
-}
-
-// Latch ESRCH per pid-file mtime so a recycled OS PID cannot revive an old session.
-type PidEntry = { mtimeMs: number; pid: number; deadLatched: boolean }
-const pidRegistry = new Map<string, PidEntry>()
-function readAgentPid(p: string): number { try { return Number(readFileSync(p, 'utf8').trim()) } catch { return NaN } }
-function agentAlive(id: string): boolean | undefined {
-  if (sessionHost().kind === 'process-host') {
-    const identity = sessionHost().witness(id)
-    return !identity || typeof identity === 'string' ? false : processStartToken(identity.pid) === identity.startToken
-  }
-  const pidPath = sessionArtifactPath(id, 'agent.pid')
-  let mtimeMs: number
-  try { mtimeMs = statSync(pidPath).mtimeMs } catch { pidRegistry.delete(id); return undefined }   // no pid file → pre-registration
-  let e = pidRegistry.get(id)
-  if (!e || e.mtimeMs !== mtimeMs) { e = { mtimeMs, pid: readAgentPid(pidPath), deadLatched: false }; pidRegistry.set(id, e) }
-  if (e.deadLatched) return false                                     // latched dead stays dead until a new write (fresh mtime)
-  if (!Number.isFinite(e.pid) || e.pid <= 0) return false
-  try { process.kill(e.pid, 0); return true }
-  catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EPERM') return true  // alive but not ours to signal
-    e.deadLatched = true                                             // ESRCH → proven dead, latch it permanently
-    return false
-  }
-}
-
-// Only pre-agent.pid Codex sessions need the legacy whole-process scan.
-export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean }[]): boolean {
-  return windowed.some((w) => (w.harness || 'claude') === 'codex' && !w.hasPid)
-}
-
-async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
-  const windows = new Map<string, PaneProbe>()
-  const titles = new Map<string, string>()
-  if (sessionHost().kind === 'process-host') {
-    // process-host has no window/pane census. Per-session process identity is joined by liveness().
-    return { probeFailed: false, windows, titles, sockets: new Set(), unproven: new Set() }
-  }
-  let out: string
-  try {
-    // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
-    // A target-scoped close probe avoids unrelated panes turning a safe close into a global timeout.
-    const args = targetId
-      ? ['list-panes', '-t', targetId, '-F', TMUX_PANE_FORMAT]
-      : ['list-panes', '-a', '-F', TMUX_PANE_FORMAT]
-    out = await sessionHost().command(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
-  } catch (e) {
-    // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
-    // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
-    return { probeFailed: probeTimedOut(e), windows, titles, sockets: new Set(), unproven: new Set() }
-  }
-  // the hot-tier pid verdict per windowed session (latch-consistent with hotSignature) + the legacy-scan gate.
-  const legacy: { harness: string; hasPid: boolean }[] = []
-  for (const [id, p] of parseLivePanes(out)) {
-    windows.set(id, { panePid: p.panePid, pidAlive: agentAlive(id) })
-    if (p.title) titles.set(id, p.title)
-    if (windows.get(id)!.pidAlive === undefined) {
-      // A corrupt row has no trustworthy harness to scan and renders liveness=unknown on its own. Letting this
-      // optional legacy enrichment throw would turn one diagnosable row into a 409 for the entire board.
-      try { const rec = readRecord(id); if (rec) legacy.push({ harness: rec.harness, hasPid: false }) }
-      catch (e) { if (!(e instanceof SessionRecordUnusable)) throw e }
-    }
-  }
-  // the whole-box ps table is gathered ONCE, and ONLY for the legacy pid-less-codex fallback (paneTreeRunsCodex).
-  if (needsCodexProcScan(legacy)) {
-    const procs = await procSnapshot().catch(() => undefined)   // codex-only, auxiliary; its failure isn't a liveness failure
-    if (procs) for (const probe of windows.values()) probe.procs = procs
-  }
-  // LISTENER probe for every windowed session, once, in parallel (a live listener, not a lingering socket
-  // file). A codex session has no rvSock → instant ENOENT → proven dead for the socket axis (codex ignores it).
-  // The tri-state matters: 'unproven' (timeout/EAGAIN — a wedged or thrashed but possibly-alive listener) lands
-  // in `unproven`, never silently not-live, so liveness() renders `unknown` not a false `offline` (issue #40).
-  const ids = [...windows.keys()]
-  // A burst of simultaneous Unix-socket connects can fill a Claude listener's accept backlog on macOS and
-  // turn every healthy socket into `unproven`. Keep the probe bounded while preserving the tri-state result.
-  const listening: Awaited<ReturnType<typeof rendezvousListening>>[] = []
-  for (let start = 0; start < ids.length; start += 2) {
-    listening.push(...await Promise.all(ids.slice(start, start + 2).map((id) => rendezvousListening(id))))
-  }
-  const sockets = new Set<string>()
-  const unproven = new Set<string>()
-  ids.forEach((id, i) => {
-    if (listening[i] === 'live') sockets.add(id)
-    else if (listening[i] === 'unproven') unproven.add(id)
-  })
-  return { probeFailed: false, windows, titles, sockets, unproven }
-}
 
 async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> {
   if (sessionHost().kind === 'process-host') {
@@ -546,108 +416,7 @@ async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> 
     : `refusing to stop ${id}: target tmux session remains ${phase}`)
 }
 
-// Avoid process spawns on the hot path; old sessions without agent.pid remain warm-tier only.
-let hotIds: string[] = []
-let hotIdsAt = 0
-export async function hotSignature(): Promise<string> {
-  const now = Date.now()
-  if (now - hotIdsAt >= 1000) { hotIds = listSessionIds(); hotIdsAt = now }
-  const pairs: string[] = []
-  const present: string[] = []
-  for (const id of hotIds) {
-    const alive = agentAlive(id)
-    if (alive === undefined) continue   // no agent.pid → the warm tier's concern, not the hot death detector
-    present.push(id)
-    pairs.push(`${id}:${alive ? 1 : 0}`)
-  }
-  // prune latch entries for ids no longer registered (closed sessions), keeping the registry bounded.
-  const live = new Set(hotIds)
-  for (const k of [...pidRegistry.keys()]) if (!live.has(k)) pidRegistry.delete(k)
-  return pairs.sort().join(',') + '|' + present.sort().join(',')
-}
 
-// Include listener and title changes so watchers refresh without another store read.
-export async function warmSignature(): Promise<string> {
-  const snap = await liveSnapshot()
-  return (snap.probeFailed ? 'PROBEFAIL|' : '') + [...snap.windows.keys()].sort().join(',') + '#' +
-    [...snap.sockets].sort().join(',') + '~' + [...snap.unproven].sort().join(',') + '|' +
-    [...snap.titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
-}
-
-// @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
-// NOT become) a session's headline activity. The board headline derives from the pane title ONLY for a
-// harness whose pane title is its own task self-summary (`paneTitleIsSelfSummary`, an adapter capability —
-// [[harness-adapter]]). claude qualifies (it writes its task summary into the OSC title), so we parse it with
-// selfSummary (glyph-gated). codex does NOT — its pane title is a spinner glyph + the cwd FOLDER name, so
-// returning it would headline the worktree folder, not the task; we refuse it (→ null) and sessionHeadline
-// falls through to promptPreview (the launch prompt). The ONLY harness branch is the capability read here —
-// no `if (codex)`, no glyph special-case; selfSummary stays the pure claude-title parser.
-export function paneActivity(harness: Harness, paneTitle: string | null | undefined): string | null {
-  if (paneTitle == null || !harness.paneTitleIsSelfSummary) return null
-  return selfSummary(paneTitle)
-}
-
-// @@@ selfSummary - the agent's OWN live one-line description, parsed from its tmux pane title — the SINGLE
-// place the "is this the agent speaking?" rule lives, exported so it is unit-auditable. Claude Code sets that
-// title via an OSC escape and ALWAYS leads it with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when idle, a
-// braille spinner frame (U+2800–U+28FF) while working. That leading glyph is the only reliable proof the
-// title is the agent and not tmux's default — which, from pane birth until the first turn, is the HOST NAME
-// (e.g. `ser581555022561`) or a bare `Claude Code` splash. So the glyph is REQUIRED: no leading glyph → null,
-// and the caller keeps showing the launch-prompt placeholder instead of flickering through the host name and
-// splash. The leading glyph run (with the spaces/`·` between and after) is stripped — the dashboard draws its
-// own status dot, a frozen spinner frame is just noise — leaving only the summary text (null if it is empty).
-// ONE regex is the single source of the glyph rule: it gates (requires ≥1 glyph) and strips in one match.
-// The glyph gate alone is not enough: Claude Code emits a glyph-led SPLASH of its own app name (`✳ Claude
-// Code`) between pane birth and its first real task summary — it CLEARS the glyph gate yet is the app naming
-// itself, not the task. GENERIC_SUMMARY rejects that stripped splash too, so the row keeps its launch-prompt
-// placeholder instead of flashing "Claude Code" for a tick (the glyph-LESS `Claude Code` splash was already
-// rejected by the gate; this catches its glyph-led twin).
-const GENERIC_SUMMARY = /^claude code$/i
-export function selfSummary(paneTitle: string): string | null {
-  const m = /^[\s·]*(?:[✳✶✻✽✢⠀-⣿][\s·]*)+(.*)$/u.exec(paneTitle)
-  if (!m) return null
-  const text = m[1].trim()
-  return text && !GENERIC_SUMMARY.test(text) ? text : null
-}
-
-// @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s
-// after the window appears to recreate its rendezvous socket; in that window the socket is absent but the
-// session is booting, NOT dead. reconcile consults this to report 'starting' (a distinct transient state)
-// instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
-// memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
-const launchedAt = new Map<string, number>()
-export const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans launchScript's bounded fast-fail retry
-                              // window (~3 attempts) so a relaunching session reads 'starting', not 'offline'
-const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this: fast
-                              // exit before readiness is retryable, but it is not proof of one specific cause
-
-export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
-  if (!rec.session || rec.stopped || rec.archived) return 'offline'
-  // Ask the resolved ADAPTER ([[harness-adapter]]): claude/pi/opencode prove their rendezvous listener;
-  // codex proves its launch-registered pid (with the legacy descendant-tree fallback). The 'starting' grace
-  // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
-  // 'offline'.
-  const h = harnessById(rec.harness || defaultHarness.id)
-  const processAlive = sessionHost().kind === 'process-host' ? agentAlive(rec.session) === true : false
-  const hostAlive = sessionHost().kind === 'process-host' ? processAlive : snap.windows.has(rec.session)
-  const pane = sessionHost().kind === 'process-host' ? { pidAlive: processAlive } : snap.windows.get(rec.session)
-  if (h.liveness(rec, hostAlive, runtimeRoot(), pane, snap.sockets.has(rec.session)) === 'online') return 'online'
-  if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
-  // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
-  // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would
-  // act on (issue #40 — a wedged-but-alive worker must not read as an actionable corpse).
-  if (snap.unproven.has(rec.session)) return 'unknown'
-  const at = launchedAt.get(rec.session)
-  if (at && Date.now() - at < BOOT_GRACE_MS) return 'starting'
-  // A dead TRANSPORT is not a dead AGENT. The socket path is keyed by session id alone, so a foreign teardown
-  // (or a stray rm) can unlink it out from under its own live listener: the agent keeps working, unreachable,
-  // and every path-connect ENOENTs — which the adapter axis above reports as proven death. The registered
-  // agent.pid is a SECOND, independent witness, and while it still answers, death is UNPROVEN: `unknown`, not
-  // the `offline` that disarms the relaunch guard and invites a human to kill a working agent. Same rule as
-  // the probe-failure branch (issue #40), one layer down: only a corpse both witnesses agree on is actionable.
-  if (agentAlive(rec.session) === true) return 'unknown'
-  return 'offline'
-}
 
 function reconcile(rec: SessRec, snap: LiveSnap, residentLiveness?: Liveness): DisplayStatus {
   // record integrity outranks both axes: a session whose worktree is gone has no work to be in any state
@@ -1027,111 +796,12 @@ export const apiBase = async (): Promise<string> => (await apiBaseInfo()).url
 
 export const ownSessionId = envSessionId
 
-export type MsgSender = { id: string; label: string | null }
-export function withSenderHint(text: string, sender: MsgSender | null): string {
-  if (!sender) return text
-  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
-}
-export function withPeerSenderHint(text: string, sender: MsgSender | null, sshAddress: string, machineId: string): string {
-  if (!sender) return text
-  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who} on machine ${machineId}. To reply: spex session send --ssh ${sshAddress} ${sender.id} "<your reply>"`
-}
-export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REPLY TRANSPORT: This sender cannot read normal assistant output. Before ending this turn, make your FINAL tool call a Spex declaration carrying the COMPLETE reply in --note: use \`session ask\` when waiting for a human reply; use \`done\` or \`park\` when that is the truthful state. This rule applies even when asked to only print/reply or make no tool calls.\n\nFor multi-line replies, preserve real LF characters. \`functions.exec\` runs a shell command through bash, so never interpolate \`JSON.stringify(note)\` into it; use stdin, a heredoc, or base64, then pass \`--note \"$note\"\`. Never use \`String.raw\` or literal backslash+n. Do not call any tool after the declaration.`
-export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
-export const slugify = (s: string | null) =>
-  (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
-
-const MENTION = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/u
-export const nodeFromPrompt = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
-
-type CommandPreset = Pick<ConfigPreset, 'name' | 'body'>
-type CommandSpec = Pick<SpecLite, 'id' | 'path'>
-
-export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[]): string {
-  const match = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
-  if (!match) return raw
-  const preset = presets.find((p) => p.name === match[1])
-  if (!preset) return raw
-
-  const ids: string[] = []
-  const allMentions = new RegExp(MENTION.source, 'gu')
-  const free = match[2].replace(allMentions, (_, id: string) => { ids.push(id); return '' }).trim()
-  const targets = ids.length
-    ? ids.map((id) => {
-        const spec = specs.find((s) => s.id === id)
-        const path = spec?.path.replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
-        return path ? `- [[${id}]] — ${path}` : `- [[${id}]]`
-      }).join('\n')
-    : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
-  const body = preset.body.includes('{{targets}}')
-    ? preset.body.replace('{{targets}}', targets)
-    : ids.length ? `${preset.body}\n\n${targets}` : preset.body
-  return free ? `${body}\n\n${free}` : body
-}
-
-// Load only the one live preset named by the raw invocation. Both session creation and sendText call this seam, so
-// launch and an existing session's inbox resolve identical plugin data with identical target semantics.
-export async function resolveCommandPrompt(raw: string, loadedSpecs?: CommandSpec[]): Promise<string> {
-  const commandName = raw.match(/^\/(\S+)/)?.[1]
-  const preset = commandName ? loadConfig().find((p) => p.name === commandName) : undefined
-  if (!preset) return raw
-  const specs = loadedSpecs ?? (nodeFromPrompt(raw) ? await loadSpecs() : [])
-  return composeCommandPrompt(raw, [preset], specs)
-}
-
-type SessionPromptTarget = Pick<SessRec, 'session' | 'harness'>
-type SessionPromptOptions = {
-  from?: string
-  replyVia?: 'note'
-  loadedSpecs?: CommandSpec[]
-  suffix?: string
-}
-export type ComposedSessionPrompt = { text: string; replyVia?: 'note' }
-
-// @@@ composeSessionPrompt - the ONE prompt-delivery seam: raw caller text + target session become the
-// exact text handed to an adapter. Launch, ordinary input, CLI send, issue dispatch, watch greetings, and
-// merge all enter here (directly or through sendText). `replyVia` is target readability: an explicit note
-// request wins; otherwise a headless adapter defaults to note. This function alone decides and appends the
-// note/terminal inserts, so clients never own the policy or duplicate the phrase.
-export async function composeSessionPrompt(raw: string, target: SessionPromptTarget, opts: SessionPromptOptions = {}): Promise<ComposedSessionPrompt> {
-  const resolved = await resolveCommandPrompt(raw, opts.loadedSpecs)
-  const prompt = opts.suffix ? `${resolved}${opts.suffix}` : resolved
-  const h = harnessById(target.harness || defaultHarness.id)
-  const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
-  const text = replyVia === 'note' ? withNoteReplyHint(prompt)
-    : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
-  return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
-}
-const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text
-const UUID_TOKEN = /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g
-const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[\p{L}\p{N}_-]+/gu, '$1').replace(UUID_TOKEN, ' ')
-export function titleFromPrompt(prompt: string): string | null {
-  const first = stripIdentityTokens(prompt || '').split('\n').map((l) => l.trim()).find(Boolean) || ''
-  const words = first.split(/\s+/).filter(Boolean).slice(0, 7).join(' ')
-  if (!words) return null
-  return words.length > 50 ? words.slice(0, 49).trimEnd() + '…' : words
-}
-
-// @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + harness command + the human prompt)
-// is written to an ephemeral `launch.sh` in the session's GLOBAL store and
-// run via `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap),
-// and a long human prompt + spec pointer can exceed it; a file has no length limit
-// and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
-// ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file. Liveness no
-// longer cares what the pane's foreground command is: claude runs as a child of bash (and, via the
-// `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
-// rendezvous socket instead (present while claude is alive, gone once it exits). The file lives OUTSIDE the
-// worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
-// the launch command for THIS session ([[launcher-select]] resume-launcher-pin): the RESOLVED base command
-// PINNED on the record at creation wins — so a (re)launch replays the EXACT launcher that made the conversation
-// (and its config-dir env), never re-resolving against a since-changed default that would send `--resume` to the
-// wrong config dir and lose the transcript. Fall back to the named-launcher resolution (an old record with a
-// launcher name but no pinned cmd; fail-loud on a since-removed launcher), then undefined (truly old record →
-// the harness adapter's ambient resolution, best-effort).
+// @@@ launcherCmd - the launch command for THIS session ([[launcher-select]] resume-launcher-pin). The RESOLVED
+// base command PINNED on the record at creation wins, so a (re)launch replays the EXACT launcher that made the
+// conversation (and its config-dir env), never re-resolving against a since-changed default that would send
+// `--resume` to the wrong config dir and lose the transcript. Fall back to the named-launcher resolution (an old
+// record with a launcher name but no pinned cmd; fail-loud on a since-removed launcher), then undefined (truly
+// old record → the harness adapter's ambient resolution, best-effort).
 export function launcherCmd(rec: SessRec): string | undefined {
   if (rec.launchCmd) return rec.launchCmd
   return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
@@ -1168,87 +838,6 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
   return null
 }
 
-// @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
-// invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
-// 后端把这条命令输入交互式 shell，脚本路径必须作为一个 shell 参数传递。
-export function launchShellCommand(file: string): string {
-  return `bash ${shQuote(file)}`
-}
-export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
-  const file = join(storeDir(id), 'launch.sh')
-  // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
-  // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
-  // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
-  // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
-  // ambient default so resume reuses the same auth. Undefined is only for old records before launch_cmd existed.
-  const invocation = `${rvEnv(id, harness, readRecord(id)?.runtimeStartToken)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
-  // @@@ birth registration - record the AGENT's real pid BEFORE exec, the anchor of the 100ms hot death tier
-  // ([[state]]). Each attempt runs `sh -c '<pid-write>; exec env <invocation>'`: the sh writes its own `$$` to
-  // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
-  // (claude: env→(reclaude→)claude; codex: env→bash -lc <script> whose last line is `exec codex … resume`), and
-  // `$$` therefore IS the launched agent's pid. `env` carries the leading `VAR=val` assignments (an env prefix
-  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shQuote) so the
-  // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
-  // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
-  const pidPath = join(storeDir(id), 'agent.pid')
-  const receiptPath = join(storeDir(id), 'agent.identity.json')
-  const born = `sh -c ${shQuote(`rm -f ${shQuote(receiptPath)}; printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
-  // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
-  // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
-  // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
-  // session end and is NEVER retried — the loop exits. BOOT_GRACE_MS and SOCKET_READY_TIMEOUT_MS both span this
-  // retry window, so liveness stays 'starting' and waitForReady keeps holding the slot across retries. This
-  // only closes startup unready failures — it adds no fallback and never masks a genuinely dead agent (3
-  // attempts, then give up).
-  // A one-shot adapter (currently codex-headless) deliberately exits after its first turn while the shared
-  // app-server stays alive. Retrying that successful fast exit would mint a duplicate thread/prompt, so the
-  // retry loop is a runtime capability rather than a harness-id branch.
-  // @@@ retry only what retrying can fix - a fast exit says the launcher stopped before readiness, which is
-  // reason enough to try again but never a diagnosis. So after a fast exit the script reads what the harness
-  // actually SAID and matches it against the ADAPTER's own settled-failure patterns ([[harness-adapter]]
-  // fatalLaunchOutput). A match means this command cannot succeed however many times we run it: stop at one
-  // attempt and let the harness's own line be the last thing on the pane, instead of spending a certain failure
-  // three times and burying the reason. No match keeps the plain bounded retry.
-  //
-  // It reads the PANE, not the agent's streams. Capturing stderr through a pipe missed the answer entirely —
-  // measured against real reclaude, "No conversation found with session ID" arrives on STDOUT, so a
-  // stderr-only capture classified nothing and retried a certain failure three times (the unit test passed
-  // only because its stub printed to the stream the implementation happened to watch). Redirecting stdout too
-  // would be worse: a TUI that finds stdout is not a terminal stops being a TUI. The pane already holds both
-  // streams exactly as the human sees them, and the script runs inside that pane — so it just asks tmux.
-  const fatal = (harness.fatalLaunchOutput ?? []).join('|')
-  const launchBody = harness.launchOneShot ? [born, ''] : [
-    `for __spex_try in 1 2 3; do`,
-    `  __spex_t0=$SECONDS`,
-    // @@@ classify THIS attempt only - the pane is a scrollback, so it also holds every earlier attempt and
-    // every earlier launch that ever ran in this window. Matching the whole capture would let a stale
-    // settled-failure line from minutes ago condemn an unrelated fast exit and cut a launch that retrying
-    // WOULD have recovered — the exact mirror of the miss this classifier exists to fix. So each attempt
-    // stamps a line unique to (this run, this attempt) and the match starts after it. The run's pid is what
-    // makes it unique across relaunches, which reuse the session id.
-    `  __spex_mark="attempt $__spex_try start $$"`,
-    `  printf '[spex launch] %s\\n' "$__spex_mark"`,
-    `  ${born}`,
-    `  __spex_rc=$?`,
-    `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
-    ...(fatal ? [
-      // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
-      // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
-      // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-.}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
-      `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
-      `    exit $__spex_rc`,
-      `  fi`,
-    ] : []),
-    `  printf '[spex launch] attempt %s exited in %ss (rc=%s) - fast launcher exit before readiness; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
-    `  sleep 2`,
-    `done`,
-    `exit $__spex_rc`,
-    ``,
-  ]
-  writeFileSync(file, launchBody.join('\n'))
-  return file
-}
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
   // record the transport path THIS runtime hands the agent, before anything reads it (launchScript bakes it
   // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
@@ -1256,7 +845,7 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   if (harness.ownsRendezvous) stampRvSock(id)
   const file = launchScript(id, tail, harness, cmd)
   await sessionHost().launch(id, launchShellCommand(file), path)
-  launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
+  markLaunched(id)   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
 
@@ -3346,7 +2935,7 @@ function writeSessionLeafReceipt(id: string, receipt: SessionLeafReceipt): void 
 
 function clearSessionLeafArtifacts(id: string): void {
   rmSync(sessionArtifactPath(id, 'agent.pid'), { force: true })
-  pidRegistry.delete(id)
+  forgetAgentPid(id)
   rmSync(sessionLeafReceiptPath(id), { force: true })
 }
 
@@ -3551,7 +3140,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
       throw new ResourceConflict(`refusing to stop ${id}: exact leaf teardown remains ${finalState}`)
     clearSessionLeafArtifacts(id)
   }
-  launchedAt.delete(id)
+  clearLaunched(id)
   await harness.cleanupRuntime(rec)
   if (requireCold) {
     const cold = await harness.coldRuntime?.(rec, coldReceipt)

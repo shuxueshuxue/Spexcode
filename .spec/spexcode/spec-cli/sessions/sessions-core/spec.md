@@ -165,9 +165,13 @@ node still owns the user-facing policy and slot semantics. Each session feature 
 under `related:`, so a change here attributes its drift and eval staleness to this one owner instead of all of them
 (see [[governed-related]]). A feature reclaims ownership by taking a FILE out of this one, not by
 anchoring a symbol inside it: [[session-selectors]] governs `session-selectors.ts`, [[ls-cjk-width]] governs
-`session-table.ts`, and [[review-payload]] governs `session-review.ts`. Each of those was a region here, and
+`session-table.ts`, [[review-payload]] governs `session-review.ts`, [[liveness]] governs `session-liveness.ts`,
+and [[prompt-operand]] governs `session-prompt.ts`. Each of those was a region here, and
 each left in the same direction — nothing in `sessions.ts` imports them back, which is what makes them
-modules rather than relocated text. That several features still hold no code of their own is the honest
+modules rather than relocated text. Where a feature's region straddled two questions the cut follows the
+question, not the line range: the probe left but `reconcile` stayed, because joining a reading onto an authored
+lifecycle is [[state]]'s; the prompt seam left but `launcherCmd` stayed, because which command starts an agent
+is not what text it is handed. That several features still hold no code of their own is the honest
 signal that the rest of `sessions.ts` remains a monolith outside the record seam.
 
 The shared layer also reconciles each executing governed record (`status: active`) with its adapter's optional

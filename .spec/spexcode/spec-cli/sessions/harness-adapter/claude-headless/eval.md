@@ -73,7 +73,7 @@ scenarios:
     tags: [backend-api, cli]
     code:
       - spec-cli/src/harness.ts#claudeHeadlessHarness
-      - spec-cli/src/sessions.ts#liveness
+      - spec-cli/src/session-liveness.ts#liveness
       - spec-cli/src/host-resources.ts
   - name: hooks-and-close
     description: Exercise a real Claude lifecycle hook, stop the governed headless session, then close it through the public session API.

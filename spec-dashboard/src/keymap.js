@@ -5,10 +5,10 @@ export const ACT = [
   // Shift TRANSPARENT to nav (⇧j = j, one global grammar; ⇧arrows match for free — e.key is unchanged);
   // that same shift-passthrough is what lets nav reach THROUGH the node-info popup, which claims only
   // unmodified keys ([[keyboard-nav]]'s lens exception — the popup follows the focus).
-  { id: 'nav.up',      keys: ['ArrowUp', 'k', 'K'],    rebind: false, desc: 'legend.graph.move' },
-  { id: 'nav.down',    keys: ['ArrowDown', 'j', 'J'],  rebind: false, desc: 'legend.graph.move' },
-  { id: 'nav.parent',  keys: ['ArrowLeft', 'h', 'H'],  rebind: false, desc: 'legend.graph.parent' },
-  { id: 'nav.child',   keys: ['ArrowRight', 'l', 'L'], rebind: false, desc: 'legend.graph.child' },
+  { id: 'nav.up',      keys: ['ArrowUp', 'k', 'K'],    codes: ['KeyK'], rebind: false, desc: 'legend.graph.move' },
+  { id: 'nav.down',    keys: ['ArrowDown', 'j', 'J'],  codes: ['KeyJ'], rebind: false, desc: 'legend.graph.move' },
+  { id: 'nav.parent',  keys: ['ArrowLeft', 'h', 'H'],  codes: ['KeyH'], rebind: false, desc: 'legend.graph.parent' },
+  { id: 'nav.child',   keys: ['ArrowRight', 'l', 'L'], codes: ['KeyL'], rebind: false, desc: 'legend.graph.child' },
   // board verbs — rebindable
   { id: 'graph.zoomIn',    keys: ['+', '='], rebind: true, desc: 'legend.graph.zoom' },
   { id: 'graph.zoomOut',   keys: ['-', '_'], rebind: true, desc: 'legend.graph.zoom' },

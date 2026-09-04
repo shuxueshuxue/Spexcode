@@ -2,7 +2,8 @@ import { existsSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { loadSpecsLite, mainRoot, type SpecLite } from '@spexcode/spec-core'
 import { localCachedSessions } from './client.js'
-import { resolveSession, type Session } from './sessions.js'
+import { resolveSession } from './session-selectors.js'
+import type { Session } from './sessions.js'
 
 export type OpenTarget =
   | { kind: 'node'; id: string; hash: string }

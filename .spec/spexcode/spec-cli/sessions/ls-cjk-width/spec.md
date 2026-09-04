@@ -4,8 +4,9 @@ status: active
 hue: 295
 desc: The `spex session ls` table presents the derived TITLE and direct PARENT at terminal display width — CJK/fullwidth glyphs count two cells, so TITLE and PROMPT truncate on cell budget without mid-glyph cuts and every column stays aligned.
 code:
-  - spec-cli/src/table-width.test.ts
+  - spec-cli/src/session-table.ts
 related:
+  - spec-cli/src/table-width.test.ts
   - spec-cli/src/sessions.ts
 ---
 
@@ -20,7 +21,9 @@ stopped reading as a table.
 
 ## expanded spec
 
-**Cells, not code units.** The table's unit of alignment is the terminal CELL. `sessions.ts` carries
+**Cells, not code units.** The table's unit of alignment is the terminal CELL. `session-table.ts` is
+this node's own module — the glyph/colour vocabulary and the cell arithmetic, extracted from the session
+core so the presentation rules are a file rather than a region of one. It carries
 three width-aware helpers — `displayWidth` (a small wcwidth-style range check over the wide blocks:
 CJK ideographs, kana, Hangul, fullwidth forms, emoji — deliberately no dependency), `truncWidth`
 (truncate to a cell budget, the ellipsis paying its own cell, never splitting a wide glyph), and

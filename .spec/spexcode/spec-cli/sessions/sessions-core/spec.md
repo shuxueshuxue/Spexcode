@@ -163,8 +163,12 @@ shared implementation seam — for example [[launch]]'s `sessions.maxActive` fal
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
 under `related:`, so a change here attributes its drift and eval staleness to this one owner instead of all of them
-(see [[governed-related]]). That several features hold no code of their own is the honest signal that
-`sessions.ts` remains a monolith outside the record seam; future code splits can let each feature reclaim ownership.
+(see [[governed-related]]). A feature reclaims ownership by taking a FILE out of this one, not by
+anchoring a symbol inside it: [[session-selectors]] governs `session-selectors.ts`, [[ls-cjk-width]] governs
+`session-table.ts`, and [[review-payload]] governs `session-review.ts`. Each of those was a region here, and
+each left in the same direction — nothing in `sessions.ts` imports them back, which is what makes them
+modules rather than relocated text. That several features still hold no code of their own is the honest
+signal that the rest of `sessions.ts` remains a monolith outside the record seam.
 
 The shared layer also reconciles each executing governed record (`status: active`) with its adapter's optional
 native turn-failure subscription. Waiting states (`asking`, `awaiting`, and `parked`) have no native turn and do

@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { resolveSession, matchesSelector, selectSessions, type Session } from './sessions.js'
+import { resolveSession, matchesSelector, selectSessions } from './session-selectors.js'
+import type { Session } from './sessions.js'
 
 // minimal Session builder — only id/branch feed the selector matcher; the rest are inert defaults so the
 // resolver sees realistic rows without dragging in tmux/git state.

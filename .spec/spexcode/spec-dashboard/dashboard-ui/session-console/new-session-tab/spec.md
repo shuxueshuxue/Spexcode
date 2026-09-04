@@ -2,7 +2,7 @@
 title: new-session-tab
 status: active
 hue: 280
-desc: The console's New Session tab — a launch composer with the `/<preset> [[node]]… <free text>` grammar, background fire that never disables the box, and the launcher pop-out picker as the only launch choice.
+desc: The console's New Session tab — a launch composer with the `/<preset> [[node]]… <free text>` grammar and the `@parent:` nesting directive, background fire that never disables the box, and the launcher pop-out picker as the only launch choice.
 code:
   - spec-dashboard/src/SessionInterface.jsx#LauncherPicker
 related:
@@ -32,6 +32,14 @@ The two compose the launch grammar `/<preset> [[node]]… <free text>`, from whi
 (the first `[[<id>]]`). Both menus only edit text; the New prompt has **no** `/` slash-command menu (presets
 only). A preset launched with **no node target** never assumes a node — the agent takes scope from the prompt,
 else asks first.
+Typing **`@`** opens the shared session rows, and among them the `parent` door: accepting it writes
+`@parent:` and re-opens the same rows so the next pick completes a full session id ([[mentions]]). That token is
+this tab's ONE addressing input — the launch it starts hangs under the named session instead of standing at
+the top level of the forest ([[session-nesting]]), which is otherwise unreachable from a browser because the
+dashboard has no session identity of its own to inherit. Like every other token here it is only text: the box
+posts the raw draft and the create boundary resolves, strips, and enforces it, so the phone composer and the
+CLI take the same directive from the same owner and a bad selector fails the launch loudly instead of quietly
+producing a top-level session.
 **Submitting launches and opens the new document**: the prompt clears **immediately** and **focus stays in the box** —
 the box **never disables or blurs**; the launch fires in the **background**, so the box is type-ready at once and you
 can fire off several in a row **without waiting** for each launch's worktree+agent setup (seconds of real work) to

@@ -10,6 +10,8 @@ import { git, gitTry, withGitAbortSignal, isGitObjectId } from '@spexcode/spec-c
 import { loadSpecsLite } from '@spexcode/spec-core'
 import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
+import { parseParentDirective } from './mentions.js'
+import { resolveSession } from './session-selectors.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
@@ -1524,7 +1526,7 @@ export class SessionCreateError extends Error {
     this.name = 'SessionCreateError'
   }
 }
-type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal; base?: string | null }
+type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal; base?: string | null; parentExplicit?: boolean }
 type SessionCreateRequestOptions = {
   requestKey?: string
   signal?: AbortSignal
@@ -1576,10 +1578,15 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const input = body as Record<string, unknown>
   const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher', 'name', 'base'].includes(key)).sort()
   if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
-  const prompt = typeof input.prompt === 'string' ? input.prompt : ''
+  // The prompt is the only field a human authors freely, so it is also where the grammar's `@parent:<sel>`
+  // directive arrives ([[mentions]]). Read it off the raw text FIRST: the stripped prompt is what titles,
+  // slugs, receipts, and the agent itself see, so the directive is never mistaken for task words.
+  const directive = parseParentDirective(typeof input.prompt === 'string' ? input.prompt : '')
+  const prompt = directive.text
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
-  const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
+  let parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
+  let parentExplicit = false
   if (input.name !== undefined && typeof input.name !== 'string') return { status: 400, error: 'session-create name must be a string' }
   const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   if (input.base !== undefined && typeof input.base !== 'string') return { status: 400, error: 'session-create base must be a string' }
@@ -1588,6 +1595,26 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   if (cutoverState === 'fenced') return { status: 409, error: 'legacy JSON session store is fenced for one-time migration', code: 'session_create_failed', phase: 'request' }
   if (cutoverState === 'migration-required') return { status: 409, error: 'legacy JSON session store must be migrated before creating sessions', code: 'session_create_failed', phase: 'request' }
   if (cutoverState === 'ambiguous') return { status: 409, error: 'session database exists without a migration marker', code: 'session_create_failed', phase: 'request' }
+  // An explicit `@parent:` outranks the caller-supplied `parent` — a spawner records provenance, but a human
+  // or agent naming a supervisor in the prompt is stating where this worker belongs ([[session-nesting]]).
+  // The board read is paid for only when the directive is present, and an unresolvable selector fails the
+  // request outright: a create that silently landed at top level would hide the miss until someone looked.
+  if (directive.selectors.length) {
+    if (directive.selectors.length > 1) {
+      return { status: 400, error: `session-create prompt names more than one @parent: ${directive.selectors.join(', ')}`, code: 'session_create_failed', phase: 'request' }
+    }
+    const selector = directive.selectors[0]
+    // Resolve against the retained board, archived rows included: parentage is a durable pointer that
+    // outlives its parent's liveness. Neither the backend's own env identity nor its cwd may stand in for a
+    // caller here, so `.` names nothing rather than silently meaning "whoever runs the server".
+    const resolved = resolveSession(selector, await listSessions(true), '', mainRoot())
+    if ('ambiguous' in resolved) {
+      return { status: 400, error: `session-create @parent: is ambiguous: ${resolved.ambiguous.map((session) => session.id.slice(0, 8)).join(', ')}`, code: 'session_create_failed', phase: 'request' }
+    }
+    if ('none' in resolved) return { status: 400, error: `session-create @parent: names no session: ${selector}`, code: 'session_create_failed', phase: 'request' }
+    parent = resolved.ok.id
+    parentExplicit = true
+  }
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {
@@ -1623,7 +1650,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   traceSessionCreate(id, requestDigest, 'request', 'start')
   try {
     try {
-      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, base, signal: controller.signal })
+      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, base, parentExplicit, signal: controller.signal })
       await options.onPublished?.(session)
       freshStoreCommitted = true
       traceSessionCreate(id, requestDigest, 'request', 'finish')
@@ -1775,10 +1802,16 @@ export function projectCreatedSession(session: Session): void {
   }
 }
 
-export function spawnerClause(p: SessRec | null): string {
+// The parent's worktree pointer is the same fact either way; only the ORIGIN sentence differs. A spawner
+// created you; an explicit `@parent:` directive says a human or agent hung you under a supervisor that never
+// ran your create. Saying "created by" for the second case would be a small lie the child cannot check.
+export function spawnerClause(p: SessRec | null, explicit = false): string {
   if (!p?.worktreePath) return ''
   const who = p.name || p.title
-  return `\n\nYou were created by session \`${p.session.slice(0, 8)}\`${who ? ` (${who})` : ''}, whose worktree is ${p.worktreePath}` +
+  const origin = explicit
+    ? `You are attached under session \`${p.session.slice(0, 8)}\`${who ? ` (${who})` : ''} as your supervising parent`
+    : `You were created by session \`${p.session.slice(0, 8)}\`${who ? ` (${who})` : ''}`
+  return `\n\n${origin}, whose worktree is ${p.worktreePath}` +
     `${p.branch ? ` on branch \`${p.branch}\`` : ''}. Your own worktree is branched from \`${mainBranch()}\`, so it does NOT contain that ` +
     `session's uncommitted or unmerged work — a spec node it just created, an edit it hasn't landed. If your task needs anything of theirs, ` +
     `read it there directly. Read only: never write into another session's worktree.`
@@ -2019,7 +2052,7 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
 }
 
 async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
-  const { id, requestDigest, payloadHash, base, signal } = context
+  const { id, requestDigest, payloadHash, base, parentExplicit, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
   traceSessionCreate(id, requestDigest, phase, 'start')
@@ -2075,7 +2108,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       const path = join(root, '.worktrees', slug)
       const spec = ref ? launchSpecs?.find((node) => node.id === ref) : undefined
       const suffix = (spec ? `\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.` : '')
-        + spawnerClause(parent ? readRecord(parent) : null)
+        + spawnerClause(parent ? readRecord(parent) : null, parentExplicit)
       let launchPrompt: string
       try {
         launchPrompt = (await composeSessionPrompt(rawPrompt, { session: id, harness: h.id }, {

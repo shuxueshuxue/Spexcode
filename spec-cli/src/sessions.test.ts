@@ -377,6 +377,23 @@ test('session-create API rejects stale fields before entering the transaction', 
   assert.deepEqual(removedNode, { status: 400, error: 'unknown session-create field: node' })
 })
 
+// @@@ the @parent: directive is refused, not swallowed - a create that quietly landed at top level would
+// hide the miss until someone went looking at the forest, so every unusable directive fails the request.
+test('session-create refuses an unusable @parent: directive instead of creating an orphan', serial, async () => {
+  const twoParents = await sessionCreateRequest({ prompt: '@parent:aaa @parent:bbb probe', launcher: 'claude' })
+  assert.equal(twoParents.status, 400)
+  assert.match((twoParents as { error: string }).error, /names more than one @parent: aaa, bbb/)
+
+  // no board row can match this selector, so the directive names nobody and the transaction never starts
+  const unknown = await sessionCreateRequest({ prompt: '@parent:no-such-session probe', launcher: 'claude' })
+  assert.equal(unknown.status, 400)
+  assert.match((unknown as { error: string }).error, /@parent: names no session: no-such-session/)
+
+  // the directive is the whole prompt: stripping it leaves no task, which is the ordinary empty-prompt refusal
+  const onlyDirective = await sessionCreateRequest({ prompt: '@parent:aaa', launcher: 'claude' })
+  assert.deepEqual(onlyDirective, { status: 400, error: 'empty prompt' })
+})
+
 test('session-create API refuses the retired JSON store while migration is fenced', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH

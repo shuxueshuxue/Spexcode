@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseMentions, notifyOriginator, pickLoopIn, stripRefSigil, summarizeLoopIn } from './mentions.js'
+import { parseMentions, parseParentDirective, notifyOriginator, pickLoopIn, stripRefSigil, summarizeLoopIn } from './mentions.js'
 
 // ---- parseMentions: the pure grammar ----
 
@@ -13,6 +13,39 @@ test('parseMentions: session references and nodes are deduped first-seen', () =>
 
 test('parseMentions: a mid-word @ is not a session reference', () => {
   assert.deepEqual(parseMentions('mail me at user@example.com').sessions, [])
+})
+
+// ---- parseParentDirective: the @parent: action, consumed at the create boundary ----
+
+test('parseParentDirective: the directive names a supervisor and leaves the task text alone', () => {
+  assert.deepEqual(parseParentDirective('@parent:7f3a9c fix the drift warning'), {
+    selectors: ['7f3a9c'], text: 'fix the drift warning',
+  })
+  // a human types the colon-space form as naturally as the closed one
+  assert.deepEqual(parseParentDirective('@parent: 7f3a9c fix the drift warning'), {
+    selectors: ['7f3a9c'], text: 'fix the drift warning',
+  })
+  // and it may sit anywhere in the draft, including after the task
+  assert.deepEqual(parseParentDirective('fix the drift warning @parent:node/slug-7f3a'), {
+    selectors: ['node/slug-7f3a'], text: 'fix the drift warning',
+  })
+})
+
+test('parseParentDirective: without a directive the text is returned unchanged, whitespace included', () => {
+  assert.deepEqual(parseParentDirective('  @abc look at [[graph]]  '), { selectors: [], text: '  @abc look at [[graph]]  ' })
+  assert.deepEqual(parseParentDirective('mail me at user@parent:example').selectors, [], 'mid-word is not a directive')
+})
+
+test('parseParentDirective: two adjacent directives are both reported, so the boundary can refuse them', () => {
+  assert.deepEqual(parseParentDirective('@parent:aaa @parent:bbb do the thing'), {
+    selectors: ['aaa', 'bbb'], text: 'do the thing',
+  })
+  // the same supervisor written twice is one intent, not a conflict
+  assert.deepEqual(parseParentDirective('@parent:aaa do the thing @parent:aaa'), { selectors: ['aaa'], text: 'do the thing' })
+})
+
+test('parseParentDirective: a prompt that is only a directive strips to nothing', () => {
+  assert.deepEqual(parseParentDirective('@parent:aaa'), { selectors: ['aaa'], text: '' })
 })
 
 // ---- implicit originator loop-in ----

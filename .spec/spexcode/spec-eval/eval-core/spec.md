@@ -9,6 +9,7 @@ code:
   - spec-eval/src/scenarios.ts#validateScenarios
   - spec-eval/src/scenarios.ts#writeScenarioMeasurementMetadata
   - spec-eval/src/scenarios.ts#resolveEvalNode
+  - spec-eval/src/scenarios.ts#hasEvalCoverage
 related:
   - spec-cli/src/cli.ts
   - spec-eval/src/cli.ts
@@ -17,6 +18,7 @@ related:
   - spec-eval/src/scenariofresh.ts
   - spec-eval/src/scenariofresh.test.ts
   - spec-eval/src/scenarios.test.ts
+  - spec-eval/src/eval-coverage.test.ts
   - spec-eval/src/declaration-write.cli.test.ts
   - spec-eval/src/scan-source.test.ts
   - spec-eval/src/cache.ts
@@ -33,6 +35,13 @@ flags it stale. Prove the whole loop — declare a scenario, file a measurement,
 prune the evidence — works end to end through the real `spex` surface, with no browser and no executor.
 
 ## expanded spec
+
+The loss signal has one public coverage question for delivery gates and other external harnesses:
+`hasEvalCoverage(root, nodeId)` resolves the same canonical node ids as the rest of spec-eval and returns
+`{ ok, reason? }` with a repairable reason on failure. A node whose spec has no `code:` claim is intent-only
+and returns an explicit exemption; a node with `code:` must have a valid `eval.md` scenario declaration.
+This is the single coverage criterion, built on the same eval.md parser and validator used by the scan, so
+consumers call it instead of reimplementing eval discovery or inventing their own error text.
 
 A scenario's declaration format, its tag vocabulary, its code axis and the anchors that narrow it are
 [[scenario-declaration]]'s. The append-only readings sidecar, its retraction event and its evidence list are

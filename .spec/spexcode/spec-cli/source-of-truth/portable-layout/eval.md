@@ -45,6 +45,19 @@ scenarios:
     code:
       - packages/spec-core/src/layout.ts#readAliasedRecordEntry
     test: spec-cli/src/layout-session-id.test.ts
+  - name: public-adoption-predicate-follows-config-layout
+    description: >
+      Through a small external-consumer script importing the published @spexcode/spec-core package entry,
+      create disposable project roots covering only .spec/spexcode.json, only the legacy root spexcode.json,
+      both locations, and neither location. Invoke the public isAdopted(root) API and capture its stdout without
+      enabling console.error interception or reading layout internals.
+    expected: >
+      The API reports true for the first three layouts and false for neither, with no migration warning or other
+      stderr output; the result is stable when both files exist because .spec has precedence.
+    tags: [cli]
+    code:
+      - packages/spec-core/src/layout.ts#isAdopted
+    test: spec-cli/src/config-layout.test.ts
 ---
 
 Measured through the CLI seam that resolves layout for every other verb (`spex internal trunk` =

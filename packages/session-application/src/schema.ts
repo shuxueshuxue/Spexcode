@@ -38,4 +38,21 @@ CREATE TABLE session_follow_cursors (
 ) STRICT;
 `,
   },
+  {
+    version: 4,
+    sql: `
+INSERT INTO session_follow_cursors (watcher_session_id, subject_session_id, event_seq)
+SELECT edge.from_session_id,
+       edge.to_session_id,
+       COALESCE(MAX(event.event_seq), 0)
+  FROM topology_edges AS edge
+  LEFT JOIN session_events AS event
+    ON event.subject_session_id=edge.to_session_id
+ WHERE edge.removed_at_ms IS NULL
+   AND edge.relation_type IN ('parent', 'watch', 'watch:parent', 'watch:manual')
+ GROUP BY edge.from_session_id, edge.to_session_id
+ON CONFLICT(watcher_session_id, subject_session_id) DO UPDATE
+ SET event_seq=MAX(session_follow_cursors.event_seq, excluded.event_seq);
+`,
+  },
 ]

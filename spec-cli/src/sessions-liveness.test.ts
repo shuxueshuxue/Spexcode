@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { displayStatusForProposal, liveness, launcherCmd, type LiveSnap } from './sessions.js'
+import { displayStatusForProposal, launcherCmd } from './sessions.js'
+import { liveness, type LiveSnap } from './session-liveness.js'
 import type { SessRec } from './session-record.js'
 
 // Pins the session-stability contract the mass-restore incident violated:

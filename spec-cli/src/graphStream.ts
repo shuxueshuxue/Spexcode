@@ -4,7 +4,8 @@ import { watch, mkdirSync, readdirSync, readFileSync, existsSync, type Dirent, t
 import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
-import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
+import { listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
+import { hotSignature, warmSignature } from './session-liveness.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, readBoard, type Board } from './graphCache.js'
 import { diffFromPosition, positionOf, type Position } from '@spexcode/spec-core'
 import {

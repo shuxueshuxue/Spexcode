@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nodeFromPrompt, slugify, titleFromPrompt } from './sessions.js'
+import { nodeFromPrompt, slugify, titleFromPrompt } from './session-prompt.js'
 
 // the create transaction names a session by: slug = `${slugify(ref || titleFromPrompt(prompt))}-<shortid>`.
 // A session's slug is its OWN identity — an @-mentioned session id or a bare UUID in the prompt must never

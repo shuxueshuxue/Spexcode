@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { withPeerSenderHint, withSenderHint, deriveHeadline } from './sessions.js'
+import { deriveHeadline } from './sessions.js'
+import { withPeerSenderHint, withSenderHint } from './session-prompt.js'
 
 // withSenderHint is the WHOLE feature: `spex session send` wraps the delivered message with a sender stamp +
 // a runnable reply command. These pin the cases the send command produces — agent→agent (headline + id,

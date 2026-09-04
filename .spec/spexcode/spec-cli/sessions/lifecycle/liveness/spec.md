@@ -4,8 +4,9 @@ status: active
 hue: 280
 desc: Whether a session's agent is addressable — derived for every session by two probe tiers and a tri-state listener test, with `unknown` for a probe that could not tell and `offline` only for a corpse two witnesses agree on.
 code:
-  - spec-cli/src/sessions.ts#liveness
+  - spec-cli/src/session-liveness.ts
 related:
+  - spec-cli/src/sessions.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/host-resources.ts
   - spec-cli/src/commit-gate.test.ts
@@ -17,6 +18,15 @@ Liveness is the runtime-derived axis of [[state]]: it never overrides the lifecy
 the reading a supervisor ACTS on — `offline` disarms the relaunch guard — so this node's whole contract is that
 the reading is honest before it is fast. Each adapter supplies its own probe ([[harness-adapter]]); the tiers,
 the witnesses, and the failure rule below are shared.
+
+`session-liveness.ts` derives that reading and does nothing else: it opens no record for writing and authors no
+status. `reconcile` stays with [[state]]'s own file, because joining a probe reading onto the lifecycle the agent
+wrote is that node's question rather than this one's — and leaving it there is exactly what lets this module
+import no runtime value from the session core at all. The reading's type is declared here too, since it is this
+module's own answer; every other file reads `Liveness` as a type imported FROM the prober. `launch`/`stop` own
+the boot window's two edges and push them in through `markLaunched`/`clearLaunched` rather than sharing a map,
+and clearing a session's leaf artifacts drops its latched death through `forgetAgentPid` — verbs, not mutable
+module state, so no caller can corrupt the pid-reuse guard by hand.
 
 **Derivation.** Most interactive adapters derive that answer from process/transport probes. Headless adapters deliberately
   derive it from their runtime owner: a Claude-headless or other leaf-backed controller is online only when its

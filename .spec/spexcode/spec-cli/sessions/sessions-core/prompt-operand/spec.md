@@ -4,11 +4,11 @@ status: active
 hue: 280
 desc: The text handed to an agent never begins with `-` — one guarantee made where every launch and send already passes, so no launch path carries a per-harness prompt escape.
 code:
-  - spec-cli/src/sessions.ts#launchScript
+  - spec-cli/src/session-prompt.ts
 related:
+  - spec-cli/src/sessions.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/sessionSlug.test.ts
-  - spec-cli/src/sessions.ts
 ---
 
 # prompt-operand
@@ -16,6 +16,13 @@ related:
 Human prompts legitimately begin with a dash — a pasted console line, a diff hunk, a quoted flag — and downstream
 that first character decides whether the text is read as a prompt or as machinery. Every harness parses its own
 argv by its own rules, so the answer is made ONCE here rather than once per adapter.
+
+`session-prompt.ts` is where that seam lives: everything that turns a human's words into the operand a harness
+receives — the sender and reply hints, the mention/slug derivations, the command presets, the composition of a
+session's opening prompt, and the launch scripts that hand it over. What the module deliberately does NOT hold
+is launch CONFIG: `launcherCmd` and the launch preflight answer *which command starts this agent on this
+machine*, a different question from *what text it is handed*, so they stay with the session core and nothing
+here calls them. That keeps the edge one-way — the session core reads this module, never the reverse.
 
 The prompt seam carries ONE invariant for every harness: **the text handed to an agent never begins with `-`**.
 Human prompts legitimately do — a pasted browser-console line, a diff hunk, a quoted flag — and downstream that

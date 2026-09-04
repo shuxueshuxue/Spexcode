@@ -27,7 +27,7 @@ same surface.
 
 ## expanded spec
 
-`reviewPayload(id)` (in [[state]]'s `sessions.ts`) computes ONE bundle for a session, served at
+`reviewPayload(id)` (in [[review-payload]]'s `session-review.ts`) computes ONE bundle for a session, served at
 `GET /api/sessions/:id/review` and printed by `spex review <id>` (`--json` for the raw payload). Unknown id
 → `null` → HTTP 404 / a non-zero CLI exit. The reads run in parallel, all against the source-of-truth base
 branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload carries:

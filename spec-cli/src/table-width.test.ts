@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { displayWidth, truncWidth, padWidth, formatTable } from './sessions.js'
+import { displayWidth, truncWidth, padWidth, formatTable } from './session-table.js'
 import type { Session } from './sessions.js'
 
 // Pins the display-width contract of `spex session ls` ([[ls-cjk-width]]): the table aligns by terminal CELLS,

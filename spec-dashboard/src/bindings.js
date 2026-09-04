@@ -41,7 +41,8 @@ export function eventKey(event) {
 export function firesEvent(id, event) {
   const action = byId[id]
   const physical = !event.altKey && !event.ctrlKey && !event.metaKey && action?.codes?.includes(event.code)
-  return keysOf(id).includes(eventKey(event)) || physical || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey(id, event.key))
+  const legacy = !event.altKey && !event.ctrlKey && !event.metaKey && action?.keyCodes?.includes(event.keyCode || event.which)
+  return keysOf(id).includes(eventKey(event)) || physical || legacy || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey(id, event.key))
 }
 
 // THE HINT READER. A control that a key can also reach says so in its own tooltip, and it asks the registry

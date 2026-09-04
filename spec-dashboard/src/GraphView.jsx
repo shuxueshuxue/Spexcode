@@ -103,6 +103,15 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
   // two instances so the popup pane and the help body keep independent scroll targets (createMomentumScroll, scroll.js)
   const popupScroll = useMemo(() => createMomentumScroll(), [])
 
+  // A hidden, kept-alive session composer can retain DOM focus across a route switch. That typing
+  // surface must not keep owning keys once the graph is visible; visible controls remain untouched.
+  useLayoutEffect(() => {
+    if (!graphSurface) return
+    const active = document.activeElement
+    if (!active || active === document.body || !active.matches?.('input, textarea, select, [contenteditable]')) return
+    if (!active.getClientRects().length) active.blur()
+  }, [graphSurface, page])
+
   // resolve focus on the RAW tree first (resilient to a polled-away merged/closed node), then expand.
   const rawById = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   // A graph-node address is a shareable focus target. Apply each changed route parameter before paint; an

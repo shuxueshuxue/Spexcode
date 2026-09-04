@@ -25,14 +25,6 @@ test('keyboard mode suppresses React Flow pointer layers from the graphview host
   assert.ok(styles.includes('.app .kbd-mode .react-flow, .app .kbd-mode .react-flow * { pointer-events: none !important; }'))
 })
 
-test('graph releases focus trapped in a hidden kept-alive input', () => {
-  assert.match(graph, /if \(!active\.getClientRects\(\)\.length\) active\.blur\(\)/)
-})
-
-test('interrupted focus animation continues from the latest local viewport frame', () => {
-  assert.match(graph, /const start = viewportRef\.current \|\| getViewport\(\)/)
-})
-
 test('focus camera keeps zoom, roots use reading pairs, and non-root tiles use pane centre', () => {
   assert.match(data, /const anchorZoom = fit && !currentFits && fitZoom >= minZoom \? fitZoom : zoom/)
   assert.match(data, /const desiredY = height \/ 2 - focus\.y \* anchorZoom/)

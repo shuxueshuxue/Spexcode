@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, sessionDiff, saveDiffComment, sendDiffComments, canonicalWatchRecipients } from './sessions.js'
+import { EMPTY_PROMPT_ERROR, retractDiffComment, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper, sessionDiff, saveDiffComment, sendDiffComments } from './sessions.js'
 import { sessionHost } from './session-host.js'
 import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable } from './session-record.js'
 import { readTimeline } from './session-timeline.js'
@@ -636,7 +636,6 @@ app.post('/api/session-runtime/:id/state', async (c) => {
       note: body?.note as string | null | undefined,
       parentSessionId: body?.parentSessionId as string | null | undefined,
       reason: typeof body?.reason === 'string' ? body.reason : null,
-      recipientSessionIds: nextStatus === undefined ? undefined : canonicalWatchRecipients(application, sessionId, nextStatus),
     }))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : String(error), code: (error as { code?: unknown })?.code }, 409)

@@ -17,7 +17,7 @@ import { acquireFreshSessionApplicationForCreate, configuredSessionApplication, 
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
+import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, collectResourceReport, ResourceConflict } from './host-resources.js'
@@ -219,35 +219,7 @@ function pkgRoot(): string {
 }
 
 export type WatchSource = 'manual' | 'parent'
-type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[] }
 export type SessionWatch = { target: string; createdAt: string }
-function canonicalWatchEntries(target: string): WatchEntry[] {
-  const application = configuredSessionApplication()
-  if (!application.readState(target)) return []
-  const seen = new Map<string, WatchEntry>()
-  for (const edge of application.topology.parents(target)) {
-    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
-    const source: WatchSource = edge.relationType === 'parent' || edge.relationType === 'watch:parent' ? 'parent' : 'manual'
-    const current = seen.get(edge.fromSessionId)
-    if (current) {
-      if (!current.sources.includes(source)) current.sources.push(source)
-      continue
-    }
-    seen.set(edge.fromSessionId, {
-      watcher: edge.fromSessionId,
-      createdAt: new Date(edge.createdAtMs).toISOString(),
-      sources: [source],
-    })
-  }
-  return [...seen.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.watcher.localeCompare(b.watcher))
-}
-
-function readWatchEntries(target: string): WatchEntry[] {
-  const canonical = canonicalWatchEntries(target)
-  if (canonical) return canonical
-  throw new ResourceConflict('session application returned no watcher projection')
-}
-
 function managedWatchRecord(id: string): SessRec {
   const rec = readRecord(id)
   if (!rec?.governed) throw new ResourceConflict(`session ${id} is not a governed session and cannot participate in a durable watch`)
@@ -261,26 +233,6 @@ function watchMessage(target: SessRec): string {
   const note = target.note ? ` — ${target.note}` : ''
   return `[spex watch] ${target.session} is ${status}${note}`
 }
-
-function shouldDeliverWatchTransition(target: SessRec, sources: readonly WatchSource[]): boolean {
-  // @@@watch-delivery-policy - Relationship setup sends current state; manual opts into working changes.
-  return target.status !== 'active' || sources.includes('manual')
-}
-
-function scheduleWatchNotifications(target: SessRec): void {
-  const watchers = readWatchEntries(target.session)
-    .filter((entry) => shouldDeliverWatchTransition(target, entry.sources))
-    .map((entry) => entry.watcher)
-  if (!watchers.length) return
-  queueMicrotask(() => {
-    for (const watcher of watchers) {
-      void sendText(watcher, watchMessage(target), target.session, { allowStranded: true }).then((result) => {
-        if (!result.ok) console.error(`spex session watch: could not deliver ${target.session} state to ${watcher}: ${result.error}`)
-      })
-    }
-  })
-}
-setRecordTransitionNotifier(scheduleWatchNotifications)
 
 export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
@@ -301,6 +253,8 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
       senderSessionId: target,
       idempotencyKey: digest(`watch-initial-snapshot\0${watcher}\0${target}\0${source}\0${message}`),
     })
+    const history = application.readEvents(target)
+    application.advanceFollowCursor(watcher, target, history.at(-1)?.eventSeq ?? 0)
     watched.push(target)
   }
   return { watched }
@@ -404,6 +358,7 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
             senderSessionId: id,
             idempotencyKey: digest(`reparent-snapshot\0${change.event.eventId}`),
           })
+          application.advanceFollowCursor(parent, id, change.event.eventSeq)
           notify.push(moved)
         }
       }
@@ -1372,26 +1327,9 @@ function clearReadinessResidueUnlocked(rec: SessRec, clearDiagnostic: boolean): 
       proposal: rec.proposal,
       note: next.note,
       parentSessionId: rec.parent,
-      recipientSessionIds: [],
     })
   }
   writeRecord(next)
-}
-
-export function canonicalWatchRecipients(
-  application: Pick<ProductionSessionApplication, 'topology'>,
-  sessionId: string,
-  status: string,
-): string[] {
-  const recipients = new Set<string>()
-  for (const edge of application.topology.parents(sessionId)) {
-    // The canonical topology stores the structural parent edge as the durable parent-watch source. Older
-    // migrated rows may also have an explicit watch:parent edge; both represent the same policy source.
-    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
-    if (status === 'active' && (edge.relationType === 'parent' || edge.relationType === 'watch:parent')) continue
-    recipients.add(edge.fromSessionId)
-  }
-  return [...recipients]
 }
 
 export function sessionHasPendingDelivery(
@@ -1447,7 +1385,6 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
     proposal,
     note,
     parentSessionId: rec.parent,
-    recipientSessionIds: canonicalWatchRecipients(application, rec.session, status),
   })
 }
 
@@ -1751,18 +1688,70 @@ export function superviseQueue(intervalMs = 3000): void {
 }
 
 let supervisingDelivery = false
+function watchMessageFromEvent(event: { payload: Uint8Array }, subjectSessionId: string): { text: string; status: string; previousStatus: string | null } {
+  const decoded = decodeEventJson(event.payload)
+  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new ResourceConflict(`watch event for ${subjectSessionId} has an invalid state payload`)
+  const body = decoded as Record<string, unknown>
+  const status = typeof body.status === 'string' ? body.status : null
+  if (!status) throw new ResourceConflict(`watch event for ${subjectSessionId} has no status`)
+  const proposal = typeof body.proposal === 'string' ? body.proposal : null
+  const label = status === 'awaiting' ? displayStatusForProposal(proposal as Proposal | null) : status === 'active' ? 'working' : status
+  const note = typeof body.note === 'string' && body.note ? ` — ${body.note}` : ''
+  return { text: `[spex watch] ${subjectSessionId} is ${label}${note}`, status, previousStatus: typeof body.previousStatus === 'string' ? body.previousStatus : null }
+}
+
+async function reconcileWatchDeliveries(application: ProductionSessionApplication): Promise<void> {
+  const watchers: string[] = []
+  for (const id of listSessionIds()) {
+    try {
+      const rec = readRecord(id)
+      if (rec?.governed && !rec.archived) watchers.push(id)
+    } catch { /* a transient record read is retried on the next tick */ }
+  }
+  const pending = (application as ProductionSessionApplication & {
+    readWatchEvents(ids: readonly string[]): readonly {
+      watcherSessionId: string
+      subjectSessionId: string
+      event: { eventId: string; eventSeq: number; payload: Uint8Array }
+      sources: readonly string[]
+    }[]
+  }).readWatchEvents(watchers)
+  const drain = new Set<string>()
+  for (const item of pending) {
+    const rendered = watchMessageFromEvent(item.event, item.subjectSessionId)
+    const parentOnly = item.sources.every(source => source === 'parent' || source === 'watch:parent')
+    if (parentOnly && rendered.status === 'active' && rendered.previousStatus !== 'queued') {
+      application.advanceFollowCursor(item.watcherSessionId, item.subjectSessionId, item.event.eventSeq)
+      continue
+    }
+    application.enqueueMessage(item.watcherSessionId, {
+      kind: 'session.prompt.v1',
+      body: Buffer.from(rendered.text, 'utf8'),
+      senderSessionId: item.subjectSessionId,
+      idempotencyKey: `watch-event:${item.event.eventId}`,
+    })
+    application.advanceFollowCursor(item.watcherSessionId, item.subjectSessionId, item.event.eventSeq)
+    drain.add(item.watcherSessionId)
+  }
+  for (const id of drain) {
+    try { await drainSession(id) }
+    catch (error) { console.error(`spex: managed watch handoff failed for ${id}: ${error instanceof Error ? error.message : String(error)}`) }
+  }
+}
+
 // @@@ superviseDelivery - the RETRY half of [[delivery-queue]]. `sendText` hands over in its own process, which
 // covers the live case; this covers everything that could not be handed over then — a harness mid-restart, a
-// pane in the one state that swallows prompts, a session that was offline when the message arrived. Owned by
-// the serve that serves this project root, so a message owed to a worker is delivered when the worker can take
-// it rather than when it happens to run a tool. A tick with nothing owed is one existsSync per session, and
-// concurrent serves are harmless: the queue's lock, not the process, is what makes a handover exactly-once.
-export function superviseDelivery(intervalMs = 2000): void {
+// pane in the one state that swallows prompts, a session that was offline when the message arrived. The watch
+// half is owned by the serve that owns each watcher's control channel; ordinary queue debt is drained only for
+// this backend's own session records. A tick with nothing owed is one cheap global event query plus one
+// existsSync per local session, and concurrent serves are harmless: the queue's lock, not the process, serializes handover.
+export function superviseDelivery(intervalMs = 1000): void {
   if (supervisingDelivery) return
   supervisingDelivery = true
   const tick = async () => {
     try {
       const application = configuredSessionApplication()
+      await reconcileWatchDeliveries(application)
       for (const id of listSessionIds()) {
         if (!sessionHasPendingDelivery(id, application)) continue
         try { await drainSession(id) } catch (error) {
@@ -2947,7 +2936,6 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
       status,
       proposal,
       note,
-      recipientSessionIds: canonicalWatchRecipients(application, id, status),
     })
     return true
   })
@@ -2977,7 +2965,6 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
     const application = configuredSessionApplication()
     application.transitionSession(sessionId, {
       status: 'error', proposal: null, note,
-      recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'error'),
     })
     return true
   })
@@ -3010,7 +2997,6 @@ function projectInterruptedUnlocked(sessionId: string): boolean {
   const application = configuredSessionApplication()
   application.transitionSession(sessionId, {
     status: 'asking', proposal: null, note: INTERRUPTED_NOTE,
-    recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'asking'),
   })
   return true
 }
@@ -4198,7 +4184,6 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
       proposal: null,
       note: latest.note,
       parentSessionId: latest.parent,
-      recipientSessionIds: canonicalWatchRecipients(application, id, 'archived'),
     })
   }
   let slot: string | null = null

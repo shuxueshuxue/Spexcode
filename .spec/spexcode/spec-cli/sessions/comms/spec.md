@@ -23,7 +23,8 @@ The mesh is the log plus three things done with it:
 - **[[dispatch]]** — acceptance: append the message to the target's log and enqueue it, both under that
   session's record lock. The write decides success; the transport never does. Merge is itself a dispatched
   message, not a server-run git script.
-- **[[delivery-queue]]** — handover: drain what is owed into the target's adapter as an ordinary prompt,
+- **[[delivery-queue]]** — handover: the backend that owns the target's adapter drains what is owed into its
+  control channel as an ordinary prompt,
   retried until it lands, in order, exactly once.
 - **[[agent-reply-channel]]** — making a send bidirectional: stamp the sender + a runnable reply hint into
   the delivered text so the recipient can reply back over the same send. A pure prompt insert, no transport

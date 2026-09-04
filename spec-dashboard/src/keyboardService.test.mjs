@@ -93,6 +93,7 @@ test('structural navigation ignores stale local keybinding overrides', () => {
   assert.match(bindings, /action\.rebind === false \? null : o/)
   assert.match(keymap, /id: 'nav\.child',[\s\S]*codes: \['KeyL'\]/)
   assert.match(bindings, /action\?\.codes\?\.includes\(event\.code\)/)
+  assert.match(bindings, /action\?\.keyCodes\?\.includes\(event\.keyCode \|\| event\.which\)/)
 })
 
 test('structural chord dispatch is registry-owned, not a second literal grammar', () => {

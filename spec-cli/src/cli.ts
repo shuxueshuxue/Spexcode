@@ -958,7 +958,8 @@ if (cmd === 'serve') {
     const peerAnchor = parseSessionPeerAnchor('new', newPositionals)
     rejectUnknownBackendFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'ssh'])
     if (peerAnchor && newPositionals.length > 2) sessionPeerAnchorUsage('new', '--ssh accepts one full-id anchor and one inline prompt at most')
-    const { createSession, ownSessionId, withPeerSenderHint } = await import('./sessions.js')
+    const { createSession, ownSessionId } = await import('./sessions.js')
+    const { withPeerSenderHint } = await import('./session-prompt.js')
     const promptFile = flag('prompt-file')
     const explicitPrompt = flag('prompt')
     if (peerAnchor && explicitPrompt !== undefined && newPositionals.length !== 1) sessionPeerAnchorUsage('new', 'give the prompt either after the full-id anchor or via --prompt, not both')
@@ -1360,10 +1361,10 @@ if (cmd === 'serve') {
       if (sendArgs.sshAddress && sender) {
         const { peerSenderRef, readPeerMachineId } = await import('./machine-peer.js')
         const machineId = readPeerMachineId()
-        text = s.withPeerSenderHint(text, sender, sendArgs.sshAddress, machineId)
+        text = (await import('./session-prompt.js')).withPeerSenderHint(text, sender, sendArgs.sshAddress, machineId)
         from = peerSenderRef(machineId, sender.id)
       } else if (!sendArgs.sshAddress) {
-        text = s.withSenderHint(text, sender)
+        text = (await import('./session-prompt.js')).withSenderHint(text, sender)
       }
       let r
       try {

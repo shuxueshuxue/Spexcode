@@ -2,7 +2,7 @@
 scenarios:
   - name: failed-probe-reads-unknown-never-offline
     tags: [backend-api, cli]
-    code: [spec-cli/src/sessions.ts#liveness]
+    code: [spec-cli/src/session-liveness.ts#liveness]
     description: >
       With a live governed session, make the tmux snapshot time out (wrap the tmux binary so the bounded probe
       exceeds its budget) and read `/api/sessions` and `spex session ls`; then unlink the live agent's socket path

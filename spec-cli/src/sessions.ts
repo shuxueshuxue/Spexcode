@@ -1526,7 +1526,34 @@ export class SessionCreateError extends Error {
     this.name = 'SessionCreateError'
   }
 }
-type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal; base?: string | null; parentExplicit?: boolean }
+type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal; base?: string | null }
+
+// @@@ create parentage - the ONE answer to "whose subtree does this create belong to". Two sources can
+// propose it — PROVENANCE (the caller ran the create) and ADDRESS (the prompt named a supervisor with
+// `@parent:`) — and they are ranked in exactly one place, below. Downstream takes the settled value and never
+// re-asks which source won; carrying the source with the id is what keeps that from becoming a second flag
+// threaded through the transaction.
+export type CreateParentage = { id: string | null; source: 'caller' | 'directive' }
+
+// The three ways a directive can be unusable, each a refusal rather than a silent top-level create: a create
+// that dropped it would be indistinguishable from an ordinary unparented launch. The board read is paid for
+// only when a directive is actually present.
+async function settleCreateParentage(selectors: string[], callerParent: string | null): Promise<CreateParentage> {
+  if (!selectors.length) return { id: callerParent, source: 'caller' }
+  if (selectors.length > 1) {
+    throw new SessionCreateError('session_create_failed', 'request', `session-create prompt names more than one @parent: ${selectors.join(', ')}`, 400)
+  }
+  const [selector] = selectors
+  // Resolve against the retained board, archived rows included: parentage is a durable pointer that outlives
+  // its parent's liveness. The backend's own env identity and cwd are never a stand-in for whichever caller
+  // wrote the prompt, so `.` names nothing here instead of meaning "whoever runs the server".
+  const resolved = resolveSession(selector, await listSessions(true), '', mainRoot())
+  if ('ambiguous' in resolved) {
+    throw new SessionCreateError('session_create_failed', 'request', `session-create @parent: is ambiguous: ${resolved.ambiguous.map((session) => session.id.slice(0, 8)).join(', ')}`, 400)
+  }
+  if ('none' in resolved) throw new SessionCreateError('session_create_failed', 'request', `session-create @parent: names no session: ${selector}`, 400)
+  return { id: resolved.ok.id, source: 'directive' }
+}
 type SessionCreateRequestOptions = {
   requestKey?: string
   signal?: AbortSignal
@@ -1536,6 +1563,9 @@ type SessionCreateRequestOptions = {
 export type SessionCreateRequestResult =
   | { status: 201; session: Session }
   | { status: SessionCreateFailureStatus; error: string; code?: SessionCreateFailureCode; phase?: SessionCreatePhase }
+// every pre-transaction refusal projects the same way, so the boundary states that shape once
+const createRequestFailure = (failure: SessionCreateError): SessionCreateRequestResult =>
+  ({ status: failure.status, error: failure.message, code: failure.code, phase: failure.phase })
 
 const DEFAULT_CREATE_TIMEOUT_MS = 30_000
 export function sessionCreateTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -1585,8 +1615,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const prompt = directive.text
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
-  let parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
-  let parentExplicit = false
+  const callerParent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
   if (input.name !== undefined && typeof input.name !== 'string') return { status: 400, error: 'session-create name must be a string' }
   const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   if (input.base !== undefined && typeof input.base !== 'string') return { status: 400, error: 'session-create base must be a string' }
@@ -1595,38 +1624,22 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   if (cutoverState === 'fenced') return { status: 409, error: 'legacy JSON session store is fenced for one-time migration', code: 'session_create_failed', phase: 'request' }
   if (cutoverState === 'migration-required') return { status: 409, error: 'legacy JSON session store must be migrated before creating sessions', code: 'session_create_failed', phase: 'request' }
   if (cutoverState === 'ambiguous') return { status: 409, error: 'session database exists without a migration marker', code: 'session_create_failed', phase: 'request' }
-  // An explicit `@parent:` outranks the caller-supplied `parent` — a spawner records provenance, but a human
-  // or agent naming a supervisor in the prompt is stating where this worker belongs ([[session-nesting]]).
-  // The board read is paid for only when the directive is present, and an unresolvable selector fails the
-  // request outright: a create that silently landed at top level would hide the miss until someone looked.
-  if (directive.selectors.length) {
-    if (directive.selectors.length > 1) {
-      return { status: 400, error: `session-create prompt names more than one @parent: ${directive.selectors.join(', ')}`, code: 'session_create_failed', phase: 'request' }
-    }
-    const selector = directive.selectors[0]
-    // Resolve against the retained board, archived rows included: parentage is a durable pointer that
-    // outlives its parent's liveness. Neither the backend's own env identity nor its cwd may stand in for a
-    // caller here, so `.` names nothing rather than silently meaning "whoever runs the server".
-    const resolved = resolveSession(selector, await listSessions(true), '', mainRoot())
-    if ('ambiguous' in resolved) {
-      return { status: 400, error: `session-create @parent: is ambiguous: ${resolved.ambiguous.map((session) => session.id.slice(0, 8)).join(', ')}`, code: 'session_create_failed', phase: 'request' }
-    }
-    if ('none' in resolved) return { status: 400, error: `session-create @parent: names no session: ${selector}`, code: 'session_create_failed', phase: 'request' }
-    parent = resolved.ok.id
-    parentExplicit = true
-  }
+  // The last two inputs the idempotency payload binds, settled together because both must be final before it
+  // is hashed and both refuse the same way. Parentage is the one that can still change here: an addressed
+  // `@parent:` outranks the caller-supplied one, because a caller records who RAN the create while a prompt
+  // naming a supervisor states where the work belongs ([[session-nesting]]).
+  let parentage: CreateParentage
   let key: string
-  try { key = normalizeCreateKey(options.requestKey) }
-  catch (error) {
-    const failure = error as SessionCreateError
-    return { status: failure.status, error: failure.message, code: failure.code, phase: failure.phase }
-  }
+  try {
+    parentage = await settleCreateParentage(directive.selectors, callerParent)
+    key = normalizeCreateKey(options.requestKey)
+  } catch (error) { return createRequestFailure(error as SessionCreateError) }
   const requestDigest = digest(key)
   const id = sessionIdForCreateKey(key)
   // Keep no-name retries byte-compatible with pre-name receipts; an explicit non-empty name is one more
   // immutable creation input because it publishes the record's existing display override. `base` joins them
   // for the same reason and with the same shape: absent, it must not perturb an existing receipt's bytes.
-  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}), ...(base ? { base } : {}) }))
+  const payloadHash = digest(JSON.stringify({ prompt, parent: parentage.id, launcher: launcher ?? null, ...(name ? { name } : {}), ...(base ? { base } : {}) }))
   let freshStoreOwned = false
   let freshStoreCommitted = false
   try {
@@ -1650,7 +1663,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   traceSessionCreate(id, requestDigest, 'request', 'start')
   try {
     try {
-      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, base, parentExplicit, signal: controller.signal })
+      const session = await prepareSession(prompt, parentage, launcher, name, { id, requestDigest, payloadHash, base, signal: controller.signal })
       await options.onPublished?.(session)
       freshStoreCommitted = true
       traceSessionCreate(id, requestDigest, 'request', 'finish')
@@ -1802,13 +1815,13 @@ export function projectCreatedSession(session: Session): void {
   }
 }
 
-// The parent's worktree pointer is the same fact either way; only the ORIGIN sentence differs. A spawner
-// created you; an explicit `@parent:` directive says a human or agent hung you under a supervisor that never
-// ran your create. Saying "created by" for the second case would be a small lie the child cannot check.
-export function spawnerClause(p: SessRec | null, explicit = false): string {
+// The parent's worktree pointer is the same fact for either parentage source; only the ORIGIN sentence
+// differs. A caller-sourced parent created you; an addressed one hung you under a supervisor that never ran
+// your create. Saying "created by" for the second would be a small lie the child has no way to check.
+export function spawnerClause(p: SessRec | null, source: CreateParentage['source'] = 'caller'): string {
   if (!p?.worktreePath) return ''
   const who = p.name || p.title
-  const origin = explicit
+  const origin = source === 'directive'
     ? `You are attached under session \`${p.session.slice(0, 8)}\`${who ? ` (${who})` : ''} as your supervising parent`
     : `You were created by session \`${p.session.slice(0, 8)}\`${who ? ` (${who})` : ''}`
   return `\n\n${origin}, whose worktree is ${p.worktreePath}` +
@@ -2051,8 +2064,9 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
   return null
 }
 
-async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
-  const { id, requestDigest, payloadHash, base, parentExplicit, signal } = context
+async function prepareSession(prompt: string, parentage: CreateParentage, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
+  const { id, requestDigest, payloadHash, base, signal } = context
+  const parent = parentage.id
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
   traceSessionCreate(id, requestDigest, phase, 'start')
@@ -2108,7 +2122,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       const path = join(root, '.worktrees', slug)
       const spec = ref ? launchSpecs?.find((node) => node.id === ref) : undefined
       const suffix = (spec ? `\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.` : '')
-        + spawnerClause(parent ? readRecord(parent) : null, parentExplicit)
+        + spawnerClause(parent ? readRecord(parent) : null, parentage.source)
       let launchPrompt: string
       try {
         launchPrompt = (await composeSessionPrompt(rawPrompt, { session: id, harness: h.id }, {

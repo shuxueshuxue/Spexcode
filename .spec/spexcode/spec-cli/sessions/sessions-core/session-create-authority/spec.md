@@ -65,7 +65,10 @@ therefore carries the grammar's one create-time directive, `@parent:<selector>` 
 the raw prompt first: the token is stripped, the selector resolved against the retained board — archived rows
 included, because parentage is a durable pointer that outlives its parent's liveness — through the same shared
 matcher every session verb uses ([[session-selectors]]), and the resolved id REPLACES any supplied `parent`.
-Explicit addressing outranks provenance; the published record's `parent` is then an ordinary one, so the read-time
+Explicit addressing outranks provenance. The two candidate sources — the caller that ran the create and the
+prompt that addressed a supervisor — are ranked in exactly one place, which yields one settled parentage
+carrying both the id and which source won; nothing downstream re-asks, and the source never becomes a second
+flag riding the transaction. The published record's `parent` is then an ordinary one, so the read-time
 forest, the parent watch source, and [[session-reparent]] all treat it exactly like a spawned child's
 ([[session-nesting]]).
 

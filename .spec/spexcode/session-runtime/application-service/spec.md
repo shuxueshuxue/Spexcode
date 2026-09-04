@@ -25,7 +25,9 @@ store; there is no runtime compatibility mode or JSON read fallback.
 ## Responsibility
 
 `createSession`, `transitionSession`, `enqueueMessage`, `attachWatcher`, and `detachWatcher` initialize exact protocol
-addresses and mutate the service state/topology/recipient queue in one synchronous transaction. `enqueueMessage` is the only
+addresses and mutate the service state/topology/recipient queue in one synchronous transaction. `attachWatcher` also
+creates or preserves the follow cursor at the subject's current event head, so a new relation never reads historical
+events. `enqueueMessage` is the only
 adopter-facing direct delivery action; consumers do not reach through the service to call protocol `enqueue`.
 A parent/child transition appends a typed event before resolving
 durable watcher recipients and enqueueing immutable notifications. A caller that owns a richer delivery policy may

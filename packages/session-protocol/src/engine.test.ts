@@ -147,35 +147,36 @@ test('the live driver satisfies the gate the engine enforces', () => {
 test('every connection asserts its mandatory pragmas by reading them back', () => {
   const handle = openProtocol(freshDb(), { busyTimeoutMs: 7000 })
   assert.deepEqual(inspectProtocol(handle).pragmas(), {
-    journal_mode: 'delete', foreign_keys: 1, synchronous: 2, busy_timeout: 7000,
+    journal_mode: 'wal', foreign_keys: 1, synchronous: 2, busy_timeout: 7000,
   })
   handle.close()
 })
 
-test('a database left in WAL is refused, not converted', () => {
+test('a database left in WAL is accepted without conversion', () => {
   const path = freshDb()
   const database = new DatabaseSync(path)
   database.prepare('PRAGMA journal_mode=WAL').get()
   database.exec('CREATE TABLE placeholder(a INTEGER PRIMARY KEY) STRICT')
   database.close()
-  assert.equal(codeOf(() => openProtocol(path)), 'PROTOCOL_JOURNAL_MODE_UNSUPPORTED')
+  const handle = openProtocol(path)
+  handle.close()
   const check = new DatabaseSync(path)
   assert.equal(check.prepare('PRAGMA journal_mode').get()?.journal_mode, 'wal')
   check.close()
 })
 
-test('the protocol depends on no -wal or -shm sidecar, at rest or mid-transaction', () => {
+test('the protocol uses WAL sidecars for concurrent readers and writers', () => {
   const path = freshDb()
   const sidecars = (): string[] => readdirSync(dirname(path)).filter(name => name !== 'protocol.sqlite').sort()
   const handle = openProtocol(path)
   handle.initialize('s1')
   handle.enqueue('s1', message())
-  assert.deepEqual(sidecars(), [])
+  assert.deepEqual(sidecars(), ['protocol.sqlite-shm', 'protocol.sqlite-wal'])
   handle.withTransaction(tx => {
     tx.enqueue('s1', message({ body: bytes('mid') }))
-    assert.deepEqual(sidecars(), ['protocol.sqlite-journal'])
+    assert.deepEqual(sidecars(), ['protocol.sqlite-shm', 'protocol.sqlite-wal'])
   })
-  assert.deepEqual(sidecars(), [])
+  assert.deepEqual(sidecars(), ['protocol.sqlite-shm', 'protocol.sqlite-wal'])
   handle.close()
 })
 
@@ -466,7 +467,7 @@ test('a read-only handle reads and refuses every write', () => {
 test('a read-only handle refuses an unmigrated database instead of guessing', () => {
   const path = freshDb()
   writeFileSync(path, '')
-  assert.equal(codeOf(() => openProtocol(path, { readOnly: true })), 'PROTOCOL_SCHEMA_GENERATION_UNSUPPORTED')
+  assert.equal(codeOf(() => openProtocol(path, { readOnly: true })), 'PROTOCOL_JOURNAL_MODE_UNSUPPORTED')
 })
 
 test('a corrupt database fails loudly and is never reported as an empty queue', () => {

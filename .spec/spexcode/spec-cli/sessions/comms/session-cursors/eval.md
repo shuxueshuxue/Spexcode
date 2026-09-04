@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: watch-cursor-starts-at-head
+    tags: [backend-api]
+    description: >-
+      Through the session application watch surface, create a subject with historical state events and establish a
+      watch relation. Simulate an upgrade by removing the cursor and migration marker, reopen the store, poll once,
+      then append a new subject event and poll again; reopen a second time to repeat the migration.
+    expected: >-
+      Both a newly established relation and an upgraded existing relation have their cursor at the subject's current
+      event head, so the first poll delivers zero historical events. A later event is delivered once, and repeating
+      the migration preserves the same cursor and zero backlog. A missing cursor is never treated as sequence zero.
+    test:
+      path: packages/session-application/src/production.test.ts
+      name: watch cursor migration seeds existing edges at the subject head and remains idempotent
   - name: advance-can-duplicate-never-skip
     tags: [cli]
     description: >-

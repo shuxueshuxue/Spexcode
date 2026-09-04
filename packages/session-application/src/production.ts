@@ -107,6 +107,13 @@ export interface CommittedSessionChange {
   messages: Message[]
 }
 
+export interface WatchEvent {
+  watcherSessionId: string
+  subjectSessionId: string
+  event: SessionEvent
+  sources: readonly string[]
+}
+
 export interface ConversationMessageInput {
   text: string
   from: string | null
@@ -135,6 +142,7 @@ export interface ProductionSessionApplication extends SessionApplication {
   dequeuePendingMessage(sessionId: string, expectedMessageId: string): Message | null
   readState(sessionId: string): SessionState | null
   readEvents(sessionId: string, afterSequence?: number): readonly SessionEvent[]
+  readWatchEvents(watcherSessionIds: readonly string[], limit?: number): readonly WatchEvent[]
   readFollowCursor(watcherSessionId: string, subjectSessionId: string): number | null
   advanceFollowCursor(watcherSessionId: string, subjectSessionId: string, eventSequence: number): void
   replayState(sessionId: string): SessionState | null
@@ -226,10 +234,10 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
   if (existing) return existing
 
   const protocol = openProtocolOnce(options.databasePath, options.now)
-  applyComponentMigrations(protocol, 'session-application', SESSION_APPLICATION_MIGRATIONS)
   const topology = openTopology(protocol)
   const events = openSessionEvents(protocol)
   const runtimeBindings = openRuntimeBindings(protocol)
+  applyComponentMigrations(protocol, 'session-application', SESSION_APPLICATION_MIGRATIONS)
   const now = options.now ?? (() => Date.now())
   const initialized = new Set<string>()
 
@@ -243,22 +251,6 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
 
   const notifyCommitted = (result: Pick<CommittedSessionChange, 'recipients'>): void => {
     options.onCommitted?.(result)
-  }
-
-  // Parent supervision is intentionally quiet for routine active/working transitions. A manual watch
-  // opts into the complete feed; when both sources exist, the union keeps that manual choice without
-  // enqueueing the same watcher twice. Creation still publishes its initial snapshot through the normal
-  // relation recipients; this filter governs later lifecycle transitions only. A queued creation snapshot is
-  // corrected once by the first ready active publication, otherwise parent-only supervision would retain the
-  // stale queued face forever.
-  const lifecycleRecipients = (subjectSessionId: string, previousStatus: string | null, status: string, tx: ProtocolTransaction): string[] => {
-    const recipients = new Set<string>()
-    for (const edge of topology.parents(subjectSessionId, undefined, tx)) {
-      const parentOnly = edge.relationType === PARENT_WATCH_RELATION
-      const manual = edge.relationType === MANUAL_WATCH_RELATION || edge.relationType === WATCH_RELATION
-      if (manual || (parentOnly && (status !== 'active' || previousStatus === 'queued'))) recipients.add(edge.fromSessionId)
-    }
-    return [...recipients].sort()
   }
 
   const app: ProductionSessionApplication = {
@@ -360,8 +352,8 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           payload: encodeEventJson(change),
           occurredAtMs: updatedAtMs,
         })
-        const recipients = topology.recipients(input.sessionId, tx)
-        const messages = recipients.map(recipient => tx.enqueue(recipient, messageForEvent(change, id)))
+        const recipients: string[] = []
+        const messages: Message[] = []
         let runtime: RuntimeBinding | null = null
         if (input.runtime) {
           runtime = runtimeBindings.bind(tx, input.sessionId, input.runtime)
@@ -443,7 +435,7 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
           occurredAtMs: updatedAtMs,
         })
         const recipients = input.recipientSessionIds === undefined
-          ? lifecycleRecipients(sessionId, current.status, status, tx)
+          ? []
           : [...new Set(input.recipientSessionIds.map(recipient => {
             requireId(recipient, 'recipientSessionId')
             return recipient
@@ -503,7 +495,21 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       requireId(subjectSessionId, 'subjectSessionId')
       initialize(watcherSessionId)
       initialize(subjectSessionId)
-      return protocol.withTransaction(tx => topology.subscribe(tx, watcherSessionId, subjectSessionId, channel))
+      return protocol.withTransaction(tx => {
+        const edge = topology.subscribe(tx, watcherSessionId, subjectSessionId, channel)
+        tx.exec(
+          `INSERT INTO session_follow_cursors (watcher_session_id, subject_session_id, event_seq)
+           SELECT ?, ?, COALESCE(MAX(event_seq), 0)
+             FROM session_events
+            WHERE subject_session_id=?
+           ON CONFLICT(watcher_session_id, subject_session_id) DO UPDATE
+             SET event_seq=MAX(session_follow_cursors.event_seq, excluded.event_seq)`,
+          watcherSessionId,
+          subjectSessionId,
+          subjectSessionId,
+        )
+        return edge
+      })
     },
 
     detachWatcher(watcherSessionId, subjectSessionId, channel = WATCH_RELATION) {
@@ -568,6 +574,49 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
     readEvents(sessionId, afterSequence) {
       requireId(sessionId, 'sessionId')
       return events.read(sessionId, afterSequence === undefined ? undefined : { afterSequence })
+    },
+
+    readWatchEvents(watcherSessionIds, limit = 1000) {
+      const ids = [...new Set(watcherSessionIds)]
+      ids.forEach(id => requireId(id, 'watcherSessionId'))
+      if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError('watch event limit must be a positive safe integer')
+      if (ids.length === 0) return []
+      const placeholders = ids.map(() => '?').join(',')
+      return protocol.withTransaction(tx => {
+        const rows = tx.query(
+          `SELECT edge.from_session_id AS watcher_session_id, edge.to_session_id AS subject_session_id,
+                  e.event_seq, e.event_id, e.event_type, e.schema_version, e.ignorable, e.payload, e.occurred_at_ms,
+                  GROUP_CONCAT(edge.relation_type) AS sources
+             FROM topology_edges AS edge
+             JOIN session_events AS e ON e.subject_session_id=edge.to_session_id
+             LEFT JOIN session_follow_cursors AS cursor
+               ON cursor.watcher_session_id=edge.from_session_id AND cursor.subject_session_id=edge.to_session_id
+            WHERE edge.from_session_id IN (${placeholders})
+              AND edge.removed_at_ms IS NULL
+              AND edge.relation_type IN (?, ?, ?, ?)
+              AND e.event_type=?
+              AND e.event_seq>COALESCE(cursor.event_seq, 0)
+            GROUP BY edge.from_session_id, edge.to_session_id, e.event_seq
+            ORDER BY e.event_seq, edge.from_session_id
+            LIMIT ?`,
+          ...ids, PARENT_RELATION, WATCH_RELATION, PARENT_WATCH_RELATION, MANUAL_WATCH_RELATION, STATE_EVENT, limit,
+        ) as Array<Record<string, unknown>>
+        return rows.map(row => ({
+          watcherSessionId: String(row.watcher_session_id),
+          subjectSessionId: String(row.subject_session_id),
+          event: Object.freeze({
+            eventId: String(row.event_id),
+            eventSeq: Number(row.event_seq),
+            type: String(row.event_type),
+            schemaVersion: Number(row.schema_version),
+            subjectSessionId: String(row.subject_session_id),
+            payload: new Uint8Array(row.payload as Uint8Array),
+            occurredAtMs: Number(row.occurred_at_ms),
+            ignorable: Number(row.ignorable) !== 0,
+          }),
+          sources: String(row.sources ?? '').split(',').filter(Boolean),
+        }))
+      })
     },
 
     readFollowCursor(watcherSessionId, subjectSessionId) {

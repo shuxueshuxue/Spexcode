@@ -32,9 +32,11 @@ the harness re-invoking an agent when a background command exits — an unstated
 harnesses have.
 
 But a governed supervisor already has a durable address: its ordinary [[dispatch]] queue. Establish that
-relationship once, then a target's authored state transition can enter that queue through the same send path
-as every other agent message. Each committed authored transition is its own queue item and post-commit
-transport wake, so consecutive changes arrive one-by-one without a human message or dashboard poll to flush
+relationship once, then the backend owning the supervisor's control channel polls the global event store and enters
+each authored state transition in that queue through the same send path as every other agent message. The subject's
+backend only appends the event; it does not attempt delivery on a channel it does not own. Each committed authored
+transition is its own cursor-addressed queue item and post-commit transport wake, so consecutive changes arrive
+one-by-one without a human message or dashboard poll to flush
 them. A caller with no governed address cannot pretend to receive such a delivery; it
 waits on the target's log in its own background command instead.
 
@@ -48,8 +50,11 @@ path projects those rows to unique watcher ids, appends one normal `sent` event 
 enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
 exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
 Installing a source or reparenting a child directly enqueues the child's current authored state — a new supervisor
-needs that context even when it is routine `active`/working. Creation uses the same canonical queue handoff; it does
-not own a deferred snapshot token or a second launch-delivery protocol. Later state writes take the transition path instead:
+needs that context even when it is routine `active`/working. Establishing the relation also initializes its durable
+follow cursor to the subject's current event head, so the relation begins "from now" and does not replay history;
+the installation migration performs the same head seeding for watch edges that already exist. A missing cursor is
+therefore never interpreted as "nothing has ever been delivered" or as a request to start at sequence zero. Creation
+uses the same canonical queue handoff; it does not own a deferred snapshot token or a second launch-delivery protocol. Later state writes take the transition path instead:
 a parent-only watch suppresses routine working, while a `manual` source explicitly asks for the complete feed and
 includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
 manual's complete-feed policy winning for later state changes. Thus a one-shot `ls` remains a current-state read,

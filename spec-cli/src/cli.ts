@@ -358,7 +358,8 @@ async function followKit(selectors: string[], verb: string): Promise<{
 }> {
   const { followSessions } = await import('./session-follow.js')
   const { localCachedSessions } = await import('./client.js')
-  const { ownSessionId, selectSessions, toSession } = await import('./sessions.js')
+  const { ownSessionId, toSession } = await import('./sessions.js')
+  const { selectSessions } = await import('./session-selectors.js')
   const { fromRaw } = await import('./session-record.js')
   const { listSessionIds, readPublicRecordEntry } = await import('@spexcode/spec-core')
   const { configuredSessionApplication } = await import('./session-application.js')
@@ -409,7 +410,7 @@ async function followKit(selectors: string[], verb: string): Promise<{
 async function localWatchTargetsOrExit(selectors: string[], verb: string): Promise<string[]> {
   if (!selectors.length) { console.error(`usage: ${verb} <SEL...>`); process.exit(2) }
   const { localCachedSessions } = await import('./client.js')
-  const { selectSessions } = await import('./sessions.js')
+  const { selectSessions } = await import('./session-selectors.js')
   const targets = selectSessions(localCachedSessions(true), selectors).map((session) => session.id)
   if (!targets.length) { console.error(`${verb}: no such local session: ${selectors.join(' ')}`); process.exit(2) }
   return targets
@@ -957,7 +958,8 @@ if (cmd === 'serve') {
     const peerAnchor = parseSessionPeerAnchor('new', newPositionals)
     rejectUnknownBackendFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'ssh'])
     if (peerAnchor && newPositionals.length > 2) sessionPeerAnchorUsage('new', '--ssh accepts one full-id anchor and one inline prompt at most')
-    const { createSession, ownSessionId, withPeerSenderHint } = await import('./sessions.js')
+    const { createSession, ownSessionId } = await import('./sessions.js')
+    const { withPeerSenderHint } = await import('./session-prompt.js')
     const promptFile = flag('prompt-file')
     const explicitPrompt = flag('prompt')
     if (peerAnchor && explicitPrompt !== undefined && newPositionals.length !== 1) sessionPeerAnchorUsage('new', 'give the prompt either after the full-id anchor or via --prompt, not both')
@@ -1003,7 +1005,9 @@ if (cmd === 'serve') {
     // pretty list of living sessions + states. `spex session ls [SEL...] [--children[=PARENT-SEL]] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
-    const { ownSessionId, resolveSession, selectDescendants, selectSessions, formatTable } = await import('./sessions.js')
+    const { ownSessionId } = await import('./sessions.js')
+    const { resolveSession, selectDescendants, selectSessions } = await import('./session-selectors.js')
+    const { formatTable } = await import('./session-table.js')
     const { clientListSessions, clientListSessionsThroughPeer } = await import('./client.js')
     // The backend's default projection excludes closed records. --all and an explicit selector request the
     // retained record projection so an operator can inspect or resume one deliberately.
@@ -1019,7 +1023,7 @@ if (cmd === 'serve') {
       ? await clientListSessionsThroughPeer(peerAnchor.sshAddress, peerAnchor.sessionId)
       : await clientListSessions(has('all') || selectors.length > 0 || topologyRead)
     let scoped = visible
-    let scope: import('./sessions.js').SessionTableScope = { kind: 'sessions' }
+    let scope: import('./session-table.js').SessionTableScope = { kind: 'sessions' }
     if (children !== undefined) {
       let parent: string
       if (children === null) {
@@ -1357,10 +1361,10 @@ if (cmd === 'serve') {
       if (sendArgs.sshAddress && sender) {
         const { peerSenderRef, readPeerMachineId } = await import('./machine-peer.js')
         const machineId = readPeerMachineId()
-        text = s.withPeerSenderHint(text, sender, sendArgs.sshAddress, machineId)
+        text = (await import('./session-prompt.js')).withPeerSenderHint(text, sender, sendArgs.sshAddress, machineId)
         from = peerSenderRef(machineId, sender.id)
       } else if (!sendArgs.sshAddress) {
-        text = s.withSenderHint(text, sender)
+        text = (await import('./session-prompt.js')).withSenderHint(text, sender)
       }
       let r
       try {
@@ -1669,9 +1673,8 @@ if (cmd === 'serve') {
     // ready to declare done, else print the reason and exit 1. Takes the PROPOSAL being judged — `merge`
     // additionally requires commits ahead of main, `nothing` only a clean tree (see mergeReadiness). Uses
     // git() so the hook's exported GIT_DIR/GIT_INDEX_FILE don't misdirect repo discovery (see git.ts).
-    const { s } = await stateKit()
     const kind = positionals(4)[0] === 'nothing' ? 'nothing' : 'merge'
-    const r = s.mergeReadiness(kind)
+    const r = (await import('./session-review.js')).mergeReadiness(kind)
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)

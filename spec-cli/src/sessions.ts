@@ -2,13 +2,13 @@ import { execFileSync, spawn } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync, type Dirent } from 'node:fs'
-import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
+import { join, dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { rm as rmAsync, readdir as readdirAsync } from 'node:fs/promises'
 import { seedWorktreeHostState } from './worktree-sources.js'
-import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, parseStatPath, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
-import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
-import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { git, gitTry, withGitAbortSignal, isGitObjectId } from '@spexcode/spec-core'
+import { loadSpecsLite } from '@spexcode/spec-core'
+import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
@@ -17,19 +17,24 @@ import { acquireFreshSessionApplicationForCreate, configuredSessionApplication, 
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, type DiffComment, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
-import { stripRefSigil } from './mentions.js'
+import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
 import { shQuote } from './sh.js'
+import {
+  composeSessionPrompt, launchScript, launchShellCommand, nodeFromPrompt, slugify, titleFromPrompt,
+} from './session-prompt.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, collectResourceReport, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { cliEntrypointArgs } from './tsx-bin.js'
-import { lastHumanSendVia } from './session-timeline.js'
-import { TMUX_PROBE_TIMEOUT_MS, TARGET_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, sessionHost, probeTimedOut } from './session-host.js'
+import { TMUX_PROBE_TIMEOUT_MS, TARGET_TMUX_CLOSE_SETTLE_MS, sessionHost } from './session-host.js'
+import {
+  agentAlive, clearLaunched, forgetAgentPid, liveness, liveSnapshot, markLaunched, paneActivity,
+  readAgentPid,
+  type Liveness, type LiveSnap,
+} from './session-liveness.js'
 
 const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
-const COLS = 120, ROWS = 32
 const DEFAULT_MAX_ACTIVE = 8
 
 const worktreeTrashDir = (root: string): string => join(root, '.worktrees', '.trash')
@@ -99,35 +104,13 @@ function maxActive(): number {
 // propagated when set, because the session inherits the tmux SERVER's env (not the backend's), so without this
 // an overridden home would silently leak the session's hook-state + codex-trust to the default ~/.spexcode /
 // ~/.codex. Deterministic: the session's store = the backend's store, never the ambient env's.
-const rvEnv = (id: string, harness = HARNESS, nativeStartToken?: string | null) => {
-  // SPEXCODE_SESSION_ID is the governed record id, and it is the SESSION'S OWN — so the launch STRIPS every
-  // session-identity variable it may have inherited (the pane inherits the tmux SERVER's env, which may carry
-  // a foreign session's ids from whoever started it) before setting this one. Identity is established HERE,
-  // once, at the boundary; nothing downstream re-verifies it, because after this a session-identity variable
-  // exists in a process only if that process belongs to that session — either set right here, or stamped by
-  // the harness itself for its own acting conversation ([[harness-adapter]]). The same strip runs on the one
-  // other process we own that is NOT a session's own — codex's shared app-server, whose leaked inherited id
-  // was github#76.
-  const scrub = sessionIdentityEnvVars().map((v) => `-u ${v}`)
-  const homeVars = ['SPEXCODE_HOME', 'CODEX_HOME'].flatMap((v) => {
-    const value = process.env[v]
-    return value ? [`${v}=${value}`] : []
-  })
-  return [...scrub,
-    `SPEXCODE_SESSION_ID=${id}`,
-    `SPEXCODE_SESSION_IDENTITY_VARS=${shQuote(sessionIdentityEnvVars().join(','))}`,
-    `SPEXCODE_PROJECT_ROOT=${shQuote(mainRoot())}`,
-    ...(nativeStartToken ? [`SPEXCODE_NATIVE_START_TOKEN=${shQuote(nativeStartToken)}`] : []),
-    ...harness.launchEnv(id), ...homeVars].join(' ')
-}
 
 // Re-exported for existing importers.
 export type { DispatchResult }
 
 type Lifecycle = SessionLifecycle
-type Proposal = SessionProposal
+export type Proposal = SessionProposal
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown' | 'corrupt' | 'retired'
-export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
 // Awaiting is the durable lifecycle row; its proposal selects the user-facing display status. Keep this
@@ -219,35 +202,7 @@ function pkgRoot(): string {
 }
 
 export type WatchSource = 'manual' | 'parent'
-type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[] }
 export type SessionWatch = { target: string; createdAt: string }
-function canonicalWatchEntries(target: string): WatchEntry[] {
-  const application = configuredSessionApplication()
-  if (!application.readState(target)) return []
-  const seen = new Map<string, WatchEntry>()
-  for (const edge of application.topology.parents(target)) {
-    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
-    const source: WatchSource = edge.relationType === 'parent' || edge.relationType === 'watch:parent' ? 'parent' : 'manual'
-    const current = seen.get(edge.fromSessionId)
-    if (current) {
-      if (!current.sources.includes(source)) current.sources.push(source)
-      continue
-    }
-    seen.set(edge.fromSessionId, {
-      watcher: edge.fromSessionId,
-      createdAt: new Date(edge.createdAtMs).toISOString(),
-      sources: [source],
-    })
-  }
-  return [...seen.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.watcher.localeCompare(b.watcher))
-}
-
-function readWatchEntries(target: string): WatchEntry[] {
-  const canonical = canonicalWatchEntries(target)
-  if (canonical) return canonical
-  throw new ResourceConflict('session application returned no watcher projection')
-}
-
 function managedWatchRecord(id: string): SessRec {
   const rec = readRecord(id)
   if (!rec?.governed) throw new ResourceConflict(`session ${id} is not a governed session and cannot participate in a durable watch`)
@@ -261,26 +216,6 @@ function watchMessage(target: SessRec): string {
   const note = target.note ? ` — ${target.note}` : ''
   return `[spex watch] ${target.session} is ${status}${note}`
 }
-
-function shouldDeliverWatchTransition(target: SessRec, sources: readonly WatchSource[]): boolean {
-  // @@@watch-delivery-policy - Relationship setup sends current state; manual opts into working changes.
-  return target.status !== 'active' || sources.includes('manual')
-}
-
-function scheduleWatchNotifications(target: SessRec): void {
-  const watchers = readWatchEntries(target.session)
-    .filter((entry) => shouldDeliverWatchTransition(target, entry.sources))
-    .map((entry) => entry.watcher)
-  if (!watchers.length) return
-  queueMicrotask(() => {
-    for (const watcher of watchers) {
-      void sendText(watcher, watchMessage(target), target.session, { allowStranded: true }).then((result) => {
-        if (!result.ok) console.error(`spex session watch: could not deliver ${target.session} state to ${watcher}: ${result.error}`)
-      })
-    }
-  })
-}
-setRecordTransitionNotifier(scheduleWatchNotifications)
 
 export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
@@ -301,6 +236,8 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
       senderSessionId: target,
       idempotencyKey: digest(`watch-initial-snapshot\0${watcher}\0${target}\0${source}\0${message}`),
     })
+    const history = application.readEvents(target)
+    application.advanceFollowCursor(watcher, target, history.at(-1)?.eventSeq ?? 0)
     watched.push(target)
   }
   return { watched }
@@ -404,6 +341,7 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
             senderSessionId: id,
             idempotencyKey: digest(`reparent-snapshot\0${change.event.eventId}`),
           })
+          application.advanceFollowCursor(parent, id, change.event.eventSeq)
           notify.push(moved)
         }
       }
@@ -413,121 +351,6 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
   return { children, parent, notified }
 }
 
-// Share one liveness snapshot rather than spawning tmux for every displayed session.
-export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
-
-// tmux rewrites CONTROL characters in a format string before printing them — 3.6a turns both a tab and a raw
-// 0x1f into `_`, while 3.4 turns a raw 0x1f into the printable escape `\037`. So the field separator is ASKED
-// FOR as that printable text, which every supported version passes through untouched, and the format is built
-// from the same constant the parser splits on: the two can no longer disagree about what tmux actually emits.
-const TMUX_PANE_SEPARATOR = '\\037'
-export const TMUX_PANE_FORMAT = `#{session_name}${TMUX_PANE_SEPARATOR}#{pane_pid}${TMUX_PANE_SEPARATOR}#{pane_title}`
-
-// First pane per session wins; split only twice so titles may contain the field separator.
-export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
-  const m = new Map<string, { panePid?: number; title?: string }>()
-  for (const line of out.split('\n')) {
-    if (!line) continue
-    // Accept the former tab shape for callers replaying old snapshots; tmux itself emits TMUX_PANE_SEPARATOR.
-    const separator = line.includes(TMUX_PANE_SEPARATOR) ? TMUX_PANE_SEPARATOR : '\t'
-    const t1 = line.indexOf(separator)
-    const name = (t1 < 0 ? line : line.slice(0, t1)).trim()
-    if (!name || m.has(name)) continue   // first pane per session wins
-    if (t1 < 0) { m.set(name, {}); continue }
-    const rest = line.slice(t1 + separator.length)
-    const t2 = rest.indexOf(separator)
-    const pid = Number((t2 < 0 ? rest : rest.slice(0, t2)).trim())
-    const title = t2 < 0 ? '' : rest.slice(t2 + separator.length)
-    m.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, title: title || undefined })
-  }
-  return m
-}
-
-// Latch ESRCH per pid-file mtime so a recycled OS PID cannot revive an old session.
-type PidEntry = { mtimeMs: number; pid: number; deadLatched: boolean }
-const pidRegistry = new Map<string, PidEntry>()
-function readAgentPid(p: string): number { try { return Number(readFileSync(p, 'utf8').trim()) } catch { return NaN } }
-function agentAlive(id: string): boolean | undefined {
-  if (sessionHost().kind === 'process-host') {
-    const identity = sessionHost().witness(id)
-    return !identity || typeof identity === 'string' ? false : processStartToken(identity.pid) === identity.startToken
-  }
-  const pidPath = sessionArtifactPath(id, 'agent.pid')
-  let mtimeMs: number
-  try { mtimeMs = statSync(pidPath).mtimeMs } catch { pidRegistry.delete(id); return undefined }   // no pid file → pre-registration
-  let e = pidRegistry.get(id)
-  if (!e || e.mtimeMs !== mtimeMs) { e = { mtimeMs, pid: readAgentPid(pidPath), deadLatched: false }; pidRegistry.set(id, e) }
-  if (e.deadLatched) return false                                     // latched dead stays dead until a new write (fresh mtime)
-  if (!Number.isFinite(e.pid) || e.pid <= 0) return false
-  try { process.kill(e.pid, 0); return true }
-  catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EPERM') return true  // alive but not ours to signal
-    e.deadLatched = true                                             // ESRCH → proven dead, latch it permanently
-    return false
-  }
-}
-
-// Only pre-agent.pid Codex sessions need the legacy whole-process scan.
-export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean }[]): boolean {
-  return windowed.some((w) => (w.harness || 'claude') === 'codex' && !w.hasPid)
-}
-
-async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
-  const windows = new Map<string, PaneProbe>()
-  const titles = new Map<string, string>()
-  if (sessionHost().kind === 'process-host') {
-    // process-host has no window/pane census. Per-session process identity is joined by liveness().
-    return { probeFailed: false, windows, titles, sockets: new Set(), unproven: new Set() }
-  }
-  let out: string
-  try {
-    // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
-    // A target-scoped close probe avoids unrelated panes turning a safe close into a global timeout.
-    const args = targetId
-      ? ['list-panes', '-t', targetId, '-F', TMUX_PANE_FORMAT]
-      : ['list-panes', '-a', '-F', TMUX_PANE_FORMAT]
-    out = await sessionHost().command(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
-  } catch (e) {
-    // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
-    // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
-    return { probeFailed: probeTimedOut(e), windows, titles, sockets: new Set(), unproven: new Set() }
-  }
-  // the hot-tier pid verdict per windowed session (latch-consistent with hotSignature) + the legacy-scan gate.
-  const legacy: { harness: string; hasPid: boolean }[] = []
-  for (const [id, p] of parseLivePanes(out)) {
-    windows.set(id, { panePid: p.panePid, pidAlive: agentAlive(id) })
-    if (p.title) titles.set(id, p.title)
-    if (windows.get(id)!.pidAlive === undefined) {
-      // A corrupt row has no trustworthy harness to scan and renders liveness=unknown on its own. Letting this
-      // optional legacy enrichment throw would turn one diagnosable row into a 409 for the entire board.
-      try { const rec = readRecord(id); if (rec) legacy.push({ harness: rec.harness, hasPid: false }) }
-      catch (e) { if (!(e instanceof SessionRecordUnusable)) throw e }
-    }
-  }
-  // the whole-box ps table is gathered ONCE, and ONLY for the legacy pid-less-codex fallback (paneTreeRunsCodex).
-  if (needsCodexProcScan(legacy)) {
-    const procs = await procSnapshot().catch(() => undefined)   // codex-only, auxiliary; its failure isn't a liveness failure
-    if (procs) for (const probe of windows.values()) probe.procs = procs
-  }
-  // LISTENER probe for every windowed session, once, in parallel (a live listener, not a lingering socket
-  // file). A codex session has no rvSock → instant ENOENT → proven dead for the socket axis (codex ignores it).
-  // The tri-state matters: 'unproven' (timeout/EAGAIN — a wedged or thrashed but possibly-alive listener) lands
-  // in `unproven`, never silently not-live, so liveness() renders `unknown` not a false `offline` (issue #40).
-  const ids = [...windows.keys()]
-  // A burst of simultaneous Unix-socket connects can fill a Claude listener's accept backlog on macOS and
-  // turn every healthy socket into `unproven`. Keep the probe bounded while preserving the tri-state result.
-  const listening: Awaited<ReturnType<typeof rendezvousListening>>[] = []
-  for (let start = 0; start < ids.length; start += 2) {
-    listening.push(...await Promise.all(ids.slice(start, start + 2).map((id) => rendezvousListening(id))))
-  }
-  const sockets = new Set<string>()
-  const unproven = new Set<string>()
-  ids.forEach((id, i) => {
-    if (listening[i] === 'live') sockets.add(id)
-    else if (listening[i] === 'unproven') unproven.add(id)
-  })
-  return { probeFailed: false, windows, titles, sockets, unproven }
-}
 
 async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> {
   if (sessionHost().kind === 'process-host') {
@@ -548,108 +371,7 @@ async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> 
     : `refusing to stop ${id}: target tmux session remains ${phase}`)
 }
 
-// Avoid process spawns on the hot path; old sessions without agent.pid remain warm-tier only.
-let hotIds: string[] = []
-let hotIdsAt = 0
-export async function hotSignature(): Promise<string> {
-  const now = Date.now()
-  if (now - hotIdsAt >= 1000) { hotIds = listSessionIds(); hotIdsAt = now }
-  const pairs: string[] = []
-  const present: string[] = []
-  for (const id of hotIds) {
-    const alive = agentAlive(id)
-    if (alive === undefined) continue   // no agent.pid → the warm tier's concern, not the hot death detector
-    present.push(id)
-    pairs.push(`${id}:${alive ? 1 : 0}`)
-  }
-  // prune latch entries for ids no longer registered (closed sessions), keeping the registry bounded.
-  const live = new Set(hotIds)
-  for (const k of [...pidRegistry.keys()]) if (!live.has(k)) pidRegistry.delete(k)
-  return pairs.sort().join(',') + '|' + present.sort().join(',')
-}
 
-// Include listener and title changes so watchers refresh without another store read.
-export async function warmSignature(): Promise<string> {
-  const snap = await liveSnapshot()
-  return (snap.probeFailed ? 'PROBEFAIL|' : '') + [...snap.windows.keys()].sort().join(',') + '#' +
-    [...snap.sockets].sort().join(',') + '~' + [...snap.unproven].sort().join(',') + '|' +
-    [...snap.titles].sort().map(([k, v]) => `${k}=${v}`).join(',')
-}
-
-// @@@ paneActivity - the harness-aware live self-summary: the SINGLE place a raw pane title becomes (or does
-// NOT become) a session's headline activity. The board headline derives from the pane title ONLY for a
-// harness whose pane title is its own task self-summary (`paneTitleIsSelfSummary`, an adapter capability —
-// [[harness-adapter]]). claude qualifies (it writes its task summary into the OSC title), so we parse it with
-// selfSummary (glyph-gated). codex does NOT — its pane title is a spinner glyph + the cwd FOLDER name, so
-// returning it would headline the worktree folder, not the task; we refuse it (→ null) and sessionHeadline
-// falls through to promptPreview (the launch prompt). The ONLY harness branch is the capability read here —
-// no `if (codex)`, no glyph special-case; selfSummary stays the pure claude-title parser.
-export function paneActivity(harness: Harness, paneTitle: string | null | undefined): string | null {
-  if (paneTitle == null || !harness.paneTitleIsSelfSummary) return null
-  return selfSummary(paneTitle)
-}
-
-// @@@ selfSummary - the agent's OWN live one-line description, parsed from its tmux pane title — the SINGLE
-// place the "is this the agent speaking?" rule lives, exported so it is unit-auditable. Claude Code sets that
-// title via an OSC escape and ALWAYS leads it with a status glyph: ✳ (and its ✶✻✽✢ blink frames) when idle, a
-// braille spinner frame (U+2800–U+28FF) while working. That leading glyph is the only reliable proof the
-// title is the agent and not tmux's default — which, from pane birth until the first turn, is the HOST NAME
-// (e.g. `ser581555022561`) or a bare `Claude Code` splash. So the glyph is REQUIRED: no leading glyph → null,
-// and the caller keeps showing the launch-prompt placeholder instead of flickering through the host name and
-// splash. The leading glyph run (with the spaces/`·` between and after) is stripped — the dashboard draws its
-// own status dot, a frozen spinner frame is just noise — leaving only the summary text (null if it is empty).
-// ONE regex is the single source of the glyph rule: it gates (requires ≥1 glyph) and strips in one match.
-// The glyph gate alone is not enough: Claude Code emits a glyph-led SPLASH of its own app name (`✳ Claude
-// Code`) between pane birth and its first real task summary — it CLEARS the glyph gate yet is the app naming
-// itself, not the task. GENERIC_SUMMARY rejects that stripped splash too, so the row keeps its launch-prompt
-// placeholder instead of flashing "Claude Code" for a tick (the glyph-LESS `Claude Code` splash was already
-// rejected by the gate; this catches its glyph-led twin).
-const GENERIC_SUMMARY = /^claude code$/i
-export function selfSummary(paneTitle: string): string | null {
-  const m = /^[\s·]*(?:[✳✶✻✽✢⠀-⣿][\s·]*)+(.*)$/u.exec(paneTitle)
-  if (!m) return null
-  const text = m[1].trim()
-  return text && !GENERIC_SUMMARY.test(text) ? text : null
-}
-
-// @@@ launchedAt - when we last started a tmux window for an id (set in launch()). claude needs ~15-20s
-// after the window appears to recreate its rendezvous socket; in that window the socket is absent but the
-// session is booting, NOT dead. reconcile consults this to report 'starting' (a distinct transient state)
-// instead of 'offline' for BOOT_GRACE_MS after launch — so 'offline' only ever means genuinely dead. In-
-// memory in the single server process (lost on restart, which is fine: a restart has nothing in flight).
-const launchedAt = new Map<string, number>()
-export const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans launchScript's bounded fast-fail retry
-                              // window (~3 attempts) so a relaunching session reads 'starting', not 'offline'
-const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this: fast
-                              // exit before readiness is retryable, but it is not proof of one specific cause
-
-export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
-  if (!rec.session || rec.stopped || rec.archived) return 'offline'
-  // Ask the resolved ADAPTER ([[harness-adapter]]): claude/pi/opencode prove their rendezvous listener;
-  // codex proves its launch-registered pid (with the legacy descendant-tree fallback). The 'starting' grace
-  // stays here: a just-launched agent whose online signal has not appeared yet reads 'starting', only past it
-  // 'offline'.
-  const h = harnessById(rec.harness || defaultHarness.id)
-  const processAlive = sessionHost().kind === 'process-host' ? agentAlive(rec.session) === true : false
-  const hostAlive = sessionHost().kind === 'process-host' ? processAlive : snap.windows.has(rec.session)
-  const pane = sessionHost().kind === 'process-host' ? { pidAlive: processAlive } : snap.windows.get(rec.session)
-  if (h.liveness(rec, hostAlive, runtimeRoot(), pane, snap.sockets.has(rec.session)) === 'online') return 'online'
-  if (snap.probeFailed) return 'unknown'   // the probe failed — we can't tell, and MUST NOT guess offline
-  // not provably online — but if this session's LISTENER probe couldn't conclude (timeout under load / EAGAIN
-  // off a full-but-alive backlog), death is UNPROVEN: `unknown`, never a false `offline` a supervisor would
-  // act on (issue #40 — a wedged-but-alive worker must not read as an actionable corpse).
-  if (snap.unproven.has(rec.session)) return 'unknown'
-  const at = launchedAt.get(rec.session)
-  if (at && Date.now() - at < BOOT_GRACE_MS) return 'starting'
-  // A dead TRANSPORT is not a dead AGENT. The socket path is keyed by session id alone, so a foreign teardown
-  // (or a stray rm) can unlink it out from under its own live listener: the agent keeps working, unreachable,
-  // and every path-connect ENOENTs — which the adapter axis above reports as proven death. The registered
-  // agent.pid is a SECOND, independent witness, and while it still answers, death is UNPROVEN: `unknown`, not
-  // the `offline` that disarms the relaunch guard and invites a human to kill a working agent. Same rule as
-  // the probe-failure branch (issue #40), one layer down: only a corpse both witnesses agree on is actionable.
-  if (agentAlive(rec.session) === true) return 'unknown'
-  return 'offline'
-}
 
 function reconcile(rec: SessRec, snap: LiveSnap, residentLiveness?: Liveness): DisplayStatus {
   // record integrity outranks both axes: a session whose worktree is gone has no work to be in any state
@@ -666,7 +388,7 @@ function reconcile(rec: SessRec, snap: LiveSnap, residentLiveness?: Liveness): D
 // resolve a session id to its record + worktree. Now a DIRECT store read (the record carries worktree_path),
 // not a scan of every worktree reading its `.session` — O(1) and exact. null when the id has no governed-or-not
 // record. Shape kept ({path, branch, rec}) so the many callers (rename/propose/resume/merge/close/…) are unchanged.
-async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
+export async function findWorktree(id: string): Promise<{ path: string; branch: string | null; rec: SessRec } | null> {
   const rec = readRecord(id)
   if (!rec) return null
   return { path: rec.worktreePath, branch: rec.branch, rec }
@@ -1029,111 +751,12 @@ export const apiBase = async (): Promise<string> => (await apiBaseInfo()).url
 
 export const ownSessionId = envSessionId
 
-export type MsgSender = { id: string; label: string | null }
-export function withSenderHint(text: string, sender: MsgSender | null): string {
-  if (!sender) return text
-  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
-}
-export function withPeerSenderHint(text: string, sender: MsgSender | null, sshAddress: string, machineId: string): string {
-  if (!sender) return text
-  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who} on machine ${machineId}. To reply: spex session send --ssh ${sshAddress} ${sender.id} "<your reply>"`
-}
-export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REPLY TRANSPORT: This sender cannot read normal assistant output. Before ending this turn, make your FINAL tool call a Spex declaration carrying the COMPLETE reply in --note: use \`session ask\` when waiting for a human reply; use \`done\` or \`park\` when that is the truthful state. This rule applies even when asked to only print/reply or make no tool calls.\n\nFor multi-line replies, preserve real LF characters. \`functions.exec\` runs a shell command through bash, so never interpolate \`JSON.stringify(note)\` into it; use stdin, a heredoc, or base64, then pass \`--note \"$note\"\`. Never use \`String.raw\` or literal backslash+n. Do not call any tool after the declaration.`
-export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
-export const slugify = (s: string | null) =>
-  (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
-
-const MENTION = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/u
-export const nodeFromPrompt = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
-
-type CommandPreset = Pick<ConfigPreset, 'name' | 'body'>
-type CommandSpec = Pick<SpecLite, 'id' | 'path'>
-
-export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[]): string {
-  const match = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
-  if (!match) return raw
-  const preset = presets.find((p) => p.name === match[1])
-  if (!preset) return raw
-
-  const ids: string[] = []
-  const allMentions = new RegExp(MENTION.source, 'gu')
-  const free = match[2].replace(allMentions, (_, id: string) => { ids.push(id); return '' }).trim()
-  const targets = ids.length
-    ? ids.map((id) => {
-        const spec = specs.find((s) => s.id === id)
-        const path = spec?.path.replace(/^\.spec\//, '').replace(/\/spec\.md$/, '')
-        return path ? `- [[${id}]] — ${path}` : `- [[${id}]]`
-      }).join('\n')
-    : '(No target was mentioned. If the prompt names the scope, use it; otherwise ask the human to define the scope before proceeding — unless this task needs no scope, in which case proceed.)'
-  const body = preset.body.includes('{{targets}}')
-    ? preset.body.replace('{{targets}}', targets)
-    : ids.length ? `${preset.body}\n\n${targets}` : preset.body
-  return free ? `${body}\n\n${free}` : body
-}
-
-// Load only the one live preset named by the raw invocation. Both session creation and sendText call this seam, so
-// launch and an existing session's inbox resolve identical plugin data with identical target semantics.
-export async function resolveCommandPrompt(raw: string, loadedSpecs?: CommandSpec[]): Promise<string> {
-  const commandName = raw.match(/^\/(\S+)/)?.[1]
-  const preset = commandName ? loadConfig().find((p) => p.name === commandName) : undefined
-  if (!preset) return raw
-  const specs = loadedSpecs ?? (nodeFromPrompt(raw) ? await loadSpecs() : [])
-  return composeCommandPrompt(raw, [preset], specs)
-}
-
-type SessionPromptTarget = Pick<SessRec, 'session' | 'harness'>
-type SessionPromptOptions = {
-  from?: string
-  replyVia?: 'note'
-  loadedSpecs?: CommandSpec[]
-  suffix?: string
-}
-export type ComposedSessionPrompt = { text: string; replyVia?: 'note' }
-
-// @@@ composeSessionPrompt - the ONE prompt-delivery seam: raw caller text + target session become the
-// exact text handed to an adapter. Launch, ordinary input, CLI send, issue dispatch, watch greetings, and
-// merge all enter here (directly or through sendText). `replyVia` is target readability: an explicit note
-// request wins; otherwise a headless adapter defaults to note. This function alone decides and appends the
-// note/terminal inserts, so clients never own the policy or duplicate the phrase.
-export async function composeSessionPrompt(raw: string, target: SessionPromptTarget, opts: SessionPromptOptions = {}): Promise<ComposedSessionPrompt> {
-  const resolved = await resolveCommandPrompt(raw, opts.loadedSpecs)
-  const prompt = opts.suffix ? `${resolved}${opts.suffix}` : resolved
-  const h = harnessById(target.harness || defaultHarness.id)
-  const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
-  const text = replyVia === 'note' ? withNoteReplyHint(prompt)
-    : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
-  return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
-}
-const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text
-const UUID_TOKEN = /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g
-const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[\p{L}\p{N}_-]+/gu, '$1').replace(UUID_TOKEN, ' ')
-export function titleFromPrompt(prompt: string): string | null {
-  const first = stripIdentityTokens(prompt || '').split('\n').map((l) => l.trim()).find(Boolean) || ''
-  const words = first.split(/\s+/).filter(Boolean).slice(0, 7).join(' ')
-  if (!words) return null
-  return words.length > 50 ? words.slice(0, 49).trimEnd() + '…' : words
-}
-
-// @@@ launchScript - the WHOLE launch invocation (rendezvous env prefix + harness command + the human prompt)
-// is written to an ephemeral `launch.sh` in the session's GLOBAL store and
-// run via `bash <file>`, NOT typed inline. Inline send-keys TRUNCATES past ~2KB (the launch-prompt-limit trap),
-// and a long human prompt + spec pointer can exceed it; a file has no length limit
-// and the only thing send-keys types is the short `bash <file>` line. It's the SAME command the inline path
-// ran (env prefix exports the rendezvous vars to the claude child), just relocated to a file. Liveness no
-// longer cares what the pane's foreground command is: claude runs as a child of bash (and, via the
-// `reclaude` wrapper, a grandchild), so the pane command is the wrapper/shell — reconcile reads claude's
-// rendezvous socket instead (present while claude is alive, gone once it exits). The file lives OUTSIDE the
-// worktree (in the store, keyed by session_id), so it never pollutes the spec/code work.
-// the launch command for THIS session ([[launcher-select]] resume-launcher-pin): the RESOLVED base command
-// PINNED on the record at creation wins — so a (re)launch replays the EXACT launcher that made the conversation
-// (and its config-dir env), never re-resolving against a since-changed default that would send `--resume` to the
-// wrong config dir and lose the transcript. Fall back to the named-launcher resolution (an old record with a
-// launcher name but no pinned cmd; fail-loud on a since-removed launcher), then undefined (truly old record →
-// the harness adapter's ambient resolution, best-effort).
+// @@@ launcherCmd - the launch command for THIS session ([[launcher-select]] resume-launcher-pin). The RESOLVED
+// base command PINNED on the record at creation wins, so a (re)launch replays the EXACT launcher that made the
+// conversation (and its config-dir env), never re-resolving against a since-changed default that would send
+// `--resume` to the wrong config dir and lose the transcript. Fall back to the named-launcher resolution (an old
+// record with a launcher name but no pinned cmd; fail-loud on a since-removed launcher), then undefined (truly
+// old record → the harness adapter's ambient resolution, best-effort).
 export function launcherCmd(rec: SessRec): string | undefined {
   if (rec.launchCmd) return rec.launchCmd
   return rec.launcher ? resolveLauncher(rec.launcher).cmd : undefined
@@ -1170,87 +793,6 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
   return null
 }
 
-// @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
-// invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
-// 后端把这条命令输入交互式 shell，脚本路径必须作为一个 shell 参数传递。
-export function launchShellCommand(file: string): string {
-  return `bash ${shQuote(file)}`
-}
-export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
-  const file = join(storeDir(id), 'launch.sh')
-  // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
-  // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
-  // agent. The launch line is just the rendezvous env + the harness command + the session-id/spec-pointer/prompt tail.
-  // `cmd` is the session's persisted launcher command ([[launcher-select]]); when set it OVERRIDES the harness's
-  // ambient default so resume reuses the same auth. Undefined is only for old records before launch_cmd existed.
-  const invocation = `${rvEnv(id, harness, readRecord(id)?.runtimeStartToken)} ${harness.launchCmd(id, runtimeRoot(), cmd)} ${tail}`
-  // @@@ birth registration - record the AGENT's real pid BEFORE exec, the anchor of the 100ms hot death tier
-  // ([[state]]). Each attempt runs `sh -c '<pid-write>; exec env <invocation>'`: the sh writes its own `$$` to
-  // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
-  // (claude: env→(reclaude→)claude; codex: env→bash -lc <script> whose last line is `exec codex … resume`), and
-  // `$$` therefore IS the launched agent's pid. `env` carries the leading `VAR=val` assignments (an env prefix
-  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shQuote) so the
-  // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
-  // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
-  const pidPath = join(storeDir(id), 'agent.pid')
-  const receiptPath = join(storeDir(id), 'agent.identity.json')
-  const born = `sh -c ${shQuote(`rm -f ${shQuote(receiptPath)}; printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
-  // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
-  // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
-  // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
-  // session end and is NEVER retried — the loop exits. BOOT_GRACE_MS and SOCKET_READY_TIMEOUT_MS both span this
-  // retry window, so liveness stays 'starting' and waitForReady keeps holding the slot across retries. This
-  // only closes startup unready failures — it adds no fallback and never masks a genuinely dead agent (3
-  // attempts, then give up).
-  // A one-shot adapter (currently codex-headless) deliberately exits after its first turn while the shared
-  // app-server stays alive. Retrying that successful fast exit would mint a duplicate thread/prompt, so the
-  // retry loop is a runtime capability rather than a harness-id branch.
-  // @@@ retry only what retrying can fix - a fast exit says the launcher stopped before readiness, which is
-  // reason enough to try again but never a diagnosis. So after a fast exit the script reads what the harness
-  // actually SAID and matches it against the ADAPTER's own settled-failure patterns ([[harness-adapter]]
-  // fatalLaunchOutput). A match means this command cannot succeed however many times we run it: stop at one
-  // attempt and let the harness's own line be the last thing on the pane, instead of spending a certain failure
-  // three times and burying the reason. No match keeps the plain bounded retry.
-  //
-  // It reads the PANE, not the agent's streams. Capturing stderr through a pipe missed the answer entirely —
-  // measured against real reclaude, "No conversation found with session ID" arrives on STDOUT, so a
-  // stderr-only capture classified nothing and retried a certain failure three times (the unit test passed
-  // only because its stub printed to the stream the implementation happened to watch). Redirecting stdout too
-  // would be worse: a TUI that finds stdout is not a terminal stops being a TUI. The pane already holds both
-  // streams exactly as the human sees them, and the script runs inside that pane — so it just asks tmux.
-  const fatal = (harness.fatalLaunchOutput ?? []).join('|')
-  const launchBody = harness.launchOneShot ? [born, ''] : [
-    `for __spex_try in 1 2 3; do`,
-    `  __spex_t0=$SECONDS`,
-    // @@@ classify THIS attempt only - the pane is a scrollback, so it also holds every earlier attempt and
-    // every earlier launch that ever ran in this window. Matching the whole capture would let a stale
-    // settled-failure line from minutes ago condemn an unrelated fast exit and cut a launch that retrying
-    // WOULD have recovered — the exact mirror of the miss this classifier exists to fix. So each attempt
-    // stamps a line unique to (this run, this attempt) and the match starts after it. The run's pid is what
-    // makes it unique across relaunches, which reuse the session id.
-    `  __spex_mark="attempt $__spex_try start $$"`,
-    `  printf '[spex launch] %s\\n' "$__spex_mark"`,
-    `  ${born}`,
-    `  __spex_rc=$?`,
-    `  [ $(( SECONDS - __spex_t0 )) -ge ${LAUNCH_FAST_FAIL_S} ] && exit $__spex_rc`,
-    ...(fatal ? [
-      // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
-      // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
-      // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-.}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
-      `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
-      `    exit $__spex_rc`,
-      `  fi`,
-    ] : []),
-    `  printf '[spex launch] attempt %s exited in %ss (rc=%s) - fast launcher exit before readiness; retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
-    `  sleep 2`,
-    `done`,
-    `exit $__spex_rc`,
-    ``,
-  ]
-  writeFileSync(file, launchBody.join('\n'))
-  return file
-}
 async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
   // record the transport path THIS runtime hands the agent, before anything reads it (launchScript bakes it
   // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
@@ -1258,7 +800,7 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   if (harness.ownsRendezvous) stampRvSock(id)
   const file = launchScript(id, tail, harness, cmd)
   await sessionHost().launch(id, launchShellCommand(file), path)
-  launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
+  markLaunched(id)   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
 
 
@@ -1372,26 +914,9 @@ function clearReadinessResidueUnlocked(rec: SessRec, clearDiagnostic: boolean): 
       proposal: rec.proposal,
       note: next.note,
       parentSessionId: rec.parent,
-      recipientSessionIds: [],
     })
   }
   writeRecord(next)
-}
-
-export function canonicalWatchRecipients(
-  application: Pick<ProductionSessionApplication, 'topology'>,
-  sessionId: string,
-  status: string,
-): string[] {
-  const recipients = new Set<string>()
-  for (const edge of application.topology.parents(sessionId)) {
-    // The canonical topology stores the structural parent edge as the durable parent-watch source. Older
-    // migrated rows may also have an explicit watch:parent edge; both represent the same policy source.
-    if (edge.relationType !== 'parent' && !edge.relationType.startsWith('watch')) continue
-    if (status === 'active' && (edge.relationType === 'parent' || edge.relationType === 'watch:parent')) continue
-    recipients.add(edge.fromSessionId)
-  }
-  return [...recipients]
 }
 
 export function sessionHasPendingDelivery(
@@ -1447,7 +972,6 @@ function publishCanonicalLifecycle(rec: SessRec, status: Lifecycle, proposal: Pr
     proposal,
     note,
     parentSessionId: rec.parent,
-    recipientSessionIds: canonicalWatchRecipients(application, rec.session, status),
   })
 }
 
@@ -1751,18 +1275,70 @@ export function superviseQueue(intervalMs = 3000): void {
 }
 
 let supervisingDelivery = false
+function watchMessageFromEvent(event: { payload: Uint8Array }, subjectSessionId: string): { text: string; status: string; previousStatus: string | null } {
+  const decoded = decodeEventJson(event.payload)
+  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new ResourceConflict(`watch event for ${subjectSessionId} has an invalid state payload`)
+  const body = decoded as Record<string, unknown>
+  const status = typeof body.status === 'string' ? body.status : null
+  if (!status) throw new ResourceConflict(`watch event for ${subjectSessionId} has no status`)
+  const proposal = typeof body.proposal === 'string' ? body.proposal : null
+  const label = status === 'awaiting' ? displayStatusForProposal(proposal as Proposal | null) : status === 'active' ? 'working' : status
+  const note = typeof body.note === 'string' && body.note ? ` — ${body.note}` : ''
+  return { text: `[spex watch] ${subjectSessionId} is ${label}${note}`, status, previousStatus: typeof body.previousStatus === 'string' ? body.previousStatus : null }
+}
+
+async function reconcileWatchDeliveries(application: ProductionSessionApplication): Promise<void> {
+  const watchers: string[] = []
+  for (const id of listSessionIds()) {
+    try {
+      const rec = readRecord(id)
+      if (rec?.governed && !rec.archived) watchers.push(id)
+    } catch { /* a transient record read is retried on the next tick */ }
+  }
+  const pending = (application as ProductionSessionApplication & {
+    readWatchEvents(ids: readonly string[]): readonly {
+      watcherSessionId: string
+      subjectSessionId: string
+      event: { eventId: string; eventSeq: number; payload: Uint8Array }
+      sources: readonly string[]
+    }[]
+  }).readWatchEvents(watchers)
+  const drain = new Set<string>()
+  for (const item of pending) {
+    const rendered = watchMessageFromEvent(item.event, item.subjectSessionId)
+    const parentOnly = item.sources.every(source => source === 'parent' || source === 'watch:parent')
+    if (parentOnly && rendered.status === 'active' && rendered.previousStatus !== 'queued') {
+      application.advanceFollowCursor(item.watcherSessionId, item.subjectSessionId, item.event.eventSeq)
+      continue
+    }
+    application.enqueueMessage(item.watcherSessionId, {
+      kind: 'session.prompt.v1',
+      body: Buffer.from(rendered.text, 'utf8'),
+      senderSessionId: item.subjectSessionId,
+      idempotencyKey: `watch-event:${item.event.eventId}`,
+    })
+    application.advanceFollowCursor(item.watcherSessionId, item.subjectSessionId, item.event.eventSeq)
+    drain.add(item.watcherSessionId)
+  }
+  for (const id of drain) {
+    try { await drainSession(id) }
+    catch (error) { console.error(`spex: managed watch handoff failed for ${id}: ${error instanceof Error ? error.message : String(error)}`) }
+  }
+}
+
 // @@@ superviseDelivery - the RETRY half of [[delivery-queue]]. `sendText` hands over in its own process, which
 // covers the live case; this covers everything that could not be handed over then — a harness mid-restart, a
-// pane in the one state that swallows prompts, a session that was offline when the message arrived. Owned by
-// the serve that serves this project root, so a message owed to a worker is delivered when the worker can take
-// it rather than when it happens to run a tool. A tick with nothing owed is one existsSync per session, and
-// concurrent serves are harmless: the queue's lock, not the process, is what makes a handover exactly-once.
-export function superviseDelivery(intervalMs = 2000): void {
+// pane in the one state that swallows prompts, a session that was offline when the message arrived. The watch
+// half is owned by the serve that owns each watcher's control channel; ordinary queue debt is drained only for
+// this backend's own session records. A tick with nothing owed is one cheap global event query plus one
+// existsSync per local session, and concurrent serves are harmless: the queue's lock, not the process, serializes handover.
+export function superviseDelivery(intervalMs = 1000): void {
   if (supervisingDelivery) return
   supervisingDelivery = true
   const tick = async () => {
     try {
       const application = configuredSessionApplication()
+      await reconcileWatchDeliveries(application)
       for (const id of listSessionIds()) {
         if (!sessionHasPendingDelivery(id, application)) continue
         try { await drainSession(id) } catch (error) {
@@ -1971,7 +1547,7 @@ function normalizeCreateKey(raw: string | undefined): string {
   }
   return key
 }
-const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
+export const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
 export function sessionIdForCreateKey(key: string): string {
   const hex = digest(`spexcode-session-create\0${key}`)
   const uuid = `${hex.slice(0, 12)}4${hex.slice(13, 16)}${((parseInt(hex[16], 16) & 3) | 8).toString(16)}${hex.slice(17)}`
@@ -2947,7 +2523,6 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
       status,
       proposal,
       note,
-      recipientSessionIds: canonicalWatchRecipients(application, id, status),
     })
     return true
   })
@@ -2977,7 +2552,6 @@ export function markTurnFailure(sessionId: string | undefined, note: string): bo
     const application = configuredSessionApplication()
     application.transitionSession(sessionId, {
       status: 'error', proposal: null, note,
-      recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'error'),
     })
     return true
   })
@@ -3010,7 +2584,6 @@ function projectInterruptedUnlocked(sessionId: string): boolean {
   const application = configuredSessionApplication()
   application.transitionSession(sessionId, {
     status: 'asking', proposal: null, note: INTERRUPTED_NOTE,
-    recipientSessionIds: canonicalWatchRecipients(application, sessionId, 'asking'),
   })
   return true
 }
@@ -3244,422 +2817,6 @@ export function markIdle(sessionId?: string): boolean {
     return true
   })
 }
-export function mergeReadiness(proposal: 'merge' | 'nothing' = 'merge'): { ready: boolean; reason?: string } {
-  let dirty: string[] = []
-  try {
-    dirty = git(['status', '--porcelain', '--untracked-files=all']).split('\n').filter(Boolean).map(porcelainPath)
-  } catch { /* git status failed — fall through to the ahead check, still a real guard */ }
-  if (dirty.length) {
-    const shown = dirty.slice(0, 8).join(', ') + (dirty.length > 8 ? ', …' : '')
-    return { ready: false, reason: `uncommitted changes on your node branch (${shown}) — commit your spec+code first` }
-  }
-  // a `nothing` proposal makes no claim about having something to land, so the clean tree is the whole gate.
-  if (proposal === 'nothing') return { ready: true }
-  let ahead = 0
-  const base = mainBranch()
-  try { ahead = Number(git(['rev-list', '--count', `${base}..HEAD`]).trim()) || 0 } catch { ahead = 0 }
-  if (ahead === 0) return { ready: false, reason: `your node branch is 0 commits ahead of ${base} — nothing is committed to merge (declaring \`done --propose nothing\` needs no commits ahead; use it to pause for the human)` }
-  return { ready: true }
-}
-
-// the path a `git status --porcelain` line refers to: strip the `XY ` status, and for a rename keep the
-// NEW path (after ` -> `). Shared by the dirty-file counters (mergeReadiness above, reviewPayload below).
-function porcelainPath(line: string): string {
-  let p = line.slice(3)
-  const arrow = p.indexOf(' -> '); if (arrow >= 0) p = p.slice(arrow + 4)
-  return p
-}
-
-export type ReviewEvalFacts = { freshPass: number; freshFail: number; needReview: number; blind: number }
-export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' | 'dormant' }
-// the session-side gates only. The measured-loss readout is composed ABOVE this layer ([[manager-cockpit]]'s
-// cockpit.ts): the eval package imports this module, so reading it from here could only ever be a deferred
-// import working around a cycle. The eval side never consumed this field — it reads lint/conflict/ahead/dirty.
-export type ReviewGates = {
-  conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
-  lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
-}
-export type ReviewPayload = {
-  id: string; branch: string | null
-  label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own branch||id chain
-  ahead: number              // commits the session branch is ahead of main
-  dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
-  diff: ReviewDiffFile[]     // the worker's real changes, anchored at the merge-base
-  gates: ReviewGates
-  proposal: { kind: Proposal | null; note: string | null }   // the session's standing proposal + its note
-}
-
-export type SessionDiffFile = ReviewDiffFile & { patch: string; diffIdentity: string }
-export type DiffScope = 'branch' | 'working'
-// What is true of the branch's own commits, decided HERE so the reader never infers it from an empty list:
-// 'no-commits' the branch head still stands at its fork point, 'merged' its head is contained in the base,
-// 'open' it carries commits the base does not.
-export type BranchState = 'no-commits' | 'merged' | 'open'
-export type SessionDiffPayload = {
-  id: string; scope: 'branch'; branch: string; baseRef: string; base: string; head: string; mergeBase: string
-  branchState: BranchState; commitUrl: string | null
-  files: SessionDiffFile[]
-  // The uncommitted half of "what has this session changed". `readable` is false when the session's own
-  // worktree directory is gone: an unknowable working tree, never a claim that it is clean.
-  working: { readable: boolean; files: SessionDiffFile[] }
-  comments: DiffComment[]
-}
-
-export function commitUrlForRemote(remote: string, commit: string): string | null {
-  const raw = remote.trim()
-  let host = '', path = ''
-  try {
-    const url = new URL(raw)
-    if (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'ssh:') {
-      host = url.host
-      path = url.pathname
-    }
-  } catch {
-    const scp = /^(?:[^@/]+@)?([^:/]+):(.+)$/.exec(raw)
-    if (scp) [, host, path] = scp
-  }
-  path = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '')
-  if (!host || !path) return null
-  const commitPath = host.toLowerCase().includes('gitlab') ? '-/commit' : 'commit'
-  return `https://${host}/${path}/${commitPath}/${commit}`
-}
-
-// The branch diff is a proof over commits, not over a working directory: refs and objects are shared with
-// the main checkout, so a session whose worktree directory is gone (landed and cleaned, or reaped) keeps a
-// provable diff for as long as its branch ref survives. Anchor git at the live worktree when it exists and
-// at the main checkout otherwise; only a branch whose ref is gone everywhere is honestly unavailable, and
-// that refusal is a structured conflict (409 {error, code}) — never a raw git ENOENT turned into a 500.
-async function diffAnchorRoot(wt: { path: string; branch: string | null; rec: SessRec }): Promise<string> {
-  if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`, 'diff-unavailable')
-  if (wt.path && existsSync(wt.path)) return wt.path
-  const main = mainRoot()
-  const proven = await gitTry(['-C', main, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`])
-  if (proven.ok) return main
-  throw new ResourceConflict(`session ${wt.rec.session} has no worktree on disk and its branch ${wt.branch} no longer exists`, 'diff-unavailable')
-}
-
-// @@@ forkCommitOf - the commit the branch was created at, from the most authoritative source that has it.
-// The record carries it for every session created since it was introduced. Older records recover the same
-// commit from the branch ref's OLDEST reflog entry, which is where git itself wrote the `worktree add` start
-// point. Neither available (reflog pruned, or a branch adopted from outside this flow) → null, and the caller
-// falls back to what ancestry alone can prove.
-async function forkCommitOf(root: string, wt: { branch: string | null; rec: SessRec }): Promise<string | null> {
-  if (wt.rec.forkCommit && isGitObjectId(root, wt.rec.forkCommit)) return wt.rec.forkCommit
-  if (!wt.branch) return null
-  const log = await gitTry(['-C', root, 'reflog', 'show', '--no-abbrev', '--format=%H', `refs/heads/${wt.branch}`])
-  if (!log.ok) return null
-  const entries = log.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
-  const created = entries[entries.length - 1]
-  return created && isGitObjectId(root, created) ? created : null
-}
-
-async function diffHeadPair(root: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<{ branch: string; baseRef: string; base: string; head: string; mergeBase: string; branchState: BranchState; commitUrl: string | null }> {
-  if (!wt.branch) throw new ResourceConflict(`session ${wt.rec.session} has no branch to diff`, 'diff-unavailable')
-  const baseRef = wt.rec.base || mainBranch()
-  const [headOut, baseOut] = await Promise.all([
-    gitTry(['-C', root, 'rev-parse', '--verify', `refs/heads/${wt.branch}^{commit}`]),
-    gitTry(['-C', root, 'rev-parse', '--verify', `${baseRef}^{commit}`]),
-  ])
-  const head = headOut.ok ? headOut.stdout.trim() : '', resolvedBase = baseOut.ok ? baseOut.stdout.trim() : ''
-  if (!head || !resolvedBase || !isGitObjectId(root, head) || !isGitObjectId(root, resolvedBase))
-    throw new ResourceConflict(`session ${wt.rec.session} diff heads are unproven`, 'diff-unavailable')
-  const mergeBaseOut = await gitTry(['-C', root, 'merge-base', resolvedBase, head])
-  const mergeBase = mergeBaseOut.ok ? mergeBaseOut.stdout.trim() : ''
-  if (!mergeBase || !isGitObjectId(root, mergeBase)) throw new ResourceConflict(`session ${wt.rec.session} diff merge-base is unproven`, 'diff-unavailable')
-  const [ancestor, remote, forkCommit] = await Promise.all([
-    gitTry(['-C', root, 'merge-base', '--is-ancestor', head, resolvedBase]),
-    gitTry(['-C', root, 'remote', 'get-url', 'origin']),
-    forkCommitOf(root, wt),
-  ])
-  // A branch that never authored a commit is ALSO an ancestor of its base, so ancestry must be asked second.
-  // Without a fork commit the only provable form of "authored nothing" is a head that is still the base head.
-  const authoredNothing = forkCommit ? head === forkCommit : head === resolvedBase
-  return {
-    branch: wt.branch, baseRef, base: resolvedBase, head, mergeBase,
-    branchState: authoredNothing ? 'no-commits' : ancestor.ok ? 'merged' : 'open',
-    commitUrl: remote.ok ? commitUrlForRemote(remote.stdout, head) : null,
-  }
-}
-
-// @@@ workingFiles - the session's uncommitted changes, enumerated from ONE porcelain status plus ONE numstat.
-// Untracked files count their own lines rather than spawning a git child each: the metadata call stays two
-// processes however dirty the tree is, and nothing here touches the index — an `--intent-to-add` would mutate
-// the worktree a live agent is working in.
-const WORKING_STATUS: Record<string, string> = { '??': 'untracked', A: 'added', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
-async function workingFiles(root: string): Promise<ReviewDiffFile[]> {
-  const [statusOut, numstatOut] = await Promise.all([
-    gitA(['-C', root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all']),
-    gitA(['-C', root, '-c', 'core.quotePath=false', 'diff', '--numstat', '-M', 'HEAD']),
-  ])
-  const counts = new Map<string, { additions: number; deletions: number }>()
-  for (const line of numstatOut.split('\n')) {
-    const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
-    if (!m) continue
-    const { to } = parseStatPath(m[3])
-    counts.set(to, { additions: m[1] === '-' ? 0 : +m[1], deletions: m[2] === '-' ? 0 : +m[2] })
-  }
-  const files: ReviewDiffFile[] = []
-  for (const line of statusOut.split('\n')) {
-    if (!line.trim()) continue
-    const code = line.slice(0, 2)
-    const path = porcelainPath(line)
-    const arrow = line.indexOf(' -> ')
-    const oldPath = arrow >= 0 ? line.slice(3, arrow) : ''
-    const letter = code.trim().replace(/[^A-Z?]/g, '').slice(0, 1) || 'M'
-    const status = WORKING_STATUS[code === '??' ? '??' : letter] ?? 'modified'
-    files.push({
-      path,
-      ...(oldPath && oldPath !== path ? { oldPath } : {}),
-      status,
-      ...(counts.get(path) ?? (code === '??' ? untrackedCounts(join(root, path)) : { additions: 0, deletions: 0 })),
-    })
-  }
-  return files.sort((a, b) => a.path.localeCompare(b.path))
-}
-
-// An untracked file is entirely new, so its addition count is its line count. A NUL byte means git would
-// print `-`/`-` for a binary blob; report the same nothing rather than a line count of bytes.
-function untrackedCounts(absolute: string): { additions: number; deletions: number } {
-  try {
-    const body = readFileSync(absolute)
-    if (body.includes(0)) return { additions: 0, deletions: 0 }
-    const text = body.toString('utf8')
-    return { additions: text.length ? text.replace(/\n$/, '').split('\n').length : 0, deletions: 0 }
-  } catch { return { additions: 0, deletions: 0 } }
-}
-
-async function workingPatch(root: string, file: ReviewDiffFile, untracked: boolean): Promise<string> {
-  if (untracked) {
-    // --no-index against /dev/null renders a whole new file as one addition hunk. It exits 1 when the two
-    // sides differ, which is the normal case here, so the patch is read off stdout rather than off `ok`.
-    const out = await gitTry(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', '--no-index', '--', '/dev/null', file.path])
-    return out.stdout
-  }
-  return gitA(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', 'HEAD', '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
-}
-
-// A working file's identity must move when its CONTENT moves, or a stale editor and a stale comment anchor
-// would survive an edit. Size and mtime are what change on every write, and they cost one stat.
-function workingIdentity(root: string, file: ReviewDiffFile): string {
-  let stamp = 'gone'
-  try { const s = statSync(join(root, file.path)); stamp = `${s.size}:${s.mtimeMs}` } catch { /* deleted in the worktree */ }
-  return createHash('sha256').update(`working\0${file.path}\0${file.oldPath || ''}\0${stamp}`).digest('hex')
-}
-
-export async function sessionDiff(id: string, filePath?: string, offset = 0, limit = 120_000, scope: DiffScope = 'branch'): Promise<SessionDiffPayload | null> {
-  const wt = await findWorktree(id)
-  if (!wt) return null
-  const root = await diffAnchorRoot(wt)
-  const pair = await diffHeadPair(root, wt)
-  // The working tree is the session's OWN directory or it is not knowable. `root` falls back to the main
-  // checkout once the worktree is gone ([[diff-document]]), and that checkout's dirty files belong to whoever
-  // is working there — never to this session.
-  const liveRoot = wt.path && existsSync(wt.path) ? wt.path : null
-  const window = (patch: string) => patch.slice(offset, offset + limit)
-
-  // A per-file fetch names its scope, so only that scope is enumerated: opening one file in a worktree with a
-  // hundred dirty paths must not re-walk the other scope's git reads.
-  const branch = scope === 'branch' || !filePath ? await mergeBaseDiff(root, pair.base, pair.head) : []
-  const branchSelected = scope === 'branch' && filePath ? branch.filter((file) => file.path === filePath || file.oldPath === filePath) : (filePath ? [] : branch)
-  const files = await Promise.all(branchSelected.map(async (file) => {
-    const identity = createHash('sha256').update(`${pair.mergeBase}\0${pair.head}\0${file.path}\0${file.oldPath || ''}`).digest('hex')
-    if (!filePath) return { ...file, patch: '', diffIdentity: identity }
-    const patch = await gitA(['-C', root, '--no-pager', 'diff', '--no-ext-diff', '--unified=40', pair.mergeBase, pair.head, '--', ...(file.oldPath ? [file.oldPath, file.path] : [file.path])])
-    return { ...file, patch: window(patch), diffIdentity: identity }
-  }))
-
-  const dirty = liveRoot && (scope === 'working' || !filePath) ? await workingFiles(liveRoot) : []
-  const workingSelected = scope === 'working' && filePath ? dirty.filter((file) => file.path === filePath || file.oldPath === filePath) : (filePath ? [] : dirty)
-  const working = await Promise.all(workingSelected.map(async (file) => {
-    const identity = workingIdentity(liveRoot!, file)
-    if (!filePath) return { ...file, patch: '', diffIdentity: identity }
-    const patch = await workingPatch(liveRoot!, file, file.status === 'untracked')
-    return { ...file, patch: window(patch), diffIdentity: identity }
-  }))
-
-  return {
-    id, scope: 'branch', ...pair, files,
-    working: { readable: !!liveRoot, files: working },
-    comments: wt.rec.diffComments ?? [],
-  }
-}
-
-export async function saveDiffComment(id: string, input: Omit<DiffComment, 'id' | 'sentAt'> & { id?: string }): Promise<DiffComment | null> {
-  const body = input.body.trim()
-  if (!input.filePath || !body || !Number.isInteger(input.lineStart) || input.lineStart < 1 || !Number.isInteger(input.lineEnd) || input.lineEnd < input.lineStart || !input.diffIdentity)
-    throw new ResourceConflict('diff comment needs a file, line range, body, and diff identity')
-  return withRecordLock(id, async () => {
-    const rec = readLiveRecord(id)
-    if (!rec) return null
-    const comment: DiffComment = { id: input.id || randomUUID(), filePath: input.filePath, lineStart: input.lineStart, lineEnd: input.lineEnd, body, diffIdentity: input.diffIdentity, sentAt: null }
-    const comments = (rec.diffComments ?? []).filter((candidate) => candidate.id !== comment.id)
-    writeRecord({ ...rec, diffComments: [...comments, comment] })
-    return comment
-  })
-}
-
-// A review conversation you can only append to is not a conversation. Saving, editing and sending all
-// existed; nothing could take a row back, so a comment filed on the wrong line — or a probe left by a
-// measurement — stayed on the record forever. Retract is the same shape as the other two `retract` verbs
-// this product already has ([[session-files]], eval): it removes the row under the record lock and says
-// which one it removed. Already-DELIVERED text is not recalled — the agent read it — so this retracts the
-// record's row, never the message that was sent.
-export async function retractDiffComment(id: string, commentId: string): Promise<DiffComment | null> {
-  if (!commentId) throw new ResourceConflict('retracting a diff comment needs its id')
-  return withRecordLock(id, async () => {
-    const rec = readLiveRecord(id)
-    if (!rec) return null
-    const comments = rec.diffComments ?? []
-    const removed = comments.find((comment) => comment.id === commentId)
-    if (!removed) return null
-    writeRecord({ ...rec, diffComments: comments.filter((comment) => comment.id !== commentId) })
-    return removed
-  })
-}
-
-export async function sendDiffComments(id: string, ids?: string[]): Promise<{ ok: boolean; sentAt?: string; count?: number; error?: string }> {
-  const selected = await withRecordLock(id, async () => {
-    const rec = readLiveRecord(id)
-    if (!rec) return null
-    const wanted = ids?.length ? new Set(ids) : null
-    return (rec.diffComments ?? []).filter((comment) => !comment.sentAt && (!wanted || wanted.has(comment.id)))
-  })
-  if (!selected) return { ok: false, error: `no such session ${id}` }
-  if (!selected.length) return { ok: false, error: 'no unsent diff comments' }
-  const text = ['Review comments on the branch diff:', ...selected.map((comment) => {
-    const lines = comment.lineStart === comment.lineEnd ? `L${comment.lineStart}` : `L${comment.lineStart}-L${comment.lineEnd}`
-    return `- ${comment.filePath}:${lines}\n  ${comment.body.replace(/\n/g, '\n  ')}`
-  })].join('\n')
-  const sent = await sendText(id, text)
-  if (!sent.ok) return { ok: false, error: sent.error || 'could not send diff comments' }
-  const sentAt = new Date().toISOString()
-  await withRecordLock(id, async () => {
-    const rec = readLiveRecord(id)
-    if (!rec) return
-    const selectedById = new Map(selected.map((comment) => [comment.id, comment]))
-    writeRecord({ ...rec, diffComments: (rec.diffComments ?? []).map((comment) => {
-      const before = selectedById.get(comment.id)
-      const unchanged = before && !comment.sentAt && comment.body === before.body && comment.diffIdentity === before.diffIdentity
-      return unchanged ? { ...comment, sentAt } : comment
-    }) })
-  })
-  return { ok: true, sentAt, count: selected.length }
-}
-
-type ReviewHeadPair = { branchHead: string; baseHead: string }
-
-async function reviewHeadPair(root: string, branch: string, base: string): Promise<ReviewHeadPair> {
-  const branchRef = `refs/heads/${branch}`, baseRef = `refs/heads/${base}`
-  const output = await gitA(['-C', root, 'for-each-ref', '--sort=refname', '--format=%(refname)%00%(objectname)', branchRef, baseRef])
-  const refs = new Map<string, string>()
-  for (const line of output.split('\n')) {
-    const at = line.indexOf('\0')
-    if (at > 0) refs.set(line.slice(0, at), line.slice(at + 1).trim())
-  }
-  const branchHead = refs.get(branchRef), baseHead = refs.get(baseRef)
-  if (!branchHead || !baseHead || !isGitObjectId(root, branchHead) || !isGitObjectId(root, baseHead)) {
-    throw new ResourceConflict(`review head pair is unproven: ${branchRef} or ${baseRef} is missing or not a native Git object id`)
-  }
-  return { branchHead, baseHead }
-}
-
-// @@@ lintGate - the spec↔code graph lint is a LOCATION gate: a function of the backend checkout's tree ALONE
-// (its .spec graph + governed files), not of which session is reviewed, and it costs a few seconds. Re-running
-// it on every reviewPayload — i.e. on every [[session-eval]] Proof-tab open, and once per session — is
-// wasteful, so memoize it on a whole-repo fingerprint: `rev-parse HEAD` + `status --porcelain` + the mtimes of
-// the changed paths (covers committed state, the dirty SET, and dirty-file CONTENT). An identical fingerprint
-// reuses the last (in-flight) result — a re-open or a second session's proof is instant — while any commit or
-// working-tree edit moves the fingerprint and recomputes. A rejected run is not cached.
-let gateCache: { fp: string; p: Promise<ReviewGates['lint']> } | null = null
-async function lintGate(): Promise<ReviewGates['lint']> {
-  const root = repoRoot()
-  const [head, status] = await Promise.all([
-    gitA(['-C', root, 'rev-parse', 'HEAD']),
-    gitA(['-C', root, 'status', '--porcelain', '--untracked-files=all']),
-  ])
-  // `status --porcelain` gives the SET of changed paths + status letters but is CONTENT-BLIND: re-editing an
-  // already-listed (dirty or untracked) file leaves the string byte-identical, so HEAD+status alone would
-  // freeze the gate after a file first goes dirty. `--untracked-files=all` stops an untracked dir from
-  // collapsing to one line (which hides a newly-added file); then fold each listed path's mtime in, so a
-  // content edit to a dirty file also moves the fingerprint. HEAD covers committed state, this covers the
-  // working tree. (Residual, accepted: the fingerprint is snapshot just before the compute, so a change
-  // landing mid-compute is labelled with the pre-change fp — rare, and the gate is advisory, re-verified at merge.)
-  const mtimes = status.split('\n').filter(Boolean).map(porcelainPath)
-    .map((p) => { try { return statSync(join(root, p)).mtimeMs } catch { return 0 } }).join(',')
-  const fp = head.trim() + '\n' + status + '\n' + mtimes
-  if (gateCache?.fp === fp) return gateCache.p
-  const p = (async () => {
-    const { specLint } = await import('./lint.js')
-    const findings = await specLint()
-    return {
-      errorCount: findings.filter((f) => f.level === 'error').length,
-      warningCount: findings.filter((f) => f.level === 'warn').length,
-    }
-  })()
-  p.catch(() => { if (gateCache?.p === p) gateCache = null })   // don't pin a failed run
-  gateCache = { fp, p }
-  return p
-}
-
-// @@@ reviewPayload - assemble the cockpit review for one session. The four session-specific reads
-// (ahead / dirty / diff / conflict gate) plus the one location gate (lint) are all independent, so they run
-// in parallel. The lint gate goes through lintGate(), which memoizes it on the checkout's tree fingerprint —
-// so an unchanged tree doesn't re-run the lint on each review / Proof-tab open, while any commit or edit
-// invalidates and recomputes.
-export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
-  const wt = await findWorktree(id)
-  if (!wt) return null
-  if (!wt.rec.governed || !wt.branch) throw new ResourceConflict(`session ${id} has no governed branch to review`)
-  const base = mainBranch()
-  const { branchHead, baseHead } = await reviewHeadPair(wt.path, wt.branch, base)
-  const [aheadOut, statusOut, diff, conflictsWithMain, lint] = await Promise.all([
-    gitA(['-C', wt.path, 'rev-list', '--count', `${baseHead}..${branchHead}`]),
-    gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
-    mergeBaseDiff(wt.path, baseHead, branchHead),
-    mergeConflicts(wt.path, baseHead, branchHead),
-    lintGate(),   // lint — memoized on the checkout fingerprint, not re-run per session/open
-  ])
-  const settledPair = await reviewHeadPair(wt.path, wt.branch, base)
-  if (settledPair.branchHead !== branchHead || settledPair.baseHead !== baseHead) {
-    throw new ResourceConflict(
-      `review head pair changed while assembling: started branch ${branchHead} / base ${baseHead}, ended branch ${settledPair.branchHead} / base ${settledPair.baseHead}`,
-      'session_review_head_changed',
-    )
-  }
-  // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
-  // path is genuine work — this is just the total uncommitted count.
-  const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
-  return {
-    id, branch: wt.branch,
-    label: deriveLabel({ id, name: wt.rec.name, title: wt.rec.title, branch: wt.branch }),
-    ahead: Number(aheadOut.trim()) || 0,
-    dirtyNonRuntime, diff,
-    gates: { conflictsWithMain, lint },
-    proposal: { kind: wt.rec.proposal, note: wt.rec.note },
-  }
-}
-
-const MERGE_PROMPT = `Merge your branch into main, then settle the session honestly.
-
-1. In your own worktree, merge the latest main into your branch. Resolve any conflicts there and re-run the tests.
-2. Atomic landing: main only receives the completed branch as one no-ff merge. Never resolve conflicts in the shared main checkout.
-3. Verify main advanced cleanly with no merge left in progress. If this task is settled, run \`spex session done --propose close\` as your FINAL action; otherwise declare the state that is true.`
-
-export type MergeSessionResult =
-  | { dispatched: true }
-  | { dispatched: false; reason: string }
-
-export async function mergeSession(id: string): Promise<MergeSessionResult> {
-  const wt = await findWorktree(id)
-  if (!wt?.branch) return { dispatched: false, reason: 'no such mergeable session' }
-  const r = await sendText(id, MERGE_PROMPT, undefined, {
-    deferDrain: true,
-  })
-  if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
-  await resumeSession(id, { guard: false })
-  await drainSession(id)
-  return { dispatched: true }
-}
 
 // @@@ killAgentProcess - the pane is the agent's HOME, not its LEASH. `kill-session` SIGHUPs the pane's
 // process group, and an idle agent goes with it (measured: ~0.8s) — but one mid-turn can outlive the whole
@@ -3764,7 +2921,7 @@ function writeSessionLeafReceipt(id: string, receipt: SessionLeafReceipt): void 
 
 function clearSessionLeafArtifacts(id: string): void {
   rmSync(sessionArtifactPath(id, 'agent.pid'), { force: true })
-  pidRegistry.delete(id)
+  forgetAgentPid(id)
   rmSync(sessionLeafReceiptPath(id), { force: true })
 }
 
@@ -3969,7 +3126,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
       throw new ResourceConflict(`refusing to stop ${id}: exact leaf teardown remains ${finalState}`)
     clearSessionLeafArtifacts(id)
   }
-  launchedAt.delete(id)
+  clearLaunched(id)
   await harness.cleanupRuntime(rec)
   if (requireCold) {
     const cold = await harness.coldRuntime?.(rec, coldReceipt)
@@ -4198,7 +3355,6 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
       proposal: null,
       note: latest.note,
       parentSessionId: latest.parent,
-      recipientSessionIds: canonicalWatchRecipients(application, id, 'archived'),
     })
   }
   let slot: string | null = null
@@ -4298,189 +3454,6 @@ export async function captureSessionResult(id: string): Promise<CaptureResult> {
 // removal. Per Monitor's "silence is not success" rule a vanished session pings too. Net feed:
 // launched → [actionable transitions] → closed. Each line names the suggested next action(s). Drop into Monitor:
 //   Monitor({ command: 'spex session watch', persistent: true, description: 'session state changes' })
-// @@@ presentation + selection - shared by `spex session ls` (pretty), `spex session watch` (events) and the API.
-export const STATUS_GLYPH: Record<DisplayStatus, string> = {
-  working: '\u25cf', idle: '\u25cb', offline: '\u23fb', starting: '\u25d4', review: '\u25c6', done: '\u2713',
-  'close-pending': '\u2715', parked: '\u29d6', error: '\u2717', asking: '\u2370', queued: '\u25cc', unknown: '\u2047',
-  corrupt: '\u26a0', retired: '\u2691',
-}
-const ANSI: Record<DisplayStatus, string> = {
-  working: '33', idle: '90', offline: '90', starting: '36', review: '35', done: '34', 'close-pending': '31', parked: '36', error: '31', asking: '93', queued: '90', unknown: '93',
-  corrupt: '31', retired: '90',
-}
-
-// @@@ session selectors - the ONE matcher every session command shares (see [[session-selectors]]). A
-// selector matches a session iff it is the session's full id, an id-PREFIX, its branch, or `.` for
-// the caller's own launched session. This is
-// the single predicate; selectSessions (MANY) and resolveSession (ONE) both call it, so id-prefix/branch
-// resolution can never drift between "which sessions ls/watch/wait/graph show" and "which session
-// review/merge/send/close act on".
-export function matchesSelector(s: Session, q: string, own = ownSessionId(), cwd = process.cwd()): boolean {
-  // a selector may be a comma-separated list (the same convention as `--status a,b`): it matches iff ANY part
-  // names the session, so `watch a,b` and `watch a b` are equivalent. A single name is the one-part case. This
-  // is what stops a comma-joined selector from silently matching nothing — an id/branch never holds a
-  // comma, so without the split `a,b` would be one literal selector that matches no session and streams in
-  // silence forever. Each part sheds an optional reference sigil (stripRefSigil): `@<sel>` / `[[<sel>]]` name
-  // the same session as the bare token, so the dashboard's mention grammar is tolerated in every CLI selector.
-  const sessionPath = s.path ? resolve(s.path) : null
-  const callerPath = resolve(cwd)
-  const self = Boolean(own) && s.id === own
-    || Boolean(sessionPath) && (callerPath === sessionPath || callerPath.startsWith(`${sessionPath}${sep}`))
-  return q.split(',').map((p) => stripRefSigil(p.trim())).filter(Boolean)
-    .some((p) => p === '.' ? self : s.id === p || s.id.startsWith(p) || s.branch === p)
-}
-
-// no selectors (or '@all') = everything. Optional status filter on top. This IS the ls/watch subscription.
-export function selectSessions(all: Session[], selectors: string[], statuses?: string[], own = ownSessionId(), cwd = process.cwd()): Session[] {
-  let out = all
-  const sel = selectors.filter((x) => x && x !== '@all')
-  if (sel.length) out = out.filter((s) => sel.some((q) => matchesSelector(s, q, own, cwd)))
-  if (statuses && statuses.length) out = out.filter((s) => statuses.includes(s.status))
-  return out
-}
-
-// Parentage is a durable direct pointer, even when that parent was terminally closed and no longer has a row.
-// The CLI's child scope must keep that fact visible rather than requiring callers to reverse-engineer prompts.
-export function selectChildren(all: Session[], parent: string): Session[] {
-  return all.filter((session) => session.parent === parent)
-}
-
-/** Read-time descendant closure; callers may filter terminal rows after traversing closed intermediates. */
-export function selectDescendants(all: Session[], parent: string): Session[] {
-  const byParent = new Map<string, Session[]>()
-  for (const session of all) {
-    if (!session.parent) continue
-    const children = byParent.get(session.parent) ?? []
-    children.push(session)
-    byParent.set(session.parent, children)
-  }
-  const out: Session[] = []
-  const seen = new Set<string>([parent])
-  const visit = (id: string): void => {
-    for (const child of byParent.get(id) ?? []) {
-      if (seen.has(child.id)) continue
-      seen.add(child.id)
-      out.push(child)
-      visit(child.id)
-    }
-  }
-  visit(parent)
-  return out
-}
-
-// @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
-// selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
-// ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a branch/
-// prefix selector drives a verb just as it filters `ls`. The result is DISCRIMINATED so a caller can fail
-// precisely: an exact full-id hit wins outright (never reported ambiguous just for prefixing a longer id);
-// otherwise a lone match is `ok`, several is `ambiguous` (a prefix hitting many), none is `none`.
-export type Resolved = { ok: Session } | { ambiguous: Session[] } | { none: true }
-export function resolveSession(selector: string, sessions: Session[], own = ownSessionId(), cwd = process.cwd()): Resolved {
-  // the exact-id check sheds the optional sigil too, so `@<full-id>` keeps the exact-wins-over-prefix rule
-  const exact = sessions.find((s) => s.id === stripRefSigil(selector))
-  if (exact) return { ok: exact }
-  const hits = sessions.filter((s) => matchesSelector(s, selector, own, cwd))
-  if (hits.length === 1) return { ok: hits[0] }
-  return hits.length ? { ambiguous: hits } : { none: true }
-}
-
-// @@@ display width - the table aligns by TERMINAL CELLS, not code units. CJK/fullwidth glyphs render
-// two cells wide, so `slice`/`padEnd` (which count code units) shear a wide glyph mid-cut and under-pad
-// the column, misaligning everything after it. A small wcwidth-style range check covers the wide blocks
-// that actually reach session labels/prompts \u2014 no dependency needed.
-const isWideCp = (cp: number): boolean =>
-  (cp >= 0x1100 && cp <= 0x115f) ||                   // Hangul Jamo
-  (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||  // CJK radicals \u2026 kana \u2026 CJK ideographs \u2026 Yi
-  (cp >= 0xac00 && cp <= 0xd7a3) ||                   // Hangul syllables
-  (cp >= 0xf900 && cp <= 0xfaff) ||                   // CJK compatibility ideographs
-  (cp >= 0xfe30 && cp <= 0xfe4f) ||                   // CJK compatibility forms
-  (cp >= 0xff00 && cp <= 0xff60) ||                   // fullwidth forms
-  (cp >= 0xffe0 && cp <= 0xffe6) ||                   // fullwidth signs
-  (cp >= 0x1f300 && cp <= 0x1faff) ||                 // emoji
-  (cp >= 0x20000 && cp <= 0x3fffd)                    // CJK extensions B+
-export function displayWidth(s: string): number {
-  let w = 0
-  for (const ch of s) w += isWideCp(ch.codePointAt(0)!) ? 2 : 1
-  return w
-}
-// truncate to a display width (the ellipsis occupies its own cell); never cuts a wide glyph in half.
-export function truncWidth(s: string, max: number): string {
-  if (displayWidth(s) <= max) return s
-  let w = 0
-  let out = ''
-  for (const ch of s) {
-    const cw = isWideCp(ch.codePointAt(0)!) ? 2 : 1
-    if (w + cw > max - 1) break
-    out += ch
-    w += cw
-  }
-  return out + '\u2026'
-}
-// pad to a display width \u2014 `padEnd` would count a double-cell glyph as one and under-pad the column.
-export const padWidth = (s: string, w: number): string => s + ' '.repeat(Math.max(0, w - displayWidth(s)))
-const trunc = truncWidth
-// the board table's NOTE display cap \u2014 exported so the declaration echo (cli.ts) can tell an author
-// exactly where their note gets cut, instead of the cap living as an anonymous magic number here.
-export const NOTE_BOARD_LIMIT = 50
-// short display label per status (only close-pending differs from the status name) \u2014 used by the legend.
-const SHORT: Partial<Record<DisplayStatus, string>> = { 'close-pending': 'close' }
-
-// @@@ statusLegend - one-line glyph\u2192meaning key, BUILT from STATUS_GLYPH so it can never drift from
-// the glyphs the table actually prints. Shown under `spex session ls` so the symbols are self-explanatory.
-export function statusLegend(color = true): string {
-  const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
-  const parts = (Object.keys(STATUS_GLYPH) as DisplayStatus[]).map(
-    (k) => `${c(ANSI[k], STATUS_GLYPH[k])} ${SHORT[k] || k}`,
-  )
-  return c('90', '  key: ') + parts.join('  ')
-}
-
-// human-friendly aligned table: header + (glyph + colour + status + title + id + parent + merges + note) rows +
-// a status legend, so the table tells the whole story (incl. each agent's note) at a glance.
-export type SessionTableScope = { kind: 'sessions' } | { kind: 'children'; parent: string }
-function statusSummary(sessions: Session[]): string {
-  const counts = new Map<DisplayStatus, number>()
-  for (const session of sessions) counts.set(session.status, (counts.get(session.status) || 0) + 1)
-  return (Object.keys(STATUS_GLYPH) as DisplayStatus[])
-    .flatMap((status) => {
-      const count = counts.get(status)
-      return count ? [`${count} ${SHORT[status] || status}`] : []
-    })
-    .join(' · ')
-}
-
-export function formatTable(sessions: Session[], color = true, scope: SessionTableScope = { kind: 'sessions' }): string {
-  const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
-  const label = scope.kind === 'children' ? `children of ${scope.parent.slice(0, 8)}` : 'sessions'
-  const heading = c('1', `SpexCode ${label} (${sessions.length}${sessions.length ? `; ${statusSummary(sessions)}` : ''})`)
-  if (!sessions.length) return [heading, c('90', `  no ${scope.kind === 'children' ? 'children' : 'living sessions'}`)].join('\n')
-  const depthOf = (session: Session): number => {
-    let depth = 0
-    const ids = new Set(sessions.map((item) => item.id))
-    const seen = new Set<string>()
-    let parent = session.parent
-    while (parent && ids.has(parent) && !seen.has(parent)) {
-      seen.add(parent)
-      depth++
-      parent = sessions.find((item) => item.id === parent)?.parent ?? null
-    }
-    return depth
-  }
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'PARENT'.padEnd(8)} ${'DEPTH'.padEnd(5)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
-  const rows = sessions.map((s) => {
-    const g = STATUS_GLYPH[s.status] ?? '\u00b7'
-    const code = ANSI[s.status] ?? '0'
-    const title = padWidth(truncWidth(sessionTitle(s), 22), 22)
-    const st = s.status.padEnd(13)
-    const parent = c('90', (s.parent || '-').slice(0, 8).padEnd(8))
-    const depth = String(depthOf(s)).padEnd(5)
-    const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
-    const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
-    const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${parent} ${depth}${merges}${prompt}${note}`
-  })
-  return [heading, header, ...rows, statusLegend(color)].join('\n')
-}
 
 // @@@ sendText - THE APPEND ACCEPTS, THE QUEUE OWES ([[dispatch]]), except a live agent whose native transport
 // is PROVEN unreachable. That stranded combination cannot ever drain, so it refuses before creating new debt.

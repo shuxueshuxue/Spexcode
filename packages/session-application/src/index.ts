@@ -102,6 +102,7 @@ export type {
   SessionState,
   SessionStateChange,
   TransitionSessionInput,
+  WatchEvent,
 } from './production.js'
 export type { SessionEvent } from '@spexcode/session-events'
 export type {

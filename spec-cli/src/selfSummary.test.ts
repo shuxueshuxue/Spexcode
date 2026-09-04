@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { selfSummary, paneActivity, deriveHeadline } from './sessions.js'
+import { deriveHeadline } from './sessions.js'
+import { selfSummary, paneActivity } from './session-liveness.js'
 import { claudeHarness } from './harness.js'
 import { codexHarness } from './codex-harness.js'
 

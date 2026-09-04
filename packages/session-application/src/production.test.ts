@@ -40,10 +40,8 @@ test('production composition runs the parent/child state, event, replay, publish
   first.advanceFollowCursor('parent', 'child', 2)
   first.advanceFollowCursor('parent', 'child', 1)
   assert.equal(first.readFollowCursor('parent', 'child'), 2)
-  assert.equal(first.protocol.listPending('parent').length, 3)
-  assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
+  assert.equal(first.protocol.listPending('parent').length, 1)
   assert.equal(first.protocol.dequeue('parent')?.kind, 'fixture.direct.v1')
-  assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
   first.transitionSession('child', { status: 'awaiting', proposal: 'merge', note: 'ready' })
   const transitioned = first.readState('child')!
   assert.equal(transitioned.sessionId, 'child')
@@ -54,7 +52,7 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.equal(first.listWatchers('parent').length, 1)
   first.detachWatcher('parent', 'child')
   assert.equal(first.listWatchers('parent').length, 0)
-  assert.equal(first.protocol.dequeue('parent')?.kind, 'session.state.changed.v1')
+  assert.equal(first.protocol.dequeue('parent'), null)
   first.close()
 
   const restarted = openProjectSessionApplication({ databasePath, locality })
@@ -84,33 +82,63 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.deepEqual(localityCalls, [databasePath, databasePath])
 })
 
-test('lifecycle publication applies parent and manual watch policies as a union', () => {
+test('lifecycle events leave watch delivery to the owning backend poll', () => {
   const root = mkdtempSync(join(tmpdir(), 'session-application-watch-policy-'))
   const app = openProjectSessionApplication({ databasePath: join(root, 'sessions.sqlite'), locality: () => {} })
   try {
     app.createSession({ sessionId: 'parent' })
     app.createSession({ sessionId: 'child', parentSessionId: 'parent', status: 'queued' })
-    while (app.protocol.dequeue('parent')) { /* discard the creation snapshot */ }
+    while (app.protocol.dequeue('parent')) { /* no transition queue rows are created by the subject */ }
 
     app.attachWatcher('parent', 'child', 'watch:parent')
+    app.advanceFollowCursor('parent', 'child', app.readEvents('child').at(-1)!.eventSeq)
     app.transitionSession('child', { status: 'active', reason: 'working' })
-    assert.equal(app.protocol.listPending('parent').length, 1, 'queued creation gets one ready-active correction')
-    app.protocol.dequeue('parent')
+    assert.equal(app.protocol.listPending('parent').length, 0)
+    assert.equal(app.readWatchEvents(['parent']).length, 1)
+    app.advanceFollowCursor('parent', 'child', app.readWatchEvents(['parent'])[0]!.event.eventSeq)
 
     app.transitionSession('child', { status: 'active', reason: 'working' })
-    assert.equal(app.protocol.listPending('parent').length, 0, 'parent-only watch suppresses routine working')
+    assert.equal(app.readWatchEvents(['parent']).length, 1, 'owner poll sees routine working and applies policy')
+    app.advanceFollowCursor('parent', 'child', app.readWatchEvents(['parent'])[0]!.event.eventSeq)
 
     app.transitionSession('child', { status: 'awaiting', proposal: 'merge', note: 'ready' })
-    assert.equal(app.protocol.listPending('parent').length, 1, 'parent-only watch receives actionable transitions')
-    app.protocol.dequeue('parent')
+    assert.equal(app.readWatchEvents(['parent']).length, 1, 'parent-only watch receives actionable transitions')
+    app.advanceFollowCursor('parent', 'child', app.readWatchEvents(['parent'])[0]!.event.eventSeq)
 
     app.attachWatcher('parent', 'child', 'watch:manual')
     app.transitionSession('child', { status: 'active', proposal: null, note: null, reason: 'working' })
-    assert.equal(app.protocol.listPending('parent').length, 1, 'manual watch opts into working transitions')
-    app.protocol.dequeue('parent')
+    assert.equal(app.readWatchEvents(['parent']).length, 1, 'manual watch opts into working transitions')
+    app.advanceFollowCursor('parent', 'child', app.readWatchEvents(['parent'])[0]!.event.eventSeq)
 
     app.transitionSession('child', { status: 'awaiting', proposal: 'close', note: 'ready to close' })
-    assert.equal(app.protocol.listPending('parent').length, 1, 'overlapping sources enqueue one unioned notification')
+    assert.equal(app.readWatchEvents(['parent']).length, 1, 'overlapping sources expose one unioned notification')
+  } finally {
+    app.close()
+  }
+})
+
+test('watch event batches resume by cursor and use event ids for idempotent queue handoff', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-watch-cursor-'))
+  const app = openProjectSessionApplication({ databasePath: join(root, 'sessions.sqlite'), locality: () => {} })
+  try {
+    app.createSession({ sessionId: 'owner' })
+    app.createSession({ sessionId: 'subject' })
+    app.attachWatcher('owner', 'subject', 'watch:manual')
+    app.advanceFollowCursor('owner', 'subject', app.readEvents('subject').at(-1)!.eventSeq)
+    app.transitionSession('subject', { status: 'awaiting', proposal: 'merge', note: 'ready' })
+    const [item] = app.readWatchEvents(['owner'])
+    assert.ok(item)
+    const message = app.enqueueMessage('owner', {
+      kind: 'session.prompt.v1', body: Buffer.from('state'), senderSessionId: 'subject',
+      idempotencyKey: `watch-event:${item.event.eventId}`,
+    })
+    const replay = app.enqueueMessage('owner', {
+      kind: 'session.prompt.v1', body: Buffer.from('state'), senderSessionId: 'subject',
+      idempotencyKey: `watch-event:${item.event.eventId}`,
+    })
+    assert.equal(replay.messageId, message.messageId)
+    app.advanceFollowCursor('owner', 'subject', item.event.eventSeq)
+    assert.equal(app.readWatchEvents(['owner']).length, 0)
   } finally {
     app.close()
   }

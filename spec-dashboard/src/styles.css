@@ -913,8 +913,8 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 /* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
 body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-select: none !important; }
 /* React Flow restores pointer events on child layers, so keyboard mode blocks the canvas and descendants. */
-.app.kbd-mode, .app.kbd-mode * { cursor: none !important; }
-.app.kbd-mode .react-flow, .app.kbd-mode .react-flow * { pointer-events: none !important; }
+.app .kbd-mode, .app .kbd-mode * { cursor: none !important; }
+.app .kbd-mode .react-flow, .app .kbd-mode .react-flow * { pointer-events: none !important; }
 
 /* ---- graph pane ---- */
 .graph { position: relative; width: 100%; height: 100%; background: var(--paper); }

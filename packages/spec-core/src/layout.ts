@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, repoRoot, gitA, gitAbortError, currentGitBuildAbortSignal, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, withGitAbortSignal, type NodeOp } from './git.js'
@@ -114,17 +114,44 @@ export function configPath(root: string, local = false): string {
   return join(root, '.spec', local ? 'spexcode.local.json' : 'spexcode.json')
 }
 
+type ProjectConfigCandidate = { path: string; legacy: boolean }
+
+function projectConfigCandidates(root: string, local: boolean): ProjectConfigCandidate[] {
+  const name = local ? 'spexcode.local.json' : 'spexcode.json'
+  return [
+    { path: configPath(root, local), legacy: false },
+    { path: join(root, name), legacy: true },
+  ]
+}
+
+function resolveProjectConfig(root: string, local: boolean): ProjectConfigCandidate | undefined {
+  return projectConfigCandidates(root, local).find(({ path }) => existsSync(path))
+}
+
 function readProjectConfig(root: string, local: boolean): any {
-  const preferred = configPath(root, local)
-  if (existsSync(preferred)) return readJsonConfig(preferred)
-  const legacy = join(root, local ? 'spexcode.local.json' : 'spexcode.json')
-  if (existsSync(legacy)) {
+  const candidate = resolveProjectConfig(root, local)
+  if (!candidate) return {}
+  if (candidate.legacy) {
     console.error(local
-      ? `Config moved to .spec/ — this file is gitignored, so move it by hand: \`mv spexcode.local.json .spec/\`: ${legacy}`
-      : `Config moved to .spec/ — run \`git mv spexcode.json .spec/\`: ${legacy}`)
-    return readJsonConfig(legacy)
+      ? `Config moved to .spec/ — this file is gitignored, so move it by hand: \`mv spexcode.local.json .spec/\`: ${candidate.path}`
+      : `Config moved to .spec/ — run \`git mv spexcode.json .spec/\`: ${candidate.path}`)
   }
-  return {}
+  return readJsonConfig(candidate.path)
+}
+
+// A predicate for external consumers: only a regular, readable, syntactically valid object config counts.
+// The first existing location owns precedence, even when it is invalid; an invalid preferred file does not
+// fall through to the legacy location.
+export function isAdopted(root: string): boolean {
+  const candidate = resolveProjectConfig(root, false)
+  if (!candidate) return false
+  try {
+    if (!statSync(candidate.path).isFile()) return false
+    const parsed = JSON.parse(readFileSync(candidate.path, 'utf8'))
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+  } catch {
+    return false
+  }
 }
 
 export function readConfig(root: string): Config {

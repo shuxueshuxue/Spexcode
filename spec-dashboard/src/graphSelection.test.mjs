@@ -4,6 +4,7 @@ import fs from 'node:fs'
 
 const graph = fs.readFileSync(new URL('./GraphView.jsx', import.meta.url), 'utf8')
 const data = fs.readFileSync(new URL('./data.js', import.meta.url), 'utf8')
+const styles = fs.readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const spec = fs.readFileSync(new URL('../../.spec/spexcode/spec-dashboard/dashboard-ui/graph/node-graph/spec.md', import.meta.url), 'utf8')
 
 test('graph has no transient marquee selection toolbar or dispatch state', () => {
@@ -16,6 +17,12 @@ test('graph has no transient marquee selection toolbar or dispatch state', () =>
 test('primary-pointer drag pans the camera without making nodes draggable', () => {
   assert.match(graph, /panOnDrag=\{true\}/)
   assert.match(graph, /nodesDraggable=\{false\}/)
+})
+
+test('keyboard mode suppresses React Flow pointer layers from the graphview host', () => {
+  assert.match(graph, /className=\{kbdMode \? 'graphview kbd-mode' : 'graphview'\}/)
+  assert.ok(styles.includes('.app .kbd-mode, .app .kbd-mode * { cursor: none !important; }'))
+  assert.ok(styles.includes('.app .kbd-mode .react-flow, .app .kbd-mode .react-flow * { pointer-events: none !important; }'))
 })
 
 test('focus camera keeps zoom, roots use reading pairs, and non-root tiles use pane centre', () => {

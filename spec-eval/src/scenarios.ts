@@ -68,6 +68,68 @@ export type EvalNode = {
   specSource?: string
 }
 
+export type EvalCoverageResult =
+  | { ok: true; nodeId: string; exempt: boolean; evalPath?: string }
+  | { ok: false; nodeId?: string; reason: string; evalPath?: string }
+
+function specDirectories(root: string): string[] {
+  const specBase = join(root, '.spec')
+  const dirs: string[] = []
+  const stack = existsSync(specBase) ? [specBase] : []
+  while (stack.length) {
+    const dir = stack.pop()!
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { continue }
+    if (existsSync(join(dir, 'spec.md'))) dirs.push(dir)
+    for (const entry of entries) if (entry.isDirectory()) stack.push(join(dir, entry.name))
+  }
+  return dirs
+}
+
+type SpecInventoryEntry = { id: string; dir: string; specSource: string; code: RelationEntry[]; problems: string[] }
+
+function specInventory(root: string): SpecInventoryEntry[] {
+  const specBase = join(root, '.spec')
+  const dirs = specDirectories(root)
+  const ids = mintIds(dirs.map((dir) => relative(specBase, dir).split(/[/\\]/)))
+  return dirs.map((dir, index) => {
+    const specSource = readFileSync(join(dir, 'spec.md'), 'utf8')
+    const fm = parseFrontmatter(specSource).fm
+    const rawCode = Array.isArray(fm.code) ? fm.code : fm.code ? [fm.code] : []
+    const code = parseRelation(rawCode, 'code')
+    return { id: ids[index], dir, specSource, code: code.entries, problems: code.problems }
+  })
+}
+
+/**
+ * Public loss-signal minimum for external harnesses. A node with no `code:` claim is intent-only and
+ * therefore exempt; a source-governing node must carry a valid eval.md scenario declaration.
+ */
+export function hasEvalCoverage(root: string, nodeId: string): EvalCoverageResult {
+  const inventory = specInventory(root)
+  const exact = inventory.find((node) => node.id === nodeId)
+  const matches = exact ? [exact] : inventory.filter((node) => basename(node.dir) === nodeId)
+  if (!matches.length) return { ok: false, reason: `node '${nodeId}' does not exist` }
+  if (matches.length > 1) {
+    return { ok: false, reason: `'${nodeId}' is ambiguous — use a canonical id: ${matches.map((node) => node.id).sort().join(', ')}` }
+  }
+  const node = matches[0]
+  if (node.problems.length) {
+    return { ok: false, nodeId: node.id, reason: `node '${node.id}' has malformed code relation: ${node.problems[0]}` }
+  }
+  if (!node.code.length) return { ok: true, nodeId: node.id, exempt: true }
+
+  const evalNode = evalNodes(root).find((candidate) => candidate.id === node.id)
+  if (!evalNode) {
+    return { ok: false, nodeId: node.id, reason: `node '${node.id}' governs source code but has no eval.md — add one with a scenario (name, description, expected, and tags)` }
+  }
+  const errors = validateScenarios(evalNode.evalSource ?? '')
+  if (errors.length) {
+    return { ok: false, nodeId: node.id, evalPath: evalNode.evalPath, reason: `node '${node.id}' has malformed ${evalNode.evalPath}: ${errors[0]}` }
+  }
+  return { ok: true, nodeId: node.id, exempt: false, evalPath: evalNode.evalPath }
+}
+
 const SCENARIO_KEYS = ['name', 'description', 'expected', 'tags', 'test', 'code', 'related'] as const
 type ScenarioKey = (typeof SCENARIO_KEYS)[number]
 const LIST_KEYS: readonly ScenarioKey[] = ['tags', 'code', 'related']
@@ -589,15 +651,9 @@ function assembleNodes(root: string, specDirs: string[], hits: { dir: string; sr
 }
 
 export function evalNodes(root: string): EvalNode[] {
-  const specDir = join(root, '.spec')
-  const specDirs: string[] = []
+  const specDirs = specDirectories(root)
   const hits: { dir: string; src: string; specSource?: string }[] = []
-  const stack = existsSync(specDir) ? [specDir] : []
-  while (stack.length) {
-    const dir = stack.pop()!
-    let ents
-    try { ents = readdirSync(dir, { withFileTypes: true }) } catch { continue }
-    if (existsSync(join(dir, 'spec.md'))) specDirs.push(dir)
+  for (const dir of specDirs) {
     if (existsSync(join(dir, EVAL_FILE))) {
       const specPath = join(dir, 'spec.md')
       hits.push({
@@ -606,7 +662,6 @@ export function evalNodes(root: string): EvalNode[] {
         ...(existsSync(specPath) ? { specSource: readFileSync(specPath, 'utf8') } : {}),
       })
     }
-    for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
   }
   return assembleNodes(root, specDirs, hits)
 }

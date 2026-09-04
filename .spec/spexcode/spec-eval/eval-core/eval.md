@@ -1,5 +1,15 @@
 ---
 scenarios:
+  - name: public-coverage-query
+    tags: [cli]
+    description: >-
+      Through the public spec-eval package API, ask whether a node has the minimum loss-signal coverage
+      required by an external delivery harness.
+    expected: >-
+      A node with a governed code claim and a valid eval.md returns ok; a code-bearing node without eval.md
+      returns ok false with a repairable reason naming the node and missing file; a code-free intent node is
+      explicitly exempt; and an unknown node returns a loud not-found reason. The API uses the same canonical
+      node ids and eval.md parser as the scan.
   - name: scan-eval-clean-loop
     tags: [cli]
     description: >-

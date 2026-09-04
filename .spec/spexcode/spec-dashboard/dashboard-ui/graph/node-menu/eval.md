@@ -8,7 +8,7 @@ scenarios:
       Right-clicking a node suppresses the browser's default context menu and opens the custom node
       menu at the cursor with exactly five items — node info, copy node URL, new session, new child node…, delete
       node… (the last one danger-tinted) — and the clicked node becomes the focused node. Picking
-      "node info" closes the menu and opens the node's info popup; "new session" / "new child node…" /
+      "node info" closes the menu and opens the node's own `#/spec/<id>` document; "new session" / "new child node…" /
       "delete node…" land on a New Session pre-seeded with the node mention / chord instruction.
       Esc or a click outside closes the menu without disturbing the board; a right-click anywhere off
       the menu dismisses it too (the default browser menu stays available off-node).

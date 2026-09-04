@@ -20,6 +20,34 @@ scenarios:
       - spec-cli/src/gateway.ts
       - spec-cli/src/port-bind.cli.test.ts
 
+  - name: every-serving-verb-declares-its-bind-face
+    tags: [cli, backend-api]
+    description: >-
+      Through the installed CLI, on a machine that has a non-loopback address, start each serving verb with no
+      host given and read the actual bind face out of the kernel's listener table, then probe /health (or /)
+      over loopback and over the non-loopback address. Repeat each verb with `--host 0.0.0.0`, with `--host
+      <that machine address>`, and — for the public gateway — with `--host 127.0.0.1`. Capture the ready lines
+      each surface prints. File the transcript with `spex eval add listener-readiness --scenario
+      every-serving-verb-declares-its-bind-face --result <txt> --pass`.
+    expected: >-
+      With no host given, `spex serve`, `spex serve ui`, and `spex dashboard` all bind the loopback face only:
+      the listener table shows the loopback address, loopback answers, and the machine's own non-loopback
+      address does not. `spex serve --public` is the one surface whose unstated default is the wide face, and
+      it still binds every interface. `--host` is honored by every one of them and never silently dropped: it
+      widens a local verb to the wildcard or to one named interface, and it narrows the public gateway to
+      loopback. A surface bound to one named interface answers on that address and not elsewhere. Each ready
+      line names the face actually bound, a wide ungated bind is announced rather than silent, and a surface
+      that binds wide publishes a dialable address rather than the wildcard for other processes to reach it.
+    code:
+      - spec-cli/src/listen.ts
+    related:
+      - spec-cli/src/supervise.ts
+      - spec-cli/src/cli.ts
+      - spec-cli/src/gateway.ts
+      - spec-cli/src/gateway-hub.ts
+      - spec-cli/src/host.ts
+      - spec-cli/src/port-bind.cli.test.ts
+
   - name: ready-publishes-kernel-assigned-port
     tags: [cli, backend-api]
     description: >-

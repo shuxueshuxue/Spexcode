@@ -91,7 +91,10 @@ The raw WebSocket upgrade, including the posted-web route, keeps its existing pa
 at the upgrade seam.
 
 **Launch seam.** `startHubGateway({port, host, tls, entry})` is the engine, TLS-capable via the same
-resolved-cert posture as [[public-mode]]. `entry` is which of [[gateway-auth]]'s two doors this listener IS —
+resolved-cert posture as [[public-mode]]. `host` is REQUIRED, not defaulted: the hub is a multi-project
+front door, so which interface it faces is the caller's declaration and never something the engine picks on
+the caller's behalf ([[listener-readiness]]). The console ready line therefore names the face actually bound,
+with no default re-applied at the point of printing. `entry` is which of [[gateway-auth]]'s two doors this listener IS —
 `'console'` by default, so every existing caller keeps its behaviour — and it is fixed at construction, never
 read from a request: a forwarded socket and a console socket are the same loopback address, so the listener is
 the one fact the caller cannot forge. A `'peer'` listener carries no visitor login at all (`/login` and

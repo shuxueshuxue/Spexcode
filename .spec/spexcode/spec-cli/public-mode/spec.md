@@ -23,7 +23,9 @@ is opt-in:** a password makes a real login appear; without one the dashboard ser
 dashboard access is effectively remote code execution through the agents, that open choice is loud-warned,
 never silent.
 
-`spex serve --public` raises a **gateway** on `0.0.0.0:PORT` — the only thing facing the internet. It
+`spex serve --public` raises a **gateway** on `0.0.0.0:PORT` — the only thing facing the internet, this being
+the one surface whose declared default is the wide face rather than loopback ([[listener-readiness]]), which
+`--host` may narrow. It
 terminates TLS, serves the built dashboard, reverse-proxies `/api/*` and the terminal WebSocket to the
 loopback supervisor, and proxies a published session-web reference only after resolving its current posted
 key to that service's loopback host ([[web]]). When `--password <pw>` is given, it gates every request behind

@@ -10,7 +10,7 @@ import { stat, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from '@spexcode/spec-core'
-import { listenOrExit, resolveConfiguredPort } from './listen.js'
+import { ALL_INTERFACES, listenOrExit, LOOPBACK_HOST, resolveConfiguredHost, resolveConfiguredPort } from './listen.js'
 import { resolvePublicConfig, startGateway, resolveDistDir } from './gateway.js'
 import { publishEndpoint, dropOwnEndpoint } from './endpoint-record.js'
 import { repoRoot as servedRepoRoot } from '@spexcode/spec-core'
@@ -37,6 +37,10 @@ try {
   process.exit(2)
 }
 const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
+// The face this supervisor exposes. `spex serve` is a LOCAL backend, so its declared default is loopback, the
+// same face `spex serve ui` and `spex dashboard` declare — widen it deliberately with --host/SPEXCODE_HOST.
+// Public mode declares the opposite default, because being the internet face is the whole request.
+const configuredHost = process.env.SPEXCODE_HOST
 
 // @@@ public mode ([[public-mode]]) - with `spex serve --public`, the supervisor is NOT the internet face:
 // the gateway is. The raw-TCP proxy retreats to a loopback internal port (the trusted boundary local agents
@@ -219,10 +223,14 @@ const reapChild = () => { unregisterBackendInstance(instanceId); try { current?.
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir()
-  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: (actualPort) => recordEndpoint(`http://127.0.0.1:${actualPort}`), ready: (actualPort) => `spec-cli supervisor on loopback :${actualPort} (zero-downtime reloads, backend :${first.port})` })
-  startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
+  listenOrExit(proxy, proxyPort, { host: LOOPBACK_HOST, label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: (actualPort) => recordEndpoint(`http://127.0.0.1:${actualPort}`), ready: (actualPort) => `spec-cli supervisor on loopback :${actualPort} (zero-downtime reloads, backend :${first.port})` })
+  startGateway({ host: resolveConfiguredHost(configuredHost, ALL_INTERFACES), publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
-  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: (actualPort) => recordEndpoint(`http://127.0.0.1:${actualPort}`), ready: (actualPort) => `spec-cli supervisor serving on http://localhost:${actualPort} (zero-downtime reloads, backend :${first.port})` })
+  // The ready line names the face actually bound, so a widened backend cannot read as a loopback one. The
+  // RECORD stays loopback either way: it is the address local agents dial, and the wildcard is not dialable.
+  const boundHost = resolveConfiguredHost(configuredHost)
+  const shown = boundHost === LOOPBACK_HOST ? 'localhost' : boundHost
+  listenOrExit(proxy, publicPort, { host: boundHost, label: 'supervisor', cleanup: reapChild, onListen: (actualPort) => recordEndpoint(`http://127.0.0.1:${actualPort}`), ready: (actualPort) => `spec-cli supervisor serving on http://${shown}:${actualPort} (zero-downtime reloads, backend :${first.port})` })
 }
 startResourceMonitor()
 

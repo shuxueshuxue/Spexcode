@@ -59,7 +59,7 @@ export type HubExtensions = {
 // linked machine's forward lands on. It is a property of the SOCKET, chosen here at construction, never
 // read from a request — see [[gateway-auth]]. A peer-ingress server is bound to loopback by its caller
 // and `--host` has no say in it.
-export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; onListen?: (port: number) => void; extensions?: HubExtensions; entry?: Entry }
+export type HubOpts = { port: number; host: string; tls?: { cert: string; key: string } | null; label?: string; onBindFail?: () => void; onListen?: (port: number) => void; extensions?: HubExtensions; entry?: Entry }
 
 // ---- registry ---------------------------------------------------------------------------------------
 // A project = a live backend record under ~/.spexcode/projects/<enc>/backend.json (written by supervise.ts
@@ -458,7 +458,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
     onListen: opts.onListen,
     ready: (actualPort) => entry === 'peer'
       ? `[hub] peer ingress on ${scheme}://127.0.0.1:${actualPort} — linked machines only, credential required`
-      : `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${actualPort} — /projects + /p/:projectId/*`,
+      : `[hub] multi-project gateway on ${scheme}://${opts.host}:${actualPort} — /projects + /p/:projectId/*`,
   })
   return server
 }

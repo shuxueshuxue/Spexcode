@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import net from 'node:net'
 import { fileURLToPath } from 'node:url'
-import { listenOrExit, resolveConfiguredPort } from './listen.js'
+import { ALL_INTERFACES, listenOrExit, LOOPBACK_HOST, resolveConfiguredHost, resolveConfiguredPort } from './listen.js'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -121,6 +121,7 @@ test('listenOrExit passes the bound port to ready publication', async () => {
   let publishedPort: number | undefined
   await new Promise<void>((resolve) => {
     listenOrExit(server, 0, {
+      host: LOOPBACK_HOST,
       label: 'test listener',
       ready: (port) => {
         publishedPort = port
@@ -133,6 +134,19 @@ test('listenOrExit passes the bound port to ready publication', async () => {
   assert.ok(address && typeof address === 'object')
   assert.equal(publishedPort, address.port)
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+})
+
+test('a configured host resolves to the surface\'s declared default, never to Node\'s', async () => {
+  // unset/blank means "the face this surface declares", which is loopback for every local serving verb and
+  // ALL_INTERFACES only where being the wide face is the request (public mode).
+  assert.equal(resolveConfiguredHost(undefined), LOOPBACK_HOST)
+  assert.equal(resolveConfiguredHost(''), LOOPBACK_HOST)
+  assert.equal(resolveConfiguredHost('   '), LOOPBACK_HOST)
+  assert.equal(resolveConfiguredHost(undefined, ALL_INTERFACES), ALL_INTERFACES)
+  // an explicit value wins over either default, trimmed — widening stays possible, it just has to be asked for
+  assert.equal(resolveConfiguredHost('0.0.0.0'), ALL_INTERFACES)
+  assert.equal(resolveConfiguredHost(' 100.64.0.1 '), '100.64.0.1')
+  assert.equal(resolveConfiguredHost('127.0.0.1', ALL_INTERFACES), LOOPBACK_HOST)
 })
 
 test('configured PORT distinguishes default, ephemeral, and invalid values', async () => {

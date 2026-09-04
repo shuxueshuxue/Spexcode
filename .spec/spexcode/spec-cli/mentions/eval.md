@@ -54,6 +54,21 @@ scenarios:
     expected: >-
       One grammar regardless of script: a CJK query filters like ASCII, and the chosen [[id]] binds the
       launched session exactly like the ASCII control.
+  - name: parent-directive-nests-a-launch
+    tags: [frontend-e2e, backend-api]
+    code: spec-cli/src/mentions.ts
+    related: [spec-cli/src/sessions.ts, spec-dashboard/src/mentions.jsx]
+    description: >-
+      Against a project holding one root session, drive the real dashboard's New Session box: type `@`, accept
+      the `@parent` door, complete a session from the ranked rows behind the qualifier, add a task, and launch.
+      Read the created record, the prompt it stored, and the console forest. Then call the real create API twice
+      more, once with a selector naming no session and once with two different selectors.
+    expected: >-
+      The bare `@` menu offers both action doors; accepting `@parent` writes `@parent:` and re-opens the board
+      rows with no create door behind the qualifier; accepting a row writes the stable full id. The launch
+      publishes a session whose `parent` is the named one and whose stored prompt is the task alone, and the
+      console folds it under that parent. Each unusable directive returns a 400 naming the miss, creating
+      nothing.
   - name: cli-sigil-tolerance
     tags: [cli]
     code: spec-cli/src/mentions.ts

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { HookPromptCatalog } from './hook-prompts.js'
+import { sessionLaunchReceipt } from './help.js'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -81,6 +82,13 @@ test('bare session keeps the complete compatible drawer', () => {
   assert.match(result.stdout, /spex session wait \[SEL…\]/)
   assert.match(result.stdout, /spex session send <SEL> "<msg>"/)
   assert.doesNotMatch(result.stdout, /spex session (?:archive|unarchive)\b/)
+})
+
+test('session launch receipt names an addressed parent watch separately from caller wait', () => {
+  const receipt = sessionLaunchReceipt('child-id', false, 'parent-id')
+  assert.match(receipt, /managed watch registered on parent `parent-i`/)
+  assert.match(receipt, /this caller has no parent watch.*spex session wait child-id/)
+  assert.doesNotMatch(receipt, /next lifecycle change: background `spex session wait/)
 })
 
 test('Stop teaching names every declaration face without changing the gate', () => {

@@ -68,6 +68,11 @@ proves it absent. If retirement cannot be proved, close fails before stopping or
 preserves its record, store, worktree, and branch. An irreversible record publication is never reported as a
 rollback, and a stale receipt can never outlive close with authority to consume a later colliding session.
 
+The prompt normalized into that payload is the prompt AFTER the grammar's `@parent:` directive has been
+consumed ([[session-create-authority]]): the directive is addressing, not task words, so the stripped text is
+what the payload hash, title, slug, stored prompt, and the launched agent all see, and the id it resolved to is
+the `parent` this transaction publishes.
+
 The public request accepts the standard `Idempotency-Key` header. The backend deterministically maps a valid
 key to one candidate session id and binds it to the normalized `{prompt,parent,launcher,name?}` payload. Creation for
 that id is serialized at the existing per-session lock. A same-key retry, including a concurrent retry or a

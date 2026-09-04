@@ -8,6 +8,7 @@ let lastAttempt = 0
 const TTL_MS = 20_000
 let lastIssueSync: string | null = null
 let lastFull = 0
+let lastFailure: string | null = null
 const FULL_MS = 30 * 60_000
 
 function refreshIfStale(now: number): void {
@@ -24,7 +25,18 @@ function refreshIfStale(now: number): void {
       ]).then(() => { lastIssueSync = startISO })
     : cache.reconcile(driver).then(() => { lastFull = now; lastIssueSync = startISO })
   )
-    .catch(() => {})
+    .then(() => { lastFailure = null })
+    // @@@ absorbed, never silent - this promise is SHARED: `refreshForgeNow` awaits it and every reader holds
+    // it through `inFlight`, so rejecting here would surface as an unhandled rejection in callers that only
+    // asked for cached state. The failure is therefore absorbed — but reporting it is not optional, because a
+    // silent absorb is what makes a forge that has been down for an hour look like a forge with no issues.
+    // Repeats are collapsed: the refresh retries every TTL, so an unchanged message is noise; a NEW message,
+    // or the same one after a success, is a fresh fact and prints again.
+    .catch((error) => {
+      const message = (error as Error).message
+      if (message !== lastFailure) console.error(`[forge] resident refresh failed: ${message}`)
+      lastFailure = message
+    })
     .finally(() => { inFlight = null })
 }
 

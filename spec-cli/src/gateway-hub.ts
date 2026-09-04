@@ -14,6 +14,7 @@
 //   DELETE /projects/:id                host extension: high-friction catalog registration removal
 //   /p/:projectId/login|logout          project session for that project
 //   ANY /p/:projectId/*  (+ WS upgrade) authorized → proxied, prefix-stripped, to that project's backend
+//   ANY /s/:sessionId/*  (+ WS upgrade) the SAME project route, addressed by a session this machine owns
 //   GET /machines                       admin: this machine's id + the peered machines and their legs
 //   ANY /m/:machineId/*  (+ WS upgrade) admin → proxied, segment-stripped, to that machine's gateway
 // Authorization never trusts the cookie's name or Path — the token's projectId claim is validated against
@@ -21,8 +22,8 @@
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
-import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { join, resolve as resolvePath } from 'node:path'
 import {
   adminCookieName, authorize, clearAdminPassword, clearProjectPassword, loadAuthStore, mintToken,
   projectCookieName, setAdminPassword, setProjectPassword, verifyPassword, PEER_CREDENTIAL_HEADER,
@@ -31,11 +32,11 @@ import {
 import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
-import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
+import { spexcodeHome, encodeProject, runtimeRoot } from '@spexcode/spec-core'
 import { readEndpointRecord } from './endpoint-record.js'
 import { readGatewayIdentity, type ResolvedIdentity } from '@spexcode/spec-core'
 import { proxyHttp, proxySessionWeb, proxySessionWebUpgrade } from './gateway.js'
-import { listMachinePeers, readPeerMachineId, type MachinePeer } from './machine-peer.js'
+import { listMachinePeers, readPeerMachineId, peerSenderRef, validPeerSender, type MachinePeer } from './machine-peer.js'
 
 export type HubProject = { id: string; identity: ResolvedIdentity; url: string; port: number; gated: boolean }
 // @@@ extension seam - the hub stays the ONE routing+authorization server; a host-level caller
@@ -103,6 +104,47 @@ export function listHubProjects(store: AuthStore): HubProject[] {
   return out.sort((a, b) => a.id.localeCompare(b.id))
 }
 
+// ---- session addressing -----------------------------------------------------------------------------
+// A session id names a project one indirection later, and that indirection is real knowledge only THIS
+// machine holds: session records live under the shared Git common-dir store (`projects/<enc>/sessions/<id>/`)
+// while a running backend publishes under the WORKTREE root it serves, so the store slot and the serving
+// project are frequently different directories. Resolving it here is what lets a remote caller — or the CLI
+// — address a session without first knowing which project answers for it, and it keeps `/p/:projectId/*`
+// meaning exactly one thing.
+type SessionAnchor = { ok: true; id: string } | { ok: false; status: number; error: string }
+
+function validSessionId(id: string): boolean {
+  return /^[0-9a-f-]{36}$/i.test(id)
+}
+
+function projectForSession(sessionId: string): SessionAnchor {
+  const projects = join(spexcodeHome(), 'projects')
+  let ids: string[] = []
+  try { ids = readdirSync(projects) } catch { ids = [] }
+  const stores = ids.filter((id) => existsSync(join(projects, id, 'sessions', sessionId, 'runtime.json')))
+  if (!stores.length) return { ok: false, status: 404, error: `no local project owns session ${sessionId}` }
+  if (stores.length > 1) return { ok: false, status: 409, error: `session ${sessionId} is ambiguous across ${stores.length} local projects` }
+  const store = stores[0]
+  // every project that is actually serving right now, by the root it serves
+  const live = ids.flatMap((id) => { const up = upstreamOf(id); return up ? [{ id, root: up.root }] : [] })
+  // the simple case: the store slot publishes its own backend
+  if (live.some((x) => x.id === store)) return { ok: true, id: store }
+  // a linked worktree: the record names the worktree it runs in, and one live backend serves that root
+  let worktree = ''
+  try {
+    const parsed = JSON.parse(readFileSync(join(projects, store, 'sessions', sessionId, 'runtime.json'), 'utf8'))
+    if (typeof parsed?.worktree_path === 'string' && parsed.worktree_path) worktree = resolvePath(parsed.worktree_path)
+  } catch { /* the backend gives the record's named error once routing reaches it */ }
+  const exact = worktree ? live.filter((x) => resolvePath(x.root) === worktree) : []
+  if (exact.length === 1) return { ok: true, id: exact[0].id }
+  if (exact.length > 1) return { ok: false, status: 409, error: `session ${sessionId} has ${exact.length} live backends for worktree ${worktree}` }
+  // last resort: any live backend whose Git project IS this session's store
+  const common = live.filter((x) => { try { return runtimeRoot(x.root) === join(projects, store) } catch { return false } })
+  if (common.length === 1) return { ok: true, id: common[0].id }
+  if (common.length > 1) return { ok: false, status: 409, error: `session ${sessionId} has ${common.length} live backends in its Git project` }
+  return { ok: false, status: 502, error: `target backend for session ${sessionId} is offline` }
+}
+
 // ---- the machine registry ---------------------------------------------------------------------------
 // The machine dimension is ADDRESSING, never aggregation ([[machine-routing]]): this hub answers for its own
 // machine and forwards `/m/:machineId/*` into a peered machine's gateway, so one origin, one SPA and one set
@@ -159,6 +201,36 @@ function readBody(req: http.IncomingMessage, limit = 4096): Promise<string> {
   })
 }
 
+// A machine hop may never claim to be a LOCAL session on the receiving machine. Exactly two routes let a
+// caller name a sender — session input and session close — so exactly two are rewritten, and every other
+// route rides through untouched. The rewrite is a body edit rather than a header the backend would have to
+// learn: [[machine-peer]] keeps the backend an ordinary local service with no cross-machine code path in it.
+const PEER_BODY_LIMIT = 1_048_576
+const SESSION_INPUT = /^\/api\/sessions\/([0-9a-f-]{36})\/input$/i
+const SESSION_CLOSE = /^\/api\/sessions\/([0-9a-f-]{36})\/close$/i
+type Stamped = { kind: 'pass' } | { kind: 'body'; body: Buffer } | { kind: 'error'; message: string }
+
+async function stampPeerSender(req: http.IncomingMessage, sub: string, machineId: string): Promise<Stamped> {
+  const input = sub.match(SESSION_INPUT)
+  const close = sub.match(SESSION_CLOSE)
+  if (!input && !close) return { kind: 'pass' }
+  const declared = Number(req.headers['content-length'] ?? 0)
+  if (declared > PEER_BODY_LIMIT) return { kind: 'error', message: `body exceeds the ${PEER_BODY_LIMIT}-byte peer limit` }
+  const raw = await readBody(req, PEER_BODY_LIMIT)
+  let parsed: unknown
+  try { parsed = JSON.parse(raw || '{}') } catch { return { kind: 'error', message: 'body must be JSON' } }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { kind: 'error', message: 'body must be a JSON object' }
+  const body = parsed as Record<string, unknown>
+  if (close) {
+    // close is the backend's ordinary external-user operation; a peer is a user there, never a session.
+    return { kind: 'body', body: Buffer.from(JSON.stringify({ ...body, source: { kind: 'user' } })) }
+  }
+  // a peer MAY name one of its own sessions — `peer_<its machine>_<session>` — and may not name anything else.
+  const claim = body.from
+  const from = validPeerSender(claim, machineId) ? claim : peerSenderRef(machineId)
+  return { kind: 'body', body: Buffer.from(JSON.stringify({ ...body, from })) }
+}
+
 function headerValue(req: http.IncomingMessage, name: string): string | null {
   const v = req.headers[name]
   return typeof v === 'string' && v ? v : null
@@ -201,7 +273,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
     const store = loadAuthStore()
     const rawUrl = req.url || '/'
     const q = rawUrl.indexOf('?')
-    const path = q >= 0 ? rawUrl.slice(0, q) : rawUrl
+    let path = q >= 0 ? rawUrl.slice(0, q) : rawUrl
     const query = q >= 0 ? rawUrl.slice(q) : ''
     const remote = req.socket.remoteAddress
     const cookies = req.headers.cookie
@@ -343,6 +415,21 @@ export function startHubGateway(opts: HubOpts): http.Server {
         (upstream) => reanchorHeaders(upstream, base))
     }
 
+    // ---- session addressing ----
+    // `/s/<sessionId>/...` is the project route wearing a different address, so it is REWRITTEN here and
+    // then handled by the project branch below — same authorization, same proxy, same WS path, same
+    // session-web frames. Resolving it into a second forwarding path is exactly the duplication this door
+    // was collapsed to remove. It is offered on both entries deliberately: a rule that existed only for the
+    // peer ingress would be a branch for one current caller rather than a property of the address.
+    const sm = path.match(/^\/s\/([^/]+)(\/.*)?$/)
+    if (sm) {
+      const sessionId = decodeURIComponent(sm[1])
+      if (!validSessionId(sessionId)) return sendJson(res, 404, { error: 'unknown session' })
+      const anchor = projectForSession(sessionId)
+      if (!anchor.ok) return sendJson(res, anchor.status, { error: anchor.error })
+      path = `/p/${encodeURIComponent(anchor.id)}${sm[2] || '/'}`
+    }
+
     // ---- project surface ----
     const pm = path.match(/^\/p\/([^/]+)(\/.*)?$/)
     if (pm) {
@@ -392,6 +479,15 @@ export function startHubGateway(opts: HubOpts): http.Server {
         return denied(res, `${base}/login`)
       }
       if (proxySessionWeb(req, res, sub + query, up.root)) return
+      // The one guarantee the old allowlist door carried, re-anchored to where the remote route is
+      // AUTHORIZED rather than to the listener that used to host it ([[machine-routing]]). It now covers
+      // every route the machine hop can reach, not just five — before this it was reachable only through the
+      // deleted door, so `/m/<id>/p/<pid>/api/sessions/<sid>/input` could carry any `from` it liked.
+      if (d.via === 'peer' && d.machineId && req.method === 'POST') {
+        const stamped = await stampPeerSender(req, sub, d.machineId)
+        if (stamped.kind === 'error') return sendJson(res, 400, { error: stamped.message })
+        if (stamped.kind === 'body') return proxyTo(req, res, up.port, sub + query, stamped.body)
+      }
       return proxyTo(req, res, up.port, sub + query)
     }
 
@@ -419,8 +515,17 @@ export function startHubGateway(opts: HubOpts): http.Server {
     const store = loadAuthStore()
     const rawUrl = req.url || '/'
     const q = rawUrl.indexOf('?')
-    const path = q >= 0 ? rawUrl.slice(0, q) : rawUrl
+    let path = q >= 0 ? rawUrl.slice(0, q) : rawUrl
     const query = q >= 0 ? rawUrl.slice(q) : ''
+    // the same session alias the HTTP half carries — a live terminal is addressable by the session it runs.
+    const sm = path.match(/^\/s\/([^/]+)(\/.*)?$/)
+    if (sm) {
+      const sessionId = decodeURIComponent(sm[1])
+      if (!validSessionId(sessionId)) return socket.destroy()
+      const anchor = projectForSession(sessionId)
+      if (!anchor.ok) return socket.destroy()
+      path = `/p/${encodeURIComponent(anchor.id)}${sm[2] || '/'}`
+    }
     const mm = path.match(/^\/m\/([^/]+)(\/.*)?$/)
     if (mm) {
       // the terminal socket is the whole point of forwarding a GATEWAY rather than a route allowlist: one leg
@@ -519,9 +624,10 @@ function pipeUpgrade(req: http.IncomingMessage, socket: import('node:stream').Du
 }
 
 // reverse-proxy one authorized request to a project's loopback backend, prefix already stripped.
-function proxyTo(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path: string): void {
+function proxyTo(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path: string, body?: Buffer): void {
   const headers: http.OutgoingHttpHeaders = { ...req.headers }
   const kept = stripGatewayCookies(req.headers.cookie)
   if (kept) headers.cookie = kept; else delete headers.cookie
-  proxyHttp(req, res, upstreamPort, path, headers)
+  if (body) { headers['content-length'] = String(body.length); delete headers['transfer-encoding'] }
+  proxyHttp(req, res, upstreamPort, path, headers, undefined, undefined, undefined, body)
 }

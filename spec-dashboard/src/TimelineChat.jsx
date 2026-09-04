@@ -470,14 +470,14 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   }, [s.id])
 
   // WALKING BACK. The window names how much earlier history it is not showing; this is the reader taking
-  // one page of it. The page is prepended and the scroll is anchored to the row that was under the thumb
-  // (below), so reading position survives the growth instead of jumping to a new top.
+  // one page of it. The page appears immediately after that way-in, so the press keeps its scroll position
+  // (below) and the newly revealed history starts where the reader asked for it.
   const anchorRef = useRef(null)
   const loadEarlier = useCallback(() => {
     if (loadingEarlier || !win.offset) return
     setLoadingEarlier(true)
     const timeline = scrollRef.current
-    anchorRef.current = timeline ? { height: timeline.scrollHeight, top: timeline.scrollTop } : null
+    anchorRef.current = timeline ? { top: timeline.scrollTop } : null
     void loadSessionTimeline(s.id, { before: win.offset, limit: WINDOW }).then((d) => {
       if (d && d.events.length) {
         setWin((prev) => ({ ...prev, offset: d.offset ?? 0, total: d.total ?? prev.total, priorWorking: !!d.priorWorking }))
@@ -625,15 +625,17 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     followTimelineTail()
   }, [followTimelineTail])
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
-  // GROWTH AT THE TOP MOVES NOTHING. Prepending a page pushes everything below it down by exactly the height
-  // that arrived; adding that height back to the scroll leaves the row the reader was on where it was. This
-  // runs before the tail-follow below and consumes the anchor, so a back-load is never also a jump to the end.
+  // A BACK-LOAD STAYS AT ITS WAY-IN. The new page is inserted after the earlier button, so preserving the
+  // pressed scroll position reveals it in place. Anchoring the old window instead skips the whole new page;
+  // when that old window is short, the resulting offset clamps at the bottom. This gesture also leaves tail
+  // pinning: the reader explicitly asked to walk into history.
   useLayoutEffect(() => {
     const anchor = anchorRef.current
     const timeline = scrollRef.current
     if (!anchor || !timeline) return
     anchorRef.current = null
-    timeline.scrollTop = anchor.top + (timeline.scrollHeight - anchor.height)
+    pinnedRef.current = false
+    timeline.scrollTop = anchor.top
   }, [events])
   useLayoutEffect(followTimelineTail, [events, followTimelineTail])
   useLayoutEffect(() => {

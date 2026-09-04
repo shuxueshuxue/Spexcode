@@ -18,6 +18,7 @@ related:
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
+  - spec-dashboard/test/timeline-load-earlier-position.e2e.mjs
   - spec-dashboard/src/readerSelection.js
 ---
 
@@ -95,9 +96,10 @@ the one row that never changes, so a reader who scrolled up met the same first l
 tell the window had moved — the press looked decorative even while it was working. The omission sits between
 the prompt and the window's oldest row, and so does the count, which is also exactly where the calendar jumps
 (a prompt on one day, the window opening days later). Reading position is what the
-press must not cost: a page arriving at the top pushes everything below it down, and the scroll is moved by
-exactly that height, so the row under the reader's eye does not move. Growth at the tail still follows the
-thumb — only a reader already at the newest entry is carried to it — and a back-load never counts as growth.
+press must not cost: the scroll position held at the press is restored, the way-in stays under the reader's
+eye, and the newly revealed page begins immediately after it. Anchoring the old window instead skips every row the reader just requested, and when
+the current text-bounded window is short that offset clamps at the bottom. Growth at the tail still follows
+the thumb — only a reader already at the newest entry is carried to it — and a back-load exits that pinning.
 Walking back is a PRESS, not a scroll trigger: an append-only history that reaches for more the moment the top
 comes into view fights the same thumb that pinning already answers to.
 

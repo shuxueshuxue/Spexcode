@@ -13,7 +13,7 @@ import {
 } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
-import { firesEvent, firesKey, keysOf } from './bindings.js'
+import { firesKey, keysOf } from './bindings.js'
 import { chordSequence } from './keymap.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
@@ -283,9 +283,7 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
       writeViewport(target)
       return
     }
-    // React Flow can lag one render behind our RAF writes; continue from the
-    // locally tracked frame so rapid keyboard navigation never jumps backward.
-    const start = viewportRef.current || getViewport()
+    const start = getViewport()
     const t0 = performance.now()
     cancelAnimationFrame(animRef.current)
     const step = (now) => {
@@ -501,10 +499,10 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
       }
       // hjkl mirror the arrows for graph nav (vim): k/j up/down the column, h/l to parent/child.
       // Keys resolved through the registry (firesKey) so they stay the single source the legend/controller share.
-      if (firesEvent('nav.up', e))     return go(upTarget, e)
-      if (firesEvent('nav.down', e))   return go(downTarget, e)
-      if (firesEvent('nav.parent', e)) return go(parent, e)
-      if (firesEvent('nav.child', e))  return go(rightTarget, e)
+      if (firesKey('nav.up', e.key))     return go(upTarget, e)
+      if (firesKey('nav.down', e.key))   return go(downTarget, e)
+      if (firesKey('nav.parent', e.key)) return go(parent, e)
+      if (firesKey('nav.child', e.key))  return go(rightTarget, e)
       // zoom & cycle are keyboard board ops too — they engage kbdMode so the mouse steps aside the same way.
       if (firesKey('graph.zoomIn', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom * 1.2), 160); return true }
       else if (firesKey('graph.zoomOut', e.key)) { e.preventDefault(); setKbdMode(true); centerOn(focus, clamp(getViewport().zoom / 1.2), 160); return true }

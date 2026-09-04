@@ -12,10 +12,8 @@ let overrides = load()
 
 // resolved keyboard keys for an action: the override's keys if set, else the registry default.
 export function keysOf(id) {
-  const action = byId[id]
-  if (!action) return []
   const o = overrides[id]
-  return (action.rebind === false ? null : o)?.keys || action.keys || []
+  return (o && o.keys) || byId[id]?.keys || []
 }
 // true when a user has changed this action away from its registry default.
 export function isCustom(id) {
@@ -39,10 +37,7 @@ export function eventKey(event) {
 }
 
 export function firesEvent(id, event) {
-  const action = byId[id]
-  const physical = !event.altKey && !event.ctrlKey && !event.metaKey && action?.codes?.includes(event.code)
-  const legacy = !event.altKey && !event.ctrlKey && !event.metaKey && action?.keyCodes?.includes(event.keyCode || event.which)
-  return keysOf(id).includes(eventKey(event)) || physical || legacy || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey(id, event.key))
+  return keysOf(id).includes(eventKey(event)) || (!event.altKey && !event.ctrlKey && !event.metaKey && firesKey(id, event.key))
 }
 
 // THE HINT READER. A control that a key can also reach says so in its own tooltip, and it asks the registry

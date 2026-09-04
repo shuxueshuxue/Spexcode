@@ -36,7 +36,7 @@ test('production composition runs the parent/child state, event, replay, publish
   assert.equal(childEvents[1]?.type, 'session.state.changed.v1')
   assert.equal(first.readEvents('child').length, childEvents.length)
   assert.deepEqual(first.readEvents('child', childEvents[0]?.eventSeq).map(event => event.eventSeq), [childEvents[1]?.eventSeq])
-  assert.equal(first.readFollowCursor('parent', 'child'), null)
+  assert.equal(first.readFollowCursor('parent', 'child'), childEvents[0]?.eventSeq)
   first.advanceFollowCursor('parent', 'child', 2)
   first.advanceFollowCursor('parent', 'child', 1)
   assert.equal(first.readFollowCursor('parent', 'child'), 2)
@@ -144,6 +144,44 @@ test('watch event batches resume by cursor and use event ids for idempotent queu
   }
 })
 
+test('watch cursor migration seeds existing edges at the subject head and remains idempotent', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-application-watch-cursor-migration-'))
+  const databasePath = join(root, 'sessions.sqlite')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  app.createSession({ sessionId: 'owner' })
+  app.createSession({ sessionId: 'subject' })
+  app.transitionSession('subject', { status: 'active', reason: 'history' })
+  app.transitionSession('subject', { status: 'review', reason: 'history' })
+  app.attachWatcher('owner', 'subject', 'watch:manual')
+  const head = app.readEvents('subject').at(-1)!.eventSeq
+  assert.equal(app.readFollowCursor('owner', 'subject'), head)
+  assert.equal(app.readWatchEvents(['owner']).length, 0)
+  app.transitionSession('subject', { status: 'close-pending', reason: 'new event' })
+  assert.equal(app.readWatchEvents(['owner']).length, 1)
+  app.protocol.withTransaction(tx => {
+    tx.exec('DELETE FROM session_follow_cursors WHERE watcher_session_id=? AND subject_session_id=?', 'owner', 'subject')
+    tx.exec("DELETE FROM schema_migrations WHERE component='session-application' AND version=4")
+  })
+  app.close()
+
+  const migrated = openProjectSessionApplication({ databasePath, locality: () => {} })
+  try {
+    assert.equal(migrated.readFollowCursor('owner', 'subject'), head + 1)
+    assert.equal(migrated.readWatchEvents(['owner']).length, 0)
+    migrated.close()
+    const reopened = openProjectSessionApplication({ databasePath, locality: () => {} })
+    try {
+      assert.equal(reopened.readFollowCursor('owner', 'subject'), head + 1)
+      assert.equal(reopened.readWatchEvents(['owner']).length, 0)
+    } finally {
+      reopened.close()
+    }
+  } catch (error) {
+    migrated.close()
+    throw error
+  }
+})
+
 test('production composition refuses missing locality and relative database paths before opening', () => {
   assert.throws(
     () => openProjectSessionApplication({ databasePath: 'relative.sqlite', locality: () => {} }),
@@ -161,14 +199,14 @@ test('a toolchain with an older application schema refuses a newer shared store 
   const first = openProjectSessionApplication({ databasePath, locality: () => {} })
   first.protocol.withTransaction(tx => {
     tx.exec(
-      "INSERT INTO schema_migrations(component,version,checksum,applied_at_ms) VALUES('session-application',4,'future-toolchain',1)",
+      "INSERT INTO schema_migrations(component,version,checksum,applied_at_ms) VALUES('session-application',5,'future-toolchain',1)",
     )
   })
   first.close()
 
   assert.throws(
     () => openProjectSessionApplication({ databasePath, locality: () => {} }),
-    /session-application carries schema generation 4; this build understands 3/,
+    /session-application carries schema generation 5; this build understands 4/,
   )
 })
 

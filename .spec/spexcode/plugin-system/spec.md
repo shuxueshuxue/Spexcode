@@ -25,6 +25,15 @@ dogfood ritual as any other node. Frontmatter: `title`, `status`, `desc`, and `s
 A plugin may also carry `kind` — `mutating` (the default) if it edits the spec graph, `report` if it only
 reports on it — which the new-session `/` palette tags it by.
 
+**A tree with no root node is refused, not quietly emptied.** Every plugin loads from
+`.spec/<root>/.plugins`, and the root is the one `.spec` child that carries a `spec.md`. When none does, the
+gather set is empty — no contract, no hooks, no commands — and nothing about that is visible: the manifest
+compiles to zero bytes, every dispatch fires and executes nothing, and the project sits in the graph looking
+adopted. That was measured on a real project carrying `.spec/<root>/<child>/` directories for weeks with no
+root `spec.md`; every hook on both harnesses had been dead the whole time. An ABSENT `.spec` is a repo that
+never adopted and is correctly silent. A `.spec` that HOLDS a tree but has no root is a broken adoption, and
+the two must not sound alike.
+
 The instance root is `.plugins`. A pre-0.3.0 `.config`-only tree is refused loudly rather than gathered as
 an empty surface that launches ungoverned agents. Its repair points to `spex doctor --migrate`; in the current
 release that spelling is only a non-mutating tombstone directing the user through a 0.3.x bridge release.

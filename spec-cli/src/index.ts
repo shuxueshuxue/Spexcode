@@ -593,7 +593,9 @@ app.post('/api/sessions', async (c) => {
     const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal, onPublished: projectCreatedSession })
     // The durable row is now public. Nudge the cheap session projection explicitly so a dashboard does not
     // wait for the best-effort store watcher; any held candidate worktree event remains a separate full claim.
-    if (result.status === 201) notifyBoardChanged('sessions')
+    // The durable row is already committed. Defer the projection nudge until this handler has returned so a
+    // slow graph splice cannot occupy the event loop between the create commit and the dashboard's 201.
+    if (result.status === 201) setImmediate(() => notifyBoardChanged('sessions'))
     // A candidate registry event is intentionally held while Git creates the private worktree. Once the
     // transaction has published or cleaned up its record, release the one deferred full refresh.
     flushDeferredWorktreeRegistryChange()
@@ -1006,7 +1008,7 @@ app.post('/api/sessions/:id/close', async (c) => {
   const ok = await closeSession(sessionId, body?.source)
   // The close route owns its write's visible boundary: filesystem watchers can be unavailable, so cache
   // invalidation must happen before the success response rather than leaving the confirming board to patrol.
-  if (ok) notifyBoardChanged('sessions')
+  if (ok) setImmediate(() => notifyBoardChanged('sessions'))
   return c.json(ok ? { ok: true } : { ok: false, error: `no close transition was committed for session ${sessionId}` }, ok ? 200 : 404)
 })
 app.post('/api/sessions/:id/quarantine', async (c) => {

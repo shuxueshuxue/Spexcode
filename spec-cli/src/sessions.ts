@@ -3449,9 +3449,15 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
     }
   }
   const target = wt
-  return target.branch
+  const close = () => target.branch
     ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source, unboundStopped))
     : closeOwnedSessionUnlocked(id, target, source, unboundStopped)
+  // Codex threads share one app-server. Its cold proof snapshots the full resident census and then
+  // mutates that same census; serialize project-local Codex closes so a sibling close cannot make a
+  // previously captured reference disappear during archive verification.
+  return target.rec.harness === 'codex'
+    ? withRecordLock('codex-shared-close', close)
+    : close()
 }
 export const closeSession = (id: string, rawSource?: unknown): Promise<boolean> => {
   const source = normalizeCloseSource(rawSource)

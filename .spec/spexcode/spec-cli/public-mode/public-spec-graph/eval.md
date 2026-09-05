@@ -1,23 +1,26 @@
 ---
 scenarios:
-  - name: static-artifact-is-graph-only
+  - name: published-tree-is-the-spec-face-with-no-backend
     tags: [cli, frontend-e2e]
     description: >
-      Build the public artifact through `npm run build:public`, inspect the emitted snapshot and load the
-      compiled shell. The snapshot must identify one committed revision and contain readable node prose;
-      the static mode must use that file rather than a live board and must leave the non-graph rail entries
-      inert.
+      Build the public artifact through `npm run build:public`, inspect the emitted snapshot, then load a
+      published tree in a real browser and open one node. The snapshot must identify one committed revision
+      and carry readable node prose. The page must be the ordinary workspace — rail, explorer, tab strip,
+      document — landing on the Spec face, and it must reach no backend at all: every request it makes has
+      to be answerable by a static host.
     expected: >
-      `spec-dashboard/dist-public/public-graph.json` is a deterministic
-      `spexcode.public-spec-graph/v1` index with a non-empty node list, `sourceRoot` equal to `.`, and no
-      session, issue, eval, overlay, terminal, or checkout-path field. Its `specs/` documents carry the
-      rendered prose separately; `public-graph-meta.json` drives the lazy About panel; and
-      `public-spec-release.json` hashes every static data file plus the `.spec/spexcode` ZIP archive. The static
-      application bundles successfully, opens the graph from the
-      index, loads one document on node open, and has only graph navigation enabled. Zero loss =
-      an ordinary static host can expose one repository's graph without exposing a live SpexCode control
-      plane.
-    code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/GraphView.jsx, spec-dashboard/src/SideBar.jsx]
+      `dist-public/public-graph.json` is a deterministic `spexcode.public-spec-graph/v1` index with a
+      non-empty node list, `sourceRoot` equal to `.`, and no session, issue, eval, overlay, terminal, or
+      checkout-path field. Its `specs/` documents carry the rendered prose separately;
+      `public-graph-meta.json` drives the lazy About panel; `public-spec-release.json` hashes every static
+      data file plus the `.spec` ZIP archive. Loaded in a browser, the bare address resolves to `#/spec`
+      with the explorer's Specs tree and the node document beside it, the rail offers exactly the
+      `PUBLIC_PAGES` doors (Spec and the Graph) with every other destination inert, opening a node reads
+      `./specs/<id>.json`, and the network log contains ZERO `/api/` requests and zero page errors. Zero
+      loss = an ordinary static host serves the real reading surface, and nothing on it can reach a control
+      plane that is not there.
+    code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SideBar.jsx]
+    related: [spec-dashboard/src/specContent.js, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/launch.js, spec-dashboard/src/FileTree.jsx]
     test: spec-dashboard/test/public-graph-static.e2e.mjs
   - name: isolated-release-host
     tags: [frontend-e2e, cli]

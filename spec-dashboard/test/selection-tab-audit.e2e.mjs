@@ -57,7 +57,7 @@ try {
     if (pathname.endsWith('/stream')) return route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'event: board\ndata: {}\n\n' })
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
   })
-  await page.addInitScript(() => localStorage.removeItem('spexcode.tabs'))
+  await page.addInitScript(() => localStorage.removeItem('spexcode.tabs.root'))
   const sessions = await (async () => {
     await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
     await page.locator('.viewhost.view-sessions').waitFor({ state: 'attached' })

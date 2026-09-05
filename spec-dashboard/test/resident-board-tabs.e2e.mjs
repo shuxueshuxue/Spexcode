@@ -16,7 +16,7 @@ const state = () => page.evaluate(() => ({
 }))
 try {
   await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
-  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  await page.evaluate(() => localStorage.removeItem('spexcode.tabs.root'))
   await page.reload({ waitUntil: 'domcontentloaded' })
   const opened = []
   for (const route of ['#/sessions', '#/evals', '#/issues', '#/spec', '#/settings']) {

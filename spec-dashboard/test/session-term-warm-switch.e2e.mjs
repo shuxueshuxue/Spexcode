@@ -59,7 +59,7 @@ const { chromium } = await import(pathToFileURL(PW).href)
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true, args: ['--no-sandbox'] })
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
 await context.addInitScript(({ tabs: initialTabs }) => {
-  localStorage.setItem('spexcode.tabs', initialTabs)
+  localStorage.setItem('spexcode.tabs.root', initialTabs)
   const sockets = []
   class FixtureWebSocket {
     constructor(url) {

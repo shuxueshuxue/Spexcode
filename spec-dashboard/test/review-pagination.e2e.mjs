@@ -477,7 +477,7 @@ try {
   await page.keyboard.press('Enter')
   await page.waitForFunction(() => location.hash.startsWith('#/evals'))
 
-  await page.evaluate(() => { sessionStorage.setItem('spex.focus', 'session-console'); location.hash = '#/' })
+  await page.evaluate(() => { sessionStorage.setItem('spex.focus.root', 'session-console'); location.hash = '#/' })
   const focusedGraphWaiting = page.waitForResponse((response) => apiPath(response).endsWith('/api/graph'), { timeout: 45_000 })
   await page.reload()
   await focusedGraphWaiting

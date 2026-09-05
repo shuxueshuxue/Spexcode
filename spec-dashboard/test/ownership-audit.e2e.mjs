@@ -60,7 +60,7 @@ await page.addInitScript(() => {
   localStorage.clear()
   localStorage.setItem('spexcode.dock', '1')
   localStorage.setItem('spexcode.dockMode', 'sessions')
-  localStorage.setItem('spexcode.tabs', JSON.stringify([
+  localStorage.setItem('spexcode.tabs.root', JSON.stringify([
     { page: 'sessions', param: 'session-a', query: null, pinned: true },
     { page: 'sessions', param: 'session-b', query: null, pinned: true },
   ]))

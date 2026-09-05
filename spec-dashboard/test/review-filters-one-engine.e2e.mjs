@@ -155,7 +155,7 @@ await page.screenshot({ path: join(OUT, '03-evals-unknown-qualifier.png') })
 
 // ============ 2. the EMBEDDED panes: same semantics, local state, no address ============
 step(`Spec Information on ${NODE} — the compact face of the same adapters`)
-await page.evaluate((id) => { sessionStorage.setItem('spex.focus', id); location.hash = '#/' }, NODE)
+await page.evaluate((id) => { sessionStorage.setItem('spex.focus.root', id); location.hash = '#/' }, NODE)
 await page.reload({ waitUntil: 'domcontentloaded' })
 await settle(1600)
 const nodeCard = page.locator('.react-flow__node').filter({ hasText: NODE }).first()

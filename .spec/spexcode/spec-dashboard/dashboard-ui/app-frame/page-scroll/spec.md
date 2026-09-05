@@ -54,7 +54,9 @@ keeps observing until the content can represent that position. Pointer, wheel, t
 ends automatic restoration immediately so user intent wins.
 List to detail is still an ordinary PUSH and browser Back still owns navigation; the primitive only
 restores the nested scrollTop belonging to the returned address. Different query states keep different
-positions. A new address starts at the top, and a hidden warm page keeps its own native state.
+positions, and so do different PROJECTS — an address is only an address inside one project, so the saved
+positions are keyed under the project's scope ([[dashboard-shell]]) rather than an origin-wide one. A new
+address starts at the top, and a hidden warm page keeps its own native state.
 
 The Graph canvas and Session console do not consume this primitive: the graph camera is not document
 scroll, the session list is a bounded pane, and xterm/tmux owns terminal scrollback. Popup, side-rail,

@@ -45,7 +45,7 @@ const dragTo = async (key, point) => {
 }
 
 try {
-  await page.addInitScript((seed) => { if (!localStorage.getItem('spexcode.tabs')) localStorage.setItem('spexcode.tabs', JSON.stringify(seed)) }, tabs)
+  await page.addInitScript((seed) => { if (!localStorage.getItem('spexcode.tabs.root')) localStorage.setItem('spexcode.tabs.root', JSON.stringify(seed)) }, tabs)
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
   await page.locator('[role="tab"][data-tab-key="#/file/alpha.md"]').waitFor({ state: 'visible' })
   assert.deepEqual(await order(), ['#/file/alpha.md', '#/file/bravo.md', '#/file/charlie.md'])

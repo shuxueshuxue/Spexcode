@@ -37,6 +37,17 @@ export const PROJECT_BASE = scope.base
 // machine. A remote scope is not a different app: it is this app at a deeper prefix.
 export const PROJECT_MACHINE_ID = scope.machineId
 
+// THE SAME SEAM FOR BROWSER-LOCAL STATE. localStorage and sessionStorage are keyed by ORIGIN, and the
+// gateway serves every project from ONE origin under different paths — so a bare key does not name one
+// project's state, it names a bucket every project on that host writes to. State that is an ADDRESS or an
+// IDENTIFIER inside a project (an open tab list of session ids, an explorer ledger of node ids and disk
+// paths, a focused node) therefore has to carry the scope, or opening a document in one project silently
+// opens it in the next and closing it there closes it here. A genuine PREFERENCE — theme, language,
+// keybindings, band widths, font size — belongs to the READER and not to any project, and stays unscoped on
+// purpose. Unscoped serving modes (vite dev, a single-project `spex serve ui`) resolve to the one 'root'
+// scope, which is the suffix the app already used before this seam was named.
+export const scopedKey = (name, projectId = PROJECT_ID) => `${name}.${projectId || 'root'}`
+
 // the ONE URL builder every backend call routes through: `/api/...` paths get the scope prefix; anything
 // else (the root-scoped /projects catalog, an absolute URL) passes through untouched. Exported as a pure
 // function of (path, base) underneath so it is testable; the app-facing form closes over the live scope.

@@ -19,7 +19,9 @@ const e2e = read('../test/page-scroll.e2e.mjs')
 test('one page scroll primitive owns address-keyed restoration', () => {
   assert.match(scroll, /export function PageScroll/)
   assert.match(scroll, /window\.location\.pathname[\s\S]*window\.location\.search[\s\S]*window\.location\.hash/)
-  assert.match(scroll, /const STORAGE_PREFIX = 'spex\.page-scroll:'/)
+  // the prefix carries the PROJECT scope: an address is only an address inside one project, and one gateway
+  // origin serves them all ([[dashboard-shell]]'s scopedKey).
+  assert.match(scroll, /const STORAGE_PREFIX = `\$\{scopedKey\('spex\.page-scroll'\)\}:`/)
   assert.match(scroll, /sessionStorage\.getItem\(`/)
   assert.match(scroll, /sessionStorage\.setItem\(`/)
   // the key is the PANE's address, not the window's: a hidden mounted document must not re-key onto

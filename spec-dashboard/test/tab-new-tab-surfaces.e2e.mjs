@@ -68,7 +68,7 @@ const settle = async (hash, ready) => {
   // Order matters: the working set is cleared while the app is ALREADY on the target address, then reloaded.
   // Clearing first lets the still-running app write its old list straight back on the way to the address.
   await page.goto(`${base}/${hash}`, { waitUntil: 'domcontentloaded' })
-  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  await page.evaluate(() => localStorage.removeItem('spexcode.tabs.root'))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator(ready).first().waitFor({ state: 'visible', timeout: 60_000 })
   await page.waitForTimeout(600)

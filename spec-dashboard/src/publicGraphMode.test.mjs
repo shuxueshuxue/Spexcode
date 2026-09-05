@@ -39,6 +39,11 @@ test('a published tree runs the workspace shell over static input, opening only 
   assert.doesNotMatch(dashboard, /<SideBar page="graph" graphOnly \/>/)
   assert.match(dashboard, /<SideBar page=\{page\} graphOnly=\{graphOnly\}/)
 
+  // The rail is the LIVE rail — same entries, same order, no published-only marker. Graph is addressable
+  // but not a rail destination, there as here.
+  assert.match(sideBar, /const entries = ENTRIES/)
+  assert.doesNotMatch(sideBar, /graphOnly \? \['graph'/)
+
   // Spec is the landing face, and the rail opens exactly the pages the static payload can answer.
   assert.deepEqual(PUBLIC_PAGES, ['spec', 'file', 'graph'])
   assert.match(route, /PUBLIC_GRAPH_ONLY/)

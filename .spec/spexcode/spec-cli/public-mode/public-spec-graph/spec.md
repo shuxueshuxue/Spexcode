@@ -40,10 +40,12 @@ issues, evals, terminals, settings, or any write route.
 
 A visitor reads it through the **same workspace shell the live dashboard uses** — the rail, the explorer,
 the tab strip, the document — landing on `#/spec`, the address a live project opens on. There is no second
-sealed frame to keep in step: a published tree is the workspace over a static payload, and the only thing
-that differs is which doors have data behind them. `PUBLIC_PAGES` names those doors — Spec, File, and the
-Graph — and every other top-level entry stays visible but disabled, so the product shape is legible without
-implying a capability the payload cannot answer.
+sealed frame to keep in step, and no marker on the rail that the live rail does not also have: a published
+tree is the workspace over a static payload, and the only thing that differs is which doors have data behind
+them. `PUBLIC_PAGES` names the ADDRESSES a static payload can answer — Spec, File, and the directly
+addressable Graph — while the rail carries the ordinary `RAIL_PAGES` entries with everything outside that
+set visible but disabled. The product shape stays legible without implying a capability the payload cannot
+answer, and without inventing an entry that exists only here.
 
 `spex graph --public --out <path>` writes `spexcode.public-spec-graph/v1` JSON containing the producer
 repository identity, exact Git `revision`, a relocatable `sourceRoot: "."`, and deterministic node rows.

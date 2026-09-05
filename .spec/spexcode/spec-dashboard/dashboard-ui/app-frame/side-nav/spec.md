@@ -82,7 +82,8 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   when already held, a board/detail route focuses the same page tab and keeps the page icon declared by
   [[view-registry]]. Legacy review addresses normalize at the route layer.
 - **Published tree.** A published spec tree ([[public-spec-graph]]) runs this same rail, not a sealed one of
-  its own. It keeps the graph anchor the live rail omits, lights whichever of `PUBLIC_PAGES` the reader is
-  on, and renders every destination outside that set muted and inert (`aria-disabled` with no href or
-  handler). The enabled set is read from that one exported list rather than spelled out here again, so a
-  door opened in the payload opens in the rail by construction. No live dock or transport mounts either way.
+  its own — the SAME entries in the same order, with no marker the live rail does not have. The graph is
+  excluded there for the reason it is excluded here: it is addressable, not a top-level board. What differs
+  is only which entries answer: those in `PUBLIC_PAGES` are live, and every destination outside that set is
+  muted and inert (`aria-disabled` with no href or handler). The enabled set is read from that one exported
+  list rather than spelled out here again. No live dock or transport mounts either way.

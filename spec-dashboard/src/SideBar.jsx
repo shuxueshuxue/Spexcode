@@ -80,9 +80,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
 export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDockToggle = false }) {
   const t = useT()
   const { setDock, setDockMode } = useWorkspaceApi()
-  // A published tree keeps the graph marker the live rail omits, because the graph is one of the two faces
-  // its static payload can actually answer.
-  const entries = graphOnly ? ['graph', ...ENTRIES] : ENTRIES
+  const entries = ENTRIES
   return (
     // the rail is inert chrome for pointer focus ([[focus-return]]): a press navigates without taking DOM
     // focus, so chrome never becomes the focus-return ticket. Keyboard Tab still reaches every entry.

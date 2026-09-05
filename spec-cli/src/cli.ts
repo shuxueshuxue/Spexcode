@@ -1000,7 +1000,11 @@ if (cmd === 'serve') {
     const help = await import('./help.js')
     console.error(peerAnchor
       ? help.peerSessionLaunchReceipt(created.id, peerAnchor.sshAddress)
-      : help.sessionLaunchReceipt(created.id, watchEstablished))
+      : help.sessionLaunchReceipt(
+        created.id,
+        watchEstablished,
+        created.parent && (watchEstablished || created.parent !== ownSessionId()) ? created.parent : null,
+      ))
   } else if (sub === 'ls') {
     // pretty list of living sessions + states. `spex session ls [SEL...] [--children[=PARENT-SEL]] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,

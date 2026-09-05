@@ -2,20 +2,23 @@
 title: session-create-authority
 status: active
 hue: 280
-desc: What a public create must establish before it may use the local path — one identity probe with its own budget and its single ECONNREFUSED licence — plus the fork point it may pin and the fork commit it always records.
+desc: What a public create must establish before it may use the local path — one identity probe with its own budget and its single ECONNREFUSED licence — plus the fork point it may pin, the fork commit it always records, and the supervisor its prompt may address.
 code:
   - spec-cli/src/sessions.ts#sessionCreateRequest
 related:
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/client.ts
+  - spec-cli/src/session-selectors.ts
+  - spec-cli/src/mentions.ts
+  - spec-cli/src/sessions.test.ts
   - packages/spec-core/src/layout.ts
 ---
 
 # session-create-authority
 
-A create is the one session verb that can be asked of the wrong backend, and the one that decides which commit
-the work starts from. Both are settled BEFORE any Git mutation, so a refusal leaves no half-made worktree,
-branch, store, or receipt behind.
+A create is the one session verb that can be asked of the wrong backend, the one that decides which commit
+the work starts from, and the one that decides whose subtree the new work belongs to. All three are settled
+BEFORE any Git mutation, so a refusal leaves no half-made worktree, branch, store, or receipt behind.
 
 **Public session creation asks one lightweight authority question before it may use the local path.** The CLI
 first opens a bounded TCP connection to the target. A completed connect is the presence fact: the supervisor's
@@ -54,6 +57,31 @@ later separates a branch which never authored a commit from one whose commits th
 cannot: both heads are ancestors of the base. A reader that lacks the field recovers the same commit from the branch
 ref's creation reflog entry, which is where git wrote that start point; the diff document ([[diff-document]]) is the
 surface that spends it.
+
+**A create may address its supervisor from the prompt.** The `parent` field records who RAN the create, which
+is provenance and nothing more — so before this, a human launching from the dashboard had no way to hang the
+new worker under an existing session at all, and an agent could only ever produce its own children. The prompt
+therefore carries the grammar's one create-time directive, `@parent:<selector>` ([[mentions]]). It is read off
+the raw prompt first: the token is stripped, the selector resolved against the retained board — archived rows
+included, because parentage is a durable pointer that outlives its parent's liveness — through the same shared
+matcher every session verb uses ([[session-selectors]]), and the resolved id REPLACES any supplied `parent`.
+Explicit addressing outranks provenance. The two candidate sources — the caller that ran the create and the
+prompt that addressed a supervisor — are ranked in exactly one place, which yields one settled parentage
+carrying both the id and which source won; nothing downstream re-asks, and the source never becomes a second
+flag riding the transaction. The published record's `parent` is then an ordinary one, so the read-time
+forest, the parent watch source, and [[session-reparent]] all treat it exactly like a spawned child's
+([[session-nesting]]).
+
+Everything that could make the directive silently wrong is a `400` before the transaction opens: two different
+selectors in one prompt, a selector that names no session, an ambiguous prefix. A create that dropped an
+unusable directive would land the worker at top level, where nothing distinguishes the miss from an ordinary
+unparented launch until a human goes looking at the forest. `.` resolves to nothing here — the backend's own
+environment id and working directory are not a stand-in for whichever caller wrote the prompt. The board read
+is paid for only when the directive is present. Because the strip happens before the payload is normalized, a
+same-key retry of the same raw prompt hashes identically; the resolved parent is part of that payload, so a
+retry whose named supervisor has since vanished is a different request and is refused rather than silently
+reparented. The launch text tells the child the truth about which of the two it is: created by a spawner, or
+attached under a supervisor that did not create it.
 
 **A node branch never tracks the base branch.** Creation passes `--no-track` when forking from any start point,
 including a remote-tracking ref, because landing explicitly merges the base and the node has no business upstream.

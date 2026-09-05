@@ -1,5 +1,6 @@
 // @@@ mentions - the shared in-text grammar: `[[node]]` and `@session` are references;
-// the exact @new token is the durable worker-creation action. Its dispatcher stays here
+// the exact @new token is the durable worker-creation action and `@parent:<sel>` addresses
+// the created worker's supervisor. Its dispatcher stays here
 // so every composer reaches the same creation owner after its own write has committed.
 const SESSION_RE = /(?:^|\s)@([\p{L}\p{N}_-]+(?::[\p{L}\p{N}_.-]+)?)/gu
 const NODE_RE = /\[\[([^\]\s]+)\]\]/g
@@ -20,6 +21,22 @@ export function parseMentions(text: string): { sessions: string[]; nodes: string
   for (const m of text.matchAll(SESSION_RE)) sessions.push(m[1])
   for (const m of text.matchAll(NODE_RE)) nodes.push(m[1])
   return { sessions: uniq(sessions), nodes: uniq(nodes) }
+}
+
+// @@@ the @parent: directive - the second reserved `@` action and the addressing twin of @new: it names the
+// session that the worker THIS text creates hangs under. Being an action rather than a reference, it is
+// consumed at the create boundary and never reaches the agent's prompt. The selector is one whitespace-
+// delimited token; a space after the colon is tolerated because a human types `@parent: <id>` as naturally as
+// `@parent:<id>`, while the autocomplete writes the closed form. The lookbehind keeps the boundary check
+// zero-width, so two adjacent directives both match instead of the first eating the second's separator.
+const PARENT_DIRECTIVE = /(?<=^|\s)@parent:[ \t]*(\S+)[ \t]*/gu
+
+// Every occurrence is stripped and every distinct selector reported, so the boundary — not this parser —
+// decides what two different parents in one text mean. Without a directive the text is returned unchanged.
+export function parseParentDirective(text: string): { selectors: string[]; text: string } {
+  const selectors: string[] = []
+  const stripped = text.replace(PARENT_DIRECTIVE, (_match, selector: string) => { selectors.push(selector); return '' })
+  return selectors.length ? { selectors: uniq(selectors), text: stripped.trim() } : { selectors: [], text }
 }
 
 export type DispatchOutcome = { token: string; result: 'spawned' | 'failed'; detail?: string; note?: string }

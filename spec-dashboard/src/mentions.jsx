@@ -62,8 +62,10 @@ export function matchSpecs(specs, query, focusId) {
 // same derived title every other surface shows; matching also searches the retained raw/name/prompt/note
 // candidates so a pane-title change or rename does not strand a session under text the human already saw.
 // `sub` is a hint (its node or status). Exact/prefix on id-or-candidate leads, then most-recent (`created`
-// desc) within a band. Returns up to 8 `{id, label, sub}`.
-export function matchSessions(sessions, query) {
+// desc) within a band. Returns up to 8 `{id, label, sub}`. The two synthetic rows after the exact hits are
+// the grammar's ACTION doors — `new` (create a worker) and `parent` (name that worker's supervisor); each
+// re-opens this same menu behind its own `:` qualifier rather than being a pick of its own.
+export function matchSessions(sessions, query, doors = true) {
   const q = query.toLowerCase()
   const handle = (s) => sessionHeadline(s) || (s.id || '').slice(0, 8)
   const candidates = (s) => [s?.title, s?.label, s?.raw?.name, s?.raw?.title, s?.activity, s?.promptPreview, s?.note]
@@ -84,9 +86,19 @@ export function matchSessions(sessions, query) {
   scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
   const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.status, session: x.s }))
   const exactCount = scored.filter((x) => x.score === 0).length
-  const beforeNew = items.slice(0, Math.min(exactCount, 7))
-  return [...beforeNew, { id: 'new', label: 'new', sub: 'choose a launcher' }, ...items.slice(beforeNew.length)].slice(0, 8)
+  if (!doors) return items.slice(0, 8)
+  const beforeNew = items.slice(0, Math.min(exactCount, 6))
+  return [
+    ...beforeNew,
+    { id: 'new', label: 'new', sub: 'choose a launcher' },
+    { id: 'parent', label: 'parent', sub: 'nest the new session under one' },
+    ...items.slice(beforeNew.length),
+  ].slice(0, 8)
 }
+
+// the two `@`-action doors, and the token each writes when picked. A door is not a referent: accepting one
+// re-opens the menu behind its qualifier so the NEXT pick is the launcher or the parent session.
+export const SESSION_DOORS = { new: '@new:', parent: '@parent:' }
 
 export function matchLaunchers(launchers, query) {
   const q = query.toLowerCase()
@@ -224,6 +236,15 @@ export function sessionMentionAt(value, caret, sessions, launchers = []) {
       if (!items.length) return null
       return { kind: 'launcher', items, index: 0, start: i, end: caret, query: query.slice('new:'.length) }
     }
+    // `@parent:` is the addressing door: past the qualifier the rows are ordinary sessions again, so the
+    // completion is the same ranked board — only the token it writes, and the id it hands the create
+    // boundary, differ. No `new` door behind it: a supervisor that does not exist yet cannot be named.
+    if (query.startsWith('parent:')) {
+      const q = query.slice('parent:'.length)
+      const items = matchSessions(sessions, q, false)
+      if (!items.length) return null
+      return { kind: 'parent', items, index: 0, start: i, end: caret, query: q }
+    }
     const items = matchSessions(sessions, query)
     if (!items.length) return null
     return { kind: 'session', items, index: 0, start: i, end: caret, query }
@@ -237,12 +258,15 @@ export function sessionMentionAt(value, caret, sessions, launchers = []) {
 export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   const t = useT()
   const launcher = menu.kind === 'launcher'
-  const session = menu.kind === 'session' || launcher
+  const parent = menu.kind === 'parent'
+  const session = menu.kind === 'session' || launcher || parent
   const head = launcher
     ? `@new:${menu.query}`
-    : menu.query
-      ? (session ? `@${menu.query}` : `[[${menu.query}]]`)
-      : t(session ? 'session.menuSessions' : 'session.menuSpecNodes')
+    : parent
+      ? `@parent:${menu.query}`
+      : menu.query
+        ? (session ? `@${menu.query}` : `[[${menu.query}]]`)
+        : t(session ? 'session.menuSessions' : 'session.menuSpecNodes')
   return (
     <ul className={`${up ? 'mention-menu up' : 'mention-menu'}${fixedStyle ? ' fixed' : ''}`} style={fixedStyle || undefined} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
@@ -253,7 +277,7 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
             key={it.id}
             role="option"
             aria-selected={i === menu.index}
-            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (menu.kind === 'session' && it.id === 'new') ? ' new' : ''}`}
+            className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (menu.kind === 'session' && SESSION_DOORS[it.id]) ? ' new' : ''}`}
             onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
             onMouseEnter={() => onHover(i)}
           >
@@ -330,8 +354,8 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
       requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    if (menu.kind === 'session' && item.id === 'new') {
-      const insert = '@new:'
+    if (menu.kind === 'session' && SESSION_DOORS[item.id]) {
+      const insert = SESSION_DOORS[item.id]
       const nextValue = before + insert + value.slice(menu.end)
       const caret = before.length + insert.length
       setValue(nextValue)
@@ -341,7 +365,8 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     }
     const insert = menu.kind === 'session' ? `@${item.id} `
       : menu.kind === 'launcher' ? `@new:${item.id} `
-        : `[[${item.id}]] `
+        : menu.kind === 'parent' ? `@parent:${item.id} `
+          : `[[${item.id}]] `
     setValue(before + insert + value.slice(menu.end))
     setMenu(null)
     setFixedStyle(null)

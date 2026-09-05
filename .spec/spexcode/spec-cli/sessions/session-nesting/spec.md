@@ -2,7 +2,7 @@
 title: session-nesting
 status: active
 hue: 300
-desc: A session launched by `spex new` from INSIDE another session records its spawner as a durable `parent`, so the dashboard folds the child under it — a read-time tree that auto-promotes orphans when a parent closes, with a purely-informational fold POD — the subtree count on the rollup colour — that never aggregates into the parent's own status or zone.
+desc: A session records a durable `parent` — its spawner when `spex new` ran INSIDE another session, or the supervisor its prompt addressed with @parent: — so the dashboard folds the child under it — a read-time tree that auto-promotes orphans when a parent closes, with a purely-informational fold POD — the subtree count on the rollup colour — that never aggregates into the parent's own status or zone.
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
@@ -34,6 +34,15 @@ reply-hint uses (in the CLI's own process) and passes it as `parent` in the `POS
 as a durable field, and it rides onto the
 public `Session` type and `/api/graph`. A human running `spex new` from a plain shell has no session id →
 `parent` stays null, so no phantom nesting — the same no-sender rule [[agent-reply-channel]] already uses.
+
+Provenance answers "who made this", which is only sometimes the same question as "whose fleet is this". So the
+launch prompt may ADDRESS a supervisor instead: `@parent:<selector>` ([[mentions]]) is resolved and consumed by
+the create boundary ([[session-create-authority]]) and its resolved id replaces the spawner's. That is what
+lets a human nest a launch from the New Session box, where the caller is a browser and there is no spawner to
+inherit. Nothing downstream distinguishes the two origins — the durable pointer, the parent watch source, the
+read-time fold, and reparenting are identical — because a parent edge means the same thing however it arrived.
+The only place the difference is spoken is the child's own launch text, which says it was attached under a
+supervisor rather than created by it, so the child does not act on a false account of its own birth.
 After a successful child create, the parent installs the `parent` source through the same durable watcher
 mechanism [[session-reparent]] later moves. The nesting field remains provenance and layout only; the sourced
 watch relation owns status delivery. It is deliberately distinct from a human's `watch` command: cancelling a

@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: tabs-belong-to-one-project
+    description: >-
+      On a gateway that serves several projects from ONE origin under different `/p/<id>/` paths, in a single
+      real browser profile: clear storage, open two documents of different kinds in project A (a session by its
+      real id and a spec node), then visit project B where nothing was ever opened and read B's strip and the
+      tab key B itself reads. Close a tab from B with its own X, reload A, and read A's stored working set.
+      Write a disclosure-ledger entry in A and read the ledger B sees.
+    expected: >-
+      Project B's strip is empty and the key B reads holds nothing: A's two documents are A's. The key each
+      project reads carries that project's scope, so closing a tab in B cannot shrink A's working set, and a
+      ledger entry written in A is not the ledger B reads. `localStorage` is keyed by origin rather than by
+      path, so an unscoped key would make every project on the host share one strip.
+    tags: [frontend-e2e]
+    code: [spec-dashboard/src/tabs.js, spec-dashboard/src/project.js]
   - name: page-kind-slot-regression
     description: >
       Open the running dashboard in a real browser. From a session document, use the Explorer to open the

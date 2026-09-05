@@ -153,10 +153,25 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   const specDest = join(targetDir, '.spec')
   const specTreeExists = existsSync(specDest)
     && readdirSync(specDest).some((e) => e !== 'spexcode.json' && e !== 'spexcode.local.json')
+  const includeSeedDir = (dir: string) => selectedNativeEvents === null || seedableForEvents(dir, selectedNativeEvents)
   if (specTreeExists) {
     console.warn(`• .spec already carries a tree at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
+    // @@@ the tree is the reader's; .plugins is the MACHINERY - and skipping one must not skip the other. A
+    // tree that arrived by hand (copied in, or written before this machine adopted) has no `.plugins`, and
+    // without it the hook manifest is EMPTY: every dispatch fires and executes nothing, so a project can sit
+    // in the graph for weeks with a full spec tree and not one working hook. Re-running init could never fix
+    // it either, because the whole scaffold was skipped. Seed the plugins into whichever root the tree
+    // already has — copyTreeNoClobber is additive, so anything already there stays the reader's.
+    const roots = readdirSync(specDest, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+    if (roots.length === 1) {
+      const planted = copyTreeNoClobber(
+        join(TEMPLATES, 'spec', 'project', '.plugins'), join(specDest, roots[0], '.plugins'), targetDir, includeSeedDir,
+      )
+      if (planted.length) console.log(`✓ seeded ${planted.length} .plugins file(s) into the existing root '${roots[0]}' — the hook manifest is built from these`)
+    } else if (roots.length > 1) {
+      console.warn(`• .spec holds ${roots.length} root directories (${roots.join(', ')}) — cannot tell which one owns .plugins. Seed it by hand, or keep one root.`)
+    }
   } else {
-    const includeSeedDir = (dir: string) => selectedNativeEvents === null || seedableForEvents(dir, selectedNativeEvents)
     const planted = copyTreeNoClobber(
       join(TEMPLATES, 'spec'), specDest, targetDir,
       includeSeedDir,

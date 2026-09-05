@@ -17,6 +17,7 @@ import { firesKey, keysOf } from './bindings.js'
 import { chordSequence } from './keymap.js'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { returnFocus } from './focus.js'
+import { scopedKey } from './project.js'
 import { labelColor } from './color.js'
 import { overlaySessions, sessionHeadline } from './session.js'
 import { lockCycleKeyLabels, showLockCycleKeys } from './lockHint.js'
@@ -81,10 +82,10 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
   // fresh tab still opens on the root); a stale saved id is fine — focusRaw below falls back to the root.
   const [focusId, setFocusId] = useState(() => {
     let saved = null
-    try { saved = sessionStorage.getItem('spex.focus') } catch { /* storage may be walled off */ }
+    try { saved = sessionStorage.getItem(scopedKey('spex.focus')) } catch { /* storage may be walled off */ }
     return (saved && specs.some((s) => s.id === saved) ? saved : null) || specs.find((s) => !s.parent)?.id
   })
-  useEffect(() => { try { if (focusId) sessionStorage.setItem('spex.focus', focusId) } catch { /* */ } }, [focusId])
+  useEffect(() => { try { if (focusId) sessionStorage.setItem(scopedKey('spex.focus'), focusId) } catch { /* */ } }, [focusId])
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
   const [pane, setPane] = useState('spec')
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace

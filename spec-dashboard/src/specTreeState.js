@@ -1,4 +1,4 @@
-import { scopedStorageKey } from './project.js'
+import { scopedKey } from './project.js'
 import { useSyncExternalStore } from 'react'
 
 // THE EXPLORER'S DISCLOSURE, held OUTSIDE the rows that draw it — the same shape the session forest
@@ -17,8 +17,9 @@ import { useSyncExternalStore } from 'react'
 // share ([[dock-modes]]) and clears both ledgers in one publish.
 //
 // Kept in module scope rather than a context: the explorer mounts in the dock and, embedded, elsewhere,
-// and both are views of ONE tree. Persisted per project so the shape of the tree a reader arranged is
-// still there on the next boot, which is what "remembered" has to mean to be worth anything.
+// and both are views of ONE tree. Persisted under the PROJECT's scope, because a node id and a disk path
+// only mean anything inside one project, so the shape of the tree a reader arranged is still there on the
+// next boot — which is what "remembered" has to mean to be worth anything — and is theirs alone.
 const ledger = (KEY) => {
   const read = () => {
     try {
@@ -59,8 +60,8 @@ const ledger = (KEY) => {
   }
 }
 
-const specs = ledger(scopedStorageKey('spex.specTreeOpen'))
-const dirs = ledger(scopedStorageKey('spex.diskTreeOpen'))
+const specs = ledger(scopedKey('spex.specTreeOpen'))
+const dirs = ledger(scopedKey('spex.diskTreeOpen'))
 
 export const useSpecTreeState = () => useSyncExternalStore(specs.subscribe, specs.get, specs.get)
 export const toggleSpecNode = (id) => specs.toggle(id)

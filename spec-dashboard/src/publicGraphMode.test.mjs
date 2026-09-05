@@ -75,12 +75,12 @@ test('remembered workspace state belongs to the tree the page was served from, n
   // One host serves many trees — the gateway's /p/<id> projects, a gallery's published trees under one
   // domain — and localStorage is per-origin. An unsuffixed key hands a reader the tabs and open branches of
   // whichever tree they looked at last, which is how a vConsole page came to show a `requests` tab.
-  assert.match(project, /export const scopedStorageKey = \(key\) => \(STORAGE_SCOPE === '\/' \? key : `\$\{key\}@\$\{STORAGE_SCOPE\}`\)/)
-  assert.match(project, /replace\(\/\[\^\/\]\*\$\/, ''\)/)
+  assert.match(project, /export const scopedKey = \(name, scope = STORAGE_SCOPE\) => `\$\{name\}\.\$\{scope\}`/)
+  assert.match(project, /replace\(\/\[\^\/\]\*\$\/, ''\)/)   // the scope is the SERVING DIRECTORY, not the project id
   for (const [name, source] of [['tabs.js', tabs], ['workspace.jsx', workspace], ['specTreeState.js', specTreeState]]) {
-    assert.doesNotMatch(source, /localStorage\.(get|set)Item\('/, `${name} keys storage through scopedStorageKey, never a bare literal`)
+    assert.doesNotMatch(source, /localStorage\.(get|set)Item\('/, `${name} keys storage through scopedKey, never a bare literal`)
   }
-  assert.match(tabs, /const KEY = scopedStorageKey\('spexcode\.tabs'\)/)
-  assert.match(workspace, /scopedStorageKey\('spexcode\.dock'\)/)
-  assert.match(specTreeState, /ledger\(scopedStorageKey\('spex\.specTreeOpen'\)\)/)
+  assert.match(tabs, /const KEY = scopedKey\('spexcode\.tabs'\)/)
+  assert.match(workspace, /scopedKey\('spexcode\.dock'\)/)
+  assert.match(specTreeState, /ledger\(scopedKey\('spex\.specTreeOpen'\)\)/)
 })

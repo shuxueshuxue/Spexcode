@@ -48,7 +48,7 @@ try {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
   })
   await page.addInitScript(() => {
-    localStorage.removeItem('spexcode.tabs')
+    localStorage.removeItem('spexcode.tabs.root')
     localStorage.setItem('spexcode.dock', '1')
     localStorage.setItem('spexcode.dockMode', 'explorer')
   })

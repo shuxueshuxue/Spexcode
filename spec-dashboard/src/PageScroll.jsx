@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
+import { scopedKey } from './project.js'
 import { usePaneAddress } from './workspace.jsx'
 
-const STORAGE_PREFIX = 'spex.page-scroll:'
+const STORAGE_PREFIX = `${scopedKey('spex.page-scroll')}:`
 
 export const pageScrollAddress = () => (
   typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}${window.location.hash}`

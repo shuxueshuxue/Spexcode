@@ -46,7 +46,7 @@ await page.goto(`${BASE}/#/empty`, { waitUntil: 'domcontentloaded' })
 await page.evaluate(() => {
   const set = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
   set('spexcode.lang', 'en'); set('spexcode.theme', 'minimal')
-  set('spexcode.tabs', '[]'); set('spexcode.dock', '1'); set('spexcode.dockMode', 'explorer')
+  set('spexcode.tabs.root', '[]'); set('spexcode.dock', '1'); set('spexcode.dockMode', 'explorer')
   try { localStorage.removeItem('spexcode.split') } catch { /* private mode */ }
 })
 await page.reload({ waitUntil: 'domcontentloaded' })
@@ -137,7 +137,7 @@ const idleWith = async (label, hashes) => {
   await probe.goto(`${BASE}/#/empty`, { waitUntil: 'domcontentloaded' })
   await probe.evaluate(() => {
     const set = (k, v) => { try { localStorage.setItem(k, v) } catch { /* private mode */ } }
-    set('spexcode.lang', 'en'); set('spexcode.theme', 'minimal'); set('spexcode.tabs', '[]')
+    set('spexcode.lang', 'en'); set('spexcode.theme', 'minimal'); set('spexcode.tabs.root', '[]')
     set('spexcode.dock', '1'); set('spexcode.dockMode', 'explorer')
     try { localStorage.removeItem('spexcode.split') } catch { /* private mode */ }
   })

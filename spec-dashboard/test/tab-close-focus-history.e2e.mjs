@@ -46,7 +46,7 @@ const closeActive = async () => {
 }
 const fresh = async (hash) => {
   await page.goto(`${base}/${hash}`, { waitUntil: 'domcontentloaded' })
-  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  await page.evaluate(() => localStorage.removeItem('spexcode.tabs.root'))
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[role="tab"][data-tab-key]').first().waitFor({ state: 'visible', timeout: 60_000 })
   await page.waitForTimeout(700)

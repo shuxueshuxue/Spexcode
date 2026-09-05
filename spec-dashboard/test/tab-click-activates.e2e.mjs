@@ -45,7 +45,7 @@ const state = () => page.locator('[role="tab"][data-tab-key]:visible').evaluateA
 })))
 
 try {
-  await page.addInitScript((tabs) => localStorage.setItem('spexcode.tabs', JSON.stringify(tabs)), seeded)
+  await page.addInitScript((tabs) => localStorage.setItem('spexcode.tabs.root', JSON.stringify(tabs)), seeded)
   await page.goto(`${base}/#/file/alpha.md`, { waitUntil: 'domcontentloaded' })
   await page.locator('[data-tab-key="#/file/alpha.md"] .tab-face').waitFor({ state: 'visible' })
   const before = await state()

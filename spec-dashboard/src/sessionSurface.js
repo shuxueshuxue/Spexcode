@@ -1,4 +1,4 @@
-import { PROJECT_ID } from './project.js'
+import { PROJECT_ID, scopedKey } from './project.js'
 
 export const SESSION_SURFACE_TERMINAL = 'terminal'
 export const SESSION_SURFACE_CONVERSATION = 'conversation'
@@ -10,7 +10,7 @@ const BASE_SURFACES = new Set([SESSION_SURFACE_TERMINAL, SESSION_SURFACE_CONVERS
 const listeners = new Set()
 let memoryState = null
 
-export const sessionSurfaceStorageKey = (projectId = PROJECT_ID) => `${STORAGE_PREFIX}.${projectId || 'root'}`
+export const sessionSurfaceStorageKey = (projectId = PROJECT_ID) => scopedKey(STORAGE_PREFIX, projectId)
 
 // Conversation is the base default for every session; Terminal is a pane-backed session's opt-in face.
 const emptyState = () => ({ defaultSurface: SESSION_SURFACE_CONVERSATION, sessions: {} })

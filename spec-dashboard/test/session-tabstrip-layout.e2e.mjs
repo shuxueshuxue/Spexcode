@@ -48,7 +48,7 @@ await page.route('**/api/**', async (route) => {
 await page.addInitScript(() => {
   localStorage.clear()
   localStorage.setItem('spexcode.dock', '0')
-  localStorage.setItem('spexcode.tabs', JSON.stringify([{ page: 'sessions', param: 'session-a', query: null, pinned: true }]))
+  localStorage.setItem('spexcode.tabs.root', JSON.stringify([{ page: 'sessions', param: 'session-a', query: null, pinned: true }]))
   window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
 })
 

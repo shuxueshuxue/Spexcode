@@ -120,7 +120,7 @@ try {
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
   await context.addInitScript(() => {
-    localStorage.removeItem('spexcode.tabs')
+    localStorage.removeItem('spexcode.tabs.root')
     window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
   })
   const page = await context.newPage()

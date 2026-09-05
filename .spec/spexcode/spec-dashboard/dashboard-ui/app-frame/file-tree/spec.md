@@ -35,8 +35,9 @@ ancestor collapses or the whole dock folds, so a row-local flag is erased by ges
 do with it — and, being unreachable from outside, it also left the tree unable to open the branch its own
 address named: the explorer could sit on a closed root while that spec's document was open beside it. One
 store outside the rows fixes both, and it is the same shape [[session-forest]]'s fold store already uses,
-because it is the same problem twice. It persists, so the arrangement a reader made is still there on the
-next boot; storage that refuses to answer yields an empty tree, which is a correct tree. The store holds
+because it is the same problem twice. It persists under the PROJECT's scope ([[dashboard-shell]]), so the arrangement a reader made is still
+there on the next boot and is that project's alone — a node id and a disk path mean nothing in another
+project's tree; storage that refuses to answer yields an empty tree, which is a correct tree. The store holds
 TWO ledgers — the open spec nodes and the open disk directories ([[disk-tree]]) — because the disk
 projection had the first defect for as long as its folders kept row-local flags: closing the Files
 section forgot every folder inside it.

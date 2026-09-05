@@ -36,7 +36,7 @@ if (fresh.hash !== '#/sessions' || !fresh.page?.includes('view-sessions')) throw
 
 // Seed one real session object into the persisted working set, then close it through the visible tab X.
 await page.evaluate((id) => {
-  localStorage.setItem('spexcode.tabs', JSON.stringify([{ page: 'sessions', param: id, query: null, pinned: true }]))
+  localStorage.setItem('spexcode.tabs.root', JSON.stringify([{ page: 'sessions', param: id, query: null, pinned: true }]))
   location.hash = `#/sessions/${encodeURIComponent(id)}`
 }, session.id)
 await page.reload({ waitUntil: 'domcontentloaded' })

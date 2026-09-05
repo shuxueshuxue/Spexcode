@@ -281,7 +281,7 @@ const seed = async (state) => {
     const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch { /* private mode */ } }
     set('spexcode.lang', 'en')          // aria labels and band classes must not shift with the locale
     set('spexcode.theme', 'minimal')
-    set('spexcode.tabs', JSON.stringify(wrapTabs))   // a strip deep enough to WRAP, rewritten per state so nothing carries over
+    set('spexcode.tabs.root', JSON.stringify(wrapTabs))   // a strip deep enough to WRAP, rewritten per state so nothing carries over
     set('spexcode.dock', s.D === 'closed' ? '0' : '1')
     set('spexcode.dockMode', s.D === 'sessions' ? 'sessions' : 'explorer')
     set('spexcode.ctxOpen', s.C === 'open' ? '1' : '0')

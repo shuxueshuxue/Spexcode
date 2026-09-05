@@ -937,7 +937,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .public-about-trigger:hover, .public-about-trigger[aria-expanded="true"] { background: var(--wash-hover); color: var(--ink2); }
 .public-about {
-  position: absolute; right: 0; bottom: 38px; width: min(380px, calc(100vw - 84px)); padding: 14px;
+  /* A VIEWPORT overlay, not a row in the strip. Its trigger sits in a status-bar item, and every `.sb-item`
+     clips its overflow so a long status string cannot spill sideways across the strip — so an absolutely
+     positioned panel inside one is invisible no matter how correct its own box is: 254px of panel laid out
+     inside a 31px clipped row, present in the DOM, measurable, and painting nothing. Positioning against the
+     viewport is what the panel always meant; `absolute` only happened to work while its ancestor did not clip. */
+  position: fixed; right: 8px; bottom: 38px; z-index: 40; width: min(380px, calc(100vw - 84px)); padding: 14px;
+  /* The panel is a viewport overlay by POSITION but still a status-bar descendant by DOM, so it inherits the
+     strip's `white-space: nowrap` — correct for a one-line status, fatal for a paragraph. Prose in an overlay
+     wraps. */
+  white-space: normal; overflow-wrap: anywhere;
   border: 1px solid var(--edge); border-radius: var(--radius); background: var(--raised); color: var(--ink);
   box-shadow: var(--shadow); font-size: var(--type-control); line-height: var(--leading-relaxed);
 }
@@ -952,7 +961,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .public-about-summary, .public-about-status { margin: 12px 0 0; }
 .public-about-error { color: var(--red); }
 .public-about-facts { display: grid; gap: 5px; margin: 12px 0 0; }
-.public-about-facts > div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
+/* auto, not a fixed 74px: the longest label here is "Source revision", which overprinted its own value at
+   that width. Nothing saw it because the panel itself never painted. */
+.public-about-facts > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; }
 .public-about-facts dt { color: var(--muted); }
 .public-about-facts dd { min-width: 0; margin: 0; color: var(--ink2); overflow-wrap: anywhere; }
 .public-about-facts code { color: var(--cyan); font-family: var(--mono); }

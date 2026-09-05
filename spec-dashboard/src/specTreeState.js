@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react'
 import { scopedKey } from './project.js'
+import { useSyncExternalStore } from 'react'
 
 // THE EXPLORER'S DISCLOSURE, held OUTSIDE the rows that draw it — the same shape the session forest
 // already uses ([[session-forest]]'s fold store), because it is the same problem twice. Two ledgers, one

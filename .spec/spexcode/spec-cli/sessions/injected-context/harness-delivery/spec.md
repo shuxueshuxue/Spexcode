@@ -73,8 +73,14 @@ plugin node. This replaces the launch-time
   ownership off the adapter and picks the writer. The post-erase empty-dir sweep covers each artifact dir AND its parent
   (never a checkout root), since a harness may nest its shim a level below its home. For a linked Codex
   worktree, the root checkout owns the executable `.codex/hooks.json` dispatcher. The worktree's
-  `.codex/hooks.json` is an empty `{ "hooks": {} }` anchor only: Codex needs the project layer anchor, but
-  parsing a second dispatcher there would execute every PreToolUse handler twice. Claude is the opposite
+  `.codex/hooks.json` is an ANCHOR only: Codex needs the project layer anchored, but parsing a second
+  dispatcher there would execute every PreToolUse handler twice. What the anchor asserts is therefore the
+  PATH'S EXISTENCE, never its bytes — Codex rewrites that layer to the root checkout and never reads them.
+  So an empty `{ "hooks": {} }` is written only when nothing is there; a file already at that path has
+  already anchored the layer and is left exactly as it is. This matters because the path is not always ours:
+  a repository that COMMITS its own `.codex/hooks.json` puts real, tracked hooks there, and writing an empty
+  anchor over them would destroy configuration SpexCode never reads, as a git modification the reader did
+  not make. Claude is the opposite
   case: it loads project settings from the session's cwd only (measured on Claude Code 2.1.241 — a hook
   configured solely in the main checkout never fires inside a nested linked worktree, and a worktree's
   generated settings file is picked up by a running session without a restart), so every worktree carries

@@ -15,9 +15,9 @@ const bandBudget = read('../test/band-budget.e2e.mjs')
 
 test('public graph and workspace status mounts are mutually exclusive and complete', () => {
   // PublicGraphAbout registers its disclosure through the same provider; the shell owns the only footer
-  // element. The public branch and normal branch each render one footer, never two competing bars.
-  assert.equal((shell.match(/<StatusBar \/>/g) || []).length, 2, 'Shell has one public and one normal status footer')
-  assert.match(shell, /if \(graphOnly\) \{[\s\S]*?<StatusBar \/>[\s\S]*?return \(/)
+  // element. There is ONE shell for both builds, so there is one footer — a published tree that grew a
+  // second branch here is a published tree drifting away from the workspace it is supposed to be.
+  assert.equal((shell.match(/<StatusBar \/>/g) || []).length, 1, 'Shell renders exactly one status footer')
   assert.match(shell, /<BoardStatus specs=\{specs\} sessions=\{sessions\} page=\{page\} \/>/)
   assert.doesNotMatch(graphStats, /useStatusItem|id:\s*['"]graph-stats['"]|className=["']graph-stats/)
   assert.doesNotMatch(app, /<ReviewSurface|surface\s*===\s*['"]review['"]/)

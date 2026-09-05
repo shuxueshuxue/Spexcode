@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { navigate, parseRoute, useRoute } from './route.js'
 import { scopedKey } from './project.js'
+import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './viewCatalog.js'
 import { closeDestination, focusTab, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
 

@@ -6,6 +6,7 @@ import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { fetchNodeFiles, specUrl } from './data.js'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
@@ -32,7 +33,7 @@ export const PANES = [
   { key: 'eval',    label: 'eval' },
 ]
 
-export function panesFor(node, graphOnly = false) {
+export function panesFor(node, graphOnly = PUBLIC_GRAPH_ONLY) {
   if (graphOnly) return [{ key: 'spec', label: 'spec' }]
   return node?.overlays?.length ? [{ key: 'edit', label: 'edit' }, ...PANES] : PANES
 }
@@ -165,9 +166,9 @@ function NodeAttachments({ nodeId, enabled }) {
   )
 }
 
-export function SpecPane({ node, graphOnly = false }) {
+export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
   const t = useT()
-  const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
+  const content = useSpecContent(node.id, node.version, { embedded: node.body != null })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
@@ -591,7 +592,7 @@ export function EvalPane({ node, filter = {}, onFilter = () => {} }) {
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = PUBLIC_GRAPH_ONLY }) {
   const t = useT()
   const proseRef = useRef(null)
   const [filters, setFilters] = useState({ issues: {}, eval: {} })

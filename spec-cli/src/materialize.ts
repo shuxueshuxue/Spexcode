@@ -19,7 +19,10 @@ export type MaterializedArtifact = {
 export type MaterializeResult = { contentHash: string; planted: MaterializedArtifact[] }
 // one shim landing: the adapter's bytes plus WHO OWNS the file they land in ([[harness-adapter]]'s
 // shimOwnership). `hooks` rides along for the shared-json case, where the bytes are merged rather than written.
-type ShimTarget = { ownership: 'exclusive' | 'shared-json'; content: string; hooks?: Record<string, unknown[]> }
+type ShimTarget = { ownership: 'exclusive' | 'shared-json'; content: string; hooks?: Record<string, unknown[]>
+  // an EXISTENCE-only target: what it needs is a file at this path, not these bytes in it. Writing over one
+  // that is already there would be taking content we do not read.
+  existenceOnly?: true }
 // land one shim. A file wholly ours is the plain byte-equality write; a config file the host agent SHARES with
 // the user gets ONLY our identity-stamped hook entries merged in, so their permissions, env, statusLine and
 // own hooks survive adoption (writeManagedJsonHooks, [[harness-adapter]]).
@@ -28,6 +31,10 @@ type ShimTarget = { ownership: 'exclusive' | 'shared-json'; content: string; hoo
 // and the allowlist this pass still owes every other target (the pre-commit anchor runs this on the way into
 // every commit). Returns whether the shim actually landed.
 function landShim(file: string, shim: ShimTarget): boolean {
+  // An anchor's whole job is that the path EXISTS, so a file already there has already done it — and its
+  // bytes may be the project's own (a repository that commits its `.codex/hooks.json` puts real hooks at
+  // exactly this path). Overwriting them would destroy configuration we never read.
+  if (shim.existenceOnly && existsSync(file)) return true
   try {
     if (shim.ownership === 'shared-json' && shim.hooks) writeManagedJsonHooks(file, shim.hooks)
     else writeFileIfChanged(file, shim.content)
@@ -435,7 +442,10 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
-    if (anchor) addShimTarget(anchorTargets, anchor, { ownership: 'exclusive', content: '{\n  "hooks": {}\n}\n' })
+    // The anchor exists so the harness DISCOVERS this layer; it then reads the main checkout's shim and
+    // ignores these bytes entirely. So it is an existence target: create one when the path is empty, never
+    // write over what is already there.
+    if (anchor) addShimTarget(anchorTargets, anchor, { ownership: 'exclusive', content: '{\n  "hooks": {}\n}\n', existenceOnly: true })
   }
   for (const sk of skillNodes) for (const h of selected) {
     const dir = h.skillDir(proj); if (!dir) continue

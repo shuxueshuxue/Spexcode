@@ -72,6 +72,15 @@ writing that one file; skipping on the directory's existence would leave that re
 contract files at all. Init therefore skips only when `.spec` holds an entry that is not one of the two
 config files.
 
+**Skipping the TREE never skips the MACHINERY.** `.plugins` is not part of the reader's spec tree — it is
+where the lifecycle hooks live, and the hook manifest is built by walking it. A tree that arrived by hand
+(copied in, or written before this machine adopted) has none, and the consequence is silent and total: the
+manifest is empty, so every dispatch fires and executes nothing. A project can then sit in the graph for
+weeks with a full spec tree and not one working hook, and re-running init could never repair it because the
+whole scaffold was skipped. So when the scaffold is skipped, init still seeds `.plugins` into whichever root
+the tree already has, additively — anything already there stays the reader's. Exactly one root can own it;
+init refuses to guess when `.spec` holds several and says so.
+
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
 literal restated in the code, which is how the message once claimed a `["src"]` starter while the template

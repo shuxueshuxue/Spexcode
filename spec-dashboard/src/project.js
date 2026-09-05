@@ -37,16 +37,28 @@ export const PROJECT_BASE = scope.base
 // machine. A remote scope is not a different app: it is this app at a deeper prefix.
 export const PROJECT_MACHINE_ID = scope.machineId
 
-// THE SAME SEAM FOR BROWSER-LOCAL STATE. localStorage and sessionStorage are keyed by ORIGIN, and the
-// gateway serves every project from ONE origin under different paths — so a bare key does not name one
-// project's state, it names a bucket every project on that host writes to. State that is an ADDRESS or an
-// IDENTIFIER inside a project (an open tab list of session ids, an explorer ledger of node ids and disk
-// paths, a focused node) therefore has to carry the scope, or opening a document in one project silently
-// opens it in the next and closing it there closes it here. A genuine PREFERENCE — theme, language,
-// keybindings, band widths, font size — belongs to the READER and not to any project, and stays unscoped on
-// purpose. Unscoped serving modes (vite dev, a single-project `spex serve ui`) resolve to the one 'root'
-// scope, which is the suffix the app already used before this seam was named.
-export const scopedKey = (name, projectId = PROJECT_ID) => `${name}.${projectId || 'root'}`
+// THE SAME SEAM FOR BROWSER-LOCAL STATE. localStorage and sessionStorage are keyed by ORIGIN, and one
+// origin serves many trees — the gateway's `/p/<id>` projects, and a gallery's several published trees under
+// a single domain. So a bare key does not name one tree's state, it names a bucket every tree on that host
+// writes to. State that is an ADDRESS or an IDENTIFIER inside a tree (an open tab list of session ids, an
+// explorer ledger of node ids and disk paths, a focused node) therefore has to carry the scope, or opening a
+// document in one tree silently opens it in the next and closing it there closes it here. A genuine
+// PREFERENCE — theme, language, keybindings, band widths, font size — belongs to the READER and not to any
+// tree, and stays unscoped on purpose.
+//
+// The scope is the DIRECTORY THE PAGE WAS SERVED FROM, for the same reason that directory is already the API
+// prefix: it is the address the page actually arrived at, so it separates every tree a host can serve rather
+// than only the ones wearing a `/p/<id>` prefix. Deriving it from the project id instead leaves a gallery of
+// published trees — no `/p/` anywhere, `PROJECT_ID` null in all of them — sharing one bucket, which is
+// measurable as a `requests` tab appearing on the vConsole page. An unscoped serving mode (vite dev, a
+// single-project `spex serve ui`, a root deployment) resolves to the one 'root' scope, which is the suffix
+// the app already used before this seam was named.
+const servingScope = (pathname) => {
+  const dir = (pathname || '/').replace(/[^/]*$/, '')
+  return dir === '/' ? 'root' : dir.replace(/^\/|\/$/g, '')
+}
+export const STORAGE_SCOPE = servingScope(typeof location !== 'undefined' ? location.pathname : '/')
+export const scopedKey = (name, scope = STORAGE_SCOPE) => `${name}.${scope}`
 
 // the ONE URL builder every backend call routes through: `/api/...` paths get the scope prefix; anything
 // else (the root-scoped /projects catalog, an absolute URL) passes through untouched. Exported as a pure

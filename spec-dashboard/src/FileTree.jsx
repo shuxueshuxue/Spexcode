@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { Caret, Icon } from './icons.jsx'
 import { firesEvent } from './bindings.js'
 import ExplorerContextMenu from './ExplorerContextMenu.jsx'
@@ -211,9 +212,13 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
         <Section name={t('fileTree.specs')} count={specs.length} tone="specs">
           {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
         </Section>
-        <Section name={t('fileTree.files')} count={fileCount} tone="files">
-          <DiskTree onCount={onFileCount} />
-        </Section>
+        {/* A published tree ships the spec index and its documents, never the repository's source. Offering
+            an empty Files section there would name a capability the payload cannot answer. */}
+        {!PUBLIC_GRAPH_ONLY && (
+          <Section name={t('fileTree.files')} count={fileCount} tone="files">
+            <DiskTree onCount={onFileCount} />
+          </Section>
+        )}
       </div>
       <ExplorerContextMenu menu={menu} onClose={closeMenu} owningNodeOf={owningNodeOf} />
       <button type="button" className="ft-graph-entry" data-tip={t('fileTree.graph')} aria-label={t('fileTree.graph')}

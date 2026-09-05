@@ -37,6 +37,16 @@ export const PROJECT_BASE = scope.base
 // machine. A remote scope is not a different app: it is this app at a deeper prefix.
 export const PROJECT_MACHINE_ID = scope.machineId
 
+// PERSISTED WORKSPACE STATE BELONGS TO THE TREE, NOT THE ORIGIN. One host serves many of them — the
+// gateway's `/p/<id>` projects, a gallery's several published trees under one domain — and localStorage is
+// per-origin, so an unsuffixed key hands a reader the tabs and open branches of whichever tree they looked
+// at last. The serving directory is the tree's identity here for the same reason it is the API prefix: it is
+// the address the page was actually served under. A root deployment keeps the bare key, so an existing
+// single-project install boots with the state it already had.
+const servingDir = (pathname) => (pathname || '/').replace(/[^/]*$/, '')
+export const STORAGE_SCOPE = servingDir(typeof location !== 'undefined' ? location.pathname : '/')
+export const scopedStorageKey = (key) => (STORAGE_SCOPE === '/' ? key : `${key}@${STORAGE_SCOPE}`)
+
 // the ONE URL builder every backend call routes through: `/api/...` paths get the scope prefix; anything
 // else (the root-scoped /projects catalog, an absolute URL) passes through untouched. Exported as a pure
 // function of (path, base) underneath so it is testable; the app-facing form closes over the live scope.

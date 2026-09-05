@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { scopedStorageKey } from './project.js'
 import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './viewCatalog.js'
 import { closeDestination, focusTab, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
@@ -31,7 +32,7 @@ export const setTabTitle = (tabOrKey, title) => {
 // address still copyable, bookmarkable and Back-navigable exactly as before — a reader who has never
 // opened a second tab cannot tell this landed.
 
-const KEY = 'spexcode.tabs'
+const KEY = scopedStorageKey('spexcode.tabs')
 
 const read = () => {
   try {

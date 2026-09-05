@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useRef, useState } from 'react'
+import { scopedStorageKey } from './project.js'
 
 // [[workspace-shell]]'s two contexts. Every context in this app is split the same way and for the same
 // measured reason: a value that mixes a stable API with changing state makes the API's identity change
@@ -31,9 +32,9 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split, lockedSource, helpOpen }
 const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, toggleHelp, closeHelp, setCompose, takeCompose, watchCompose, splitTo, closeSplit, lockGraphTo }
 
-const DOCK_KEY = 'spexcode.dock'
-const DOCK_MODE_KEY = 'spexcode.dockMode'
-const SPLIT_KEY = 'spexcode.split'
+const DOCK_KEY = scopedStorageKey('spexcode.dock')
+const DOCK_MODE_KEY = scopedStorageKey('spexcode.dockMode')
+const SPLIT_KEY = scopedStorageKey('spexcode.split')
 
 export function WorkspaceProvider({ children }) {
   // The dock starts OPEN. It is how a reader finds a document without already knowing its address, and a

@@ -16,6 +16,10 @@ const route = text('route.js')
 const specContent = text('specContent.js')
 const launch = text('launch.js')
 const fileTree = text('FileTree.jsx')
+const project = text('project.js')
+const tabs = text('tabs.js')
+const workspace = text('workspace.jsx')
+const specTreeState = text('specTreeState.js')
 
 test('a published tree runs the workspace shell over static input, opening only the doors it has data for', () => {
   assert.match(data, /fetch\(PUBLIC_GRAPH_SOURCE, \{ cache: 'no-cache' \}\)/)
@@ -60,4 +64,18 @@ test('a published tree runs the workspace shell over static input, opening only 
   assert.match(dashboard, /graphOnly && <PublicGraphAbout \/>/)
   assert.match(about, /loadPublicGraphMetadata\(\)/)
   assert.doesNotMatch(about, /apiUrl|\/api\//)
+})
+
+test('remembered workspace state belongs to the tree the page was served from, not to the origin', () => {
+  // One host serves many trees — the gateway's /p/<id> projects, a gallery's published trees under one
+  // domain — and localStorage is per-origin. An unsuffixed key hands a reader the tabs and open branches of
+  // whichever tree they looked at last, which is how a vConsole page came to show a `requests` tab.
+  assert.match(project, /export const scopedStorageKey = \(key\) => \(STORAGE_SCOPE === '\/' \? key : `\$\{key\}@\$\{STORAGE_SCOPE\}`\)/)
+  assert.match(project, /replace\(\/\[\^\/\]\*\$\/, ''\)/)
+  for (const [name, source] of [['tabs.js', tabs], ['workspace.jsx', workspace], ['specTreeState.js', specTreeState]]) {
+    assert.doesNotMatch(source, /localStorage\.(get|set)Item\('/, `${name} keys storage through scopedStorageKey, never a bare literal`)
+  }
+  assert.match(tabs, /const KEY = scopedStorageKey\('spexcode\.tabs'\)/)
+  assert.match(workspace, /scopedStorageKey\('spexcode\.dock'\)/)
+  assert.match(specTreeState, /ledger\(scopedStorageKey\('spex\.specTreeOpen'\)\)/)
 })

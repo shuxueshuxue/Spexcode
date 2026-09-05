@@ -22,6 +22,10 @@ related:
   - spec-dashboard/src/specContent.js
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/FileTree.jsx
+  - spec-dashboard/src/project.js
+  - spec-dashboard/src/tabs.js
+  - spec-dashboard/src/workspace.jsx
+  - spec-dashboard/src/specTreeState.js
   - spec-dashboard/vite.config.js
   - spec-cli/src/public-graph.test.ts
   - spec-dashboard/src/publicGraphMode.test.mjs
@@ -62,6 +66,15 @@ Files section — the surface is not rendered at all rather than rendered empty.
 `spexcode.net` documentation root. Public boot reads the graph index once; static graph and document JSON use
 conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an
 ETag check. The public mode never polls or opens a long-lived stream.
+
+Because the shell is the real one, its REMEMBERED state has to be scoped like the real one too. Persisted
+workspace state — open tabs, the dock, the split, the explorer's open branches — belongs to the tree the page
+was served from, not to the origin. One host serves many trees: the gateway's `/p/<id>` projects, and a
+gallery's several published trees under a single domain. `localStorage` is per-origin, so an unsuffixed key
+hands a reader the tabs of whichever tree they looked at last — a vConsole page showing a `requests` tab. The
+serving directory is the tree's identity here for the same reason it is the API prefix: it is the address the
+page was actually served under. A root deployment keeps the bare key so an existing install boots with the
+state it already had.
 
 A registry is the sole repository-to-host mapping. Every publication explicitly names its repository, its
 `id`, its hostname, and the About-panel copy; neither the build nor the deployment derives a hostname from a

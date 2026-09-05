@@ -1,3 +1,4 @@
+import { scopedStorageKey } from './project.js'
 import { useSyncExternalStore } from 'react'
 
 // THE EXPLORER'S DISCLOSURE, held OUTSIDE the rows that draw it — the same shape the session forest
@@ -58,8 +59,8 @@ const ledger = (KEY) => {
   }
 }
 
-const specs = ledger('spex.specTreeOpen')
-const dirs = ledger('spex.diskTreeOpen')
+const specs = ledger(scopedStorageKey('spex.specTreeOpen'))
+const dirs = ledger(scopedStorageKey('spex.diskTreeOpen'))
 
 export const useSpecTreeState = () => useSyncExternalStore(specs.subscribe, specs.get, specs.get)
 export const toggleSpecNode = (id) => specs.toggle(id)

@@ -222,6 +222,10 @@ receipt before the stop guard may admit a known native descendant collection. If
 the same object authorizes adapter compensation of the original collection. A missing, forged, stale, or changed
 receipt retains the ordinary descendant refusal before shared-runtime mutation and cannot authorize compensation.
 
+When the resolved adapter is Codex, close also holds one project-scoped `codex-shared-close` lock across the
+cold proof, native teardown, and archive publication. Codex sessions share one app-server, so serializing this
+critical section keeps a sibling reference census from being invalidated by a concurrent close.
+
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
 no branch, no resolvable launcher command, or a rendezvous owner's derived socket pathname at/over its OS byte
 limit. Those are facts about this machine that no number of attempts can change, so each is one loud refusal

@@ -22,6 +22,19 @@ scenarios:
     code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SideBar.jsx]
     related: [spec-dashboard/src/specContent.js, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/launch.js, spec-dashboard/src/FileTree.jsx]
     test: spec-dashboard/test/public-graph-static.e2e.mjs
+  - name: remembered-state-does-not-cross-published-trees
+    tags: [frontend-e2e]
+    description: >
+      In one browser profile, open one published tree, open a node there, then navigate to a DIFFERENT
+      published tree served from the same domain. Read the second tree's tab strip.
+    expected: >
+      The second tree shows only its own tabs. Persisted workspace state — tabs, dock, split, the
+      explorer's open branches — is keyed by the directory the page was served from, so a gallery of trees
+      under one domain does not share one `localStorage` bucket. Zero loss = a reader who browsed
+      `psf/requests` and then opened `tencent/vconsole` never sees a `request-cycle` tab on the vConsole
+      page.
+    code: [spec-dashboard/src/project.js]
+    related: [spec-dashboard/src/tabs.js, spec-dashboard/src/workspace.jsx, spec-dashboard/src/specTreeState.js]
   - name: isolated-release-host
     tags: [frontend-e2e, cli]
     description: >

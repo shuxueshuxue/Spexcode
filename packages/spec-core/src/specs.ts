@@ -442,7 +442,25 @@ function rootNode(): string | null {
 // read of legacy content), pointing at the one-shot migrator. Delete this check in 0.4.0.
 function configRoots(): string[] {
   const root = rootNode()
-  if (!root) return []
+  // @@@ a tree with no root is a silent total hook failure - returning [] here means no contract, no hooks,
+  // no commands, and NOTHING says so: the manifest compiles to zero bytes, every dispatch fires and executes
+  // nothing, and the project sits in the graph looking adopted. Measured on a real project that had carried
+  // `.spec/<root>/<child>/` directories for weeks with no `<root>/spec.md` — every hook on BOTH harnesses had
+  // been dead the whole time. An absent `.spec` is a repo that never adopted and is correctly silent; a `.spec`
+  // that HOLDS a tree but has no root node is a broken adoption, and the difference has to be audible.
+  if (!root) {
+    const entries = existsSync(SPEC_DIR)
+      ? readdirSync(SPEC_DIR, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+      : []
+    if (entries.length) {
+      throw new Error(
+        `.spec holds ${entries.map((e) => `'${e}'`).join(', ')} but no root node: none of them contains a spec.md. ` +
+        `Every plugin — the contract, the lifecycle hooks, the commands — is loaded from .spec/<root>/${PLUGIN_INSTANCE_ROOT}, ` +
+        `so without a root NOTHING loads and every hook silently does nothing. Give the tree its root: ` +
+        `write .spec/${entries[0]}/spec.md describing the project.`)
+    }
+    return []
+  }
   if (existsSync(join(SPEC_DIR, root, '.config')) && !existsSync(join(SPEC_DIR, root, PLUGIN_INSTANCE_ROOT))) {
     throw new Error(
       `.spec/${root}/.config exists but .spec/${root}/${PLUGIN_INSTANCE_ROOT} does not — this spec tree predates the v0.3.0 ` +

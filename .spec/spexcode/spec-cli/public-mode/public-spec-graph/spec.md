@@ -89,6 +89,12 @@ deployment configuration and lives with the deployment. The current SpexCode row
 `shuxueshuxue/spexcode` to `spexcode.spexcode.net`. `herdr.spexcode.net` is a retired trial alias and may only
 redirect to the registered SpexCode host; it must never keep serving SpexCode content as if Herdr owned it.
 
+The About panel's trigger rides the status bar, but the PANEL is a viewport overlay and has to be positioned
+and styled as one. A status strip clips each item's overflow and sets `white-space: nowrap` — both correct for
+a one-line status, both fatal for a 250px panel of prose parented inside one: it lays out, measures correctly,
+and paints nothing, which is exactly how it was found. Being a descendant of the strip is a DOM fact; being an
+overlay is what it is.
+
 The build also emits `public-graph-meta.json`, a lazy static source for the floating About panel, and a
 `spexcode.spec.zip` archive rooted at `.spec/` and made from the graph revision's `.spec/spexcode` tree. The panel offers the
 archive download always and a repository link only when the publication names one — the shell also renders

@@ -81,5 +81,8 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   anchor navigation never creates or focuses a strip tab. Their resident workspace tabs are the exception:
   when already held, a board/detail route focuses the same page tab and keeps the page icon declared by
   [[view-registry]]. Legacy review addresses normalize at the route layer.
-- **Public graph.** The sealed graph-only face keeps the graph anchor and renders the other rail destinations
-  muted and inert (`aria-disabled` with no href or handler); it mounts no live dock or transport.
+- **Published tree.** A published spec tree ([[public-spec-graph]]) runs this same rail, not a sealed one of
+  its own. It keeps the graph anchor the live rail omits, lights whichever of `PUBLIC_PAGES` the reader is
+  on, and renders every destination outside that set muted and inert (`aria-disabled` with no href or
+  handler). The enabled set is read from that one exported list rather than spelled out here again, so a
+  door opened in the payload opens in the rail by construction. No live dock or transport mounts either way.

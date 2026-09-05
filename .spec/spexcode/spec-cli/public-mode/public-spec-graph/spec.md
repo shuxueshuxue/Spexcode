@@ -18,6 +18,10 @@ related:
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/PublicGraphAbout.jsx
   - spec-dashboard/src/data.js
+  - spec-dashboard/src/route.js
+  - spec-dashboard/src/specContent.js
+  - spec-dashboard/src/launch.js
+  - spec-dashboard/src/FileTree.jsx
   - spec-dashboard/vite.config.js
   - spec-cli/src/public-graph.test.ts
   - spec-dashboard/src/publicGraphMode.test.mjs
@@ -28,9 +32,14 @@ related:
 
 The public graph is a **static read-only projection** of one Git repository's `.spec` tree. It is a
 different surface from `spex serve --public`: it must never start or proxy a backend, expose sessions,
-issues, evals, terminals, settings, or any write route. A visitor gets the graph and can open a node's
-spec prose; every other top-level dashboard entry remains visible but disabled so the product shape is
-legible without implying an unavailable capability.
+issues, evals, terminals, settings, or any write route.
+
+A visitor reads it through the **same workspace shell the live dashboard uses** — the rail, the explorer,
+the tab strip, the document — landing on `#/spec`, the address a live project opens on. There is no second
+sealed frame to keep in step: a published tree is the workspace over a static payload, and the only thing
+that differs is which doors have data behind them. `PUBLIC_PAGES` names those doors — Spec, File, and the
+Graph — and every other top-level entry stays visible but disabled, so the product shape is legible without
+implying a capability the payload cannot answer.
 
 `spex graph --public --out <path>` writes `spexcode.public-spec-graph/v1` JSON containing the producer
 repository identity, exact Git `revision`, a relocatable `sourceRoot: "."`, and deterministic node rows.
@@ -40,10 +49,16 @@ rendered spec body/parts. Runtime sessions, overlays, issue/eval summaries, and 
 enter either payload. The same command without `--out` writes identical index bytes to stdout.
 
 `npm run build:public` builds the dashboard with `VITE_PUBLIC_GRAPH_ONLY=1` and copies that snapshot plus
-the per-node documents under `specs/` beside the static assets. The graph-only client reads the small
-index first and fetches only the selected document, never opens
-`/api/graph`, SSE, session, issue, eval, settings, or terminal transports, and routes all unknown hashes
-back to `#/graph`. The artifact is therefore safe to serve from an ordinary static host and never reuses the
+the per-node documents under `specs/` beside the static assets. The published client reads the small index
+first and fetches only the selected document, never opens `/api/graph`, SSE, session, issue, eval, settings,
+or terminal transports, and normalizes every hash outside `PUBLIC_PAGES` back to `#/spec`.
+
+**Which source a reader reads is a property of the BUILD, never of the call site.** A body, a node's
+attachments, a launcher list: each resolves from `PUBLIC_GRAPH_ONLY` at its one definition, so a surface
+that never heard of publishing is still right in both builds. A call site that has to remember to pass a
+flag is a call site that will eventually forget, and forgetting means a static page firing a request only a
+backend could answer. Where a published tree genuinely has no data — the source files under the explorer's
+Files section — the surface is not rendered at all rather than rendered empty. The artifact is therefore safe to serve from an ordinary static host and never reuses the
 `spexcode.net` documentation root. Public boot reads the graph index once; static graph and document JSON use
 conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an
 ETag check. The public mode never polls or opens a long-lived stream.

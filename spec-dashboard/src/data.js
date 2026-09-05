@@ -2,7 +2,7 @@ import { mergeTranscriptFrame } from '@spexcode/transcript/frames'
 import { applyDeltaUnits, boardFromUnits, tagOfAsync, unitize, unitValues } from '@spexcode/spec-core/graph-delta'
 import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
-import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
+import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_ONLY, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the single-layer expansion frontier chosen by
 // GraphView. Each depth is its own column: roots are evenly spaced around the origin, then the children of
@@ -340,6 +340,9 @@ export const specUrl = (id, ...parts) =>
 // gate from the source read — the spec tree sits outside the coverage policy on purpose — reached through
 // the node's own id rather than a repo path, because the folder belongs to the node.
 export async function fetchNodeFiles(id) {
+  // A published tree carries each node's body and nothing from its folder, so there is no attachment list to
+  // ask for. Answering empty here keeps every reader of a node right in both builds.
+  if (PUBLIC_GRAPH_ONLY) return []
   const res = await apiFetch(specUrl(id, 'files'))
   const body = await res.json().catch(() => null)
   if (!res.ok) throw new Error(body?.error || `attachment list failed (${res.status})`)

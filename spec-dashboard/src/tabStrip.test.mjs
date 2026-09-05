@@ -101,7 +101,7 @@ test('resident review tabs share the workspace strip and every board keeps the a
   // dock, but the rail — the top-level board switch — never disappears under any board.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /<SideBar page=\{page\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
+  assert.match(shell, /<SideBar page=\{page\} graphOnly=\{graphOnly\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
   assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
   assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
 })

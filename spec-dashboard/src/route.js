@@ -23,6 +23,10 @@ export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 's
 // route projects back onto it instead of making the selected top-level board disappear. Graph remains
 // directly addressable for legacy links but is no longer a workspace destination or rail entry.
 export const RAIL_PAGES = ['spec', 'sessions', 'evals', 'issues', 'settings']
+// The pages a static publication can actually answer. A published tree carries the spec index and one
+// document per node and nothing else, so Spec (with File and Graph as its neighbours) is the whole of what
+// it can serve — the live-only destinations have no data behind them here.
+export const PUBLIC_PAGES = ['spec', 'file', 'graph']
 
 // canonical query serialization: `q` (the review lists' one token-text param, [[review-query]]) first,
 // any remaining keys in sorted order — the same state always prints the same address (hash comparisons
@@ -140,11 +144,14 @@ export function navigate(page, param = null, { replace = false, query = null } =
 // review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
-  // The published graph has one addressable face. Normalize every incoming hash before the shell sees it,
-  // so a deep link cannot leave a graph-only artifact claiming an unavailable Issues/Evals surface.
-  if (PUBLIC_GRAPH_ONLY && window.location.hash !== '#/graph') {
-    window.history.replaceState(null, '', '#/graph')
-    return parseRoute('#/graph')
+  // Normalize every incoming hash before the shell sees it, so a deep link cannot leave a published tree
+  // claiming an Issues/Evals surface it has no data for. Spec is the landing face — the same address the
+  // live dashboard opens a project on.
+  if (PUBLIC_GRAPH_ONLY) {
+    const face = parseRoute(window.location.hash)
+    if (PUBLIC_PAGES.includes(face.page)) return face
+    window.history.replaceState(null, '', '#/spec')
+    return parseRoute('#/spec')
   }
   const legacy = legacyEvalHash(window.location.hash) || sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {

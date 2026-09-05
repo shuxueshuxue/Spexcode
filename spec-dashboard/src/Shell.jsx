@@ -660,26 +660,12 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     )
   }
 
-  // The public artifact is one sealed reading surface: no dock, no tabs, no palette, one view.
-  if (graphOnly) {
-    return (
-      <div className="app-shell">
-        <div className="app">
-          <TooltipLayer />
-          <SideBar page="graph" graphOnly />
-          <div className="app-main"><ViewHost page="graph" param={param} query={query} /></div>
-        </div>
-        <StatusBar />
-      </div>
-    )
-  }
-
   return (
     <div className="app-shell">
       <div className="app">
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
-        <SideBar page={page} needsYou={needsYou} hideDockToggle={!foldable} />
+        <SideBar page={page} graphOnly={graphOnly} needsYou={needsYou} hideDockToggle={!foldable} />
         {dockMounted && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} folding={foldingDock} mode={dockProjection} specs={specs} sessions={sessions}

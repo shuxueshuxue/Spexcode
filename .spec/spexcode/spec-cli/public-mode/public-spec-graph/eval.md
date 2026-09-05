@@ -14,11 +14,12 @@ scenarios:
       checkout-path field. Its `specs/` documents carry the rendered prose separately;
       `public-graph-meta.json` drives the lazy About panel; `public-spec-release.json` hashes every static
       data file plus the `.spec` ZIP archive. Loaded in a browser, the bare address resolves to `#/spec`
-      with the explorer's Specs tree and the node document beside it, the rail offers exactly the
-      `PUBLIC_PAGES` doors (Spec and the Graph) with every other destination inert, opening a node reads
+      with the explorer's Specs tree and the node document beside it, the rail carries the ordinary
+      `RAIL_PAGES` entries — the same list the live product shows, with no published-only marker and no
+      Graph entry — of which only Spec answers while the other four are inert, opening a node reads
       `./specs/<id>.json`, and the network log contains ZERO `/api/` requests and zero page errors. Zero
-      loss = an ordinary static host serves the real reading surface, and nothing on it can reach a control
-      plane that is not there.
+      loss = an ordinary static host serves the real reading surface, nothing on it can reach a control
+      plane that is not there, and nothing on it exists only there.
     code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SideBar.jsx]
     related: [spec-dashboard/src/specContent.js, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/launch.js, spec-dashboard/src/FileTree.jsx]
     test: spec-dashboard/test/public-graph-static.e2e.mjs

@@ -32,7 +32,7 @@ test('live terminals are writable by default and only suspended input asks for c
 })
 
 test('an empty diff names which of the three branch states is true and prints complete git identities', () => {
-  const backend = source('../../spec-cli/src/sessions.ts')
+  const backend = source('../../spec-cli/src/session-review.ts')
   const diff = source('./DiffDocument.jsx')
 
   assert.match(backend, /branch: wt\.branch, baseRef/)
@@ -63,7 +63,7 @@ test('an empty diff names which of the three branch states is true and prints co
 })
 
 test('the uncommitted half is read from the session\'s own worktree, or honestly marked unreadable', () => {
-  const backend = source('../../spec-cli/src/sessions.ts')
+  const backend = source('../../spec-cli/src/session-review.ts')
   const diff = source('./DiffDocument.jsx')
   const en = source('./i18n/en.js')
   const zh = source('./i18n/zh.js')
@@ -107,7 +107,7 @@ test('the Explorer owns one official collapse-folders action for both trees', ()
 })
 
 test('a gone worktree keeps the diff provable from shared refs, and only a vanished branch is refused — structurally', () => {
-  const backend = source('../../spec-cli/src/sessions.ts')
+  const backend = source('../../spec-cli/src/session-review.ts')
   const diff = source('./DiffDocument.jsx')
   const en = source('./i18n/en.js')
   const zh = source('./i18n/zh.js')

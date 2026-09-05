@@ -168,7 +168,7 @@ try {
 
   // Known workspace: no persisted tabs, then one plain navigation that mints A's slot.
   await page.goto(`${base}/#/sessions/${A}`, { waitUntil: 'domcontentloaded' })
-  await page.evaluate(() => localStorage.removeItem('spexcode.tabs'))
+  await page.evaluate(() => localStorage.removeItem('spexcode.tabs.root'))
   await page.reload({ waitUntil: 'domcontentloaded' })
   for (const id of [A, B, D, E]) await sessionRow(id).waitFor({ state: 'visible', timeout: 60_000 })
   await settledTabs((tabs) => tabs.length === 1 && tabs[0].key === sessionKey(A), 'A as the only session tab')

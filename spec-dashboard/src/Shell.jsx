@@ -15,7 +15,7 @@ import { viewFor, viewRouteContract } from './views.jsx'
 import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
-import { PROJECT_ID, hubHref, projectHref } from './project.js'
+import { PROJECT_ID, hubHref, projectHref, scopedKey } from './project.js'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
 import { ScoreBadge } from './score.jsx'
 import { nextGraphStatNode } from './GraphStats.jsx'
@@ -281,7 +281,7 @@ function BoardStat({ name, count, title, onClick, children }) {
 }
 
 const storedGraphFocus = () => {
-  try { return sessionStorage.getItem('spex.focus') } catch { return null }
+  try { return sessionStorage.getItem(scopedKey('spex.focus')) } catch { return null }
 }
 
 // The BOARD's own numbers, as ambient state.

@@ -63,7 +63,19 @@ model and they never let last-good projections masquerade as current while the t
 **The project scope is a shell concern**
 ([[projects-hub]]): `project.js` reads the served pathname once (`/p/<id>/` vs the root) and every `/api`
 URL in the data layer — fetch, SSE, the terminal WebSocket — routes through its one prefixing seam, so a
-scoped page talks to `/p/<id>/api/*` while an unscoped serve stays byte-identical to before; the entry's
+scoped page talks to `/p/<id>/api/*` while an unscoped serve stays byte-identical to before. **That one
+seam also keys browser-local state**, because `localStorage` and `sessionStorage` are scoped by ORIGIN and
+this gateway serves every project from one: state that is an ADDRESS or an IDENTIFIER inside a project — the
+open tab list ([[tab-strip]]), the explorer's two disclosure ledgers ([[file-tree]] / [[disk-tree]]), the
+graph's focused node, a document's restored scroll position ([[page-scroll]]), a session's chosen surface
+([[session-surface]]) — is stored under the project's scope, and an unscoped serving mode resolves to the one
+`root` scope. A bare key there does not name one project's state; it names a bucket every project on the host
+writes to, which makes opening a document in one project open it in the next and closing it there close it
+here. A genuine PREFERENCE is the reader's rather than any project's — theme, language, keybindings, band
+widths, terminal font size — and stays unscoped deliberately; the test of which a key is, is whether its
+value would still mean the same thing in another project. The upgrade to a scoped key abandons whatever the
+bare key held, so the working set and the disclosure ledgers start empty once and are each project's own
+afterwards; the entry's
 face pick extends the same way (a scoped 401 raises the shared credential gate instead of the error panel,
 and the root address with no board but a live `/projects` surface boots the hub face instead of the
 classic dashboard). Route params that belong to a feature
@@ -86,7 +98,8 @@ OLD hashed chunks the server no longer has (the gateway answers 404, never HTML 
 shell catches the failed chunk load (`vite:preloadError`) and **reloads once** onto the fresh index.html —
 a deploy under a live tab costs one automatic reload, never a blanked app; a failure that persists right
 after that reload surfaces as the normal error instead of a reload loop. The board **focus survives a reload or a mobile↔desktop breakpoint remount within its tab**
-(session-scoped, so a fresh tab still opens on the root). A feature node lists whichever of these it touches under
+(session-scoped, so a fresh tab still opens on the root; project-scoped too, since a node id names a node in
+one project only). A feature node lists whichever of these it touches under
 `related:`, so editing the shell or the stylesheet attributes its drift and eval staleness here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.

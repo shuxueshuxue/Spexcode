@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { navigate, parseRoute, useRoute } from './route.js'
+import { scopedKey } from './project.js'
 import { isDocument } from './viewCatalog.js'
 import { closeDestination, focusTab, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
 
@@ -31,7 +32,10 @@ export const setTabTitle = (tabOrKey, title) => {
 // address still copyable, bookmarkable and Back-navigable exactly as before — a reader who has never
 // opened a second tab cannot tell this landed.
 
-const KEY = 'spexcode.tabs'
+// A tab is an address INSIDE a project, so the working set is stored under that project's scope
+// ([[dashboard-shell]]'s `scopedKey`) — the gateway serves every project from one origin, and a bare key
+// made every project's strip one strip.
+const KEY = scopedKey('spexcode.tabs')
 
 const read = () => {
   try {

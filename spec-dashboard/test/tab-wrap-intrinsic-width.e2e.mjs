@@ -42,7 +42,7 @@ try {
   })
   await page.addInitScript((seed) => {
     localStorage.clear()
-    localStorage.setItem('spexcode.tabs', JSON.stringify(seed))
+    localStorage.setItem('spexcode.tabs.root', JSON.stringify(seed))
     localStorage.setItem('spexcode.dock', '0')
     localStorage.setItem('spexcode.lang', 'en')
     localStorage.setItem('spexcode.theme', 'minimal')

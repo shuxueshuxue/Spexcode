@@ -34,7 +34,11 @@ identity while its detail remains route state, because the strip names the board
 Graph, empty workspace, bare Sessions, and the New Session form have no document identity and therefore do not
 become tabs.
 
-The open list is local workspace state; the active tab is the URL. A tab click and an ordinary link use the same
+The open list is local workspace state OF ONE PROJECT; the active tab is the URL. A tab is an address
+inside a project — a session id, a spec node id, a file path — so the working set is stored under that
+project's scope ([[dashboard-shell]]) and never under a bare, origin-wide key: the gateway serves every
+project from one origin, so a bare key gives every project on the host the same strip, and opening a
+document in one project then shows and closes it in another. A tab click and an ordinary link use the same
 navigation path, so the strip, deep links, and browser history agree. Session base faces are URL selectors on one
 session tab; published resources are separate file-class tabs. The shell owns the strip's position in the
 frame and the document-actions slot at its right edge; documents do not render a second tab rail.

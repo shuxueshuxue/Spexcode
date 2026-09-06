@@ -13,9 +13,13 @@ related:
 `buildChangeReport({ repoRoot, rev | range, note?, maxHunkLines?, parentSessionId? })` reads only the named Git
 tree and revision window. It emits stable text with one section per changed `.spec/.../spec.md` node: the node id,
 one-line description, status, additions/removals in `code:` and `related:` frontmatter (and status changes), and
-body diff hunks capped at `maxHunkLines`, with an explicit `git show` path when truncated. Non-spec files are shown
-with Git numstat and the governing node resolved from the tip tree's `code:` claims. A change touching only ack
-stamps or `evals.ndjson` emits one line stating `ack/eval only, no body change (empty=true)`. The report ends with
+body diff hunks capped at `maxHunkLines`, with an explicit `git show` path when truncated. A governance edge is a
+set difference over the two parsed frontmatter blocks, never a match on the diff line's text: a `code:` row is a
+path, and a path carries no marker saying which key holds it. Those rows are named on the status line and are
+excluded from the body, so a moved claim reads as governance and never as edited prose. Non-spec files are shown
+with Git numstat and the governing node resolved from the tip tree's `code:` claims. A revision that changes no
+file at all — an ack stamp is an empty commit, so its whole signature is the empty diff — or that touches only
+`evals.ndjson` readings emits one line stating `ack/eval only, no body change (empty=true)`. The report ends with
 the fixed parent-session reread request; `note` is copied verbatim, or `the sender gave no reason` when absent. The
 report is machine-facing product output, so it is written in English like every other line the CLI and backend
 print — the reader's own language belongs to authored content, never to tool output. No semantic

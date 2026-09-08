@@ -40,7 +40,9 @@ function TransientNoticeViewport({ notices, dismiss, setInteraction }) {
           onKeyDown={notice.onClick ? (event) => {
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); notice.onClick() }
           } : undefined}
-          onPointerEnter={() => setInteraction(notice.id, 'pointer', true)}
+          // MOVE, not enter: `pointerenter` also fires when a notice is published under a pointer that
+          // never moved, and a pointer that never moves never fires the matching `pointerleave`.
+          onPointerMove={() => setInteraction(notice.id, 'pointer', true)}
           onPointerLeave={() => setInteraction(notice.id, 'pointer', false)}
           onFocus={() => setInteraction(notice.id, 'focus', true)}
           onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteraction(notice.id, 'focus', false) }}

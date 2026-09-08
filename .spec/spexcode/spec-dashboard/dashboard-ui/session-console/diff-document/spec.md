@@ -108,3 +108,7 @@ The diff face is a surface of the session object tab, uses the existing i18n and
 a second navigation or transport mechanism. The document-actions slot owns a compact `git-compare` icon toggle with
 `aria-pressed`; entering or leaving it replaces the URL while the tab remains `#/sessions/<id>`, and leaving returns to
 the remembered Terminal or Conversation base face. Terminal and conversation remain the other two session faces.
+
+The reader opens in unified mode with line wrapping enabled. The CodeMirror editor and merge containers inherit the
+application's paper, ink, and divider tokens so their loading surface, gutters, and surrounding frame follow the
+selected dashboard theme.

@@ -189,14 +189,25 @@ try {
   // start watching the pane now (the echo is transient) but read the notices first — they expire too
   const secondEcho = waitFor(paneHas(secondText), 'the harness echoing the second worker request')
   await page.waitForFunction(() => document.querySelectorAll('.tn-notice.success').length >= 1)
-  const stackedNotices = await page.locator('.tn-notice.success').evaluateAll((nodes) => nodes.map((node) => {
-    const rect = node.getBoundingClientRect()
-    return { top: rect.top, bottom: rect.bottom, width: rect.width, duration: getComputedStyle(node).getPropertyValue('--tn-duration') }
+  // the stack is read against the status strip's OWN rect, not a pixel constant: "clear of the footer" is
+  // the product relation, and a token change must not quietly turn this assertion into a tautology.
+  const stack = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    stripTop: document.querySelector('.statusbar')?.getBoundingClientRect().top ?? null,
+    notices: [...document.querySelectorAll('.tn-notice.success')].map((node) => {
+      const rect = node.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom, width: rect.width, duration: getComputedStyle(node).getPropertyValue('--tn-duration') }
+    }),
   }))
+  const stackedNotices = stack.notices
   assert.ok(stackedNotices.length >= 1)
-  assert.ok(stackedNotices.every((notice) => notice.top >= 16 && notice.top < 100), `desktop notices start at the top-right edge: ${JSON.stringify(stackedNotices)}`)
+  assert.ok(Number.isFinite(stack.stripTop), 'the desktop shell renders its status strip')
+  assert.ok(stackedNotices.every((notice) => notice.bottom <= stack.stripTop),
+    `desktop notices sit clear of the status strip: ${JSON.stringify(stack)}`)
+  assert.ok(stackedNotices.every((notice) => notice.top > stack.viewportHeight / 2),
+    `desktop notices occupy the bottom-right edge: ${JSON.stringify(stack)}`)
   if (stackedNotices.length > 1) {
-    assert.ok(stackedNotices.every((notice, index) => index === 0 || stackedNotices[index - 1].bottom <= notice.top), 'top-right notices do not overlap')
+    assert.ok(stackedNotices.every((notice, index) => index === 0 || stackedNotices[index - 1].bottom <= notice.top), 'bottom-right notices do not overlap')
     assert.ok(stackedNotices.every((notice) => notice.width === stackedNotices[0].width), 'stacked notices share one width')
   }
   for (const notice of stackedNotices) assert.ok(Number.parseFloat(notice.duration) >= 5000 && Number.parseFloat(notice.duration) <= 14000)

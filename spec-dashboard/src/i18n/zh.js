@@ -584,7 +584,8 @@ export default {
     copyUrl: '复制节点 URL',
     copied: '已复制',
     failed: '复制失败',
-    send: '发送到会话',
+    newSession: '新建会话',
+    newChild: '新建子节点…',
     del: '删除节点…',
   },
 
@@ -592,7 +593,7 @@ export default {
   proseActions: {
     groupLabel: '选中的正文 —— 发给会话，或就地编辑',
     nodeGroupLabel: '当前节点操作',
-    nodeSend: '发送到会话',
+    nodeSend: '把当前节点发给会话',
     nodeCopy: '复制节点链接',
     nodeCopied: '节点链接已复制',
     act: {

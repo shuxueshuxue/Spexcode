@@ -12,8 +12,6 @@ import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
 import { DOCK_BAND } from './dockBand.js'
 import { revealSpecPath, toggleSpecNode, useSpecTreeState } from './specTreeState.js'
-import { useWorkspaceApi } from './workspace.jsx'
-import { useViewScope } from './ViewScope.jsx'
 
 // [[file-tree]]: the left dock. A spec node is a FOLDER, so the tree that navigates the project is the
 // folder tree — the same shape on disk, on the board, and here.
@@ -129,8 +127,6 @@ function Section({ name, count, tone, children }) {
 // The two zone heads below name the projections inside the list, not the list itself.
 export default function FileTree({ specs, focusId, onOpenFile, embedded = false }) {
   const t = useT()
-  const { setCompose } = useWorkspaceApi()
-  const scope = useViewScope()
   const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
   const [fileCount, setFileCount] = useState(0)
   const kids = useMemo(() => kidsOf(specs || []), [specs])
@@ -152,11 +148,6 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     revealSpecPath(path)
   }, [focusId, parentOf])
   const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
-  const sendNode = useCallback((id) => {
-    const text = `[[${id}]] `
-    setCompose(text)
-    scope.open({ page: 'sessions', param: 'new', query: { seed: text } })
-  }, [scope, setCompose])
   const [menu, setMenu] = useState(null)
   // A path's owner is already in the board the tree is built from, so "reveal owning node" needs no lookup
   // route: the first node whose `code:` claims the path IS the answer [[one-govern]] guarantees is single.
@@ -229,7 +220,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
           </Section>
         )}
       </div>
-      <ExplorerContextMenu menu={menu} onClose={closeMenu} owningNodeOf={owningNodeOf} onSend={sendNode} />
+      <ExplorerContextMenu menu={menu} onClose={closeMenu} owningNodeOf={owningNodeOf} />
       <button type="button" className="ft-graph-entry" data-tip={t('fileTree.graph')} aria-label={t('fileTree.graph')}
         onClick={openSpecGraph}>
         <Icon name="graph" size={14} />

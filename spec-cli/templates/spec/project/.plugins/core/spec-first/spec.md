@@ -8,6 +8,7 @@ events:
 order: 20
 block: true
 ---
+The startup `SPEX_PROFILE` hook list may disable this repository-facing hook with a clean no-op; `full` and profiles that include `spec-first` retain this gate.
 A one-shot, governed-aware ACCESS gate. Its state advances only when the agent is about to read OR mutate code that has a real governor (`code:` ownership). The first such touch creates the session sentinel and blocks once, naming the resolved governing spec and directing the agent through the relevant parent, sibling, and child contracts before retrying. Once that contract-read path has been demanded, later code touches pass.
 
 The state machine has no transition for an irrelevant tool, an unresolvable path, or an uncovered/related-only file. In particular, any number of ungoverned touches remain allowed without consuming or muting the gate; a later governed one must still block.

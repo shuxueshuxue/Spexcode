@@ -28,8 +28,10 @@ const THEME = EditorView.theme({
   '.cm-gutters': { backgroundColor: 'var(--paper)', color: 'var(--muted)', border: 'none', opacity: '.7' },
   '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px' },
   '.cm-line': { whiteSpace: 'pre' },
+  '.cm-editor, .cm-mergeView, .cm-mergeViewEditor, .cm-scroller': { backgroundColor: 'var(--paper)' },
+  '.cm-mergeViewEditor + .cm-mergeViewEditor': { borderLeftColor: 'var(--line)' },
   '.cm-mergeView': { minWidth: '0' },
-}, { dark: true })
+})
 
 const JS_EXT = new Set(['js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts'])
 async function languageFor(path) {
@@ -220,7 +222,7 @@ function TreeRows({ nodes, depth, prefix, scope, selected, openDirs, onToggleDir
 export default function DiffDocument({ sessionId }) {
   const t = useT(); const { lang } = useI18n(); const views = useRef(new Map())
   const [state, setState] = useState({ phase: 'loading', data: null, error: null }); const [draft, setDraft] = useState(null); const [body, setBody] = useState('')
-  const [mode, setMode] = useState('split'); const [wrap, setWrap] = useState(false); const [selected, setSelected] = useState('')
+  const [mode, setMode] = useState('unified'); const [wrap, setWrap] = useState(true); const [selected, setSelected] = useState('')
   const [openDirs, setOpenDirs] = useState(() => new Set())
   const registerView = useCallback((key, view) => { if (view) views.current.set(key, view); else views.current.delete(key) }, [])
   // A 409 is the endpoint's structured "this diff is honestly unavailable" state (no branch, or worktree AND

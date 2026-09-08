@@ -48,7 +48,7 @@ an exception carved out of the worktree model — it is the one writer the workt
    the writer are counting the same lines.
 3. **The gates stay up.** The commit opens exactly ONE door in [[main-guard]] — `SPEXCODE_ALLOW_MAIN`, the
    escape hatch that guard already names — and never `--no-verify`. This is the load-bearing difference
-   from the neighbouring programmatic writers: [[local-issues]] and [[human-ok]] may skip the pre-commit
+   from the neighbouring programmatic writers: [[local-issues]] and human sign-off may skip the pre-commit
    hook because their paths are unanchored **data**, and that justification does not transfer to a
    `spec.md`, which is the contract itself. So the spec-lint shim and the eval backstop judge this commit
    exactly as they judge a session's, and the non-bypassable reference-transaction candidate gate judges it
@@ -63,7 +63,7 @@ version from its count of content commits and re-derives drift from ancestry, so
 drift recount are consequences of the commit, not writes of their own. The board is invalidated on the way
 out so the writer's own refetch cannot race a stale cache.
 
-**Identity is server-derived.** The commit carries `Session: human`, the same rule [[human-ok]] states: the
+**Identity is server-derived.** The commit carries `Session: human`, the same rule human sign-off states: the
 actor is the person at the board and no request body gets to claim to be someone else. That trailer is what
 the node's "last edited by" then reads, honestly.
 

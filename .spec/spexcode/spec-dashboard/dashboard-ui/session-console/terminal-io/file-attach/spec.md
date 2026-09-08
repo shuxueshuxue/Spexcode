@@ -108,5 +108,5 @@ name, which left the Conversation wearing a paperclip it could not use. The uplo
 the same shape [[session-rename]] uses to span the UI and the server for one feature. This node's slices of
 those shared files are just the attach-control styling in `styles.css` and the `/api/uploads` route in
 `index.ts`; the eval tab's `.eval-*` classes and its eval-blob endpoint, reworked when the eval engine was
-reframed to serve a verdict over transcript-or-image evidence, are [[spec-eval]]'s churn, not file-attach's
+reframed to serve a verdict over transcript-or-image evidence, are the former measurement layer's churn, not file-attach's
 drift.

@@ -9,7 +9,6 @@ code:
   - packages/spec-core/src/specs.ts#reId
 related:
   - spec-dashboard/src/data.js
-  - spec-eval/src/scenarios.ts
 ---
 # id-url-safe
 
@@ -37,9 +36,9 @@ the machinery speak the SAME vocabulary — the exact per-character whitelist de
 authored id, not merely a survivable foreign one; what id-format forbids (space, `/`, `_`, uppercase
 Latin, control chars) the mint never has to repair.
 
-The mint is ONE, and every id producer shares it. `spec-eval`'s node walk mints its ids through the same
+The mint is ONE, and every id producer shares it. The spec loader's node walk mints ids through the same
 exported function, over the same universe (every spec node — a leaf that collides among spec nodes is
-disambiguated even when only one of them carries a eval.md), so `spex eval add/show` answer to exactly
+disambiguated even when only one of them carries a measurement contract), so `measurement filing` answer to exactly
 the id the board and scan print. Before this, the eval engine keyed nodes to the bare leaf name — a second id scheme
 that diverged on every collision: the canonical id read as "no measurable node" while the bare leaf silently hit
 whichever colliding node the walk met first, so no colliding node could reliably take a reading.

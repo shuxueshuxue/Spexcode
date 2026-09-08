@@ -7,25 +7,23 @@ related:
   - spec-dashboard/src/Thread.jsx
   - spec-cli/src/mentions.ts
   - spec-cli/src/localIssues.ts
-  - spec-eval/src/evaltab.ts
-  - spec-eval/src/cli.ts
   - spec-dashboard/src/NodeView.jsx
 ---
 # remark-polish
 
 M4 is the closing milestone of the eval/issue/remark refactor: the substrate ([[remark-substrate]]), the
-teeth ([[remark-teeth]]), and the split + one detail component ([[eval-issue-split]] / [[event-detail]]) are
+teeth ([[remark-teeth]]), and the split + one detail component ([[eval-issue-split]] / the thread detail) are
 built; this node polishes three edges the invariant set (E2, the R3 dispatch clause, directive 5) left
 sharp. The three strands are independent and share no new record type or schema growth — each is one
 computation reused on every surface, CLI-first.
 
 ## Strand 1 — an anchor's canonical form is its step-name (E2)
 
-An anchored remark's first line is `▶m:ss · <step>` ([[event-detail]]). The **step-name is canonical**; the
+An anchored remark's first line is `▶m:ss · <step>` (the thread detail). The **step-name is canonical**; the
 `m:ss` is *derived from the current clip at render time*, never trusted frozen. The reason is re-measure: a
 fresh reading produces a new video where the same step sits at a *different* time, so a frozen `m:ss` would
 seek to the wrong moment. The renderer resolves the anchor by **step-name against the CURRENT reading's
-[[step-timeline]]** — seek to that step's live `tMs`, and re-derive the shown `m:ss` to match — so the anchor
+step timeline** — seek to that step's live `tMs`, and re-derive the shown `m:ss` to match — so the anchor
 lands correctly on *every* reading of the scenario, A and B alike.
 
 When the named step is **absent** from the current reading's timeline (a step that reading never had), the
@@ -57,9 +55,9 @@ A remark whose scenario was **renamed or deleted** keys a `(node, scenario)` tha
 loads ([[remark-teeth]]'s dangling clause) but, until now, appeared *nowhere*. M4 surfaces it: the node's
 eval timeline (`evaltab.ts`) emits a synthetic **dangling** row per orphaned track — the scenario name struck
 through / marked gone, its remarks listed and **resolvable/retractable via their normal refs**
-(`spex remark resolve` / `spex remark retract`). A track is dangling only when its scenario is BOTH gone from `eval.md`
+(`spex remark resolve` / `spex remark retract`). A track is dangling only when its scenario is BOTH gone from `measurement contract`
 AND has no reading; a still-declared-but-unmeasured scenario is a blind spot, not an orphan. The dangling row
 is kept **separate** from `readings` so it never flows into `latestPerScenario` / the board scoreboard: it
-**ages nothing** (there is no reading for the teeth to stale), it is only made *visible*. `spex eval lint`
+**ages nothing** (there is no reading for the teeth to stale), it is only made *visible*. `measurement lint`
 notes orphaned tracks (one `eval-dangling` line per node plus a count in the summary), so the gap is legible
 from the CLI with no server running.

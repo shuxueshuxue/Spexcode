@@ -45,13 +45,13 @@ Three clusters, each answering one question:
   three nodes is one issue. Lean per-node open ids provide only this dedupe/walk identity, never issue rows;
   the board only knows node-linked issues, so `◆` is the *linked* open set.
 - **Coverage — how well-MEASURED the tree is.** The eval **score circles**, drawn through the same
-  `ScoreBadge` used elsewhere ([[eval-score-badge]]) — green solid-ring check for fresh pass, red solid-ring
+  `ScoreBadge` used elsewhere (the score badge) — green solid-ring check for fresh pass, red solid-ring
   cross for fresh fail, grey **dashed-ring** check/cross for stale verdicts, and a faint empty ring for a
   blind spot. Fresh and stale never share geometry or rely on tooltip or colour alone. The projected counts
   remain per **scenario**, not per node: a node owns several scenarios, each in its own state, so each adds
   to its state's bucket (a never-measured scenario folds into the blind-spot empty). This gives the row
   a larger, truer base than collapsing every node to one worst-first verdict. It counts only what the frontend
-  can see — not a "should have a scenario" census, which lives in `spex eval lint`.
+  can see — not a "should have a scenario" census, which lives in `measurement lint`.
 
 On the graph, every category chip is a **walk** at node granularity: clicking steps focus to the **next**
 node it counts, entering at the first when focus is outside the ring and **wrapping**. The step remains the

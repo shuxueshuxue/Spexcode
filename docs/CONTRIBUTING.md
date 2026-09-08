@@ -103,8 +103,8 @@ licensed under the same terms.
   tidy-tree `layout()` is exported from `data.js` but **applied in `Dashboard.jsx`** (focus-driven
   drill-down — a pure view concern, the backend has no pixels). The live Sessions console is a **real
   terminal** (`SessionTerm.jsx`) over the `/api/sessions/:id/socket` WebSocket.
-- `spec-eval/` — the measurement system behind the `spex eval` / `spex evidence` drawers: scenario
-  schema, eval filings, freshness, and the content-addressed evidence store.
+- `packages/spec-core/` and `spec-cli/` — shared content-addressed evidence storage, the `spex evidence`
+  transport verbs, and the HTTP route used by issue threads and the dashboard.
 - `spec-forge` — a sibling package node, **built and `active`**: a host-agnostic, **read-only forge
   link tracer** that reads a forge's open issues/PRs and resolves each to the spec node it serves
   (git/`.spec` stays the single source of truth — a node's status stays git-derived). Real `spec-forge/`

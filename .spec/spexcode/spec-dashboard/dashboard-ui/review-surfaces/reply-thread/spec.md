@@ -17,7 +17,7 @@ related:
 ## raw source
 
 Two pages hold a discussion: an issue's detail ([[issues-view]], both stores) and an eval's detail
-([[event-detail]], the (node,scenario) remark thread). They render the SAME component — `Thread.jsx` — and
+(the thread detail, the (node,scenario) remark thread). They render the SAME component — `Thread.jsx` — and
 both nodes' bodies say so out loud: the eval detail's spec calls it *the SAME shared `Thread.jsx` the issue
 detail uses*, and points at the issue page for the composer's shape. So the file was **described by two
 nodes and governed by neither**: nothing tracked its drift, no version answered for it, and a change to the

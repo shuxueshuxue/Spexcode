@@ -136,7 +136,7 @@ realpath、branch、`b9b3fa701` 是祖先、HEAD、`git status --porcelain`（**
 | 门 | 结果 |
 |---|---|
 | `spex spec lint` | 0 error / 12 warning（warning 全是既有 coverage/drift，阻塞门只看 error） |
-| `spex eval lint --changed` | 0 node flagged（0 malformed / 0 stale / 0 missing / 0 coverage gap） |
+| `measurement lint on changed scope` | 0 node flagged（0 malformed / 0 stale / 0 missing / 0 coverage gap） |
 | `scripts/m5-zswarm-adopter.mjs` | 122 assertions；`forbiddenGraphCount: 0`；`protocolAdopterColumns: []` |
 | `scripts/m4-self-launch-yatu.mjs` | 17 assertions |
 | `scripts/m1-conformance.mjs` | 48 assertions |
@@ -232,7 +232,7 @@ diff 相对 base 为 **23 files / +1749 / −222**。收口判定 **PASS**。
    往别人的仓库里塞我们的治理格式，是把自己的流程当成通用规范。
 2. **那个 clone 不是 Spex governed 项目**，trailer 里的 `Session:` 在对方仓库里指不到任何东西，
    写了也只是一串对读者无意义的 uuid。
-3. **改写会毁掉已经正确归档的证据。** 三条 reading 的 `codeSha` 精确指向 `3b1d53e26`；
+3. **改写会毁掉已经正确归档的证据。** 三条 reading 的 `target commit` 精确指向 `3b1d53e26`；
    为补 trailer 而 amend 会让那个对象消失，readings 立刻指向不存在的 commit——
    为了形式合规去破坏实质证据，方向反了。
 
@@ -244,17 +244,17 @@ diff 相对 base 为 **23 files / +1749 / −222**。收口判定 **PASS**。
 | 实现 commit（z-code） | `3b1d53e267fbd5344c5d607e75ff7fd7d2169eee` |
 | readings sidecar commit（z-code） | `d97c3e87e1784e306a3cbde4020d65fa73ac8a00` |
 
-三条 reading 全部以**实现 commit** 为 `codeSha`（不是 sidecar 自己），scenario 文本在测量前已冻结
-（sidecar 对 `eval.md` 的改动为 0），且三条各自持有**不同的 scenarioHash 与不同的 evidence transcript**：
+三条 reading 全部以**实现 commit** 为 `target commit`（不是 sidecar 自己），scenario 文本在测量前已冻结
+（sidecar 对 `measurement contract` 的改动为 0），且三条各自持有**不同的 contract hash 与不同的 evidence transcript**：
 
-| scenario | scenarioHash | evidence |
+| scenario | contract hash | evidence |
 |---|---|---|
 | `split-session-protocol-cross-process` | `fe2cea8ae18c8214…` | `5f9c7492bbb8fd84…` |
 | `split-session-protocol-production-composition` | `de4d1c13a462a787…` | `b28722f55c7224b8…` |
 | `split-session-protocol-canonical-metadata` | `5f67cc8330c4654e…` | `dcfca456e44d0847…` |
 
 三个 hash 两两不同这件事本身是有意义的：它排除了"用同一个内部 helper 断言三次、冒充三条产品测量"这种做法。
-z-code 侧 `spex eval lint` 的 missing 从 4 降到 1，剩下那 1 条是 base 既有，不属于本次。
+z-code 侧 `measurement lint` 的 missing 从 4 降到 1，剩下那 1 条是 base 既有，不属于本次。
 
 ## 6. z-code 侧门禁的覆盖边界：跑了什么、没跑什么、哪一条不能声称
 
@@ -275,8 +275,8 @@ z-code 侧 `spex eval lint` 的 missing 从 4 降到 1，剩下那 1 条是 base
 
 **跑不了，因此明确不声称：**
 
-- **`spex eval lint --changed` 在 z-code 建立不了 scope**——该 clone 没有本地 `main` ref，
-  changed-scope 无从计算。**不声称它通过。** 全量 `spex eval lint` 的结论另算：
+- **`measurement lint on changed scope` 在 z-code 建立不了 scope**——该 clone 没有本地 `main` ref，
+  changed-scope 无从计算。**不声称它通过。** 全量 `measurement lint` 的结论另算：
   只剩 base 既有的 5 malformed / 2 stale / 1 missing，本轮新增的三条已 filing 完毕。
 
 **为什么要这样分**：一个没跑起来的聚合门和一个跑完全绿的门，在最终报告里长得一模一样——都是"没有报错"。
@@ -357,7 +357,7 @@ bootstrap 完整套件 93 files / 1,288 tests = 1,276 pass + 9 fail + 3 skip，J
 - `DEFERRED(actual Windows Node/PowerShell runtime; currently unreachable)`：见 §8。
 - `NOT-MEASURED(native provider-backed worker lifecycle)`：跨进程门的 worker 是独立 Node fixture，
   production composition 门用注入模型；需要真实 provider 的完整 native worker lifecycle 未启动。
-- `spex eval lint --changed`：clone 无 `main` ref，changed scope 建立不了，**不声称通过**；完整 eval lint 已跑，
+- `measurement lint on changed scope`：clone 无 `main` ref，changed scope 建立不了，**不声称通过**；完整 eval lint 已跑，
   只剩 base 既有 5 malformed / 2 stale / 1 missing。
 - lsof 已用真实 open-file 固定向量标定；clone 下写 FD 命中 0。另有旧 z-code worktree 进程经硬链接映射到
   clone 的 node_modules inode，但只显示 `mem`/`txt`、cwd 不在 clone、无写入。

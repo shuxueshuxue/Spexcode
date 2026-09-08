@@ -98,7 +98,7 @@ place, so the slash tally can never be clipped between digits. Named launcher pr
 mark remain distinct by their full names in the expanded detail; the aggregate deliberately states only the
 launcher count and combined tally. When any session needs the human, the sessions ledger item also carries the
 existing `sb-warning` yellow semantic token. Beside them ride the document's own facts: the session
-console's unread-resource signal, the session's [[eval-door]] measurement glance, the public-graph disclosure. A routed file's source path is NOT one of
+console's unread-resource signal, the session's the session review entry measurement glance, the public-graph disclosure. A routed file's source path is NOT one of
 them — the owner withdrew it (2026-08-24): the workspace tab and the address already carry the document's
 identity, and an ambient path item read as noise. `status-bar-contract.test.mjs` keeps that withdrawal
 executable. The bar's vertical separators speak one voice, and it is a SHORT one: every boundary in the right group
@@ -147,7 +147,7 @@ A count that is merely large stays quiet. Per-chip items would give the user fin
 already supports it; that is an unclaimed improvement, not a hidden limitation.
 
 **A document contributing a fact about itself is the registry working as designed** — the session console's
-unread-resource signal, its [[eval-door]] glance, and the public-graph disclosure are such facts, and the bar
+unread-resource signal, its the session review entry glance, and the public-graph disclosure are such facts, and the bar
 is where a persistent readout goes precisely so that no surface has to grow one. The boundary the file path's
 withdrawal drew: a fact earns the bar only when no existing chrome already states it. A path the tab and the
 address both carry was a third copy, so it left; a signal nothing else shows stays.

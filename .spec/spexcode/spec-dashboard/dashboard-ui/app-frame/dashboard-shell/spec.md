@@ -252,7 +252,7 @@ response is dropped, never painted. Without that guard a just-closed session res
 reload paints the row gone, then a stale in-flight snapshot lands late and flickers it back. The guard makes
 a removal stick the moment its own reload lands.
 
-That same envelope sequences session eval summaries ([[session-eval]]): within one backend epoch, a session
+That same envelope sequences session eval summaries (session proof): within one backend epoch, a session
 projection is accepted only when its generation is at least the last one displayed; an authoritative full
 snapshot may rebase the epoch, while a chained delta may not regress it. Stream `ping` proves transport
 liveness only. An error or dead-man breach marks resident summaries last-known without clearing their values;

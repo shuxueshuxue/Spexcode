@@ -66,7 +66,7 @@ republished without putting rows on the graph wire, and no store's write is invi
 serialized by graph JSON, graph SSE, or delta units.
 
 **A session row carries its eval glance, never its eval model.** The row's `evalSummary` is
-[[session-eval]]'s cached lean projection: process epoch, monotonic input generation, loading/updating/ready/error
+session proof's cached lean projection: process epoch, monotonic input generation, loading/updating/ready/error
 phase, content revision when stable, the seven counts, and an optional last-known stable value while updating or
 failed. It is already batch-produced and content-addressed before graph assembly; `buildBoard` and the sessions
 splice only attach the cached projection. No graph request, subscriber, or session row calls the full
@@ -90,7 +90,7 @@ scenario rows to the graph or lite corpus.
 The node popup requests `node:`-filtered Issue rows and a paged Eval timeline through the same protocol.
 A direct Eval detail loads only the selected scenario's complete A/B history plus at most five lightweight
 ordered neighbors through [[paged-review]]'s ONE bounded detail projection; trunk and scoped sources share
-that response shape, and scoped detail keeps [[session-eval]]'s generation/revision fence. Issue detail loads
+that response shape, and scoped detail keeps session proof's generation/revision fence. Issue detail loads
 its one addressed thread. No failed demand read falls back to graph rows, because there are deliberately none.
 The self-contained session HTML export is the only full-model transport exception.
 

@@ -21,7 +21,7 @@ It used to carry two more planes — Issues and scenarios — fetched live from 
 `/api/evals` on every debounced keystroke, plus a command row of **all Issues · N** / **all Evals · N**
 anchors into the review lists. That was a search box quietly growing a second job. An issue and a scenario
 are findings ABOUT a node, and they already have list pages built to filter, page and sort them
-([[issues-view]] / [[evals-view]]) — each one ⌥digit away, each strictly better at the job than fifteen
+([[issues-view]] / the measurement view) — each one ⌥digit away, each strictly better at the job than fifteen
 interleaved rows and a total. Restating a page-1 slice under the jump-list gave the reader a worse copy of a
 surface that already existed, and paid two server round-trips per keystroke to do it. Removing the planes
 removes the round-trips, the "all results" anchors, and the second ranking rule with them.

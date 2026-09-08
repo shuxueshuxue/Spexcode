@@ -35,7 +35,7 @@ the agent from one verb, picked by an optional topic:
   holds this page and both READMEs' Quick start to exactly that set, so the example can neither
   regress to one privileged harness nor silently drift from the registry.
 - **`spec` / `eval` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
-  artifacts — spec.md (frontmatter, body, the rules lint enforces) and eval.md (the scenario schema, how
+  artifacts — spec.md (frontmatter, body, the rules lint enforces) and measurement contract (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
   it. Compact always-on prompts point here for their operational detail: `eval` carries a bug fix's same-scenario
   A/B sequence (old-commit failing reading, verified-tree commit, then passing reading anchored to that commit),

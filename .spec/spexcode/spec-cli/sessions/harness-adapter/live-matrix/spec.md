@@ -4,23 +4,20 @@ status: active
 hue: 280
 desc: The parameterized harness conformance scenario suite — eight live behaviors exercised by a test file against any registered launcher, filing per-scenario eval readings on that harness's node.
 code:
-  - spec-cli/scenarios/harness-live-matrix.ts
 related:
-  - spec-eval/src/filing.ts
-  - spec-eval/src/scenarios.ts
   - spec-cli/src/harness.ts
 ---
 
 # live-matrix
 
 [[harness-adapter]]'s acceptance rule — an adapter merges only with per-behavior readings measured through
-a REAL dispatched session — used to live as prose: each harness's eval.md hand-transcribed its own wording
+a REAL dispatched session — used to live as prose: each harness's measurement contract hand-transcribed its own wording
 of the eight behaviors and a worker ran them by hand, so every new harness re-copied the matrix or silently
 dropped rows. This node keeps that coverage as a parameterized test asset: the behavior contracts live in each
-harness's `eval.md` scenarios, while one test file supplies the shared drive and evidence collection. Running
+harness's `measurement contract` scenarios, while one test file supplies the shared drive and evidence collection. Running
 the test against a launcher is a test action, not a new SpexCode CLI verb.
 
-Each scenario carries its contract in `eval.md` and points at the test case that supplies the DRIVE (real
+Each scenario carries its contract in `measurement contract` and points at the test case that supplies the DRIVE (real
 steps over the public session verbs — new/send/show/stop/resume/close, plus a materialize for the transient
 guard hook and tmux for the liveness kill; never a parallel mechanism). The test captures EVIDENCE as a
 per-scenario transcript of every command, board observation, and pane capture, then files it with the
@@ -30,7 +27,7 @@ undeclared-stop · pretooluse-block · ask-note · deliver-steer · resume · li
 close-residue.
 
 The scenario declaration is the contract source: the test resolves the existing canonical name or historical
-alias and fails loudly when the harness node has not declared it. It never creates or rewrites `eval.md`.
+alias and fails loudly when the harness node has not declared it. It never creates or rewrites `measurement contract`.
 Adding coverage means adding scenario data and, where needed, a parameterized test case; it does not widen the
 CLI or add a harness-specific route.
 
@@ -63,7 +60,7 @@ each measured through a REAL dispatched session:
 8. **close** — zero residue: tmux window, process tree, worktree/branch, sockets, session record.
 
 A harness whose runtime shape removes a row's premise supplies a replacement scenario rather than a false cell,
-and each harness node's `eval.md` owns those declarations while [[harness-adapter]] files the aggregate. Prompt
+and each harness node's `measurement contract` owns those declarations while [[harness-adapter]] files the aggregate. Prompt
 delivery additionally carries the rerunnable combination campaign — harness form × prompt origin × delivery
 timing — whose cells prove native delivery, a readable answer at the requested surface, truthful liveness, and a
 landed declaration together; a structural non-cell is BLOCKED, while a runnable cell that cannot start, exits

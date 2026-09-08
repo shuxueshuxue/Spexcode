@@ -70,7 +70,7 @@ per-tree 隔离与确定性顺序。新建一条投递路径只会多一个权�
 |---|---|
 | session-protocol / topology / selflaunch（Node 22.21.0） | **66 / 15 / 26**，全过 |
 | `npm run build` · `sync-init-plugins --check` | PASS · 31 个生成文件全等 |
-| `spex spec lint` · `spex eval lint --changed` | **0 error** · **0 flagged** |
+| `spex spec lint` · `measurement lint on changed scope` | **0 error** · **0 flagged** |
 | M1 跨层 conformance（回归） | **48 / 48** 仍全过 |
 | **M4 synced YATU**（`scripts/m4-self-launch-yatu.mjs`） | **11 / 11** |
 | lane F sabotage gate run-7 | A1/A2/A4/A5/A6/A7 PASS，A3 NO-CONSUMER；五计数全 0 且前置全 MEASURED |

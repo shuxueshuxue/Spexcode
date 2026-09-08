@@ -60,12 +60,12 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   and a filter. The local issue store is the git-native **discussion/annotation layer over the graph**.
 - **One file per thread.** The file is a one-line `concern` plus a prose body plus appended replies —
   each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A reply may carry **remark** state
-  ([[remark-substrate]]) — a resolvable bit + the codeSha it judges — appended to its sentinel as a
+  ([[remark-substrate]]) — a resolvable bit + the targetSha it judges — appended to its sentinel as a
   ` :: <k=v>` tail; a plain reply has no tail and parses unchanged, and the remark write verbs
   (`remark`/`resolve`/`retract`) are thin siblings of `reply` over this same committed store. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
   `evidence:` (content-addressed evidence hashes — the typed reference a cross-node finding carries, per
-  [[issues]] / [[video-evidence]]). The sentinel is **unforgeable**: user body text is
+  [[issues]] / video evidence). The sentinel is **unforgeable**: user body text is
   neutralized on write, so a body that itself contains that marker can't spawn a phantom reply or truncate
   the thread.
 - **Own lifecycle status**, store-authored never git-derived: `open` → `landed`.

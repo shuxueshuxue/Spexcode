@@ -10,7 +10,7 @@
 // what makes `roots` insertion-ordered enough for the eviction loop to mean "oldest root".
 //
 // This existed twice, verbatim in logic and even in name — `touchRoot` in git.ts (index/drift) and again in
-// spec-eval's scenariofresh.ts (scenario chains), whose comment said it was "mirroring historyIndex/driftIndex
+// the scenario-chain cache, whose comment once said it was "mirroring historyIndex/driftIndex
 // in git.ts". Both authors knew; neither had anywhere to put it. Now they do.
 
 // slot bound for one cache family. Every caller names its own env knob and default so operators can tune the

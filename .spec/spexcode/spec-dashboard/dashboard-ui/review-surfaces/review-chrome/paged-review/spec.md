@@ -9,7 +9,6 @@ related:
   - spec-cli/src/index.ts
   - packages/spec-core/src/review/reviewFilters.js
   - packages/spec-core/src/review/reviewQuery.js
-  - spec-eval/src/sessioneval.ts
 ---
 
 # paged-review

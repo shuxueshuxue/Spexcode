@@ -440,8 +440,8 @@ test('mergeBaseDiff preserves the old path of a pure rename for merge-base reade
   run('init', '-q')
   run('config', 'user.email', 'test@example.com')
   run('config', 'user.name', 'test')
-  const oldPath = '.spec/old-parent/n/eval.md'
-  const newPath = '.spec/new-parent/n/eval.md'
+  const oldPath = '.spec/old-parent/n/notes.md'
+  const newPath = '.spec/new-parent/n/notes.md'
   mkdirSync(dirname(join(root, oldPath)), { recursive: true })
   writeFileSync(join(root, oldPath), '---\nscenarios: []\n---\n')
   run('add', '.')
@@ -449,7 +449,7 @@ test('mergeBaseDiff preserves the old path of a pure rename for merge-base reade
   run('branch', 'base')
   mkdirSync(dirname(join(root, newPath)), { recursive: true })
   run('mv', oldPath, newPath)
-  run('commit', '-qm', 'move eval')
+  run('commit', '-qm', 'move attachment')
 
   assert.deepEqual(await mergeBaseDiff(root, 'base'), [{
     path: newPath,

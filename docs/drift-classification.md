@@ -58,7 +58,7 @@ or defer with a linked issue.
 | eval-core | ack | Package imports only; scenario hash/projection, relation parsing, and validation are unchanged. |
 | eval-score-badge | refresh | Server-computed summary tally and local fallback are now specified. |
 | eval-tab | ack | Package entrypoint relocation only; tab classification and timeline behavior are unchanged. |
-| evidence-put | ack | `spec-eval/src/cli.ts` changes are outside anchored `blobPut`; hashing/storage/receipt remain unchanged. |
+| evidence-put | ack | CLI evidence transport changes are outside the core hash/storage owner; hashing, storage, and receipt remain unchanged. |
 | session-eval | ack | `bf224c540` makes host capability failures explicit; projection now states that error boundary. |
 | step-timeline | ack | `156caa401` removes comments only; v1/v2 validation and normalization are unchanged. |
 | forge-cli | refresh | Current output says traced records; the spec now uses that current wording. |

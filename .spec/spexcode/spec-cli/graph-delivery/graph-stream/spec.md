@@ -215,9 +215,9 @@ nobody looking nothing runs. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db
 a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
 generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains
-event-driven under [[session-eval]]'s observer holds.
+event-driven under session proof's observer holds.
 
-The patrol is deliberately **not an eval-summary correctness source** ([[session-eval]]). It neither advances a
+The patrol is deliberately **not an eval-summary correctness source** (session proof). It neither advances a
 session eval input generation nor starts a periodic fingerprint/build. Session-eval coherence is a state machine
 over canonical events: a relevant refs/worktree/explicit-write event first increments the affected cache
 generation and makes the session unit `updating(lastKnown)`, then the existing graph debounce ships that state;

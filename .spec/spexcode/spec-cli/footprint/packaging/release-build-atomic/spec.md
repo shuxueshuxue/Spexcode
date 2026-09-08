@@ -8,7 +8,6 @@ code:
 related:
   - packages/spec-core/package.json
   - spec-cli/package.json
-  - spec-eval/package.json
   - spec-forge/package.json
   - scripts/build-workspaces.mjs
 ---

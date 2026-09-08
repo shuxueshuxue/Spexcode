@@ -151,7 +151,7 @@ async function issueVerbs(args: string[]): Promise<number> {
   return 0
 }
 
-const VALUE_FLAGS = new Set(['--node', '--body', '--evidence', '--scenario', '--code-sha', '--store'])
+const VALUE_FLAGS = new Set(['--node', '--body', '--evidence', '--scenario', '--target-sha', '--store'])
 // bare positionals, skipping flags + their values.
 function bare(args: string[]): string[] {
   const out: string[] = []
@@ -229,15 +229,15 @@ export async function runIssueWrite(args: string[]): Promise<number> {
 export const ISSUE_WRITE_SUBS = new Set(['open', 'reply'])
 
 // ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
-// `spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]`
-// host = a local issue id, OR a <node> with --scenario <name>. Records targetCodeSha (default: worktree HEAD).
+// `spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--target-sha <sha>] [--evidence <hash>…]`
+// host = a local issue id, OR a <node> with --scenario <name>. Records the target commit (default: worktree HEAD).
 export async function runRemark(args: string[]): Promise<number> {
   try {
     const scenario = fl(args, 'scenario')
     const positional = bare(args)[0]
     const body = readBody(args)
     if (!positional || !body) {
-      console.error('usage: spex remark add <issue-id | node --scenario name> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]')
+      console.error('usage: spex remark add <issue-id | node --scenario name> --body -|<text> [--target-sha <sha>] [--evidence <hash>…]')
       return 2
     }
     // THE FLAG DECIDES THE PARSE ([[cli-surface]] §1): `--scenario` present ⇒ the positional is a NODE id
@@ -245,8 +245,8 @@ export async function runRemark(args: string[]): Promise<number> {
     // a node id and an issue id are both bare slugs, so any "looks like" guess would misroute; the flag
     // is the one unambiguous discriminator, and a wrong host fails loud downstream (unknown issue/node).
     const host = scenario ? { node: positional, scenario } : { issue: positional }
-    const r = await (await import('./loop-in.js')).remarkWithLoopIn(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
-    console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
+    const r = await (await import('./loop-in.js')).remarkWithLoopIn(host, body, { targetSha: fl(args, 'target-sha'), evidence: repeated(args, 'evidence') })
+    console.log(`remark ${r.ref}  (against ${r.targetSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
     const dispatched = summarizeDispatch(r.outcomes)
     if (dispatched) console.log(`  ${dispatched}`)
     const s = summarizeLoopIn(r.loopIn)

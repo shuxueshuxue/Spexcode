@@ -33,7 +33,7 @@ export async function replyIssueWithLoopIn(
 export async function remarkWithLoopIn(
   host: { issue?: string; node?: string; scenario?: string },
   body: string,
-  opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
+  opts: { targetSha?: string; author?: string; evidence?: string[] } = {},
 ): Promise<Awaited<ReturnType<typeof remarkOnHost>> & { loopIn: LoopIn | null }> {
   const r = await remarkOnHost(host, body, opts)
   return { ...r, loopIn: await loopInFor(r.thread, r.author, body, r.thread.id) }

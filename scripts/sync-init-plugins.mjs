@@ -74,9 +74,6 @@ export function buildProjection({
         visit(path, relPath)
         continue
       }
-      // Scenarios and readings measure the dogfood implementation and name commits from its git database;
-      // plugin definitions/helpers project, measurement artifacts do not.
-      if (entry.name === 'eval.md' || entry.name === 'evals.ndjson') continue
       files.set(relPath, {
         content: readFileSync(path),
         mode: statSync(path).mode & 0o777,

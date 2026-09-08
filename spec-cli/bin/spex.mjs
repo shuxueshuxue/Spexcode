@@ -25,7 +25,6 @@ if (existsSync(sourceRoot)) {
     ['packages/session-application', 'dist/index.js'],
     ['packages/session-selflaunch', 'dist/index.js'],
     ['packages/spec-core', 'dist/index.js'],
-    ['spec-eval', 'dist/index.js'],
     ['spec-forge', 'dist/index.js'],
     ['spec-cli', 'dist/cli.js'],
   ]
@@ -54,7 +53,6 @@ if (existsSync(sourceRoot)) {
   const runtimeEntries = [
     cli,
     join(workspace, 'packages', 'spec-core', 'dist', 'index.js'),
-    join(workspace, 'spec-eval', 'dist', 'index.js'),
     join(workspace, 'spec-forge', 'dist', 'index.js'),
   ]
   // Tests and declaration files are typecheck inputs, not runtime build inputs. Counting them here makes a
@@ -124,8 +122,7 @@ if (existsSync(sourceRoot)) {
     'packages/session-events': ['packages/session-application', 'spec-cli'],
     'packages/session-application': ['spec-cli'],
     'packages/session-selflaunch': ['spec-cli'],
-    'packages/spec-core': ['spec-eval', 'spec-forge', 'spec-cli'],
-    'spec-eval': ['spec-cli'],
+    'packages/spec-core': ['spec-forge', 'spec-cli'],
     'spec-forge': ['spec-cli'],
     'spec-cli': [],
   }

@@ -3283,7 +3283,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .ef-node:hover { text-decoration: underline; }
 /* the full-width list page has room — the node name breathes there (58px was the slim-column budget). */
 .lp-row .ef-node { max-width: 180px; }
-/* the human sign-off on a row ([[human-ok]]): a settled approval mark on an ok'd reading, and the quiet
+/* the human sign-off on a reviewed row: a settled approval mark, and the quiet
    hover-revealed ok affordance on an un-ok'd one (a span, not a nested button — the row IS a button). */
 .ef-okd { flex: none; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--line)); border-radius: 50%; }
 
@@ -3360,7 +3360,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* the header verdict of the CURRENTLY-VIEWED reading (flips with the A/B strip) */
 .an-verdict-badge { font-weight: var(--weight-semibold); }
 
-/* the human sign-off in the header band ([[human-ok]]): settled mark / the deliberate ok button —
+/* the human sign-off in the header band: settled mark / the deliberate approval button —
    offered only while the viewed reading IS the scenario's latest. */
 .an-okd { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--green); white-space: nowrap; }
 

@@ -20,7 +20,6 @@
   ],
   "bundledDependencies": [
     "@spexcode/spec-core",
-    "@spexcode/spec-eval",
     "@spexcode/spec-forge"
   ],
   "publishConfig": {
@@ -37,7 +36,6 @@
     "@spexcode/session-application": "0.7.0-next.15",
     "@spexcode/session-selflaunch": "0.7.0-next.15",
     "@spexcode/spec-core": "0.7.0-next.15",
-    "@spexcode/spec-eval": "0.7.0-next.15",
     "@spexcode/spec-forge": "0.7.0-next.15",
     "@spexcode/transcript": "0.7.0-next.15",
     "smol-toml": "^1.8.0"

@@ -69,7 +69,7 @@ remove the wording after the replacement contract is stable.
 | 1 | Z-01/Z-02: popup code placement and tab close/empty wording. Resolve the approved replacement semantics first; no tree moves. | `spex spec lint` + focused dashboard tab/popup evals; commit code/spec together if any wording is changed. |
 | 2 | Z-03/L-06: retire `session-multi-select`, remove or re-home its anchors, and leave one dock-owned session-list rule. | `spex spec lint` 0 errors + session-console/dock E2E regression. |
 | 3 | H-01/H-02/H-03: move/merge hierarchy and clarify ownership without changing behavior. | `spex spec lint` 0 errors + changed-node anchor/eval lint. |
-| 4 | D-01/D-02/D-03/D-04: deduplicate prose into canonical owners and replace sibling text with links. | `spex spec lint` 0 errors + `spex eval lint --changed`; remeasure affected scenarios. |
+| 4 | D-01/D-02/D-03/D-04: deduplicate prose into canonical owners and replace sibling text with links. | `spex spec lint` 0 errors + `measurement lint on changed scope`; remeasure affected scenarios. |
 | 5 | L-01/L-02/L-03: move historical explanations into one retirement ledger; preserve L-04/L-05 as anti-resurrection guards. | `spex spec lint` 0 errors + final dashboard navigation/evidence pass. |
 
 No batch should delete or rewrite a `code:`/`eval:`-anchored node without first listing the anchor migration and

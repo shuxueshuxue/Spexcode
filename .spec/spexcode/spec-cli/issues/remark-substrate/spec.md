@@ -18,7 +18,7 @@ true — the whole author → resolve → retract loop holds under pure self-lau
 
 ## What a remark is
 
-A remark is **a reply that carries a mutable `resolved` bit**, plus a stable id and the codeSha it was
+A remark is **a reply that carries a mutable `resolved` bit**, plus a stable id and the targetSha it was
 authored against. It is *not* a new record type and *not* "every reply on a scenario": a plain reply stays
 `{by, at, body}`; a reply becomes a remark exactly when it carries the bit. Because a
 remark may attach to an issue **or** a scenario, remark-ness can't be positional — it is a property the reply
@@ -31,7 +31,7 @@ carries. The bit is the marker.
   **atomic**: find-or-create runs inside the store lock, so a concurrent burst of first-remarks on a fresh
   pair (normal, with parallel workers) can't mint two threads — a duplicate would be invisible to the concern
   key and never fire its teeth (R4).
-- **Pinned to a reading.** A remark records the **codeSha it was authored against** (the worktree HEAD by
+- **Pinned to a reading.** A remark records the **targetSha it was authored against** (the worktree HEAD by
   default; overridable). Later milestones hang the freshness teeth on this — a remark ages its scenario until
   a fresh reading *after* a resolve clears it — so it must remember which reading it judged.
 - **Trunk-scoped.** Remarks are not code-bound, so they live in the trunk issue store, always visible, never
@@ -42,7 +42,7 @@ carries. The bit is the marker.
 
 Thin wrappers over the store write path — a remark is a trunk-committed reply that also carries the bit:
 
-- **author** — records a remark on a host, stamping the target codeSha and a fresh unresolved bit.
+- **author** — records a remark on a host, stamping the target targetSha and a fresh unresolved bit.
 - **resolve** — flips the bit to resolved and stamps who/when. This has *teeth*: it is a **deliberate**
   call (the `spex ack` pattern, never a passive side effect of dispatch/delivery); it is **never the
   author's own** — self-resolve is rejected loudly, resolving is a second party's judgment; and it is

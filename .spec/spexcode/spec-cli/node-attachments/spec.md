@@ -13,7 +13,7 @@ related:
 # node-attachments
 
 A spec node has always been a **folder**, and the board could see exactly one file in it. Everything else a
-node carries — its eval contract, an evidence directory, a raw capture, a reproduce script, a working note
+node carries — an evidence directory, a raw capture, a reproduce script, a working note
 written beside the spec that cites it — existed on disk and nowhere in the product. In this repository that
 is several hundred files: authored, committed, cited in prose, and unreachable from the surface that shows
 the prose citing them.
@@ -29,9 +29,9 @@ destroyed the one invariant that keeps *what the product shows* and *what the pr
 set. So the **gate is different and the windowed read is shared** — which is the right way round. Two
 surfaces may disagree about what may be read; they must not disagree about what `bytes` means.
 
-**Two files are excluded because they already have better surfaces.** `spec.md` is the node's document and
-`evals.ndjson` is its eval timeline; listing them here would offer a second, worse way to read what the
-board already renders well. Asking for one by name is refused with that reason rather than served.
+**The document is excluded because it already has a better surface.** `spec.md` is the node's document;
+listing it here would offer a second, worse way to read what the board already renders well. Asking for it by
+name is refused with that reason rather than served.
 
 **Containment is checked by resolving, not by pattern-matching.** The name is joined and then tested for
 containment, so a `..` that normalises back inside is fine and one that escapes is caught wherever it came

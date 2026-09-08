@@ -56,6 +56,9 @@ A **game controller** drives this same registry from **inside the page** — [[g
 
 ## principles
 
+The current keymap keeps the relationship-walk action table authoritative while the surrounding dashboard
+navigation cleanup remains a mechanical implementation change.
+
 **Camera rule (current).** Arrow nav, mouse click, and programmatic jumps all use [[node-graph]]'s anchor:
 a root uses the focus→nearest child midpoint at the `43%` canvas token, while a non-root focus uses its own
 centre at the `50%` canvas token (never a parent/child midpoint). During focus follow (`fit: false`), the current

@@ -7,7 +7,6 @@ related:
   - packages/spec-core/src/specs.ts
   - spec-cli/src/lint.ts
   - spec-cli/src/cli.ts
-  - spec-eval/src/cli.ts
 ---
 
 # governed-related
@@ -72,7 +71,7 @@ on drift only, never on ownership). It blames the file's size, not its ownership
 - **merge the nodes** when the separate specs are really one concern;
 - **single foundation owner** + relate the rest, when the file is a genuine shared substrate.
 
-The model holds on **both** axes — spec nodes and eval scenarios (a eval.md owns nothing; only its
+The model holds on **both** axes — spec nodes and eval scenarios (a measurement contract owns nothing; only its
 scenarios `code`-govern ≤1 file and `related`-reference the rest, and a file governed by too many
 scenarios is the `eval-owners` smell). A node whose intent genuinely spans several source files is a
 **split-the-file candidate** ([[sessions-core]], [[dashboard-shell]]): its one truth stays govern, the

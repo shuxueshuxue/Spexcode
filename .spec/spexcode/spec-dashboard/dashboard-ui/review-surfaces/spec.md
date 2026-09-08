@@ -13,7 +13,7 @@ drift risk once, as two master-detail copies of the same idea. So the shared mid
 afterthought that happened to be extracted — it is why this group exists, and it is why either page reads
 correctly only beside it.
 
-- [[evals-view]] — the Evals pages: the Fail/Pass/Unmeasured loss axis over the measured record, the
+- the measurement view — the Evals pages: the Fail/Pass/Unmeasured loss axis over the measured record, the
   evidence detail workspace, and the `scope:` token that sources one session's worktree loss through the
   same route family.
 - [[issues-view]] — the Issues pages: Open/Closed lifecycle over the merged store, a detail whose writes

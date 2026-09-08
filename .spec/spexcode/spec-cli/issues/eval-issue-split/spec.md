@@ -36,16 +36,16 @@ issues name top to bottom, and the old data-dir name is no longer residue but re
   surfaces consume) **keeps only** them. Splitting at the source — inside `mergedIssues` — frees every issue
   surface at once, by construction: the [[issues-view]] Issues page list, the [[dashboard-issues]] board issue
   badge, and the `spex issues` drain all stop counting eval remarks as issues, with no per-surface filter.
-  The eval-remark tracks instead ride the EVAL side ([[evals-view]]): the [[evals-feed]] rows and the [[event-detail]] pane,
+  The eval-remark tracks instead ride the EVAL side (the measurement view): the the measurement feed rows and the the thread detail pane,
   through the M2 server overlay.
 
 - **One overlay feeds both eval homes.** The (node, scenario)↔thread join is lifted server-side onto the
   reading itself: `evalTimeline` attaches the eval thread as `EvalEntry.thread`, so it is present on **every**
   eval home — the issues-page feed folds it in through the board, the session tab through the proof model.
-  [[event-detail]] therefore reads its remark track from `entry.thread`, never from a resident issues list
+  the thread detail therefore reads its remark track from `entry.thread`, never from a resident issues list
   (which no longer holds eval threads anyway) — the counterpart to splitting them out.
 
-Together these reach **U1**: ONE `EventDetail` component ([[event-detail]]), store-agnostic, reused in every
+Together these reach **U1**: ONE `EventDetail` component (the thread detail), store-agnostic, reused in every
 home — the issues eval tab AND the session eval tab (whose "no resident issues list" degradation is gone, since
 the composer authors remarks through the CLI-parity `/api/remarks` and needs no list). **U2** holds
 throughout: scenario and issue stay DISTINCT peer types on DISTINCT surfaces (Evals | Issues) — the split is

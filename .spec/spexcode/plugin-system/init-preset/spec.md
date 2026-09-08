@@ -32,13 +32,13 @@ its behavior earns the added surface.
 optional discipline. [[core]] requires re-measuring changed scenarios, matching evidence type to behavior,
 filing only after the measured change is committed, and giving obvious frontend changes a real-browser
 scenario. `reproduce-before-fix` supplies the fail→pass repair pair, while `core/stop-gate` gives cleanly
-finished work the [[eval-proactive]] advisory. These shared contracts reach adopter and dogfood agents alike.
+finished work the the measurement nudge advisory. These shared contracts reach adopter and dogfood agents alike.
 
 **The checked-in template is generated output.** Published code cannot read this repo's live `.spec`, so
 `spex init` copies `spec-cli/templates/spec/project/.plugins`; the projection command derives that tree from
 the live source. It includes seedable plugin definitions, helpers, and executable modes; renames the spec
-root to `project`; and unwraps links to known nodes absent from the seed. `eval.md` scenarios and
-commit-anchored `evals.ndjson` readings measure the dogfood implementation, so both remain with its git
+root to `project`; and unwraps links to known nodes absent from the seed. `measurement contract` scenarios and
+commit-anchored `measurement records` readings measure the dogfood implementation, so both remain with its git
 database. No prose normalizer, content exception, or separately maintained adopter variant is allowed.
 
 The same command writes and checks the projection. Repository lint, CI, and packaging compare every expected

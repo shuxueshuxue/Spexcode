@@ -19,7 +19,7 @@ path, and a path carries no marker saying which key holds it. Those rows are nam
 excluded from the body, so a moved claim reads as governance and never as edited prose. Non-spec files are shown
 with Git numstat and the governing node resolved from the tip tree's `code:` claims. A revision that changes no
 file at all — an ack stamp is an empty commit, so its whole signature is the empty diff — or that touches only
-`evals.ndjson` readings emits one line stating `ack/eval only, no body change (empty=true)`. The report ends with
+`measurement records` readings emits one line stating `ack/eval only, no body change (empty=true)`. The report ends with
 the fixed parent-session reread request; `note` is copied verbatim, or `the sender gave no reason` when absent. The
 report is machine-facing product output, so it is written in English like every other line the CLI and backend
 print — the reader's own language belongs to authored content, never to tool output. No semantic

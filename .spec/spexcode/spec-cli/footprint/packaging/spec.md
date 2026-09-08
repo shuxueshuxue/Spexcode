@@ -9,7 +9,6 @@ related:
   - package.json
   - package-lock.json
   - spec-cli/package.json
-  - spec-eval/package.json
   - spec-forge/package.json
   - packages/spec-core/package.json
   - spec-cli/src/cli.ts
@@ -55,7 +54,7 @@ scaffolding only, not an extra normal-adopter step.
 The repository holds the transcript packages `@spexcode/transcript` and `@spexcode/transcript-ui` ([[transcript]],
 [[transcript-ui]]; Node >= 18, the packages whose floor is set by the Electron adopters they are published for), the runtime package stack `@spexcode/session-protocol`, `@spexcode/session-events`,
 `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-application`, and
-`@spexcode/session-selflaunch`, alongside the product packages `@spexcode/spec-core`, `@spexcode/spec-eval`,
+`@spexcode/session-selflaunch`, alongside the product package `@spexcode/spec-core`,
 `@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name real package
 dependencies by release version; local workspace resolution is a development convenience, not a published
 `file:` contract. The retired `@spexcode/session-core` name is not a package or compatibility export.

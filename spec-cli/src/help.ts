@@ -462,8 +462,7 @@ close — routes by the issue's own store too, so a thread ends where it lives.
 
 promote — moves an OPEN local issue to the forge as one recorded action.
 
-links — the read-only forge trace: which open forge issues/PRs serve which spec node (--pending
-narrows to threads still awaiting a response).
+links — the read-only forge trace: which open forge issues/PRs serve which spec node.
 
 The issues workflow's on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle
 verb — edit the JSON; \`spex doctor\` reports its state).
@@ -472,7 +471,7 @@ ${MENTION_NOTE}`,
   },
   remark: {
     line: 'remark <verb>         resolvable pins on a host: add · resolve · retract',
-    body: `Usage: spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]
+    body: `Usage: spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--target-sha <sha>] [--evidence <hash>…]
        spex remark resolve <ref>          (the <thread-id>#<rid> that \`spex remark add\` printed)
        spex remark retract <ref>
 
@@ -502,7 +501,6 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
     line: 'guide [topic]         the manuals: setup workflow · spec format · evidence handoff · .spec/spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
-       spex guide eval       retired: attach product evidence with \`spex session files add\`
        spex guide settings   every .spec/spexcode.json / .spec/spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 

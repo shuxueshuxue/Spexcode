@@ -28,7 +28,7 @@ routes are ordinary resident workspace documents inside it ([[workspace-shell]],
 no longer selects a lighter surface for a cold review URL: that fast path gave review routes a second host to
 drift in and made the tab strip vanish on cold review navigation, so it was withdrawn in favour of one host
 with one chrome. A legacy Evals address still normalizes to the canonical route and still mounts the SAME
-[[evals-view]] components; there is no second renderer, data projection, or URL vocabulary.
+the measurement view components; there is no second renderer, data projection, or URL vocabulary.
 
 The static [[public-spec-graph]] face is a compile-time exception: with `VITE_PUBLIC_GRAPH_ONLY=1`, the root
 hands even a copied review URL to the sealed App, which normalizes the hash to `#/graph`. The live dashboard

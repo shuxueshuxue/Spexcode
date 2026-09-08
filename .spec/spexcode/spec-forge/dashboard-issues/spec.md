@@ -56,7 +56,7 @@ the TTL and AWAITS it (`refreshForgeNow`), so the next read carries the real rea
 a FULL re-list, never the incremental window — a since-read can lag a just-posted write, advancing the
 watermark past it. Read-only throughout — the resident module never writes the forge (writes are the
 [[port]] driver's) and never touches a node's git-derived status. Sibling folds ride the same pattern
-(the [[eval-tab]] eval timeline); this node owns only the issues slice.
+(the the measurement view eval timeline); this node owns only the issues slice.
 
 **Frontend — one glance badge; rows stay on demand.** When a node carries open issues, its
 first row gains one badge — the **count**, hue distinct from the status dot and drift-badge (the three

@@ -57,7 +57,7 @@ merged spec tree, the per-worktree overlay (a ghost/added node nests by director
 introducing a whole new subtree renders as one tree, not a flat scatter), the session list, and the
 backend's own project identity (the browser-tab name) — in one module, served identically at HTTP
 `/api/graph` and `spex graph --json` (the frontend only adds x/y pixels). It is also the shared hub where sibling
-features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, [[eval-tab]]
+features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, the measurement view
 evals) and behind which the live pane is read as text at `…/capture` (which [[remote-client]]'s `spex
 capture` reads) — so such a fold is that feature's stake, not `sessions`' drift.
 
@@ -67,7 +67,7 @@ lifecycle and list ownership remain here, while graph remains the common project
 
 ### Cross-product worker identity
 
-ZCode owns native swarm child ids; SpexCode owns the session record and its [[session-eval]] projection. When a
+ZCode owns native swarm child ids; SpexCode owns the session record and its session proof projection. When a
 ZCode tool or hook needs to show a child-specific SpexCode eval glance, it must declare the exact pair with
 `POST /api/sessions/:spexSessionId/zcode-child-sessions` and body `{ "childSessionId": "<opaque-zcode-id>" }`.
 The target must be a current governed SpexCode session. The declaration stores the opaque id in that session's
@@ -79,4 +79,4 @@ The graph exposes a non-empty `zcodeChildSessionIds` only on the owning session 
 relation and consumers leave a child eval cell absent, rather than presenting an aggregate or zero. Because the
 association has exactly the same lifetime as its target record, close removes it and a newly created record may
 later bind the same ZCode id. This is a relation only: it neither creates a SpexCode session for a ZCode worker nor
-changes [[session-eval]]'s worktree-rooted evaluation semantics.
+changes session proof's worktree-rooted evaluation semantics.

@@ -23,6 +23,5 @@ const build = (dir, script, output) => {
   }
 }
 build('packages/spec-core', 'build', 'dist/index.js')
-build('spec-eval', 'build', 'dist/index.js')
 build('spec-forge', 'build', 'dist/index.js')
 build('spec-cli', 'build', 'dist/cli.js')

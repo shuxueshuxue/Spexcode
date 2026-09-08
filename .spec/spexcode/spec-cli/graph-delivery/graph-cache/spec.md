@@ -184,7 +184,7 @@ and turn a normal reload into backend event-loop and memory pressure.
   a read-driven verification is neither stale nor refreshing until it finds something, at which point the
   ordinary dirty machinery reports it like any other obligation.
 
-Session rows' eval summaries compose with this cache rather than hiding inside it ([[session-eval]]): graph
+Session rows' eval summaries compose with this cache rather than hiding inside it (session proof): graph
 assembly batch-reads a separate content-addressed projection cache and may start only its missing/invalidated
 entries. A summary completion invalidates the board at `sessions` scope, so the sessions splice attaches the
 new stable projection without rebuilding node/eval/issue units. Lifecycle-only splices reuse unchanged summary
@@ -315,7 +315,7 @@ standing obligation whenever the bound is retuned.
 Bounding processes is not enough on its own, because what a build RETAINS scales too. A fold over an
 adopted corpus reads many off-history anchors, and asking each of them a repository-wide question made the
 build's own heap — not its child processes — the binding term. So the off-history content fallback asks
-only about the governed paths each reading claims and keeps only those verdicts ([[eval-core]]); retention
+only about the governed paths each reading claims and keeps only those verdicts (the former measurement core); retention
 scales with governed breadth, not repository width, and the same three-round platform obligation covers the
 builder's own memory, not merely its descendants.
 
@@ -325,7 +325,7 @@ object — it decomposes it into delta units ([[graph-delta]]).
 
 **The build itself must not block the liveness probe.** Even coalesced to one, a build with a long
 *synchronous* stretch freezes `/health`. The two dominant stretches were full-tree fs walks — `raws()`
-(the spec.md walk) and `evalNodes()` (the eval.md walk), ~1s of uninterrupted `readFileSync`. Their hot
+(the spec.md walk) and `measurement-node walk` (the measurement contract walk), ~1s of uninterrupted `readFileSync`. Their hot
 twins `rawsAsync()`/`evalNodesAsync()` read through `fs/promises`, yielding the event loop between files,
 so `/health` answers *during* a build instead of behind it. The git walks were already async+parallel and
 HEAD-cached (they never re-fork per node — [[graph-lean]]/source-of-truth), so async fs closed the last
@@ -357,12 +357,12 @@ removed immediately, so retained memory is bounded by live checkouts rather than
 have existed in the process.
 
 **Where a full build's time actually goes — measured, so the budget warning names a lever instead of a mood.**
-On a 476-node adopter corpus (429 nodes carrying `eval.md`, 2,521 declared scenarios, 3,023 stored readings) a
+On a 476-node adopter corpus (429 nodes carrying `measurement contract`, 2,521 declared scenarios, 3,023 stored readings) a
 fresh-process full build logged 1710 / 1825 / 1870 ms against the 1500ms budget. The `sourceIndexes` +
 `loadSpecs` baseline — history and drift included — is 394–524ms of that and is **shared with `spex spec lint`**,
 which is why a no-server lint of the same corpus finishes at 1.61s wall while the board needs more: the
 difference is not the tree walk. Board-only work, in size order: eval timeline and freshness derivation
-778–876ms, the `.spec`/`eval.md` walk 227–405ms, the scenario and remark index 109–129ms, session census and
+778–876ms, the `.spec`/`measurement contract` walk 227–405ms, the scenario and remark index 109–129ms, session census and
 liveness 98–119ms, worktree layout and overlay discovery 102–108ms — and then everything else (overlay/ghost
 projection, issue merge, review fold, the resident session-eval copy, identity, and serializing a 583KB board)
 under 7ms each. Inside freshness on that corpus, the 558.7–591.8ms attributed to selector-anchor verification is
@@ -373,9 +373,9 @@ spent 507ms. The content fallback across all 3,023 readings is 29.7–35.8ms.
 The dimension is readings and their code axes, not node count. At 119 / 238 / 357 / 476 ids the readings go
 882 / 1,543 / 2,176 / 3,023 while full freshness goes 621.0 / 663.9 / 714.6 / 911.7 ms — **sublinear**, which
 says the cost is a fixed sum re-paid per build rather than a walk that scales wrongly. That fixed sum is what
-[[selector-anchor-scope]] now scopes to the root's current head, and the corpus that exhibits it is **spexcode
+selector anchor scope now scopes to the root's current head, and the corpus that exhibits it is **spexcode
 governing itself** — 1,850 anchored demands deduplicating to 1,018 distinct queries — not the 476-node adopter
-measured above: none of that adopter's 1,144 distinct reading `codeSha`s is reachable from its HEAD, so zero
+measured above: none of that adopter's 1,144 distinct reading `targetSha`s is reachable from its HEAD, so zero
 selector queries reach the hit engine there and it cannot show this cost at all. Ordering without freshness
 (`order: true`, 229.8ms) is not the substitute it looks like —
 it deliberately emits `freshnessDeferred`, and the review summary's counts need real fresh/stale decisions.

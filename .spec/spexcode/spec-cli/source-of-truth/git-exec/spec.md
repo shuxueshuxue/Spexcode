@@ -19,7 +19,6 @@ related:
   - packages/spec-core/src/git.ts
   - spec-cli/src/git.test.ts
   - spec-cli/src/workspace-precondition.cli.test.ts
-  - spec-eval/src/freshness.ts
   - spec-cli/src/sessions.ts
 ---
 
@@ -103,8 +102,8 @@ Seven call sites branch on it, across two packages and in BOTH polarities, so th
 is not a local concern:
 
     spec-cli/src/sessions.ts   1718 · 2660 · 2692 · 2693 · 2792   `failure !== 'exit'`
-    spec-eval/src/freshness.ts 183                                `failure !== 'exit'`
-    spec-eval/src/sessioneval.ts 410                              `failure === 'exit'`
+    legacy measurement source/freshness.ts 183                                `failure !== 'exit'`
+    legacy measurement source/sessioneval.ts 410                              `failure === 'exit'`
 
 The reversed-polarity one is where this classification is easiest to misread, including by me. Both of its
 branches raise the same error type and differ only in the sentence, and the `exit` sentence is *"base X is not

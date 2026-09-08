@@ -1,5 +1,5 @@
 // throwaway benchmark harness for spec-search — drives the REAL `spex spec search --json` over the holdout
-// cases and reports recall@1, recall@3, MRR. The cases live in the node's eval.md.
+// cases and reports recall@1, recall@3, MRR. The cases live in the benchmark fixture.
 //
 // Labels are node LEAF names, matched with the same de-collision rule the loader applies (specs.ts reId):
 // a returned id matches a label if it IS the label or ends with `_<label>` — so a bare leaf keeps matching

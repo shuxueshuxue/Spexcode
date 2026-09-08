@@ -22,5 +22,5 @@
   <text x="700" y="128" font-size="20" fill="#16495A" text-anchor="middle">agents commit · the optimizer</text>
 
   <path d="M 908 384 C 780 482, 620 482, 494 390" fill="none" stroke="#B08A1E" stroke-width="4" marker-end="url(#lg)"/>
-  <text x="700" y="522" font-size="20" fill="#B08A1E" text-anchor="middle">spex eval · the measured loss</text>
+  <text x="700" y="522" font-size="20" fill="#B08A1E" text-anchor="middle">spex evidence · shared bytes</text>
 </svg>

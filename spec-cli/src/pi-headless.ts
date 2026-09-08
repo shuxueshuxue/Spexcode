@@ -1,7 +1,6 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'

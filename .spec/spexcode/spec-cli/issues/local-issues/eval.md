@@ -100,6 +100,20 @@ scenarios:
     expected: >-
       The node merge prints the issues nudge in the merge command's own output, naming the merged
       node id; the unrelated merge stays silent (the hook is guarded to `merge node/*`).
+  - name: post-merge-nudge-matches-the-tree-it-fired-in
+    tags: [cli]
+    code: spec-cli/src/localIssues.ts
+    related: [spec-cli/templates/hooks/post-merge]
+    description: >-
+      Land a `node/<id>` branch the way the merge skill does it — `git worktree add --detach` a temporary
+      worktree of the trunk and make the `--no-ff` merge there, with the post-merge hook installed and `spex`
+      pinned to the binary under test — and read the nudge the merge prints. Repeat with the same merge made
+      in the trunk checkout itself. Then run `spex issue open` from a linked worktree of the same repository.
+    expected: >-
+      From the temporary landing worktree the nudge still asks for the close and the read but does NOT print
+      `spex issue open`, saying instead that the open belongs in the declaration note or the trunk checkout;
+      from the trunk it prints `spex issue open` unchanged. The separate `issue open` run confirms the refusal
+      the worktree text is describing, so the instruction and the enforcement agree in both trees.
   - name: close-time-issue-closeout
     tags: [cli]
     code: spec-cli/src/localIssues.ts

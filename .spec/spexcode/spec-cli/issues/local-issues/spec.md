@@ -86,8 +86,15 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   IS the trunk checkout. True for the primary backend and for a throwaway **clone** (its own `.git`, its own
   disposable main — never the real one); **false only for a linked-worktree backend**, exactly the footgun. When
   false the commit is **refused, loud, with the repair** — never a silent write onto someone else's main. The
-  legitimate write moment already satisfies the predicate: the post-merge nudge fires inside `git -C <main> merge`
-  (cwd = main), so a doer opening a post-merge concern is running as the trunk checkout.
+  post-merge nudge does NOT satisfy the predicate, and assuming it did was a real defect. Landing is one
+  `--no-ff` merge made in a **temporary detached worktree** of the source branch, which is then fast-forwarded
+  into the trunk, so the `merge node/<id>:` commit — the only subject the hook reacts to — is authored from a
+  linked worktree. The nudge therefore fired where a write is refused and still printed the `issue open`
+  command: the system asking for the one thing it forbids, with the refusal arriving only after the agent
+  tried. The nudge now reads **this same predicate** and adapts its second instruction, so the ask and the
+  enforcement cannot disagree; from the trunk it still names `issue open`, and from a linked worktree it says
+  the open belongs in the declaration note or in the trunk checkout. The predicate is read in the CLI, where
+  the write enforces it, never re-derived by the git hook.
 - **A disposable store for tests — one override, plain files, no commit, no git at all.** `SPEXCODE_ISSUES_DIR=<abs>`
   points **both** reads and writes at an isolated directory of plain `.md` files: no `git add/commit`, so it can
   **never** touch any shared main, and the primary-checkout predicate is moot (nothing is committed). This is the

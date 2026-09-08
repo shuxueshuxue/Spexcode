@@ -3856,6 +3856,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* the editor is the payload: it takes every pixel the two chrome rows leave */
 .diff-editor { flex:1; min-height:0; overflow:auto; }
+.diff-editor .cm-editor, .diff-editor .cm-mergeView, .diff-editor .cm-mergeViewEditors,
+.diff-editor .cm-mergeViewEditor, .diff-editor .cm-scroller { background:var(--paper) !important; color:var(--ink); }
+.diff-editor .cm-mergeViewEditor { border-color:var(--line); }
 .diff-editor .cm-line { cursor:pointer; }
 .diff-editor-split, .diff-editor-unified { min-height:0; overflow:auto; }
 /* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each

@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css'
 import SpecNode from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
+import ProseActions from './ProseActions.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
 import PublicGraphAbout from './PublicGraphAbout.jsx'
@@ -83,13 +84,14 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
   })
   useEffect(() => { try { if (focusId) sessionStorage.setItem(scopedKey('spex.focus'), focusId) } catch { /* */ } }, [focusId])
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
-  const [sendNodeId, setSendNodeId] = useState(null)
+  const [sendNode, setSendNode] = useState(null)
   const [pane, setPane] = useState('spec')
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
   const { getViewport, setViewport } = useReactFlow()
   const t = useT()
   const graphRef = useRef(null)
+  const graphActionsRef = useRef(null)
   const animRef = useRef(0)
   const viewportRef = useRef(null)
   const fitZoomRef = useRef(null)
@@ -616,11 +618,15 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => scope.open({ page: 'spec', param: focusRef.current.id, query: null })}
-          onSend={(id) => { setNodeMenu(null); setSendNodeId(id); setPane('spec'); focusNode(id); setOverlay(true) }}
+          onSend={(id, source) => { setNodeMenu(null); focusNode(id); setSendNode({ id, x: source.x, y: source.y }) }}
           onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}
         />}
+
+        {!graphOnly && sendNode && (
+          <ProseActions node={rawById[sendNode.id]} hostRef={graphActionsRef} openSend={sendNode} />
+        )}
 
         {!graphOnly && lockedSession && (
           <div className="lock-hint" style={{ '--ov': labelColor(lockedSession.id) }}>
@@ -648,7 +654,8 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
             extracted this view once dropped this line entirely while keeping all its key handling — a
             popup with working keys and no body. */}
         {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
-          openSend={sendNodeId === focus.id} onClose={() => { setOverlay(false); setSendNodeId(null) }} />}
+          onClose={() => setOverlay(false)} />}
+        <span ref={graphActionsRef} className="graph-actions-host" aria-hidden="true" />
       </div>
     </div>
   )

@@ -39,7 +39,7 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onSend, onDelet
   if (!menu) return null
   // picking closes FIRST, then fires — the action may navigate away (New Session), and the menu must not
   // linger over the next page.
-  const pick = (fn) => (e) => { e.stopPropagation(); onClose(); fn(menu.id) }
+  const pick = (fn) => (e) => { e.stopPropagation(); onClose(); fn(menu.id, menu) }
   const open = (id) => { onClose(); onOpenSession?.(id) }
   const copyUrl = async (e) => {
     e.stopPropagation()

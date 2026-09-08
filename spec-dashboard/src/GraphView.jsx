@@ -44,10 +44,8 @@ const clamp = (z) => Math.max(GRAPH_MIN_ZOOM, Math.min(GRAPH_MAX_ZOOM, z))
 
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
 // prompt-driven work, never a server op ([[mentions]]: the issue store is the only programmatic surface).
-const NEW_CHILD_CHORD = chordSequence('graph.newChild').join('')
 const DELETE_CHORD = chordSequence('graph.del').join('')
 const CHORDS = {
-  [NEW_CHILD_CHORD]: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
   [DELETE_CHORD]: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
 }
 const CHORD_KEYS = Object.keys(CHORDS)
@@ -624,8 +622,7 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => scope.open({ page: 'spec', param: focusRef.current.id, query: null })}
-          onFresh={(id) => startNew(`[[${id}]] `)}
-          onNewChild={(id) => startNew(CHORDS[NEW_CHILD_CHORD](id))}
+          onSend={(id) => startNew(`[[${id}]] `)}
           onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}

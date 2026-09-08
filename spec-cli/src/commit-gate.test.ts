@@ -76,6 +76,27 @@ function fixture(): Fixture {
   return { root, git, commit, commitEnv, runGit, lint }
 }
 
+test('a candidate that only adds unclaimed source is allowed, but the skip names the file', () => {
+  const fx = fixture()
+  writeFileSync(join(fx.root, 'src', 'orphan.py'), 'def orphan():\n    return 1\n')
+  fx.git('add', 'src/orphan.py')
+  const added = fx.commit('-m', 'add an unclaimed module')
+  // the verdict is unchanged: coverage is a warning, so the commit lands
+  assert.equal(added.status, 0, `${added.stdout}${added.stderr}`)
+  assert.equal(fx.git('log', '-1', '--format=%s'), 'add an unclaimed module')
+  // ...but the skip is no longer indistinguishable from a clean check
+  const out = `${added.stdout}${added.stderr}`
+  assert.match(out, /claimed by no spec/, out)
+  assert.match(out, /src\/orphan\.py/, out)
+
+  // a non-source path in the same shape stays silent — this must not become chatty
+  writeFileSync(join(fx.root, 'README.md'), 'fixture, edited\n')
+  fx.git('add', 'README.md')
+  const doc = fx.commit('-m', 'edit the readme')
+  assert.equal(doc.status, 0, `${doc.stdout}${doc.stderr}`)
+  assert.doesNotMatch(`${doc.stdout}${doc.stderr}`, /claimed by no spec/)
+})
+
 test('new anchored drift is rejected before the branch ref advances', () => {
   const fx = fixture()
   const before = fx.git('rev-parse', 'HEAD')

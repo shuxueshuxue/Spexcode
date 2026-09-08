@@ -33,7 +33,10 @@ may remain installed after a selection changes, but an event whose baked harness
 allowlist exits before any input handling. An absent allowlist means this tree is unmaterialized and is an error.
 
 A missing manifest is an error because silently dropping lifecycle hooks hides a broken installation. All matching handlers preserve the
-existing deterministic order, stdout concatenation, blocking declaration, and Codex stderr reason translation.
+existing deterministic order, blocking declaration, and Codex stderr reason translation. Their stdout is
+COLLECTED and emitted once, as [[output-fold]] defines, rather than written through as each handler returns.
+Zero or one structured document is passed through byte for byte, so the ordinary dispatch is unchanged and
+boots nothing; only a genuine second speaker reaches the fold.
 
 **A HANDLER THAT FAILS SAYS SO, whether or not it may block.** A non-blocking handler's exit code was dropped
 and its captured stderr was overwritten by the next handler and deleted on exit, so a lifecycle hook that could

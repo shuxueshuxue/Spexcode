@@ -4,7 +4,7 @@ import { readConfig, configPath, repoRoot, git, gitObjectFormat, sourceIndexes, 
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
 import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
-import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
+import { DEFAULT_TEST_GLOBS, isSourcePath, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 export const SPEC_LINT_REPORT_PROJECTION = 'spex.spec-lint.report'
@@ -123,25 +123,54 @@ function pendingChangedPaths(root: string, tip: string): string[] {
     return [...new Set(changed.filter(Boolean))]
   } catch { return [] }
 }
+// what the cheap pending classification concluded, and what it had to compute to conclude it.
+export type PendingScope = {
+  // does this candidate reach the full lint path at all?
+  touchesGoverned: boolean
+  // changed paths that ARE source under `governedRoots` and that NO candidate spec claims. Only ever
+  // populated on the skip path, where nothing else will name them.
+  uncoveredSources: string[]
+}
+
 // Cheap pending classification for the reference hook. It reads only the candidate tree and claims; it
 // never constructs either history index. A normal lint call deliberately does not use this
 // shortcut so its full findings/oracle contract remains unchanged.
-export async function pendingTouchesGoverned(root: string, tip: string): Promise<boolean> {
+// @@@ the skip path still owes an answer - this predicate needs the changed paths AND the claim set to
+// decide, so the set of "changed source nothing claims" is already in hand when it decides to skip. It used
+// to return a bare boolean and throw that set away, which made the ONE commit shape that creates a coverage
+// gap — adding a source file no spec claims — the ONE shape that touches nothing governed and is therefore
+// skipped in silence. The verdict is unchanged (coverage is a warning, never a gate); what changes is that
+// the skip stops being indistinguishable from a clean check.
+export async function pendingScope(root: string, tip: string): Promise<PendingScope> {
+  const governed = { touchesGoverned: true, uncoveredSources: [] as string[] }
   // A merge can introduce reachable side-branch debt without changing the result tree. The first-parent
   // diff is insufficient for a scope proof, so all multi-parent candidates stay on the full lint path.
   const parentCount = git(['-C', root, 'rev-list', '--parents', '-n1', tip]).trim().split(/\s+/).length - 1
-  if (parentCount > 1) return true
+  if (parentCount > 1) return governed
   const changed = pendingChangedPaths(root, tip)
-  if (!changed.length) return true
+  if (!changed.length) return governed
   // `governedRoots` is source discovery policy, not the set of actual code claims: a spec may deliberately
   // govern a path outside those roots. Read only the candidate spec tree (no history/drift indexes) so the
   // scope proof follows the same code:/related: declarations that lint later enforces.
   const specs = await loadSpecs(root, { tip, history: null, drift: null })
   const claims = specs.flatMap((spec) => [...spec.code, ...spec.related])
-  return changed.some((path) => claims.some((claim) => relationClaimsPath(claim, path))
+  const claimed = (path: string) => claims.some((claim) => relationClaimsPath(claim, path))
+  const touchesGoverned = changed.some((path) => claimed(path)
     || path === 'spexcode.json' || path === 'spexcode.local.json'
     || (path.startsWith('.spec/') && !path.startsWith('.spec/.issues/'))
     || path === '.spec')
+  if (touchesGoverned) return governed
+  // Same discovery policy full lint's coverage rule uses, applied to the SHORT changed list rather than the
+  // whole tree: no extra git, no tree walk, and the answer is the same one coverage would give. The policy
+  // is read from the CANDIDATE, like the full pending lint does — judging the candidate against the
+  // worktree's roots would name files the commit itself never claimed to govern.
+  const cfg = loadConfig(root, treeFileText(root, tip, '.spec/spexcode.json') ?? treeFileText(root, tip, 'spexcode.json'))
+  const underGovernedRoot = (path: string) => cfg.governedRoots.some((rootDir) =>
+    rootDir === '.' || path === rootDir || path.startsWith(`${rootDir}/`))
+  return {
+    touchesGoverned: false,
+    uncoveredSources: changed.filter((path) => underGovernedRoot(path) && isSourcePath(path, cfg)),
+  }
 }
 
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {

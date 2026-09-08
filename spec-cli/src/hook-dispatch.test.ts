@@ -494,6 +494,157 @@ function specOfFileRig(harness: GateHarness) {
   return { fire }
 }
 
+// Two handlers bound to ONE event, both speaking the structured contract — the arrangement the plugin system
+// invites and the dispatcher used to answer with two concatenated documents.
+function twoSpeakerRig(handlers: string[]) {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-two-speakers-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(runtime, { recursive: true })
+  const rows = handlers.map((body, i) => {
+    const name = `h${i}.sh`
+    writeFileSync(join(dir, 'hooks', name), `#!/usr/bin/env bash\ncat >/dev/null\n${body}\n`)
+    return `PostToolUse\t${10 + i}\tfalse\thooks/${name}`
+  })
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, `${rows.join('\n')}\n`)
+  const fire = () => spawnSync('bash', [dispatch, 'claude', 'PostToolUse'], {
+    cwd: dir,
+    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: JSON.stringify({ session_id: 'sid-two', hook_event_name: 'PostToolUse', tool_name: 'Read' }),
+    encoding: 'utf8',
+  })
+  return { fire, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
+const CONTEXT = (text: string) =>
+  `printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"${text}"}}'`
+
+test('two handlers on one event produce ONE parseable document, not two concatenated', () => {
+  const t = twoSpeakerRig([CONTEXT('first says this'), CONTEXT('second says that')])
+  try {
+    const r = t.fire()
+    assert.equal(r.status, 0, r.stderr)
+    // the whole point: this parse is what used to throw
+    const doc = JSON.parse(r.stdout)
+    assert.equal(doc.hookSpecificOutput.hookEventName, 'PostToolUse')
+    assert.match(doc.hookSpecificOutput.additionalContext, /first says this/)
+    assert.match(doc.hookSpecificOutput.additionalContext, /second says that/)
+  } finally { t.cleanup() }
+})
+
+test('a block from either speaker survives the fold, and a decision cannot be downgraded', () => {
+  const t = twoSpeakerRig([
+    CONTEXT('just context'),
+    `printf '{"decision":"block","reason":"the gate says no"}'`,
+  ])
+  try {
+    const r = t.fire()
+    const doc = JSON.parse(r.stdout)
+    assert.equal(doc.decision, 'block')
+    assert.match(doc.reason, /the gate says no/)
+    assert.match(doc.hookSpecificOutput.additionalContext, /just context/)
+  } finally { t.cleanup() }
+})
+
+test('one speaker is byte-identical to the old passthrough, and non-JSON stdout still passes through', () => {
+  const solo = twoSpeakerRig([CONTEXT('alone'), `printf ''`])
+  try {
+    const r = solo.fire()
+    assert.equal(r.stdout, '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"alone"}}')
+  } finally { solo.cleanup() }
+  // command substitution strips a handler's trailing newlines — unchanged from the streaming implementation
+  const chatty = twoSpeakerRig([`printf 'plain advice\n'`, CONTEXT('alone')])
+  try {
+    const r = chatty.fire()
+    assert.equal(r.stdout, 'plain advice{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"alone"}}')
+  } finally { chatty.cleanup() }
+})
+
+test('two speakers disagreeing on an unknown key keep the first and say so', () => {
+  const t = twoSpeakerRig([`printf '{"customField":"a"}'`, `printf '{"customField":"b"}'`])
+  try {
+    const r = t.fire()
+    const doc = JSON.parse(r.stdout)
+    assert.equal(doc.customField, 'a', 'the first handler wins')
+    assert.match(r.stderr, /two handlers set 'customField' differently/, r.stderr)
+  } finally { t.cleanup() }
+})
+
+// A git shim that records every invocation, so a hook's repository work is countable from outside it.
+// Placed FIRST on PATH; it execs the real git so behaviour is unchanged.
+function gitCountingRig() {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-spec-of-file-cost-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const realGit = execFileSync('bash', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, '.spec', 'project'), { recursive: true })
+  mkdirSync(join(dir, 'src'), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(dir, 'shim'), { recursive: true })
+  mkdirSync(runtime, { recursive: true })
+  writeFileSync(join(dir, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\nProject scope.\n')
+  writeFileSync(join(dir, 'src', 'novel.ts'), 'export const novel = true\n')
+  const log = join(dir, 'git-calls.log')
+  writeFileSync(join(dir, 'shim', 'git'), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(log)}\nexec ${JSON.stringify(realGit)} "$@"\n`)
+  chmodSync(join(dir, 'shim', 'git'), 0o755)
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'spec-of-file', 'spec-of-file.sh')
+  writeFileSync(join(dir, 'hooks', 'spec-of-file.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const withHandler = join(runtime, 'hooks-manifest')
+  const empty = join(runtime, 'hooks-manifest-empty')
+  writeFileSync(withHandler, 'PostToolUse\t10\tfalse\thooks/spec-of-file.sh\n')
+  writeFileSync(empty, '')
+  const fire = (manifest: string, payload: unknown) => {
+    writeFileSync(log, '')
+    const r = spawnSync('bash', [dispatch, 'claude', 'PostToolUse'], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        PATH: `${join(dir, 'shim')}:${process.env.PATH ?? ''}`,
+        SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
+        SPEXCODE_HOME: home,
+        SPEX_HOOK_MANIFEST: manifest,
+      },
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+    })
+    const calls = readFileSync(log, 'utf8').split('\n').filter(Boolean)
+    return { ...r, calls }
+  }
+  return {
+    fire,
+    withHandler,
+    empty,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  }
+}
+
+test('spec-of-file: a non-mutating tool call costs no repository work', () => {
+  const t = gitCountingRig()
+  try {
+    const read = { session_id: 'sid-cost', hook_event_name: 'PostToolUse', tool_name: 'Read', tool_input: { file_path: 'src/novel.ts' } }
+    // The dispatcher itself resolves the store and tree with git before any handler runs. That floor is the
+    // dispatcher's, so measure the HANDLER's contribution as the delta against a dispatch with no handler.
+    const floor = t.fire(t.empty, read)
+    const withHook = t.fire(t.withHandler, read)
+    assert.equal(withHook.status, 0, withHook.stderr)
+    assert.equal(withHook.stdout, '', 'a read has nothing to annotate')
+    assert.deepEqual(
+      withHook.calls, floor.calls,
+      `a non-mutating call must not spawn git: handler added ${JSON.stringify(withHook.calls.slice(floor.calls.length))}`,
+    )
+    // The same rig still pays for a real edit — this measures ordering, not a disabled hook.
+    const write = { session_id: 'sid-cost', hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: 'src/novel.ts' } }
+    const edit = t.fire(t.withHandler, write)
+    assert.equal(edit.status, 0, edit.stderr)
+    assert.ok(edit.calls.length > floor.calls.length, 'a mutation still resolves the repository')
+    assert.match(JSON.parse(edit.stdout).hookSpecificOutput.additionalContext, /src\/novel\.ts/)
+  } finally { t.cleanup() }
+})
+
 for (const harness of ['claude', 'codex'] as const) {
   test(`${harness} spec-of-file: actionable edit emits the registry prompt once`, () => {
     const t = specOfFileRig(harness)

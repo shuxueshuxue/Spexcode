@@ -23,7 +23,16 @@ fire **once per file, never per write**, and never block.
 ## expanded spec
 
 A PostToolUse hook (`spec-of-file.sh`) consumes the harness adapter's complete code-mutation path list. Like
-[[inject-spec-first]], it is NOT gated on `governed` — spec-awareness serves any agent. For every file in one
+[[inject-spec-first]], it is NOT gated on `governed` — spec-awareness serves any agent.
+
+**The mutation verdict is asked first, before anything costs a process.** This hook is bound to every
+PostToolUse, so most of the calls that reach it are reads, searches, and shell commands it has nothing to say
+about. That verdict is a pure read of the payload already in hand, so a non-mutating call must leave the hook
+having spawned nothing — no session-store resolution, no repository resolution, no CLI. Ordering is the whole
+mechanism here: the same work placed after those lookups is invisible in the output and paid on every tool
+call, which is how an annotation meant to be cheap becomes a tax on reading.
+
+For every file in one
 tool call, including every path in a Codex multi-file patch, it resolves actionable ownership and combines the
 messages into one **non-blocking** `additionalContext`; a ledger dedupes so each file is annotated **once per
 session**. That ledger is a sibling file in the session's GLOBAL store dir

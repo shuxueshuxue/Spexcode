@@ -6,7 +6,7 @@
 # adapter's shell mirror, which the hook handlers source) without ever sniffing the payload shape. ONE job:
 #   DISPATCH — run every handler bound to <Event> from the persistent manifest, in order, feeding each the
 #   ORIGINAL stdin. Reproduces the native parallel multi-hook contract DETERMINISTICALLY: all handlers run
-#   (side effects preserved), their stdout (decision/additionalContext) is concatenated through, and a
+#   (side effects preserved), their stdout (decision/additionalContext) is folded into ONE payload, and a
 #   block:true handler that exits 2 makes the dispatch exit 2 with that handler's stderr — the one signal
 #   the harness propagates. Pure bash, no node boot on the hot path. cwd = the project/worktree. $SPEX (abs
 #   tsx+cli) is inherited from the shim env.
@@ -60,12 +60,27 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' HUP TERM
 rc=0
+# @@@ collect, then emit ONCE - handler stdout used to be written through the moment each handler returned.
+# That is correct for the "at most one handler speaks JSON" arrangement the core hooks happen to have, and
+# silently wrong the moment a second one does: two JSON documents end up concatenated, which is not a
+# document with a losing field but an unparseable one, so BOTH decisions are lost. Collect instead, and fold
+# at the end. The fold is only reached when two handlers actually emitted JSON, so the ordinary dispatch pays
+# nothing for it. See [[dispatcher-runtime]].
+outs=()
+json_count=0
+first_json=
 # manifest line: event<TAB>order<TAB>block<TAB>script  (pre-sorted by event,order,script)
 while IFS=$'\t' read -r ev order block script; do
   [ "$ev" = "$event" ] || continue
   handler="$proj/$script"
   out="$(printf '%s' "$input" | bash "$handler" 2>"$err")"; code=$?
-  [ -n "$out" ] && printf '%s' "$out"
+  outs+=("$out")
+  # cheap shape test only; the merger does the real parse. A handler whose stdout starts with `{` is claiming
+  # to speak the structured contract.
+  trimmed=${out#"${out%%[![:space:]]*}"}
+  case "$trimmed" in
+    '{'*) json_count=$((json_count + 1)); [ -n "$first_json" ] || first_json="$out" ;;
+  esac
   if [ "$block" = "true" ] && { [ "$code" = "2" ] || printf '%s' "$out" | grep -q '"decision"[[:space:]]*:[[:space:]]*"block"'; }; then
     cat "$err" >&2
     # codex reads a Stop block's continuation prompt from STDERR (+ exit 2), NOT the claude-style
@@ -90,4 +105,25 @@ while IFS=$'\t' read -r ev order block script; do
     [ -s "$err" ] && cat "$err" >&2
   fi
 done < "$manifest"
+
+# ONE payload for the harness. Zero or one JSON document is exactly the old behaviour, byte for byte, and
+# needs no CLI. Two or more must be folded, and folding JSON is not a job for shell — hand the parts to the
+# CLI, which owns the merge rules. If the CLI cannot be reached in that case, emit the FIRST document alone
+# and say so: a valid document that lost a handler is recoverable, an unparseable one loses every handler.
+if [ "$json_count" -le 1 ]; then
+  for out in ${outs[@]+"${outs[@]}"}; do [ -n "$out" ] && printf '%s' "$out"; done
+else
+  merged=""
+  if [ -n "${SPEX:-}" ] || command -v spex >/dev/null 2>&1; then
+    merged="$(printf '%s\0' "${outs[@]}" | ${SPEX:-spex} internal hook-merge 2>>"$err")" || merged=""
+  fi
+  if [ -n "$merged" ]; then
+    printf '%s' "$merged"
+  else
+    printf 'dispatch.sh: %s had %s handlers emit JSON and the merge was unavailable; emitting the first only\n' \
+      "$event" "$json_count" >&2
+    printf '%s' "$first_json"
+  fi
+  [ -s "$err" ] && cat "$err" >&2
+fi
 exit "$rc"

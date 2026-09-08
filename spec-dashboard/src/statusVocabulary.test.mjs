@@ -76,12 +76,10 @@ test('dashboard source does not mint a second multi-status literal', () => {
   const self = join(here, 'statusVocabulary.test.mjs')
   const allowed = new Map([
     // Existing consumers are whitelisted one expression at a time: session.js owns the colour/glyph maps and
-    // needs-you set; EvalsPage's `keys` is an eval-summary schema; sessionCommands' UI_COMMANDS is the command
-    // capability registry; the test fixture objects exercise those consumers. None is a second vocabulary.
+    // needs-you set; sessionCommands' UI_COMMANDS is the command capability registry; fixture objects exercise
+    // those consumers. None is a second vocabulary.
     ['session.js', new Set(['STATUS_COLOR', 'STATUS_GLYPH', 'NEED_STATUS'])],
-    ['EvalsPage.jsx', new Set(['keys'])],
     ['sessionCommands.js', new Set(['UI_COMMANDS'])],
-    ['evalsPage.test.mjs', new Set(['summary', 'projection'])],
     ['reviewFilters.test.mjs', new Set(['sessions'])],
     ['session.test.mjs', new Set(['cases', 'sessions'])],
   ])

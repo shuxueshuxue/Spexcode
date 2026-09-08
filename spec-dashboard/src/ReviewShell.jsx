@@ -18,21 +18,11 @@ export const REVIEW_STATE_VISUALS = {
     open: { icon: 'issue-opened', tone: 'open', label: 'reviewState.issueOpen' },
     closed: { icon: 'issue-closed', tone: 'closed', label: 'reviewState.issueClosed' },
   },
-  eval: {
-    pass: { icon: 'circle-check', tone: 'pass', label: 'score.pass' },
-    fail: { icon: 'circle-x', tone: 'fail', label: 'score.fail' },
-    stalePass: { icon: 'circle-check-dashed', tone: 'stale', label: 'score.stalePass' },
-    staleFail: { icon: 'circle-x-dashed', tone: 'stale', label: 'score.staleFail' },
-    review: { icon: 'clock', tone: 'review', label: 'reviewList.needsReview' },
-    empty: { icon: 'circle-minus', tone: 'empty', label: 'score.empty' },
-    missing: { icon: 'circle-dashed', tone: 'empty', label: 'score.missing' },
-    legacy: { icon: 'circle-minus', tone: 'empty', label: 'score.empty' },
-  },
 }
 
 export const reviewStateVisual = (kind, state) => {
-  const normalized = kind === 'issue' ? (state === 'open' ? 'open' : 'closed') : (state || 'empty')
-  return REVIEW_STATE_VISUALS[kind]?.[normalized] || REVIEW_STATE_VISUALS.eval.empty
+  const normalized = state === 'open' ? 'open' : 'closed'
+  return REVIEW_STATE_VISUALS.issue[normalized]
 }
 
 export function ReviewState({ kind, state, showLabel = false, size = 16, className = '', title }) {
@@ -540,8 +530,8 @@ export function ListPage({ leading, error, loading = false, title, action, searc
                     tabs[next]?.click()
                   }}>
                   <span>{section.label}</span><span className="rl-section-count">{section.count}</span>
-                  {/* an optional quieter SECOND count the domain supplies when its section splits (Evals'
-                      stale remeasurement debt): part of the button's accessible name, never a control.
+                  {/* an optional quieter second count a review domain supplies when its section splits: part of
+                      the button's accessible name, never a control.
                       Two visible faces, one meaning — the phone condenses the WORDING, never the number,
                       exactly like the compact result summary; the accessible name stays fully qualified. */}
                   {section.countSuffix && (

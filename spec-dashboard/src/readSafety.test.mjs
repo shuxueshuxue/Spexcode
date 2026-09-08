@@ -129,14 +129,12 @@ test('a gone worktree keeps the diff provable from shared refs, and only a vanis
 test('a 502 publishes one global offline state and marks retained tallies stale', () => {
   const data = source('./data.js')
   const root = source('./Root.jsx')
-  const evals = source('./EvalsPage.jsx')
   const shell = source('./Shell.jsx')
   const dock = source('./Dock.jsx')
 
   assert.match(data, /subscribeBackendHealth/)
   assert.match(data, /\[502, 503, 504\]/)
   assert.match(root, /BackendStatusFrame/)
-  assert.match(evals, /apiFetch\(apiUrl\(`\/api\/evals\/detail/)
   assert.match(shell, /useBackendHealth/)
   assert.match(shell, /sb-stale/)
   assert.match(dock, /useBackendHealth/)

@@ -1,23 +1,47 @@
 import type { ForgeIssue, ForgeLabel, ForgePR } from '@spexcode/spec-forge/port'
 import { resolveLinks } from '@spexcode/spec-forge/links'
 import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '@spexcode/spec-forge/drivers'
-import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, replyLocalIssue, parseEvalConcern } from './localIssues.js'
+import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, replyLocalIssue } from './localIssues.js'
 import { dispatchNewMentions, parseMentions, type DispatchOutcome } from './mentions.js'
 import { envSessionId } from '@spexcode/spec-core'
-import type { Reply, Issue, RemarkTrack } from '@spexcode/spec-eval/remarks'
-export type { Reply, Issue } from '@spexcode/spec-eval/remarks'
+export type Reply = {
+  by: string
+  at: string
+  body: string
+  rid?: string
+  targetCodeSha?: string
+  resolved?: boolean
+  resolvedAt?: string
+  resolvedBy?: string
+}
+
+export type Issue = {
+  id: string
+  store: string
+  concern: string
+  by: string
+  status: string
+  nodes: string[]
+  created: string
+  body: string
+  replies: Reply[]
+  evidence: string[]
+  labels: unknown[]
+  url?: string
+}
 
 // A Reply is a plain thread post `{by, at, body}` — OR, when it carries the fields below, a REMARK
 // ([[remark-substrate]]): a reply that pins a RESOLVABLE concern to its host (an issue or a scenario). A
 // remark is not a new record type: it is a reply with the mutable `resolved` bit, a stable `rid` (so it is
 // addressable across retracts), and the `targetCodeSha` it was authored against (the reading it judges). A
 // plain reply omits them all and parses/serializes unchanged (backward compatible). `isRemark` = rid set.
-export const isRemark = (r: Reply): boolean => r.rid !== undefined
 export type IssueLabel = ForgeLabel
 
 export type ForgeState = { issues: ForgeIssue[]; prs: ForgePR[] }
 export type ForgeSlice = { host: string; state: ForgeState }
 export type IssueStore = { id: string; label: string; kind: 'local' | 'forge'; writable: true }
+
+export const isRemark = (r: Reply): boolean => r.rid !== undefined
 
 export function issueStores(): IssueStore[] {
   return [
@@ -36,38 +60,6 @@ function forgeIssueBody(concern: string, body: string | undefined, nodes: string
     nodes.length ? `Spec: ${nodes.join(', ')}` : '',
     evidence.length ? `Evidence: ${evidence.join(', ')} (evidence content hashes)` : '',
   ].filter(Boolean).join('\n\n')
-}
-
-// ── the (node, scenario) ↔ eval-thread join ([[remark-teeth]]) ────────────────────────────────────────
-// A scenario's remark track lives ONCE in trunk, keyed by its `eval: <node> · <scenario>` concern thread
-// (R4). This is the ONE server-side overlay: the same join the dashboard's Annotator used to compute
-// client-side (concern-key matching), lifted here so the CLI, the board fold, the session proof, and the
-// annotator all read ONE join. It returns, per pair, the thread plus its REMARK replies (the resolvable
-// ones — a plain comment on the thread is not a remark). The teeth ([[remark-teeth]]) read the remark
-// signals; the annotator reads the thread.
-
-// `eval: <node> · <scenario>` — node first (never contains ' · '), then the scenario (may). One thread per
-// pair (EventDetail.jsx evalConcern / localIssues.ts resolveRemarkHost mint it), so the last write wins is fine.
-export const trackKey = (node: string, scenario: string): string => `${node} · ${scenario}`
-
-// an eval-remark thread is the eval scoreboard's data, NOT a drain-worthy issue (I1: a scenario-scoped
-// concern is a remark, never an issue). Its `eval: <node> · <scenario>` concern is the tell — the SAME key
-// loadEvalRemarkTracks isolates them by. The two reads are complementary over one store: mergedIssues (the
-// ISSUE surfaces) excludes these; loadEvalRemarkTracks (the EVAL surfaces) keeps only these.
-export const isEvalConcern = (concern: string): boolean => !!parseEvalConcern(concern)
-
-// read the whole local store ONCE and split the eval-concern threads out (directive 3): trunk-scoped,
-// read-time, no branch write. A remark whose scenario no longer exists still LOADS here (it just keys a pair
-// no reading joins) — never a crash, per [[remark-teeth]]'s dangling clause.
-export function loadEvalRemarkTracks(): Map<string, RemarkTrack> {
-  const out = new Map<string, RemarkTrack>()
-  for (const t of loadLocalIssues()) {
-    const parsed = parseEvalConcern(t.concern)
-    if (!parsed) continue
-    const { node, scenario } = parsed
-    out.set(trackKey(node, scenario), { threadId: t.id, node, scenario, thread: t, remarks: t.replies.filter(isRemark) })
-  }
-  return out
 }
 
 // forge → Issue, at the adapter boundary: the host's node-naming conventions (`Spec:` body marker +
@@ -104,18 +96,11 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
 // stores are the same abstraction, so they interleave by creation time, newest first (never
 // store-grouped; a reader's eye lands on what just happened, whatever store holds it). CALLERS own
 // freshness — the server passes the resident cache's state (instant, background reconcile), the CLI a
-// live pull — so the merge itself stays pure. Eval-remark threads are SPLIT OUT read-time (isEvalConcern):
-// they are the eval scoreboard's data, not issues, so every issue surface this feeds — the Threads tab, the
-// board issue badge, the `spex issue ls` drain — is free of them by construction (they reach the EVAL side
-// through loadEvalRemarkTracks / the reading overlay instead).
+// live pull — so the merge itself stays pure.
 export function mergedIssues(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
-  return allThreads(forge, nodeIds).filter((i) => !isEvalConcern(i.concern))
+  return allThreads(forge, nodeIds)
 }
 
-// the same one merged read BEFORE the read-time split: every thread in the store, both halves, one walk.
-// Deliberately NOT exported — the split above is what every SURFACE read owes ([[eval-issue-split]]), and
-// an unsplit set escaping to a surface would put eval remarks back in the issue drain. The one consumer
-// whose question is about the STORE ITSELF reaches it through boardThreads below.
 function allThreads(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
   const remote = forge ? fromForge(forge, nodeIds) : []
   return [...loadLocalIssues(), ...remote].sort((a, b) => b.created.localeCompare(a.created))
@@ -123,7 +108,7 @@ function allThreads(forge: ForgeSlice | null, nodeIds: string[]): Issue[] {
 
 export function boardThreads(forge: ForgeSlice | null, nodeIds: string[]): { issues: Issue[]; stamp: string } {
   const threads = allThreads(forge, nodeIds)
-  return { issues: threads.filter((i) => !isEvalConcern(i.concern)), stamp: threadStamp(threads) }
+  return { issues: threads, stamp: threadStamp(threads) }
 }
 
 export function threadStamp(threads: Issue[]): string {

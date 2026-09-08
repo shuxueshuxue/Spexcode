@@ -69,7 +69,6 @@ function baseRecord() {
 let board: typeof import('./graphSnapshot.js')
 let cache: typeof import('./graphCache.js')
 let layout: typeof import('@spexcode/spec-core')
-let evalProjection: typeof import('../../spec-eval/src/sessioneval.js')
 let sessionApplication: any
 
 function writeSessionRecord(over: Record<string, unknown>) {
@@ -164,7 +163,6 @@ process.env.SPEXCODE_TMUX = 'boardscope-iso'
   board = await import('./graphSnapshot.js')
   cache = await import('./graphCache.js')
   layout = await import('@spexcode/spec-core')
-  evalProjection = await import('../../spec-eval/src/sessioneval.js')
 
   // The JSON envelope is only the public projection now; seed its canonical application state first.
   const { configuredSessionApplication } = await import('./session-application.js')
@@ -182,11 +180,7 @@ test.after(() => clearInterval(backendLifetime))
 // 1. EQUIVALENCE — spliceSessions(prev) == a fresh buildBoard() when only SESSION state changed.
 // ---------------------------------------------------------------------------------------------------------
 test('spliceSessions is byte-identical to a fresh buildBoard when only session state moved', { skip: !gitOk && 'git not available' }, async () => {
-  // The lean eval projection is an independent async unit. Fix its generation before comparing the two
-  // board assembly paths; otherwise the first assembly may honestly read `loading` while the second reads
-  // the completed `error`/`ready` state, which is a time change rather than a splice-equivalence failure.
   await board.buildBoard()
-  await evalProjection.awaitSessionEvalProjectionIdle()
   const A = await board.buildBoard()
   assert.equal(A.sessions.length, 1, 'the one governed record is enumerated')
   assert.equal(A.sessions[0].id, SESS_ID)

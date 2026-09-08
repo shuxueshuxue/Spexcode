@@ -8,14 +8,11 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/client.ts
-  - spec-cli/src/eval-cli-read.test.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
   - spec-eval/src/sessioneval-cold-gate.api.test.ts
   - spec-eval/src/sessionimpact.api.test.ts
-  - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/test/session-scope-impact.e2e.mjs
-  - spec-dashboard/src/sessionEvalCoherence.test.mjs
 ---
 # session-eval
 

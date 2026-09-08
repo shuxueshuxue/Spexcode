@@ -140,8 +140,6 @@ test('resource closing returns to its session before the new-session page', () =
 test('board details normalize to one top-level identity', () => {
   const isDocument = () => true
   const raw = [
-    { page: 'evals', param: null, query: { state: 'open' }, pinned: true },
-    { page: 'evals', param: 'node/scenario', pinned: true },
     { page: 'issues', param: null, query: { q: 'needle' }, pinned: true },
     { page: 'settings', param: null, pinned: true },
     { page: 'issues', param: '42', pinned: false },
@@ -149,7 +147,7 @@ test('board details normalize to one top-level identity', () => {
   ]
   const tabs = normalizeTabs(raw, isDocument)
   // The two board details collapse onto their boards; the spec detail keeps its own document address.
-  assert.deepEqual(keys(tabs), ['#/evals', '#/issues', '#/settings', '#/spec/node'])
+  assert.deepEqual(keys(tabs), ['#/issues', '#/settings', '#/spec/node'])
 })
 
 test('cold workspace has no board tabs until a route is opened', () => {
@@ -189,14 +187,11 @@ test('a spec carries no face selector, so a query change stays in one tab', () =
   assert.deepEqual(tabs[0].query, { from: 'search' })
 })
 
-test('opening a scenario or issue creates focused top-level tabs without evicting documents', () => {
+test('opening an issue creates a focused top-level tab without evicting documents', () => {
   let tabs = browse([], specDocument('node'), append(session('s1')))
-  tabs = browse(tabs, { page: 'evals', param: 'node/scenario', query: null }, { page: 'issues', param: '42', query: null })
-  assert.deepEqual(keys(tabs), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
-  assert.deepEqual(tabs.slice(2).map(({ page, param }) => ({ page, param })), [
-    { page: 'evals', param: 'node/scenario' },
-    { page: 'issues', param: '42' },
-  ])
+  tabs = browse(tabs, { page: 'issues', param: '42', query: null })
+  assert.deepEqual(keys(tabs), ['#/spec/node', '#/sessions/s1', '#/issues'])
+  assert.deepEqual(tabs.slice(2).map(({ page, param }) => ({ page, param })), [{ page: 'issues', param: '42' }])
 })
 
 // REORDERING IS A SPLICE, and the properties that matter are the ones a drag can violate: the set of open
@@ -249,7 +244,7 @@ test('closing returns to the last-focused tab across kinds before falling back t
   assert.deepEqual(closeDestination(file('eval.md'), [resource, specDocument('node')], 1,
     recent(file('eval.md'), specDocument('node'), resource)), specDocument('node'))
   // NO SAME-KIND SURVIVOR: the last-focused tab of any kind, not the positional neighbor
-  assert.deepEqual(closeDestination(file('x'), [session('a'), board('evals'), session('b')], 1, recent(file('x'), session('b'), session('a'))), session('b'))
+  assert.deepEqual(closeDestination(file('x'), [session('a'), board('issues'), session('b')], 1, recent(file('x'), session('b'), session('a'))), session('b'))
   // history naming tabs that already left the strip is skipped, never trusted
   assert.deepEqual(closeDestination(file('x'), [file('L'), file('R')], 1, recent(file('x'), file('gone'), file('L'))), file('L'))
   // a closed non-focused key in the history does not resurrect it: only survivors inherit
@@ -265,14 +260,13 @@ test('closing with no focus history lands on the nearest same-kind tab, then the
   assert.deepEqual(closeDestination(file('x'), [file('L'), session('s'), file('RR')], 1), file('L'))
   // CROSS-KIND: no same-kind survivor → the nearest tab of any kind inherits (a file close no longer
   // conjures the graph while other tabs remain)
-  assert.deepEqual(closeDestination(file('x'), [session('s'), board('evals')], 1), board('evals'))
+  assert.deepEqual(closeDestination(file('x'), [session('s'), board('issues')], 1), board('issues'))
   assert.deepEqual(closeDestination(session('x'), [board('issues')], 0), board('issues'))
   // LAST TAB: only an emptied strip leaves the workspace, each kind to its standing no-tab destination
   assert.deepEqual(closeDestination(file('x'), [], 0), { page: 'graph', param: null, query: null })
   assert.deepEqual(closeDestination(session('x'), [], 0), { page: 'empty', param: null, query: null })
   const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
   assert.deepEqual(closeDestination(resource, [], 0), { page: 'sessions', param: 'new', query: null })
-  assert.deepEqual(closeDestination(board('evals'), [], 0), { page: 'empty', param: null, query: null })
 })
 
 test('focusTab resolves one-based ordinals and maps 9 to the last tab', () => {

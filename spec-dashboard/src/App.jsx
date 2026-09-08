@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { acceptSessionEvalBoard, loadGraph, loadPublicGraph, subscribeBoardLive, projectIdentity } from './data.js'
+import { loadGraph, loadPublicGraph, subscribeBoardLive, projectIdentity } from './data.js'
 import { PROJECT_ID } from './project.js'
 import { CATALOG_POLL_MS, applyCatalogResult, loadProjects, selectGatewayIdentity, selectProjectIdentity, tabTitle } from './projects.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -15,7 +15,7 @@ import { useBackendHealth } from './BackendStatus.jsx'
 import { useRoute } from './route.js'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
-// via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
+  // via its own lazy leaves, xterm); the phone face ([[mobile-ui]]) carries none of them.
 // Which chunk loads is the same viewport-width pick as ever — the split only moves bytes, never behaviour.
 // The projects hub ([[projects-hub]]) is a third lazy face: the catalog page standalone, no board behind it.
 const WorkspaceSurface = lazy(() => import('./WorkspaceSurface.jsx'))
@@ -53,11 +53,7 @@ export default function App({ surface = 'workspace' }) {
     return undefined
   }, [isMobile])
   const [board, setBoard] = useState(null)
-  const [boardLive, setBoardLive] = useState(false)
-  const summarySeen = useRef(new Map())
-  const applyBoard = useCallback((next, authoritative) => {
-    setBoard(acceptSessionEvalBoard(next, summarySeen.current, authoritative))
-  }, [])
+  const applyBoard = useCallback((next) => { setBoard(next) }, [])
   // fail loudly at boot: a board that never arrives (backend down / proxy dead) shows an error + retry
   // panel, never an eternal spinner. Only the pre-first-board window reads this — once a board has landed,
   // a failed refetch keeps the last good board and the poll/stream keep retrying on their own.
@@ -113,7 +109,7 @@ export default function App({ surface = 'workspace' }) {
         .then((graph) => {
           if (mine !== reqSeq.current) return
           setLoadFailed(false)
-          applyBoard(graph, true)
+          applyBoard(graph)
         })
         .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
     }
@@ -121,7 +117,7 @@ export default function App({ surface = 'workspace' }) {
       .then((r) => {
         if (mine !== reqSeq.current || !r) return
         if (r.authRequired) { setAuthNeeded(r.authRequired); return }
-        setAuthNeeded(null); setLoadFailed(false); applyBoard(r.board, true); r.seal()
+        setAuthNeeded(null); setLoadFailed(false); applyBoard(r.board); r.seal()
       })
       .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
   }, [applyBoard])
@@ -153,9 +149,8 @@ export default function App({ surface = 'workspace' }) {
     if (hub || facePending) return
     reload()
     const unsub = subscribeBoardLive({
-      onBoard: (b, frame) => { reqSeq.current++; setLoadFailed(false); applyBoard(b, !!frame?.authoritative) },
+      onBoard: (b) => { reqSeq.current++; setLoadFailed(false); applyBoard(b) },
       onLegacyChange: () => { reload() },
-      onStatus: setBoardLive,
     })
     const id = setInterval(() => { reload() }, 15000)
     return () => { unsub(); clearInterval(id) }
@@ -224,15 +219,14 @@ export default function App({ surface = 'workspace' }) {
   const workspace = isMobile
     ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} route={route} />
     : <WorkspaceSurface route={lastWorkspaceRoute.current || { page: 'graph', param: null, query: null }} />
-  // Every routed product face shares the workspace shell. In particular, Evals and Issues are resident
-  // tabs, so a detail route must keep the Spec/Session/File working set and the same TabStrip visible.
-  // The old standalone ReviewSurface path made the strip disappear on cold review navigation.
+  // Every routed product face shares the workspace shell. In particular, Issues is a resident tab, so its
+  // detail route keeps the Spec/Session/File working set and the same TabStrip visible.
   const routed = workspace
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
       {PUBLIC_GRAPH_ONLY
-      ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, boardLive: false, graphOnly: true }}><KeyboardServiceProvider><WorkspaceProvider><WorkspaceSurface route={route} /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>
-        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, boardLive, graphOnly: false }}><KeyboardServiceProvider><WorkspaceProvider>{routed}</WorkspaceProvider></KeyboardServiceProvider></BoardProvider>}
+      ? <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: [], issuesStamp: null, identity, catalog: null, graphOnly: true }}><KeyboardServiceProvider><WorkspaceProvider><WorkspaceSurface route={route} /></WorkspaceProvider></KeyboardServiceProvider></BoardProvider>
+        : <BoardProvider reload={reload} value={{ specs: board.nodes, sessions: board.sessions, issuesStamp: board.issuesStamp, identity, catalog: projAccess, graphOnly: false }}><KeyboardServiceProvider><WorkspaceProvider>{routed}</WorkspaceProvider></KeyboardServiceProvider></BoardProvider>}
     </Suspense>
   )
 }

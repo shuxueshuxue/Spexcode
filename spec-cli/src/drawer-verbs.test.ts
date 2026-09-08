@@ -68,7 +68,7 @@ test('every verb a drawer rejection advertises answers a real help page', () => 
 
 // A VERB PAGE IS A PROJECTION OF ITS DRAWER, so the page can never claim something the drawer does not say and
 // can never go missing for a verb the drawer advertises in its own usage block. Per-verb help used to exist on
-// `session` alone; the reader who typed `spex eval add --help` got the whole 53-line measurement drawer back.
+// `session` alone; every surviving noun now gets a focused page.
 // This reads the real CLI: for every verb named in a noun's usage block, the page must be about that verb,
 // strictly narrower than the drawer, and made only of lines the drawer itself already prints.
 const drawerVerbs = (drawer: string, noun: string): string[] => {
@@ -80,7 +80,7 @@ const drawerVerbs = (drawer: string, noun: string): string[] => {
 test('every noun drawer projects a per-verb page, narrower than the drawer and made of the drawer’s own lines', () => {
   const bin = fileURLToPath(new URL('../bin/spex.mjs', import.meta.url))
   const help = (...args: string[]): string => execFileSync(process.execPath, [bin, ...args, '--help'], { encoding: 'utf8' })
-  for (const noun of ['eval', 'spec', 'issue', 'evidence']) {
+  for (const noun of ['spec', 'issue', 'evidence']) {
     const drawer = help(noun)
     const verbs = drawerVerbs(drawer, noun)
     assert.ok(verbs.length > 1, `${noun} advertises verbs in its usage block`)

@@ -10,7 +10,6 @@ related:
   - spec-dashboard/src/noticeTiming.js
   - spec-dashboard/src/transientNotice.test.mjs
   - spec-dashboard/src/Root.jsx
-  - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css

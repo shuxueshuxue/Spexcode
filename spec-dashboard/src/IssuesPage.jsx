@@ -234,7 +234,7 @@ export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onW
           {th.by && (
             <SideSection label={t('detail.sideOriginator')}>
               {local
-                ? <OriginatorLiveness originator={th.by} sessions={sessions} kind="issue" onOpenSession={onOpenSession} />
+                ? <OriginatorLiveness originator={th.by} sessions={sessions} onOpenSession={onOpenSession} />
                 : <SideValue text={th.by} dim />}
             </SideSection>
           )}

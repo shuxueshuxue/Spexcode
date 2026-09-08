@@ -8,7 +8,6 @@ code:
 related:
   - packages/spec-core/src/graph.ts
   - spec-cli/src/reviews.ts
-  - spec-cli/src/graph.test.ts
   - spec-cli/src/reviewSnapshot.test.ts
 ---
 

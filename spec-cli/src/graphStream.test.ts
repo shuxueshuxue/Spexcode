@@ -13,12 +13,11 @@ import {
   graphWatcherCensus,
   isSessionCreateCandidateRegistryEvent,
   sessionWorktreeWatchPaths,
-  watchSessionEvalRefs,
-  watchSessionEvalRegistry,
-  watchSessionEvalWorktree,
+  watchRefs,
+  watchWorktreeRegistry,
+  watchWorktree,
   watchSessionDatabase,
   sessionDatabaseWatchIgnore,
-  evalTargetForRef,
 } from './graphStream.js'
 
 class FakeWatcher extends EventEmitter {
@@ -261,7 +260,7 @@ async function waitFor(predicate: () => boolean, message: string): Promise<void>
 // Whichever transport the running platform resolves to, the OBSERVATION contract is identical: a real
 // worktree delivers its dirty source, its renames, its sidecars and its staged-only index writes, and
 // never pays a registration for dependency bytes.
-test('worktree eval watcher observes source, rename, sidecar, and index inputs', async () => {
+test('worktree watcher observes source, rename, sidecar, and index inputs', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-graph-watch-'))
   const gitDir = join(root, '.git-meta')
   const specDir = join(root, '.spec', 'area', 'node')
@@ -273,7 +272,7 @@ test('worktree eval watcher observes source, rename, sidecar, and index inputs',
 
   let inputs = 0
   let failures = 0
-  const watchers = watchSessionEvalWorktree(root, gitDir, () => { inputs++ }, () => { failures++ })
+  const watchers = watchWorktree(root, gitDir, () => { inputs++ }, () => { failures++ })
 
   try {
     if (watchers.root.transport === 'exact-directory')
@@ -309,16 +308,16 @@ test('worktree eval watcher observes source, rename, sidecar, and index inputs',
   }
 })
 
-test('refs eval watcher fails partial attach and survives repeated atomic ref replacement', async () => {
+test('refs watcher fails partial attach and survives repeated atomic ref replacement', async () => {
   const common = mkdtempSync(join(tmpdir(), 'spex-refs-watch-'))
   let inputs = 0
   let failures = 0
   try {
-    assert.throws(() => watchSessionEvalRefs(common, () => { inputs++ }, () => { failures++ }))
+    assert.throws(() => watchRefs(common, () => { inputs++ }, () => { failures++ }))
     assert.equal(failures, 0, 'the owner handles an attach throw and places the observer hold')
 
     mkdirSync(join(common, 'refs', 'heads'), { recursive: true })
-    const watchers = watchSessionEvalRefs(common, () => { inputs++ }, () => { failures++ })
+    const watchers = watchRefs(common, () => { inputs++ }, () => { failures++ })
     for (let round = 1; round <= 3; round++) {
       const before = inputs
       writeFileSync(join(common, 'refs', 'heads', 'main.lock'), `${round}\n`)
@@ -340,7 +339,7 @@ test('worktree registry watcher closes and reopens without duplicate delivery', 
   let inputs = 0
   let failures = 0
   try {
-    let watcher = watchSessionEvalRegistry(registry, () => { inputs++ }, () => { failures++ })
+    let watcher = watchWorktreeRegistry(registry, () => { inputs++ }, () => { failures++ })
     writeFileSync(join(registry, 'new-worktree'), 'registered\n')
     await waitFor(() => inputs > 0, 'replacement registry watcher did not observe the next entry')
     watcher.close()
@@ -348,71 +347,13 @@ test('worktree registry watcher closes and reopens without duplicate delivery', 
     writeFileSync(join(registry, 'closed-worktree'), 'closed\n')
     await new Promise((resolve) => setTimeout(resolve, 50))
     assert.equal(inputs, before, 'a closed registry must not deliver')
-    watcher = watchSessionEvalRegistry(registry, () => { inputs++ }, () => { failures++ })
+    watcher = watchWorktreeRegistry(registry, () => { inputs++ }, () => { failures++ })
     writeFileSync(join(registry, 'reopened-worktree'), 'reopened\n')
     await waitFor(() => inputs > before, 'reopened registry did not observe the next entry')
     watcher.close()
     assert.equal(failures, 0)
   } finally {
     rmSync(registry, { recursive: true, force: true })
-  }
-})
-
-// @@@ the narrowing is a CORRECTNESS change wearing performance clothes ([[taste]] 19) - it must be proven
-// against the scope it replaces, ref shape by ref shape, because the failure mode is silent: a session whose
-// evaluation should have been invalidated simply keeps serving a stale answer, and nothing in the response
-// says so. `packed-refs`/HEAD name nothing and must stay broad; a tag or remote feeds no fingerprint; the
-// base branch moves every merge-base; a session's own branch moves only its own.
-test('evalTargetForRef derives the invalidation scope from the ref that moved', () => {
-  const branches = new Map([['node/cr-pipeline-3030', 'sess-3030'], ['node/other', 'sess-other']])
-  const at = (ref: string | undefined) => evalTargetForRef(ref, 'adopter-a-spec', branches)
-
-  assert.equal(at(undefined), 'all', 'an unnamed movement (packed-refs, HEAD) must assume the worst')
-  assert.equal(at('heads/adopter-a-spec'), 'all', 'the base branch moves every session merge-base')
-  assert.deepEqual(at('heads/node/cr-pipeline-3030'), { id: 'sess-3030' }, 'a session branch moves that session')
-  assert.deepEqual(at('heads/node/other'), { id: 'sess-other' })
-  assert.equal(at('heads/somebody-elses-branch'), undefined, 'a branch no session owns moves no evaluation')
-  assert.equal(at('tags/v1.0.0'), undefined, 'a tag feeds no session fingerprint')
-  assert.equal(at('remotes/origin/adopter-a-spec'), undefined, 'a remote-tracking ref is not the local base')
-  assert.deepEqual(at('heads\\node\\cr-pipeline-3030'), { id: 'sess-3030' },
-    'a Windows watcher reports backslashes; normalise before matching so the scope still narrows there')
-})
-
-// @@@ the POSITIVE control the narrowing needs - "an unrelated ref no longer invalidates" is indistinguishable
-// from "the watcher is dead and nothing ever invalidates" unless the delivery itself is pinned. So this asserts
-// the watcher hands the ref PATH through (it used to be discarded), and that the path it hands over is the one
-// the derivation reads. Real atomic ref replacement, the way git writes one.
-test('the refs watcher delivers the ref path, so a relevant ref still invalidates its session', async () => {
-  const common = mkdtempSync(join(tmpdir(), 'spex-refs-scope-'))
-  const seen: (string | undefined)[] = []
-  try {
-    mkdirSync(join(common, 'refs', 'heads', 'node'), { recursive: true })
-    const watchers = watchSessionEvalRefs(common, (ref) => { seen.push(ref) }, () => {})
-    const replace = (rel: string) => {
-      writeFileSync(join(common, 'refs', rel + '.lock'), 'a'.repeat(40) + '\n')
-      renameSync(join(common, 'refs', rel + '.lock'), join(common, 'refs', rel))
-    }
-    replace('heads/node/cr-pipeline-3030')
-    await waitFor(() => seen.length > 0, 'the refs watcher observed no ref replacement')
-    const branches = new Map([['node/cr-pipeline-3030', 'sess-3030']])
-    const delivered = seen.filter((r): r is string => typeof r === 'string')
-    assert.ok(delivered.length > 0, 'the watcher must hand the ref path over, not discard it')
-    assert.ok(
-      delivered.some((ref) => JSON.stringify(evalTargetForRef(ref, 'adopter-a-spec', branches)) === JSON.stringify({ id: 'sess-3030' })),
-      `a session's own branch must still invalidate that session; delivered ${JSON.stringify(delivered)}`,
-    )
-
-    // and the base branch, through the same delivery, still invalidates everything
-    seen.length = 0
-    replace('heads/adopter-a-spec')
-    await waitFor(() => seen.length > 0, 'the refs watcher observed no base-branch replacement')
-    assert.ok(
-      seen.filter((r): r is string => typeof r === 'string').some((ref) => evalTargetForRef(ref, 'adopter-a-spec', branches) === 'all'),
-      'the base branch must still invalidate every session',
-    )
-    watchers.close()
-  } finally {
-    rmSync(common, { recursive: true, force: true })
   }
 })
 

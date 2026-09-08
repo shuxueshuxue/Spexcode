@@ -1,53 +1,15 @@
 import { notifyOriginator, type LoopIn } from './mentions.js'
 import { replyIssue, type Issue } from './issues.js'
-import { parseEvalConcern, remarkOnHost } from './localIssues.js'
-
-// @@@ loop-in - the originator loop-in's eval-aware half, at the one altitude that can hold it
-// ([[mentions]] / [[remark-substrate]] R3). The MECHANISM never moved: `notifyOriginator`, `summarizeLoopIn` and
-// `LoopIn` live in `mentions.ts`, genuine substrate, and they stay there. What lived at the wrong height was a
-// single INPUT — resolving WHICH candidates to try, which for an eval-remark thread means asking the eval
-// package who filed the reading under judgement. That resolution sat in `localIssues.ts`, a module the eval
-// package imports, so it could only reach eval through a deferred `await import()` whose own comment explained
-// why it had to be wrong. A correct mechanism with one mis-layered input is the hardest shape to see: every
-// piece you read is where it belongs.
-//
-// This module sits above both the store modules and the eval layer, so the import is an ordinary static one.
+import { remarkOnHost } from './localIssues.js'
 
 // @@@ ONE composer per path - the loop-in is reachable from four call sites: the CLI's `issue reply` and
 // `remark add`, and the HTTP routes for each. If each composed its own chain, the same verb would report
 // different candidates depending on which door it came through, and no gate we have would notice the drift.
 // So the four sites call these two functions, and these two are the only places a chain is built.
 
-// A node's governing session — the `session` its spec resolves to (the Session: trailer of its latest version,
-// else the frontmatter `session:` fallback; specs.ts owns that derivation). The fallback link when a reading's
-// filer is unreachable. null when the node is unknown or has no governing session.
-async function nodeGoverningSession(nodeId: string): Promise<string | null> {
-  const { loadSpecs } = await import('@spexcode/spec-core')
-  return (await loadSpecs()).find((s) => s.id === nodeId)?.session ?? null
-}
-
-// The FALLBACK CHAIN of candidates a reply loops in, tried in order until one is online.
-// A plain thread's only candidate is its author. An EVAL-COMMENT thread (concern `eval: <node> · <scenario>`)
-// chains: the agent who FILED the reading the remark judges FIRST — resolved from the TRUNK sidecar, then from
-// each LIVE session's worktree sidecar (the review-time case, when the filer sits online awaiting review) —
-// then the NODE's governing session, so an unresolved remark still reaches an agent who can act on it. A
-// broken/absent worktree sidecar falls through silently: one bad worktree never fails the remark write.
-// Non-eval threads pay nothing — no eval, specs or sessions module is touched for them.
-async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
-  const parsed = parseEvalConcern(thread.concern)
-  if (!parsed) return [thread.by]
-  const { node, scenario } = parsed
-  const { evalReadingFiler } = await import('@spexcode/spec-eval/filing')
-  const chain: (string | null)[] = [evalReadingFiler(node, scenario)]
-  try {
-    const { listSessions } = await import('./sessions.js')
-    for (const s of await listSessions()) {
-      try { if (s.path) chain.push(evalReadingFiler(node, scenario, s.path)) } catch { /* one unreadable worktree → next link */ }
-    }
-  } catch { /* sessions unavailable (bare store, no tmux) → trunk-only chain, as before */ }
-  chain.push(await nodeGoverningSession(node))
-  return chain
-}
+// The fallback chain is deliberately the thread author. Ledger readers used to derive extra candidates;
+// replies now use the same originator rule for every thread.
+const threadOriginators = async (thread: Issue): Promise<(string | null)[]> => [thread.by]
 
 // the implicit courtesy copy every reply carries: a copy down the fallback chain, delivered to the first online
 // link, notification only — it resolves nothing (R3 keeps resolve a deliberate second-party act).

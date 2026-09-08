@@ -1,5 +1,4 @@
-// @@@ import direction - this module reads sessions.ts; sessions.ts must never import it back. The one-way
-// edge is what lets the eval package call reviewPayload without a cycle ([[review-payload]] has the rest).
+// @@@ import direction - this module reads sessions.ts; sessions.ts must never import it back.
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -38,11 +37,6 @@ function porcelainPath(line: string): string {
   return p
 }
 
-export type ReviewEvalFacts = { freshPass: number; freshFail: number; needReview: number; blind: number }
-export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' | 'dormant' }
-// the session-side gates only. The measured-loss readout is composed ABOVE this layer ([[manager-cockpit]]'s
-// cockpit.ts): the eval package imports this module, so reading it from here could only ever be a deferred
-// import working around a cycle. The eval side never consumed this field — it reads lint/conflict/ahead/dirty.
 export type ReviewGates = {
   conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
   lint: { errorCount: number; warningCount: number } // the spec↔code graph lint

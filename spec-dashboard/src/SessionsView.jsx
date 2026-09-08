@@ -8,7 +8,7 @@ import { markNewTab } from './tabs.js'
 // state lives. `sel` used to be held by the component that also held the graph's camera and every other
 // page's props — so opening a session re-rendered the graph. Now it is the view's own.
 export default function SessionsView({ param, query }) {
-  const { specs, sessions, boardLive } = useBoard()
+  const { specs, sessions } = useBoard()
   const { reload } = useBoardApi()
   const { palette } = useWorkspace()
   const { openPalette, takeCompose, watchCompose } = useWorkspaceApi()
@@ -62,7 +62,6 @@ export default function SessionsView({ param, query }) {
         page: 'sessions', param: param && param !== 'new' ? param : null, query: { archive: '1' },
       })}
       onOpenSearch={() => openPalette('sessions')}
-      boardLive={boardLive}
       reload={reload}
       archiveRequested={query?.archive === '1'}
       route={{ page: 'sessions', param, query }}

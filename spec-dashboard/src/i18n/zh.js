@@ -82,15 +82,11 @@ export default {
   },
   contextDock: {
     title: '上下文',
-    scenarios: '场景',
     issues: '议题',
     open: '显示上下文栏',
     close: '隐藏上下文栏',
-    loading: '正在加载场景…',
     loadingIssues: '正在加载议题…',
-    noScenarios: '没有声明场景',
     noIssues: '没有未关闭的议题',
-    states: { pass: '通过', fail: '失败', stalePass: '旧通过', staleFail: '旧失败', missing: '未测量', empty: '未测量' },
   },
   empty: {
     title: '当前没有打开的文档',
@@ -110,7 +106,6 @@ export default {
     graph: '图',
     spec: '规格',
     sessions: '会话',
-    evals: '评测',
     issues: '议题',
     settings: '设置',
     issueNew: '新建议题',
@@ -131,7 +126,6 @@ export default {
   place: {
     graph: '节点图',
     sessions: '会话',
-    evals: '评测',
     issues: '议题',
     settings: '设置',
     empty: '工作区',
@@ -144,7 +138,6 @@ export default {
     // 只写名字。快捷键由 withShortcut 从活的 keymap 现取现拼 —— 写死在这里就是一份改不到的副本，而它已经漂了。
     sessions: '会话面板',
     spec: '规格',
-    evals: 'Evals',
     issues: '议题',
     settings: '设置',
     projectChip: '项目：{name} — 切换项目',
@@ -271,9 +264,6 @@ export default {
     restore: '恢复隐藏的状态项',
     // 环境态的看板计数；每一项本身就是它命名的那扇门。
     nodes: ({ n }) => `${n} 个规格节点 —— 已合并 · 进行中 · 漂移 · 待建。打开节点图`,
-    evals: ({ pass, fail, stalePass, staleFail, empty }) =>
-      `评测场景：${pass} 最新通过，${fail} 最新失败，${stalePass} 过期通过，${staleFail} 过期失败，${empty} 未测量`,
-    openEvals: '打开 Evals 看板',
     issues: ({ n }) => `${n} 个未关闭议题 —— 打开议题看板`,
     sessions: '按 launcher 分组的会话 —— 打开会话面板',
     launcher: ({ name }) => `${name}：运行中 / 等你 / 其他 —— 打开会话面板`,
@@ -290,27 +280,20 @@ export default {
     loadError: '无法连接后端 —— 看板加载失败。',
     retry: '重试',
   },
+  evidence: {
+    loadingTranscript: '正在加载文本记录…',
+    loadingData: '正在加载数据…',
+    data: '结构化数据（JSON）',
+    dataInvalid: '结构化数据 —— 无效 JSON',
+    miss: '原始证据不可用。',
+    noImage: '没有附加证据截图。',
+    fullscreen: '全屏',
+    exitFullscreen: '退出全屏',
+  },
 
   viewError: {
     title: '这个视图崩溃了。',
     retry: '重试',
-  },
-
-  evalsFeed: {
-    title: '评测',
-    kind: { video: '视频', image: '图片', all: '全部' },
-    summary: ({ n }) => `${n} 条当前`,
-    datasetEmpty: '暂无评测。',
-    noMatches: '当前视图没有匹配的评测。',
-    annotate: '打开并标注',
-    inSession: '由本会话测得',
-    okdTip: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
-    okChip: ({ n }) => `${n} 已签核`,
-    okChipTitle: '显示被默认隐藏的已签核场景',
-    filedBy: ({ by }) => `由 ${by} 提交`,
-    filedAt: ({ at }) => `${at}前提交`,
-    sessionTag: '会话',
-    freshnessDeferred: '新鲜度仍在计算；此行可排序但尚未评分',
   },
 
   reviewState: {
@@ -322,7 +305,6 @@ export default {
     all: '全部',
     search: '搜索',
     searchIssues: '搜索 issues',
-    searchEvals: '搜索 evals',
     rowMenu: '行操作',
     copyAddress: '复制地址',
     clearSearch: '清除搜索',
@@ -336,9 +318,6 @@ export default {
     filters: '筛选',
     activeFilters: ({ n }) => `${n} 个已启用筛选`,
     facetStore: '存储',
-    facetVerdict: '判定',
-    facetFreshness: '新鲜度',
-    facetKind: '证据',
     facetAuthor: '发起者',
     facetLabel: '标签',
     facetNode: '规格节点',
@@ -350,8 +329,6 @@ export default {
     sessionMissing: '已不在',
     openedBy: ({ by }) => `由 ${by} 发起`,
     openedAt: ({ at }) => `${at}前发起`,
-    verdict: { pass: '通过', fail: '未通过', unmeasured: '未测量', deferred: '等待新鲜度', unscored: '未评分' },
-    freshness: { fresh: '最新', stale: '过期' },
     pagination: '分页',
     previous: '上一页',
     next: '下一页',
@@ -361,11 +338,8 @@ export default {
   },
 
   reviewShell: {
-    evalNotFound: ({ node, scenario }) => `找不到 ${node} · ${scenario} 的评测`,
-    evalUnmeasured: '该场景尚未测量',
     scopeFallback: '该 session 的工作区已不存在，下面是主干上的读数',
     issueNotFound: ({ id }) => `找不到 issue ${id}`,
-    backToEvals: '← 全部评测',
     backToIssues: '← 全部 issues',
   },
 
@@ -377,36 +351,11 @@ export default {
     sideLabels: '标签',
     sideOriginator: '发起者',
     sideNodes: '规格节点',
-    backToEvals: '返回评测列表',
     backToIssues: '返回 issues 列表',
-    sideQueue: '继续查看',
-    queuePrev: '前面',
-    queueNext: '接下来',
     sideIssue: '议题',
     sideNode: '规格节点',
   },
 
-  annotator: {
-    title: '标注器',
-    play: '播放',
-    pause: '暂停',
-    fullscreen: '全屏',
-    exitFullscreen: '退出全屏',
-    capturing: '正在截取画面…',
-    failed: '失败 — 后端在跑吗？',
-    comments: ({ n }) => (n ? `评审轨道（${n}）` : '评审轨道'),
-    abOlder: '更早的 eval（‹ 靠近 A / 复现出的 bug）',
-    abNewer: '更新的 eval（靠近 B / 验证过的修复 ›）',
-    abLatest: '最新',
-    abPos: ({ i, n }) => `${i} / ${n}`,
-    abMore: ({ n }) => `更早的结果（${n}）`,
-    okd: '已签核',
-    okBy: ({ by, at }) => `已由 ${by} 签核 · ${at}`,
-    menuReview: '评审命令',
-    cmd: {
-      okDesc: '签核这条结果 — 你已复核并认可其判定；只绑定当前最新结果，单调（无撤销）',
-    },
-  },
   thread: {
     anchorNow: '锚定',
     anchorTitle: '把这条评论锚定到当前帧',
@@ -420,25 +369,9 @@ export default {
     resolveTitle: '解决此评注 —— 第二人的判定（单调：不可撤销解决）',
     retract: '撤回',
     retractTitle: '撤回你自己未解决的评注 —— 从线程中移除',
-    anchorDegraded: '该步骤已不在当前测量中——此 m:ss 为原始冻结值，无法跳转',
     originatorIssue: '打开发起此 issue 的会话：{by}',
-    originatorEval: '打开记录此评测的会话：{by}',
   },
 
-
-  sessionEval: {
-    btn: '评测',
-    btnTitle: '在 Evals 页打开此会话已测得的评测证据',
-    scopeDoor: '返回会话终端',
-    none: '此会话暂无评测',
-    unavailable: '会话模型成功加载前无法显示评测。',
-    loadFailed: ({ reason }) => `会话评测加载失败 — ${reason}`,
-    export: '导出',
-    exportTitle: '导出本次评测为自包含的 HTML 报告',
-    empty: '该会话尚无测量。',
-    unmeasured: '未测量',
-    unknownCoverage: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
-  },
 
   time: {
     justNow: '刚刚',
@@ -464,10 +397,9 @@ export default {
       child: '前往最近的子节点',
       zoom: '放大 / 缩小 · 重置为概览',
       info: '打开节点信息弹窗（或双击节点）',
-      search: '跨节点、会话、议题与场景搜索并跳转',
+      search: '跨节点、会话与议题搜索并跳转',
       overlayCycle: '在工作树正在修改的节点间循环（⇧ 反向）',
       fresh: '在聚焦节点上开启一个全新会话',
-      evals: '打开 evals 页（项目当前的实测损失）',
       newChild: '在聚焦节点下新建子节点（连击）',
       del: '删除聚焦节点（连击）',
       settings: '打开设置（语言…）',
@@ -475,7 +407,6 @@ export default {
     },
     shell: {
       newSession: '打开新会话',
-      evals: '打开评测页面',
       search: '搜索会话',
       sessionPrevious: '选择上一个会话',
       sessionNext: '选择下一个会话',
@@ -589,10 +520,8 @@ export default {
     paneSpec: '规格',
     paneHistory: '历史',
     paneIssues: 'issue',
-    paneEval: '评测',
     paneEdit: '改动',
     filterIssues: '筛选 issue…',
-    filterScenarios: '筛选场景…',
     filterNone: '没有匹配的条目。',
     noEdit: '暂无进行中的改动 —— 此节点没有正在编辑的会话。',
     editCommitted: '已提交',
@@ -618,57 +547,12 @@ export default {
     noChange: '尚无记录的改动——此规格即最新的事实依据。',
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',
-    eval: {
-      noScenarios: '尚未声明场景 —— 此节点没有可测量的 eval.md。',
-      noReadings: '尚无测量 —— 运行 `spex eval add` 归档一次。已声明的场景：',
-      staleAxes: ({ axes }) => `已过期：自本次读取以来 ${axes} 已变动`,
-      staleLabel: '已过期：',
-      staleReadoutTitle: '这条读取已落后——列出自它以来变动的轴；对于 code 轴，还显示是哪些受管文件漂移了、以及落后了几个提交（+N）',
-      danglingTitle: '该场景已被重命名或删除——其评注无读取可依附，但仍可通过 ref 解决',
-      danglingGone: '场景已失',
-      pass: '✓ 通过',
-      fail: '✗ 未通过',
-      note: '≈ 备注',
-      legacy: '旧版',
-      expected: '预期：',
-      noteLabel: '备注：',
-      loadingTranscript: '正在加载文本记录…',
-      loadingData: '正在加载数据…',
-      data: '结构化数据（JSON）',
-      dataInvalid: '结构化数据 —— 无效 JSON',
-      miss: '原始文件缺失 —— 证据已从缓存中清除。',
-      noImage: '无证据 —— 代理未捕获即作出判定。',
-      shotAlt: ({ scenario }) => `${scenario} 的捕获证据`,
-      openDetail: '打开该场景的 eval 详情页',
-      passCount: ({ n }) => `${n} 个场景最新且通过`,
-      failCount: ({ n }) => `${n} 个场景最新且未通过`,
-    },
   },
 
-  // shell 账本的 graph 走查：节点徽章按不同对象计数，覆盖度按场景计数。
+  // shell 账本的 graph 走查：节点徽章按不同对象计数。
   stats: {
     statusTitle: ({ n, status }) => `${n} 个${status} —— 点击逐个走查`,
     issueTitle: ({ n }) => `链接到树上的不同未关闭议题共 ${n} 个 —— 点击逐个走查承载它们的节点`,
-    scorePass: ({ n }) => `${n} 个场景测量为最新且通过 —— 点击逐个走查承载它们的节点`,
-    scoreFail: ({ n }) => `${n} 个场景测量为最新且未通过 —— 点击逐个走查承载它们的节点`,
-    scoreStalePass: ({ n }) => `${n} 个场景为过期通过（最近一次通过测量后代码有变动）—— 点击逐个走查承载它们的节点`,
-    scoreStaleFail: ({ n }) => `${n} 个场景为过期未通过（最近一次未通过测量后代码有变动）—— 点击逐个走查承载它们的节点`,
-    scoreEmpty: ({ n }) => `${n} 个场景未测量或未评分（盲点）—— 点击逐个走查承载它们的节点`,
-  },
-
-  // 评测评分词汇 —— 节点卡片计数、搜索与 eval 标签页共用一套词汇。count 是卡片/状态栏的计数；
-  // missing 是已声明但从未测量的场景。
-  score: {
-    pass: '当前通过 —— 已测量、最新且通过',
-    fail: '当前未通过 —— 已测量、最新且未通过',
-    stalePass: '已过期 —— 上次测量为通过，现已过时',
-    staleFail: '已过期 —— 上次测量为未通过，现已过时',
-    empty: '暂无当前评分 —— 从未测量，或无通过/未通过判定',
-    missing: '尚未测量 —— 该场景还没有任何读数',
-    count: ({ satisfied, total, outstanding }) =>
-      `${total} 个场景中有 ${satisfied} 个已满足（最新且通过）` +
-      (outstanding ? ` · ${outstanding} 个待处理 —— 未通过、已过期或未测量` : ''),
-    openList: '打开该节点的 Evals 过滤列表',
   },
 
   specNode: {
@@ -834,8 +718,6 @@ export default {
     diffNext: '下一个改动',
     diffSent: '已发送 {n} 条评论',
     diffUnsent: '{n} 条评论未发送',
-    tabEval: '评测',
-    tabEvalTitle: '打开此会话在 Evals 页的评测',
     toolbarLabel: '会话终端工具栏',
     conversationToolbarLabel: '会话对话工具栏',
     switchToConversation: '切换到对话',
@@ -857,23 +739,6 @@ export default {
     closeResourceTab: '关闭 {name}',
     surfaceLabel: '当前会话界面',
     toolbarToolsLabel: '会话工具',
-    evalLoading: '正在载入此会话的评测概况',
-    evalDormant: '此会话的评测概况尚未计算 — 打开 Eval 即可测量',
-    evalDormantLast: '上次已知 — 此留存会话不再重新计算',
-    evalDormantKnown: ({ summary }) => `上次已知，不再重新计算 — ${summary}`,
-    evalUnavailable: '此会话的评测概况不可用',
-    evalUpdating: ({ summary }) => `正在更新此会话的评测概况 — 上次已知：${summary}`,
-    evalDisconnected: ({ summary }) => summary
-      ? `图数据流已断开 — 上次已知：${summary}`
-      : '图数据流已断开 — 尚无评测概况',
-    evalFailedKnown: ({ summary }) => `评测概况更新失败 — 上次已知：${summary}`,
-    evalPass: ({ n }) => `${n} 个场景为新鲜通过`,
-    evalFail: ({ n }) => `${n} 个场景为新鲜失败`,
-    evalReview: ({ n }) => `${n} 个已评测场景已过期或未评分，需人工复核`,
-    evalBlind: ({ n }) => `${n} 个已声明场景尚未评测`,
-    evalUnknown: ({ n }) => `${n} 个已改前端文件的评测覆盖未知`,
-    evalDoorSummary: ({ pass, fail, review, blind, unknown }) =>
-      `打开此会话的 Evals 页 — 新鲜通过 ${pass}，新鲜失败 ${fail}，待人工复核 ${review}，未评测 ${blind}，覆盖未知 ${unknown}`,
     commandBox: 'Command Box',
     commandBtn: 'Command Box',
     commandTitle: '打开 Command Box，发送完整指令或执行面板命令',
@@ -923,7 +788,6 @@ export default {
     // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。/merge 等智能体工作流
     // 来自 plugin preset，不在 Dashboard 内维护第二份标签或可用性文案。
     cmd: {
-      evalDesc: '切换到此会话的 Evals 页 —— 受影响场景与实测证据',
       stopTitle: '停止此会话（结束智能体，保留工作树 —— 可恢复）',
       stopDesc: '停止 —— 结束智能体与 tmux，但保留工作树，之后可恢复',
       closeTitle: '关闭此会话（移除工作树）',
@@ -985,7 +849,6 @@ export default {
     more: '展开',
     specsTab: '规格',
     sessionsTab: '会话',
-    evalsTab: '评测',
     issuesTab: 'issues',
     childrenTab: ({ n }) => `子节点 ${n}`,
     liveEditors: ({ n }) => `${n} 个在线编辑者`,

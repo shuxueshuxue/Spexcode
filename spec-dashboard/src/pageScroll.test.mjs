@@ -12,7 +12,6 @@ const settings = read('Settings.jsx')
 const projects = read('ProjectsPage.jsx')
 const dashboard = read('Shell.jsx') + read('GraphView.jsx') + read('views.jsx')
 const mobile = read('MobileApp.jsx')
-const evalsPage = read('EvalsPage.jsx')
 const css = read('styles.css')
 const e2e = read('../test/page-scroll.e2e.mjs')
 
@@ -50,49 +49,20 @@ test('document pages consume PageScroll while Graph and Sessions keep their own 
   assert.match(settings, /<PageScroll className="page-settings-scroll">/)
   assert.match(projects, /<PageScroll className="page-projects-scroll">/)
   assert.doesNotMatch(dashboard, /<PageScroll/)
-  assert.match(shell, /<PageScroll className="lp-page">[\s\S]*\{leading\}[\s\S]*className="rl-content"/)
-  assert.match(evalsPage, /<EvalsGroup[\s\S]*leading=\{leading\}/)
+  assert.match(shell, /<PageScroll className="lp-page">[\s\S]*className="rl-content"/)
   assert.match(mobile, /const Settings = lazy[\s\S]*page === 'settings'[\s\S]*<Settings \/>/)
 
   assert.match(css, /\.page-scroll\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;/s)
   assert.doesNotMatch(css, /\.lp-page\s*\{[^}]*overflow-[xy]:/s)
   assert.doesNotMatch(css, /\.ds-page\s*\{[^}]*overflow-[xy]:/s)
   assert.doesNotMatch(css, /\.page-projects\s*\{[^}]*overflow-[xy]:/s)
-  assert.match(evalsPage, /className="page-detail-stack"/)
   assert.match(css, /\.page-detail-stack\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s)
   assert.match(css, /\.si-term-body\s*\{[^}]*overflow:\s*clip;/s)
   assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)
-})
-
-test('scoped Evals status stays a non-scrolling sticky child without creating trunk geometry', () => {
-  assert.match(css, /\.se-gates\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 40px;[^}]*height:\s*40px;/s)
-  assert.match(css, /\.se-gates\s*\{[^}]*border-bottom:\s*1px solid var\(--line\);[^}]*background:\s*var\(--panel2\);/s)
-  // the gates strip is the outermost pinned row, so everything pinned inside the scroll owner offsets past
-  // it: first the query that produced the list, then the gate head below that.
-  assert.match(css, /\.se-gates\s*~\s*\.rl-content\s+\.rl-query\s*\{\s*top:\s*40px;\s*\}/s)
-  assert.match(css, /\.se-gates\s*~\s*\.rl-content\s+\.lp-head\s*\{\s*top:\s*84px;\s*\}/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;[^}]*\}[\s\S]*\.se-gates\s*~\s*\.rl-content\s+\.rl-query\s*\{\s*top:\s*80px;/s)
-  assert.doesNotMatch(css, /\.se-gates\s*\{[^}]*position:\s*fixed;/s)
-  assert.doesNotMatch(evalsPage, /sessionId\s*\?\s*\([\s\S]*<PageScroll/)
 })
 
 test('recorded viewport scenarios satisfy the e2e-review one-pair-per-directory contract', () => {
   assert.match(e2e, /const scenarioDir = join\(out, name\)/)
   assert.match(e2e, /const videoPath = join\(scenarioDir, `\$\{name\}\.webm`\)/)
   assert.match(e2e, /writeFileSync\(join\(scenarioDir, `\$\{name\}\.timeline\.json`\)/)
-})
-
-test('browser proof requires scoped blind rows, real long details, and every themed surface', () => {
-  assert.match(e2e, /async function findLongDetail/)
-  assert.match(e2e, /best\.scrollHeight > best\.clientHeight \+ 400/)
-  assert.match(e2e, /page\.counts\?\.unmeasured > 0/)
-  assert.doesNotMatch(e2e, /\/api\/sessions\/.*\/evals/)
-  assert.match(e2e, /defaultCounts\[2\], scopedPage\.counts\.unmeasured/)
-  assert.match(e2e, /unmeasuredPage\.items\.every\(\(item\) => item\.filterKind === 'blind'\)/)
-  assert.match(e2e, /assert\.deepEqual\(await sectionCounts\(\), reviewCounts/)
-  assert.match(e2e, /async function assertScopedStatus/)
-  assert.match(e2e, /scoped status stays pinned at the PageScroll inset/)
-  assert.match(e2e, /secondary Filters menu stays above the scoped status strip/)
-  assert.match(e2e, /scoped Evals Back restores exact list scrollTop/)
-  assert.match(e2e, /for \(const \[label, code\] of themes\)[\s\S]*for \(const \[surface, href, selector\] of surfaces\)/)
 })

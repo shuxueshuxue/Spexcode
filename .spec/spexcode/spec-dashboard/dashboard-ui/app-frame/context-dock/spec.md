@@ -8,7 +8,6 @@ code:
 related:
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/workspace.jsx
-  - spec-dashboard/src/score.jsx
   - spec-dashboard/src/reviewPage.js
   - spec-dashboard/src/tabs.js
   - spec-dashboard/src/ReviewShell.jsx

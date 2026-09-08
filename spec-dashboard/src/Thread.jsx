@@ -14,7 +14,7 @@ import { newTabAnchor } from './tabs.js'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
-// replies[], [[issues]]) and the eval detail ([[event-detail]]). The composer is delivery-agnostic: the home
+// replies[] and the issue detail. The composer is delivery-agnostic: the home
 // passes `onSend(text, evidence)` (reply to an existing thread — the server routes it by the issue's store,
 // local-store commit or real forge comment — or lazily create one), so the thread's binding stays the caller's
 // concern while the writing surface stays one component — an @-reference stays in the authored prose,
@@ -71,22 +71,21 @@ export function resolveAnchor(anchor, events) {
   return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: true, degraded: false }
 }
 
-// The thread's ORIGINATOR liveness ([[mentions]] loop-in) — WHO filed this issue/eval, and whether their
-// session is still ALIVE. This is a thin join of the originator id against the live board sessions the page
-// already holds — session.js's liveSession, the SAME judgment the issues/evals live chips filter by
-// ([[live-session-filter]]), so a chip-filtered list and these dots can never disagree. A live originator is
+// The thread's ORIGINATOR liveness ([[mentions]] loop-in) — WHO filed this issue, and whether their session
+// is still ALIVE. This is a thin join of the originator id against the live board sessions the page already
+// holds — session.js's liveSession. A live originator is
 // a direct door to its session-board tab; offline remains a
 // static identity chip. Reuses the board's four-hue STATUS_COLOR (the live status paints the dot), never a
-// second palette. `kind` ('issue' | 'eval') only picks the label wording. A missing/unresolvable originator
+// second palette. A missing/unresolvable originator
 // renders nothing — exactly the case where the loop-in chain runs dry silently (a forge github login, a
 // legacy reading).
-export function OriginatorLiveness({ originator, sessions = [], kind = 'issue', onOpenSession = null }) {
+export function OriginatorLiveness({ originator, sessions = [], onOpenSession = null }) {
   const t = useT()
   if (!originator) return null
   const s = liveSession(sessions, originator)
   const alive = !!s
   const color = alive ? (STATUS_COLOR[s.status] || STATUS_COLOR.working) : STATUS_COLOR.offline
-  const title = t(kind === 'eval' ? 'thread.originatorEval' : 'thread.originatorIssue', { by: originator })
+  const title = t('thread.originatorIssue', { by: originator })
   const dot = <span className="fv-originator-dot" style={{ background: color }} aria-hidden="true" />
   // the chip is an identity SKIN over the one SideValue rail primitive ([[review-chrome]]): the value
   // text shrinks/ellipsizes inside the rail while the tooltip/accessible name keeps the full id.
@@ -100,11 +99,11 @@ export function OriginatorLiveness({ originator, sessions = [], kind = 'issue', 
 // Over a clip ([[event-detail]]) the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly
 // selected and the playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor
 // chip both seeks AND selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection.
-// Off a clip these are all absent and a reply renders exactly as before. `events` is the viewed reading's
+// Off a clip these are all absent and a reply renders exactly as before. `events` is an optional timeline's
 // step timeline: each anchor is resolved by STEP-NAME against it (E2, resolveAnchor) so its moment tracks a
 // re-measure, degrading to a readable-not-seekable chip when the step is gone. A reply that is a REMARK
 // ([[remark-substrate]] — it carries `rid`) shows its `resolved` bit: a resolved remark renders settled
-// (dimmed, ✓), an open one prominent — the loss the eval scoreboard is still carrying, made visible in place.
+// (dimmed, ✓), an open one prominent.
 // The bit is also WRITABLE here at CLI parity ([[remark-substrate]] LAW L): when the home passes `threadId`
 // + `onRemarkChange`, an unresolved remark carries its one applicable verb — RESOLVE on an agent's remark
 // (the human's second-party judgment; never on the human's own, mirroring the server's self-resolve
@@ -206,8 +205,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const taRef = useRef(null)
   const { launchers } = useLaunchers()
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
-  // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands` (the eval
-  // detail; the issue composers pass none and keep their exact old surface). Two command kinds, one menu:
+  // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands`. Two command
+  // kinds, one menu:
   // a BUILT-IN verb (`run`) fires its one host-bound runner after the typed token is removed; a PRESET
   // (`prefill`) replaces the draft
   // with its filled template, keeping a stamped `▶` anchor head (the anchor line + its own riding frame).
@@ -233,7 +232,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
 
   // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for
   // edit. A NULL draft CLEARS — the host nulls it when the working state resets (a selection change, an A/B
-  // flip), and preserving the old text past that reset is exactly the cross-eval draft leak; a freshly
+  // flip), and preserving the old text past that reset is exactly the cross-surface draft leak; a freshly
   // mounted composer may also briefly see the host's stale draft before the host's own reset effect runs,
   // so the clear (not an early return) is what makes the reset stick.
   useEffect(() => {
@@ -287,7 +286,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
           onSelect={(e) => { ac.sync(e.target); syncSlash(e.target) }} onBlur={() => { ac.close(); setSlash(null) }}
           onKeyDown={(e) => { if (composingKey(e)) return; if (onSlashKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
         {ac.menuEl}
-        {slash && <SlashMenu menu={slash} up head={slash.query ? `/${slash.query}` : t('annotator.menuReview')}
+        {slash && <SlashMenu menu={slash} up head={slash.query ? `/${slash.query}` : t('thread.reviewCommands')}
           onPick={acceptSlash} onHover={(i) => setSlash((m) => (m ? { ...m, index: i } : m))} />}
       </div>
   )

@@ -7,7 +7,6 @@ const read = (name) => readFileSync(new URL(name, import.meta.url), 'utf8')
 const notice = read('./TransientNotice.jsx')
 const root = read('./Root.jsx')
 const app = read('./App.jsx')
-const evals = read('./EvalsPage.jsx')
 const issues = read('./IssuesPage.jsx')
 const sessions = read('./SessionInterface.jsx')
 const css = read('./styles.css')
@@ -42,7 +41,7 @@ test('one root provider serves every route through the resident workspace shell'
 })
 
 test('review surfaces and the session console publish through the shared mechanism', () => {
-  for (const source of [evals, issues]) {
+  for (const source of [issues]) {
     assert.match(source, /const \{ notify \} = useTransientNotice\(\)/)
     assert.match(source, /const flash = \(outcomes\) => \{ if \(outcomes\) notify\(outcomes\) \}/)
     assert.doesNotMatch(source, /setTimeout\(\(\) => setNotice/)

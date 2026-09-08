@@ -3,11 +3,8 @@ title: eval-door
 status: active
 hue: 280
 desc: The session document's Eval door — a real anchor to the canonical session-scoped Evals address, carrying a bounded four-tally glance over the row's `evalSummary` projection whose spinner only ever promises an arriving value.
-code:
-  - spec-dashboard/src/SessionInterface.jsx#SessionEvalStats
 related:
   - spec-eval/src/sessioneval.ts
-  - spec-dashboard/src/sessionEvalCoherence.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
 ---
 

@@ -11,7 +11,6 @@ import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
 import { issueSourceCurrent, readReviewSnapshot, type IssueSourceRevision } from '@spexcode/spec-core'
-import { sessionEvalProjection } from '@spexcode/spec-eval/sessioneval'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 
 export type Board = Awaited<ReturnType<typeof buildBoard>>
@@ -35,13 +34,11 @@ export type RevisionPublication = {
 type BoardInputRevision = {
   full: string
   sessions: string
-  projections: string
   combined: string
   fullParts: Record<string, string>
   worktreeParts: Record<string, string>
-  projectionIds: string[]
 }
-type SessionInputRevision = Pick<BoardInputRevision, 'sessions' | 'projections' | 'projectionIds'> & { activeRoots: string[] }
+type SessionInputRevision = Pick<BoardInputRevision, 'sessions'> & { activeRoots: string[] }
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
 
 function textOrNull(path: string): string | null {
@@ -173,9 +170,8 @@ function digest(value: unknown): string {
 
 // The patrol's cheap authority check. These are exactly the mutable inputs a board assembly reads, folded
 // without doing the assembly: HEAD/config + `.spec`, governed records and active governed worktree state,
-// the issue-store carrier, and the already-resident session-eval projections. It intentionally does not call
-// listSessions or sessionEvalProjections: verification must neither poll tmux again nor mint/schedule eval work.
-// The hot/warm liveness signatures and eval generations remain graph-stream's canonical event-owned axes.
+// the issue-store carrier. It intentionally does not call listSessions: verification must neither poll tmux
+// again nor perform any demand-side work.
 function sessionInputRevision(): SessionInputRevision {
   const ids = listSessionIds().sort()
   // listSessions projects the structured record plus a one-line preview of the separately-stored originating
@@ -191,12 +187,11 @@ function sessionInputRevision(): SessionInputRevision {
   // has no row that derives from the store, and the store's own birth — the first canonical access inside a
   // build initializes it — must not read as an input that moved during that build.
   const canonical = ids.length ? sessionDatabaseRevision() : null
-  const projections = digest(ids.map((id) => [id, sessionEvalProjection(id)]))
   const activeRoots = [...new Set(ids.flatMap((id) => {
     const entry = readPublicRecordEntry(id)
     return entry.kind === 'ok' && entry.raw.governed && !entry.raw.archived ? [entry.raw.worktree_path] : []
   }))].sort()
-  return { sessions: digest([canonical, sessionInputs]), projections, projectionIds: ids, activeRoots }
+  return { sessions: digest([canonical, sessionInputs]), activeRoots }
 }
 
 function boardInputRevision(board: Board | null): BoardInputRevision {
@@ -234,7 +229,7 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
   return {
     full,
     ...session,
-    combined: digest([full, session.sessions, session.projections]),
+    combined: digest([full, session.sessions]),
     fullParts,
     worktreeParts,
   }
@@ -247,16 +242,12 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
 function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): BoardInputRevision {
   const fullParts = { ...sample.fullParts, issuesStamp: digest(board.issuesStamp) }
   const full = digest(fullParts)
-  const boardProjections = new Map(board.sessions.map((session) => [session.id, session.evalSummary ?? null]))
-  const projections = digest(sample.projectionIds.map((id) => [id, boardProjections.get(id) ?? null]))
   return {
     full,
     sessions: sample.sessions,
-    projections,
-    combined: digest([full, sample.sessions, projections]),
+    combined: digest([full, sample.sessions]),
     fullParts,
     worktreeParts: sample.worktreeParts,
-    projectionIds: sample.projectionIds,
   }
 }
 
@@ -264,38 +255,30 @@ function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): Board
 // certify that those old nodes carry a full revision sampled after the base was built.
 function revisionCarriedBySessionSplice(
   base: BoardInputRevision,
-  sample: Pick<SessionInputRevision, 'sessions' | 'projections' | 'projectionIds'>,
-  board: Board,
-  stable: boolean,
+  sample: Pick<SessionInputRevision, 'sessions'>,
+  _board: Board,
+  _stable: boolean,
 ): BoardInputRevision {
-  const boardProjections = new Map(board.sessions.map((session) => [session.id, session.evalSummary ?? null]))
-  const projections = stable
-    ? digest(sample.projectionIds.map((id) => [id, boardProjections.get(id) ?? null]))
-    : sample.projections
   return {
     full: base.full,
     sessions: sample.sessions,
-    projections,
-    combined: digest([base.full, sample.sessions, projections]),
+    combined: digest([base.full, sample.sessions]),
     fullParts: base.fullParts,
     worktreeParts: base.worktreeParts,
-    projectionIds: sample.projectionIds,
   }
 }
 
 // The full producer's topology may be newer than the last published session projection. When completion
 // re-bases that already-visible projection onto the new topology, keep the full carrier from the producer and
-// only the sessions/projections carrier from the published rows. Do not sample current inputs here: that would
-// certify a write that neither producer actually carried.
+// only the sessions carrier from the published rows. Do not sample current inputs here: that would certify a
+// write that neither producer actually carried.
 function revisionCarriedByPublishedSessionRebase(full: BoardInputRevision, published: BoardInputRevision): BoardInputRevision {
   return {
     full: full.full,
     sessions: published.sessions,
-    projections: published.projections,
-    combined: digest([full.full, published.sessions, published.projections]),
+    combined: digest([full.full, published.sessions]),
     fullParts: full.fullParts,
     worktreeParts: full.worktreeParts,
-    projectionIds: published.projectionIds,
   }
 }
 
@@ -313,7 +296,7 @@ function carrySubtractiveWorktrees(base: BoardInputRevision, activeRoots: readon
       full,
       fullParts,
       worktreeParts,
-      combined: digest([full, base.sessions, base.projections]),
+      combined: digest([full, base.sessions]),
     },
     added: false,
   }
@@ -413,7 +396,7 @@ function startSessionSplice(): Flight | null {
       const board = await spliceSessions(base)
       const after = sessionInputRevision()
       if (base !== cached || revision !== cachedRevision || generation !== topologyGeneration) continue
-      const stable = before.sessions === after.sessions && before.projections === after.projections &&
+      const stable = before.sessions === after.sessions &&
         JSON.stringify(before.activeRoots) === JSON.stringify(after.activeRoots)
       const projectedRoots = [...new Set(board.sessions.map((row) => row.path))].sort()
       const rootTransition = carrySubtractiveWorktrees(revision, projectedRoots)
@@ -525,9 +508,9 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
           const fullMoved = before.full !== anchor.full
           const subtractiveWorktreeMove = fullMoved && isPureSubtractiveWorktreeMove(anchor, before)
           const structuralMoved = fullMoved && !subtractiveWorktreeMove
-          const projectionMoved = before.sessions !== anchor.sessions || before.projections !== anchor.projections
-          // A projection move nobody signalled is this validation doing the patrol's repair job.
-          if ((projectionMoved || subtractiveWorktreeMove) && !sessionOwed && dirty !== 'sessions') {
+          // A session-input move nobody signalled is this validation doing the patrol's repair job.
+          const sessionMoved = before.sessions !== anchor.sessions
+          if ((sessionMoved || subtractiveWorktreeMove) && !sessionOwed && dirty !== 'sessions') {
             gen++
             sessionOwed = true
             sessionGeneration++

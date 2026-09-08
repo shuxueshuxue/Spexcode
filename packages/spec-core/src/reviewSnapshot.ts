@@ -1,11 +1,3 @@
-export type ReviewEvalNode = {
-  id: string
-  hue?: number
-  scenarios: any[]
-  evals: any[]
-  readings: any[]
-}
-
 // The content revision of every source the Issue read merges, ONE number per store. A single carrier
 // cannot express this: a store whose write bumped nothing is a store the reader is blind to, and folding
 // the stores into one counter lets a newer revision on one of them pay for a missed write on another.
@@ -16,7 +8,6 @@ export type IssueSourceRevision = {
 
 export type ReviewSnapshot = {
   issues: any[]
-  evalNodes: ReviewEvalNode[]
   issueSource: IssueSourceRevision
 }
 

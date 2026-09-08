@@ -449,7 +449,7 @@ export function EditPane({ node }) {
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = PUBLIC_GRAPH_ONLY }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = PUBLIC_GRAPH_ONLY, openSend = false }) {
   const t = useT()
   const proseRef = useRef(null)
   const [filters, setFilters] = useState({ issues: {} })
@@ -494,7 +494,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [], 
           {active === 'spec' && (
             <div className="pane-solo" ref={proseRef}>
               <SpecPane node={node} graphOnly={graphOnly} />
-              {!graphOnly && <ProseActions node={node} hostRef={proseRef} />}
+              {!graphOnly && <ProseActions node={node} hostRef={proseRef} openSend={openSend} />}
             </div>
           )}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}

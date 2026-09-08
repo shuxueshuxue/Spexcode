@@ -19,8 +19,8 @@ the node first (the clicked tile stays screen-stable while the camera absorbs an
 anchor contract as click), so the menu always acts on the node under the cursor and the board visibly agrees
 about which node that is.
 
-The menu exposes the node verbs plus one document door and one address handoff, with no new node mutation
-behind them:
+The menu exposes the node document door, the shared session dispatch, and one address handoff, with no new
+node mutation behind them:
 
 - **node info** — the node's own `#/spec/<id>` document ([[spec-view]]), which is this menu's door to
   reading the node. It lands in the workspace's current Spec tab rather than a second one, because a spec
@@ -30,24 +30,23 @@ behind them:
   against the current dashboard document. It therefore preserves the current public origin and `/p/<project>/`
   scope rather than baking a tunnel host into the product. Clipboard API denial or an HTTP context falls back
   to the browser copy path; the row briefly changes to copied or copy failed before the menu dismisses.
-- **new session** — a fresh New Session pre-seeded with the node mention (the `[` verb).
-- **new child node** — the `nn` chord's pre-filled instruction.
+- **send to a session** — opens the node popup's existing prose composer with the whole node attached, so
+  the reader can edit the message, choose a live target or launcher, and send through the ordinary dispatch.
 - **delete node** (danger-tinted) — the `dd` chord's pre-filled instruction.
 
-The two chord items inherit the chords' safety contract ([[keyboard-nav]]): they only pre-seed a New
-Session prompt the human completes and confirms — creating or deleting a node stays prompt-driven agent
-work, never a direct server op, so a mis-aimed right-click can't destroy anything.
+Deleting a node stays prompt-driven agent work, never a direct server op, so a mis-aimed right-click can't
+destroy anything.
 
 **Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
 currently touch it — the menu appends, below a divider from the
-five fixed actions, **one item per overlaying session** using the shared [[session-picker]] row: the
+four fixed actions, **one item per overlaying session** using the shared [[session-picker]] row: the
 deterministic avatar, `sessionDisplayState` status-coloured glyph, and stable session handle. The handle is
 the same identity used by the dock, mentions, and prose dispatch, so a session reads identically everywhere.
 Picking one opens that session in the console ([[session-console]]) through the shared [[session-picker]] row
 language. **A node's action menu is where a crossing
 into an *existing* session lives** — the graph deliberately has no bare keystroke for it and the
 node-info popup's Enter is inert ([[keyboard-nav]]), so the mouse menu is where "jump into the session
-editing this node" belongs. A node with no overlay shows only the five fixed actions — no divider, no empty
+editing this node" belongs. A node with no overlay shows only the four fixed actions — no divider, no empty
 section.
 
 **Which sessions those are is one join, not this menu's own.** The overlays name worktree paths and a

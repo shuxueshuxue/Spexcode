@@ -9,4 +9,4 @@ code:
 ## Reproduce before you fix
 
 For a bug fix, the fail→pass pair on one scenario is the repair proof. New intent has no prior failure to
-reproduce has the A/B filing sequence.
+reproduce; the real product has the A/B sequence.

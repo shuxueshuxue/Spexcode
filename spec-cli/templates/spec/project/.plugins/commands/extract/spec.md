@@ -50,9 +50,9 @@ bare render-check), covering a failure/empty/edge state — with a **description
 **expected** zero-loss result, and **≥1 `tags`** classifying it (a surface like `frontend-e2e`/`backend-api`/
 `cli`, a device like `desktop`/`mobile`) drawn from the configured library (`lint.scenarioTags`); a tag
 outside the library fails `scan`, so use an existing one or extend the library. Frontend scenarios are measured by looking (YATU) — a screenshot filed with
-`spex eval add <node> --image <png> --pass`. Backend nodes don't need one yet; run `spex eval lint` to
+hand the screenshot to the reviewer with `spex session files add`. Backend nodes don't need one yet;
 list the frontend nodes still uncovered. On a **re-run** this is also where you sharpen — give an uncovered
-node its first scenario, tighten a thin one (a bare render-check, or a stale `expected`); `spex guide eval`
+node its first scenario, tighten a thin one (a bare render-check, or a stale `expected`)
 has the schema.
 
 **Extract incrementally — don't plan the whole tree before writing.** For a large area (hundreds of files),

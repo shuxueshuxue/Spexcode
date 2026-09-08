@@ -66,37 +66,6 @@ IFS=$'\t' read -r governed status proposal <<< "$hook_state"
 # BSD sed has no \| alternation.)
 cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/p')
 
-# @@@ eval advisory - a nudge (never a gate) emitted when a session stops CLEAN-DONE (committed work + a
-# done/awaiting declaration): the agent IS the measuring hand, so an eval gap in what it just changed is a
-# blind spot to flag the moment work lands. SCOPED via `spex eval lint --changed` to the nodes THIS branch
-# touched — so an agent is never nagged about a score that went stale in a node it never opened (the bug
-# that made three workers ask "is this mine?"). Three gap classes it surfaces: eval-drift / eval-missing
-# (a node with an eval.md whose score is stale / unmeasured) and eval-coverage (a FRONTEND node with no
-# eval.md — an obvious UI change carrying no loss signal). Delivered via the Stop hook's additionalContext
-# (NEVER a block decision: a gap is a heads-up, not a wall). FIRES ONCE: the additionalContext itself forces
-# one continuation, so the CALLER guards it on stop_hook_active — re-emitting on the forced re-stop is what
-# looped 31 turns and tripped the Stop-hook block cap. Called only on ALLOW paths, never alongside a block.
-#
-# SURFACE-NEUTRAL: a stale/unmeasured score is refreshed only by PRODUCING the measurement on the scenario's
-# OWN surface — a real run, never a desk check and never deferring to review a recording after the fact. The
-# nudge privileges NO surface: `eval lint --changed` carries each drift/missing scenario's tag on its finding line
-# ([[eval-core]]'s lint.scenarioTags — frontend-e2e / backend-api / cli / desktop / mobile), so the agent
-# reads there WHICH surface to run. One line covers all five surfaces; there is no per-surface branch.
-eval_advisory() {
-  local out ids n msg esc
-  # Codex Stop hooks reject the Claude-family `hookSpecificOutput.additionalContext` shape on allow paths.
-  # Keep Codex Stop stdout empty unless it is a real block decision; the dispatcher still bridges block
-  # reasons to Codex stderr.
-  [ "${SPEXCODE_HARNESS:-claude}" = codex ] && return 0
-  out=$($S eval lint --changed 2>&1)
-  n=$(printf '%s\n' "$out" | grep -cE 'eval-(drift|missing|coverage):')
-  [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or eval lint unavailable) -> nothing to nudge
-  ids=$(printf '%s\n' "$out" | sed -n "s/.*eval-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
-  msg=$($S internal hook-prompt stop-gate --variant eval --count "$n" --ids "$ids") || return 0
-  esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
-}
-
 # @@@ commit gate - a declaration of done/merge (awaiting + proposal merge; legacy nothing is accepted only
 # for backward-readable records) is only honest once the
 # node branch carries the work as COMMITS: the dogfood ritual commits spec+code BEFORE any proposal, yet a
@@ -111,10 +80,6 @@ eval_advisory() {
 # stop normally instead of becoming corrupt.
 if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$proposal" = nothing ]; }; then
   if gatemsg=$($S internal commit-gate "$proposal" 2>&1); then
-    # nudge ONCE: emit on the natural stop, but STAY SILENT on the forced re-stop the additionalContext
-    # itself causes (stop_hook_active=true). Without this guard the advisory re-fired every clean-done stop
-    # and looped — the bug a prior change DESCRIBED in a comment but never actually implemented at the call.
-    [ "$cont" != true ] && eval_advisory
     exit 0   # work is committed and ahead of main -> the proposal is honest, let it stop.
   fi
   if [ "$cont" = true ]; then

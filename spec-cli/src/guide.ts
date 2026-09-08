@@ -38,7 +38,6 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 
 Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec       the spec.md format (frontmatter + body + the rules lint enforces)
-  spex guide eval       the eval.md format (scenario schema + how loss is measured and filed)
   spex guide settings   the .spec/spexcode.json / .spec/spexcode.local.json settings (launchers, dashboard icon, upload,
                         lint budgets, layout) — every field, and which of the two files it belongs in
   spex guide footprint  the footprint model — what SpexCode plants in a repo, and who sees it
@@ -152,148 +151,12 @@ Heuristic spec health is deliberately outside this production gate. Bare \`spex 
 altitude and breadth findings; the tidy workflow consumes that report and adds semantic judgment.
 
 LIFECYCLE: one node per commit; \`spex spec lint\` must reach 0 errors
-before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.
+before merge. \`spex init\` seeds the first tree; product evidence goes to the reviewer through \`spex session files add\`.
 
 SHARED LANDING: if the shared checkout is mid-merge, wait. Never abort or resolve someone else's merge; if your
 own landing stops half-merged, abort it and report.`
 
-const EVAL = `spex guide eval — the eval.md file format
-
-An eval.md sits BESIDE a node's spec.md and says how to MEASURE the node's loss — the gap between live
-behaviour and the spec. It is optional, but a node that governs a file admitted by lint's shared tracked-text
-include-minus-exclude/test policy with no eval.md is
-a blind spot: \`spex eval lint\` flags it \`eval-coverage\`. The eval system defines no DSL and RUNS
-NOTHING — the agent measures; eval keeps score.
-
-FRONTMATTER: a \`scenarios:\` list (a YAML block sequence of mappings). Each scenario:
-  name         REQUIRED. Unique within the file — it keys the sidecar and \`--scenario <name>\`.
-  description  REQUIRED. What to check / how to measure it through the running product.
-  expected     REQUIRED. What ZERO loss looks like — the target the measurement is compared against.
-  tags         REQUIRED. ≥1 classification tag (a comma list / flow list \`[a, b]\`), each drawn from the
-               configured library (\`lint.scenarioTags\` in .spec/spexcode.json; ships
-               \`frontend-e2e, backend-api, cli, desktop, mobile\`). A tag outside the library is rejected —
-               use an existing one, or add it to the library to mint it. Tags classify a scenario (surface,
-               device) so it can be filtered and, later, routed to the right driver.
-  test         optional. Either a repo-path scalar (the backward-compatible shorthand) or a strict object:
-                 test:
-                   path: tests/auth.spec.ts
-                   name: rejects an expired session
-               Both forms normalize in JSON to \`{ "path": "..." }\` with optional \`"name"\`. The object
-               requires exactly \`path\` + \`name\`; its case name is opaque text preserved for the measuring
-               hand. The path must exist. SpexCode does not parse WDIO/Playwright or execute anything.
-  code         optional. The file THIS scenario GOVERNS, ideally one (a comma list / flow list \`[a, b]\` is
-               allowed) — its own slice of the code freshness axis, so scenarios on one node go stale
-               independently. Absent → it inherits the node's \`code:\` list. A file governed by > maxOwners
-               scenarios warns \`eval-owners\` (split it). Each path must exist (a ghost → \`eval-schema\`).
-  related      optional. Files this scenario REFERENCES but does not govern — same path forms. They do NOT
-               stale it (the freshness mirror of a spec node's govern/related). Each path must exist.
-Multi-line prose uses YAML block scalars: \`|\` keeps newlines, \`>\` folds wrapped lines to spaces.
-An eval.md OWNS nothing — only its scenarios govern and relate (see governed-related).
-
-THE SCHEMA IS ENFORCED (closed field set, four required fields, unique names, tags within the library). A
-missing required field, an unknown key (a typo like \`descripton:\`), a duplicate name, an out-of-library
-tag, or no scenarios at all is rejected LOUD: \`spex eval lint\` reports it as \`eval-schema\`, and the
-pre-commit \`internal check-staged\` BLOCKS the commit.
-
-BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
-looks at / calls the real product surface, not an internal helper chosen to make the evidence easy.
-
-REPAIR EVIDENCE: for a bug fix, use one scenario's fail→pass pair. A, BEFORE EDITING: find the violated scenario
-or add one to \`eval.md\`, run it against the old committed behavior, and file
-\`spex eval add <node> --scenario <s> --fail\` with evidence of the failure. B, AFTER EDITING: run that same
-scenario against the working tree until it passes; commit the verified tree; then file
-\`spex eval add <node> --scenario <s> --pass\`. The measurement's \`codeSha\` must be that commit. New intent has no
-prior failure to reproduce.
-
-MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
-transcript, a by-hand pass), compares the result to \`expected\`, and files it:
-  spex eval add <node> [--scenario <name>] (--pass | --fail) [--note <text>]
-                 [--image <png> …repeatable] [--result <txt>|-] [--video <webm|mp4>] [--timeline <json>]
-(--scenario may be omitted only when the node declares exactly one scenario.)
-The verdict is \`--pass\` or \`--fail\` (a measurement must commit to one — an unmeasured scenario is \`missing\`,
-not a hedged fail). \`--note <text>\` is an OPTIONAL one-line annotation on either (why it failed, how far a
-pass sits from ideal); it does NOT replace evidence — the image/video/transcript is the captured actual behaviour.
-PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
-  MOVES / is timed  → \`--video <webm|mp4>\`. Terminal scroll or redraw, an animation or transition, media
-                      playback, a multi-step interaction flow, keyboard timing — a still of a moving thing
-                      proves the wrong thing; RECORD the run (e.g. playwright \`recordVideo\` on the context).
-                      STEP EVIDENCE gets a STEP-MAP: when the evidence unfolds in steps, carry named steps
-                      anchored to a POSITION on the evidence's OWN axis, EXPORTED BY THE RUN that produced it
-                      — never a value the agent eyeballs off the finished artefact afterwards (that's
-                      misaligned and dishonest, worse than none). \`--timeline <json>\` carries one; its \`axis\`
-                      is the evidence's: a video is \`time\` (ms), a transcript \`line\`, a still SEQUENCE \`frame\`,
-                      a structured data export \`index\` (record ordinals; the format's axis set is open — an
-                      unknown axis just renders as a bare number).
-                      \`at\` = the position on that axis, \`step\` = a short name for that moment; copy this shape:
-                        { "v": 2, "axis": "time",
-                          "events": [ { "at": 0, "step": "open graph" },
-                                      { "at": 1200, "step": "type query" } ] }
-                      The run exports it: in whatever drives the evidence — Playwright, a computer-use hand, a
-                      CLI harness stamping line numbers — take a baseline and at EACH real step push
-                      \`{ at: <position>, step: "…" }\`; dump that array as \`--timeline\`. Its \`axis\` MUST match the
-                      evidence it rides (a \`line\` map needs a \`--result\` transcript, a \`time\` map a \`--video\`);
-                      skip it for a short single-step artefact. A step name is a SHORT human label for its
-                      moment ("open graph") — never a metadata channel: the run's identity, its verdict, and
-                      the evidence's extent already have canonical homes (the scenario's \`test:\` field, the
-                      measurement's --pass/--fail, the artefact itself), so a step like
-                      "runner start: path/to/spec.ts :: <full case title>" smuggles data the measurement already
-                      carries and turns the step ruler into noise. (Legacy \`{ "v": 1, "events": [{ "tMs" }] }\` — the
-                      time axis with \`tMs\` — is still accepted, read as \`axis: "time"\`.)
-  STATIC end state  → \`--image <png>\` (repeatable — N stills). Layout, an icon, copy, one rendered frame.
-  backend / CLI     → \`--result <txt>\` (a transcript; \`-\` reads stdin). A STRUCTURED export (a tool's
-                      \`--export-json\` dump, an API payload, a metrics dump) is recognized BY CONTENT and kept as
-                      \`data\` — rendered as a validatable data block, not flattened into scrolling transcript
-                      text; free-form output stays a transcript. You pick the flag; the KIND follows the bytes.
-The flags combine in ONE filing — several stills can ride beside the clip of the same run.
-POPULATION DISCIPLINE: when \`expected\` quantifies over a set ("every X is Y", "nothing under Z"), the
-measurement reports the set's SIZE, not only the verdict. An empty set satisfies a universal claim
-VACUOUSLY, so a pass over nothing and a real pass are indistinguishable — and the universal form reads
-STRICTER than an enumeration, which is what makes it the hardest wrong-population case to catch. File
-\`N of N\`, never a bare boolean: \`0 of 0\` shows itself, \`true\` does not. The denominator must come from a
-source that can DISAGREE with the numerator — count the population off the surface that does NOT decide the
-outcome (a backend export, a ledger, the enumeration upstream of the thing under test) and the passing members
-off the surface under test. A ratio whose halves share one source says only "what I selected, I selected": a
-selector that silently drops half the population reports \`3 of 3\` when the truth is 6. Two weaker defences
-that do not substitute — a precondition sentence depends on the next author remembering it, a printed
-denominator depends on a reader noticing it. Nothing here enforces either (the schema has no population
-field), so treat a zero-population run as a NON-measurement and do not file it. Cheaper than any of that, when
-you can get it: restate the claim over something the product CANNOT make empty. "every active node's name is
-readable" needs someone to arrange activity and goes vacuous when nobody does; "the rendered size never falls
-below the authored size" is a property of the viewport itself, true of a one-node graph, and has no
-population to get wrong. A claim with no population beats a well-reported one.
-RENDERED GEOMETRY (browser): measure the rendered BOX, never the authored STYLE. An ancestor CSS \`transform\`
-— the ordinary zoom/pan wrapper on a canvas or graph view — does NOT change computed style, so
-\`getComputedStyle(el).fontSize\` answers the AUTHORED size while the screen shows that size times the
-ancestor scale, and the measurement is a SILENT FALSE PASS. (No numbers here on purpose: the authored size is
-whatever this project's stylesheet says today, and a manual that hard-codes one teaches a constant that
-drifts — read it off the tree you are measuring.) Go through \`getBoundingClientRect()\` (it carries the
-ancestor scale) and derive the effective size from the box, or from a known string's width. This is also why
-a geometric claim ships WITH its \`--image\`: a rect can be computed wrong, while "is that text legible" is
-human-judgeable, so the two evidences cover each other.
-ANCHOR DISCIPLINE: an eval's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
-uncommitted change has none. So measure the tree you are about to commit, COMMIT it, then file; confidence
-is earned on the working tree, but the anchor can only land after the commit. Filing from a dirty tree
-mis-anchors the eval (its sha lacks the change it measured) and it goes stale the moment you commit.
-
-A botched filing (a junk e2e/smoke run, a wrong verdict) is undone through the SAME surface:
-  spex eval retract <node> [--scenario <name>] [--last | --ts <iso>] [--note <why>]
-retract APPENDS a retraction event to the sidecar (never deletes a line — the trace stays, git records
-who/when/why); the scoreboard then drops the retracted eval everywhere: the previous eval becomes
-the latest again, or the scenario honestly returns to \`missing\`. Default target is the scenario's latest
-eval (\`--last\` makes that explicit; repeat to peel junk back one filing at a time); \`--ts\` pins one.
-
-THE SCOREBOARD: evals live in evals.ndjson beside the eval.md — one JSON line per measurement
-(a second git-as-database axis). Freshness is derived live from git: an eval goes STALE when a governed
-code file or the scenario (the eval.md) moves since it was filed.
-  spex eval lint [--changed]     the measurement layer's findings — PURE ADVISORY, always exit 0 (spec
-                                 lint's errors block commits; a measurement gap never blocks anyone):
-                                 eval-schema (malformed) · eval-drift (stale) · eval-missing (never
-                                 measured) · eval-dangling (orphaned remark track) · eval-coverage
-                                 (governed source, no eval.md — spec lint's coverage, one rule per layer) ·
-                                 eval-owners (a file governed by > maxOwners scenarios — split it)
-  spex eval ls <node>            the eval timeline (verdict · freshness · evidence), newest first
-  spex eval scenario ls [<node>] the declared contracts; text --unmeasured = blind-spot worklist; --json = canonical declaration index
-  spex eval clean                GC the content-addressed evidence cache`
+const EVAL = `spex guide eval — eval was retired; hand product evidence to the reviewer with \`spex session files add\`.`
 
 const UPLOAD_DEFAULTS = uploadPolicyDefaults()
 
@@ -690,7 +553,7 @@ and navigation URLs are relative and it reads its own base from location.pathnam
 root and under the gateway's path prefix. Configure the framework's base-path option when building, then serve
 that dist (for example, vite preview as above); the gateway forwards the prefix and bytes without rewriting them.`
 
-const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB }
+const TOPICS: Record<string, string> = { spec: SPEC, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB }
 
 // every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
 // the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.
@@ -700,6 +563,7 @@ const FOOTER = `\n\n(This is the skill layer. Command usage: \`spex help\` for t
 // back to — an unknown topic must never read as a successful page ([[cli-surface]]'s dead-end rule).
 export function guideText(topic?: string): string | null {
   if (!topic) return SETUP + FOOTER
+  if (topic === 'eval') return EVAL + FOOTER
   const t = TOPICS[topic]
   return t ? t + FOOTER : null
 }

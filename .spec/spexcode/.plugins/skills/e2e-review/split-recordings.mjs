@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // split-recordings — cut whole-session e2e recordings into per-scenario clips + spec-eval step
-// timelines, ready for `spex eval add … --video --timeline` (the [[e2e-review]] skill's step 1).
+// timelines, ready to hand to the reviewer with `spex session files add` (the [[e2e-review]] skill's step 1).
 //
 // INPUT: a directory scanned recursively for pairs of one `.webm` + one `*.timeline.json` in the same
 // folder (e.g. Playwright POOL workers: test-results/pool-video-w*/). The timeline is the EMITTER
@@ -95,5 +95,5 @@ for (const [name, s] of [...seg.entries()].sort()) {
 
 console.log(`\n${n}/${seg.size} clips → ${outDir}`)
 console.log('file each against its governing node (spex spec search <topic> finds it):')
-for (const f of filed) console.log(`  spex eval add <node> --scenario ${JSON.stringify(f.name)} --pass|--fail --video ${f.mp4} --timeline ${f.tlOut}`)
+for (const f of filed) console.log(`  spex session files add ${f.mp4} && spex session files add ${f.tlOut}`)
 process.exit(n === seg.size ? 0 : 1)

@@ -453,13 +453,13 @@ edit the spec instead — same commit as the code.`,
        spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
        spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
 
-add — file an eval of a scenario against its expected: the loss signal the optimizer reads.
+add — record an eval of a scenario against its expected: the loss signal the optimizer tracks.
 Measure through the REAL product surface, never by reasoning about the code. Evidence kind follows
 the behaviour: MOVING/timed behaviour records a --video; a STATIC end state screenshots --image;
 backend/CLI files a --result transcript. A fix's evidence is a fail→pass pair on the SAME scenario.
 
 ls — node-scoped bare (its per-scenario eval history); session-scoped with an EXPLICIT --session
-(never type-sniffed): filed evals are newest-first across nodes and source ownership; own measurements
+(never type-sniffed): recorded evals are newest-first across nodes and source ownership; own measurements
 are ✦-marked, evals filed by other sessions are unmarked, and blind spots follow measured rows. --export writes ONE self-contained
 HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 
@@ -483,8 +483,8 @@ no un-ok exists). The evals feed default-hides a fresh, ok'd scenario; a governe
 (an agent's judgment on a measurement is a remark, never a self-blessing).
 
 clean — garbage-collects the content-addressed evidence cache against what the sidecars still reference.
-Bare it removes only UNREFERENCED blobs (nothing a filed reading names is touched); --keep-latest also drops
-the evidence of superseded readings, keeping each scenario's latest; --all empties the cache and reads no
+Bare it removes only UNREFERENCED evidence (nothing a recorded result names is touched); --keep-latest also drops
+the evidence of superseded results, keeping each scenario's latest; --all empties the cache and reads no
 sidecar. It prints how many files it removed and how many it kept, with the mode it ran in.
 
 retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never

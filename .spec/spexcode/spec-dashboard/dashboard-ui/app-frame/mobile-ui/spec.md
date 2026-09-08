@@ -47,7 +47,7 @@ back control, and eval entry). Viewport width changes chrome and layout, never t
 
 **The review and Settings pages are the SAME routed pages, reflowed — never a phone clone.** The phone honors the
 [[side-nav]] route family: a `#/evals`/`#/issues` address (list or detail) opened at phone width renders
-the SAME [[evals-view]]/[[issues-view]] components and their current [[paged-review]] request inside the phone shell, restacked by [[review-chrome]]'s
+the SAME the measurement view/[[issues-view]] components and their current [[paged-review]] request inside the phone shell, restacked by [[review-chrome]]'s
 one-column reflow (side metadata above the main column — GitHub's own 390px order); the tab bar grows an
 Evals and an Issues entry (tapping navigates the route, the active page lights its tab), and Back is the
 browser's history exactly as on desktop. Their spec-node facts remain the same real `graphNodeAddress`
@@ -99,10 +99,10 @@ The two planes, made native to touch:
   a list a phone reader never used — but the header carries ONE compact **eval** entry: a DOOR that is
   a REAL anchor to the session-scoped Evals list (`#/evals?q=is:eval scope:<id>`, the
   [[address-routing]] projection as its literal href — one ordinary hash push;
-  [[session-eval]] — gates strip,
+  session proof — gates strip,
   blind spots, ✦-marked own readings, inherited baseline), the same canonical pages the desktop uses,
   lazily loaded and reflowed to one column. And the conversation is DEEP-LINKABLE: a `#/sessions/<id>`
-  address (a shared link, or the scoped eval pages' terminal door — [[evals-view]]) opens that session's
+  address (a shared link, or the scoped eval pages' terminal door — the measurement view) opens that session's
   conversation on a cold phone load, one-way route→state — leaving the detail via its back control is
   phone-local and never rewrites the hash. Reading the measured loss is exactly what a
   phone reviewer needs; ACTING on it (merge/close) stays desktop scope. The conversation has no second native

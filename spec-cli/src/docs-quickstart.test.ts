@@ -52,8 +52,7 @@ test('spex guide setup page lists the full built-in registry in its adopt step',
 })
 
 test('spex guides retain the operational detail omitted from always-on prompts', () => {
-  const evalGuide = guideText('eval')!
-  assert.match(evalGuide, /eval was retired[\s\S]*?spex session files add/)
+  assert.equal(guideText('eval'), null, 'the retired measurement topic is no longer advertised')
 
   const specGuide = guideText('spec')!
   assert.match(specGuide, /COMMENT ALTITUDE:[\s\S]*?measured pitfalls[\s\S]*?@@@title - explanation/)

@@ -16,7 +16,6 @@ related:
   - packages/session-events/package.json
   - packages/session-application/package.json
   - packages/session-selflaunch/package.json
-  - spec-eval/package.json
   - spec-forge/package.json
   - spec-cli/package.json
   - spec-dashboard/package.json
@@ -26,7 +25,7 @@ related:
 
 The metapackage is not a release unit by itself. A release is the committed set of fifteen public packages:
 `@spexcode/transcript`, `@spexcode/transcript-ui`, `@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`, `@spexcode/session-events`,
-`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/spec-core`, `@spexcode/spec-eval`,
+`@spexcode/session-application`, `@spexcode/session-selflaunch`, and `@spexcode/spec-core`,
 `@spexcode/spec-forge`, `@spexcode/spec-cli`, `@spexcode/spec-dashboard`, and `spexcode`. Every public package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
 the publication order is transcript (it depends on nothing), transcript-ui, session-protocol, session-topology, session-runtime, session-events, session-application,

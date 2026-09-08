@@ -117,7 +117,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   mobile-only pagination dialect exists.
 - **Matching is [[review-filters]], not page code.** The canonical ListViews bridge their ONE parsed token
   text into that shared Issue/Eval engine and render its data-derived options; [[node-popup]] and
-  [[eval-tab]] project the same adapters into one extremely compact embedded control with popup-local
+  the measurement view project the same adapters into one extremely compact embedded control with popup-local
   state. This node owns the presentations and canonical address behavior — never a second parser or a
   second field predicate.
 - **Rows use ONE two-level information grammar.** Every navigable row exposes one full-row REAL `<a>` detail
@@ -165,7 +165,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   tied to line one, never re-centered against the whole block. No page or breakpoint may add its own
   pixel offset, and the anchor keeps its ≥24px hit target and focus ring. The header has no generic
   trailing action slot: detail-local exits belong in their actual content contract, and scoped Evals
-  deliberately expose only the list-return arrow here ([[evals-view]]). Source failure
+  deliberately expose only the list-return arrow here (the measurement view). Source failure
   and honest not-found are distinct faces. On desktop the SIDE rail is **sticky in its grid column**
   (never `position:fixed`): while a long main column scrolls, the rail pins near the scrollport top so
   the metadata stays on screen — grid containment keeps it off the header (which scrolls away normally)

@@ -1,7 +1,0 @@
-function duplicate(value: number): number {
-  return value
-}
-
-function duplicate(value: string): string {
-  return value
-}

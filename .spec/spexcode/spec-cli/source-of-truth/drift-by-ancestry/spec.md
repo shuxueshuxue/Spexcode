@@ -7,7 +7,6 @@ code:
   - packages/spec-core/src/git.ts#driftFor
   - packages/spec-core/src/git.ts#ackCoverFor
 related:
-  - spec-eval/src/freshness.ts
 ---
 # drift-by-ancestry
 
@@ -36,7 +35,7 @@ project historical path identities through the current tip, and apply in-memory 
 cannot model path reuse or parallel rename forks. The one event/project/filter mode avoids a per-node history
 walk, so "scale with history, not node count" remains a correctness shape, not a performance promise. The same
 rule feeds every consumer of the signal — the [[spec-lint]] drift warning, board drift counts, and eval engine's
-code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
+code/scenario freshness axes (the former measurement core) — with no parallel heuristic beside it.
 
 The exact implementation is an event fold followed by a read-time project/filter. The ordinary drift fold reads
 one NUL-framed Git raw-identity event per commit: a status and one path, or the two endpoints of a rename, with
@@ -55,7 +54,7 @@ positive control, then compare a separate implementation against this Git-derive
 A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side: drift measured
 *from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
 longer folds into a blanket stale: where ancestry can't testify, eval freshness falls back to comparing
-CONTENT between the anchor's tree and HEAD ([[eval-core]]'s content fallback) — a fold, rebase,
+CONTENT between the anchor's tree and HEAD (the former measurement core's content fallback) — a fold, rebase,
 squash-merge or cherry-pick that left governed content byte-identical reads fresh, and only an
 anchor whose commit object is truly gone stays conservatively stale (named as such). Distinguishing
 a genuine orphan from a reachable-but-unmerged branch is still never attempted — the content compare

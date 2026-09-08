@@ -58,9 +58,10 @@ The principles, in the maintainer's own framing:
 15. **Each pillar gets exactly ONE adapter seam.** The maintainer's framing: "harness adapter, language
     adapter, test framework adapter — 我们最终会拥有这三方面的适配". Harness adapter exists (`harness.ts` +
     launchers + materialize); language adapter is the anchor/coverage extraction seam; test-framework adapter
-    is where eval evidence producers will plug in. Every seam shares one shape: an interface + an ordered
-    registry + per-instance DATA rows (a new harness/language/runner is a row, not a branch), loud degradation
-    when a tier is unavailable — and product semantics never learn which adapter sits on the other side.
+    is where evidence producers plug in; there is no separate measurement consumer left to couple to that seam.
+    Every seam shares one shape: an interface + an ordered registry + per-instance DATA rows (a new
+    harness/language/runner is a row, not a branch), loud degradation when a tier is unavailable — and product
+    semantics never learn which adapter sits on the other side.
 16. **Don't invent what the pillar isn't prepared for.** The maintainer's framing: "不要擅自发明 git 没有准备
     好的东西". Stated when rejecting an explicit node-identity field to make rename tracking provable: git
     *detects* renames by content similarity rather than *recording* them, so an id field would erect a second
@@ -139,16 +140,16 @@ The principles, in the maintainer's own framing:
     契约挪走。" Freshness has more than one axis, and the rule we already wrote down only guards one of them:
     "commit the verified tree, then file" catches the *code* moving after the proof, and says nothing about the
     *contract* moving after the proof. Measured, self-caught by the session that did it: it filed a passing
-    reading, then softened the wording of the same scenario in `eval.md`, and both readings went stale on the
-    scenario axis — in its own words, "I was holding the proof of that tree, and then I moved the contract that
-    proof was against." The reason this one gets its own entry rather than an amendment to the code-axis rule is
+    proof you handed over, then softened the wording of the same measurement contract, and both proofs went stale
+    on the contract axis — in its own words, "I was holding the proof of that tree, and then I moved the contract
+    that proof was against." The reason this one gets its own entry rather than an amendment to the code-axis rule is
     that the two feel nothing alike: editing code, you know you are moving the thing under test; editing wording
-    feels like polishing a document, and `scenarioHash` disagrees. Its sibling is the same shape wearing a
+    feels like polishing a document, and the contract comparison disagrees. Its sibling is the same shape wearing a
     different costume — a *sampling* choice that silently decides the claim. One-build-per-fresh-process does not
     merely hide an in-process memo, it **inverts the conclusion**: 507ms cold against 12–15ms warm is a factor of
     forty, so "a cache buys ~0 here" and "this is the headline finding" were separated by nothing but how the
-    sample was taken; the corpus picked to prove it could not exhibit the defect at all (0 of 1144 distinct
-    reading `codeSha`s reachable from that HEAD, therefore zero selector queries reaching the engine). Hence the
+    sample was taken; the corpus picked to prove it could not exhibit the defect at all (zero target commits
+    reachable from that HEAD, therefore zero selector queries reaching the engine). Hence the
     method rule that came out of it: on a loaded box a **fixed wall-clock threshold is not a claim** — compare
     load-matched pairs, and put the falsifiable half of the claim on something load-independent. The stopwatch is
     the symptom; the count of git child processes is the assertion.

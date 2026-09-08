@@ -23,10 +23,10 @@ forge is a value (`--store <host>`), never a command drawer ([[cli-surface]]).
   legible: nothing linked vs nothing to trace). `--node` narrows to one node; `--json` emits the raw
   resolved structure.
 - `spex issue links --pending [--store github] [--node <id>] [--json]` — the same read, resolved instead to the
-  open issues flagged `needs-eval`, printed as `node → evaluation owed` with the same header and
+  open issues flagged `review-needed`, printed as `node → evaluation owed` with the same header and
   `--node`/`--json` flags so the two reports read alike. The flag-recognition and node-resolution semantics
-  are [[needs-eval]]'s; this is only its CLI exposure. `--json` emits the raw `NodeEvalPending[]` —
-  the shape `spex eval lint` consumes.
+  are review-needed's; this is only its CLI exposure. `--json` emits the raw `NodeEvalPending[]` —
+  the shape `measurement lint` consumes.
 
 Both verbs share one read — select the host's driver **through the `ForgeDriver` port** (a registry keyed by
 each driver's own `host`, never a hardcoded vendor branch — a second host is one registry entry), load the

@@ -58,7 +58,7 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
   status   pending | active | merged | drift. Usually DERIVED from git state — rarely hand-set.
   code:    the file this node GOVERNS (is source of truth for) — a YAML list, but AT MOST ONE entry
            (the \`one-govern\` lint error otherwise: keep the true subject, move the rest to related:).
-           Drives drift + eval freshness. Many nodes MAY govern the same file (ordinary
+           Drives drift + measurement freshness. Many nodes MAY govern the same file (ordinary
            composition); a file governed by > maxOwners nodes warns (the \`owners\` rule — split it). Omit
            for a pure-prose node: a cross-cutting contract no file owns.
            The entry may pin named units — ANCHORS: one or more \`path#symbol\` rows, ALL on the same
@@ -78,11 +78,11 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
            the declaration's range. Runtime-created/assigned callables, imported aliases, and generated
            names are outside this declaration extractor and therefore resolve as dead anchors.
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
-           (never drift, never eval freshness, nothing to ack); it is the many-to-many net that claims the files
+           (never drift, never measurement freshness, nothing to ack); it is the many-to-many net that claims the files
            govern doesn't. Every listed path must exist (lint integrity error otherwise). A related row
            may also pin \`path#symbol\`: the node then hears about a commit ONLY when it moves that
            unit — a hit is a soft \`related-drift\` warn naming the selector, a miss is SILENT (a scoped
-           related file's ordinary file-level nudge is off). Still never blocks, no ack, no eval freshness.
+           related file's ordinary file-level nudge is off). Still never blocks, no ack, no measurement freshness.
   surface  plugin-system/.plugins nodes only: one or MORE of system (folded into every agent's prompt) |
            command (a /command) | skill (an on-demand SKILL.md the harness loads when a task matches the
            node's desc) | agent (a spawnable sub-agent definition; its \`tools:\` list is the spawned
@@ -134,7 +134,7 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       anchor-drift above). On a selector-SCOPED code file whose window has NO hit (a
                       miss), this advisory stays by default; the committed \`lint.scopedCodeMiss:
                       "ignore"\` silences ONLY it (hit blocks, bare drift, integrity, acks, related,
-                      eval freshness all untouched). Remedy: edit the spec to the new intent
+                      measurement freshness all untouched). Remedy: edit the spec to the new intent
                       (re-versions the node), OR \`spex spec ack <node> --reason "…"\` when only
                       mechanics changed and the contract still holds.
   anchor     (warn)   an anchor pins a type/interface — types reshape with every refactor; anchor the
@@ -155,8 +155,6 @@ before merge. \`spex init\` seeds the first tree; product evidence goes to the r
 
 SHARED LANDING: if the shared checkout is mid-merge, wait. Never abort or resolve someone else's merge; if your
 own landing stops half-merged, abort it and report.`
-
-const EVAL = `spex guide eval — eval was retired; hand product evidence to the reviewer with \`spex session files add\`.`
 
 const UPLOAD_DEFAULTS = uploadPolicyDefaults()
 
@@ -563,7 +561,6 @@ const FOOTER = `\n\n(This is the skill layer. Command usage: \`spex help\` for t
 // back to — an unknown topic must never read as a successful page ([[cli-surface]]'s dead-end rule).
 export function guideText(topic?: string): string | null {
   if (!topic) return SETUP + FOOTER
-  if (topic === 'eval') return EVAL + FOOTER
   const t = TOPICS[topic]
   return t ? t + FOOTER : null
 }

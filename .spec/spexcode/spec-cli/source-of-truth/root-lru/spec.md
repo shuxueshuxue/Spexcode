@@ -8,8 +8,6 @@ code:
 related:
   - spec-cli/src/root-lru.test.ts
   - packages/spec-core/src/git.ts
-  - spec-eval/src/scenariofresh.ts
-  - spec-eval/src/freshness.ts
 ---
 
 # root-lru
@@ -17,7 +15,7 @@ related:
 ## raw source
 
 The same bounded-slot cache guard was written three times: `touchRoot` in `git.ts` for the index/drift
-caches, `touchRoot` again in spec-eval's `scenariofresh.ts` for scenario chains — same name, same
+caches, `touchRoot` again in the scenario-chain cache — same name, same
 reference-counted eviction, same recency bump — and a third, simpler per-root scope in `freshness.ts`.
 Both duplicate authors documented it as they wrote it (`freshness.ts`: "the same bounded-slot guard the
 index caches use"; `scenariofresh.ts`: "mirroring historyIndex/driftIndex in git.ts"). Nobody was careless.

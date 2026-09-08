@@ -50,12 +50,12 @@ query — no surface special-cases the token.
 
 The consumers own different state homes, not different semantics. [[paged-review]] imports this SAME pure
 module on the server, applies it before slicing, and returns the resulting full-population counts/facets;
-the canonical pages render that result and never re-match a current-page subset. [[issues-view]] and [[evals-feed]]
+the canonical pages render that result and never re-match a current-page subset. [[issues-view]] and the measurement feed
 own ONE visible token text ([[review-query]] parses it; [[review-chrome]] renders it): the canonical
 bridge maps parsed tokens into engine state — duplicate qualifiers last-wins, `scope:` to no predicate
 (it picks the data source upstream), and any qualifier outside the page's map to the IMPOSSIBLE state,
 so an unknown token stays verbatim in the text and honestly matches nothing. Every human change remains
-a history push and browser Back replays it. [[node-popup]] and [[eval-tab]] keep plain structured state
+a history push and browser Back replays it. [[node-popup]] and the measurement view keep plain structured state
 only for the lifetime of the open Spec Information surface, surviving tab switches without minting a
 second address. Their compact face is
 one shallow sticky search row plus the shared accessible facet overflow. It uses the same adapter options,

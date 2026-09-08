@@ -71,7 +71,7 @@ may carry selectors too: a hit is a soft warn naming the selector, a miss is sil
 never-block, never-ack, no eval freshness.
 
 This vocabulary is READ by a second consumer with its own window: an eval scenario's `code:` axis
-([[eval-core]]), which narrows a reading's staleness to the units it actually measures. The parse,
+(the former measurement core), which narrows a reading's staleness to the units it actually measures. The parse,
 extractor registry, resolution and hunk∩range engine are shared verbatim — there is no second anchor
 syntax — but the two windows are deliberately different, because they answer to different subjects. Spec
 drift asks about a NODE and so subtracts `Spec-OK` acks; eval freshness asks about a READING, which an ack
@@ -144,7 +144,7 @@ dashboard liveness; changing the patrol period alone only moves the threshold.
 **Two consumers ask two different questions of this engine, and they enter through different doors rather
 than through one call carrying a mode flag.** ENUMERATION — spec drift and exact impact — IS the per-commit,
 per-selector list, so it must scan its whole window; that list is what names the debt an author must answer.
-EXISTENCE — an eval reading's anchor axis, whose entire verdict is one bit ([[eval-core]]) — is discharged by
+EXISTENCE — an eval reading's anchor axis, whose entire verdict is one bit (the former measurement core) — is discharged by
 the FIRST hit, and scanning past it computes rows nobody reads. Existence is order-independent (a window
 either holds a hit or it does not), so stopping early cannot change a verdict; what it must never do is
 report "not found yet" as "no hit", so a window is settled only by a hit or by having been scanned to its

@@ -34,7 +34,7 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   allowlist. Same artifact shape as `skill`, one definition per harness: the divergence is a single
   [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
   exactly as a harness with no skill primitive gets no `SKILL.md`.
-- `surface: review` — a **review-track prose preset** ([[review-commands]]): offered in the eval detail's
+- `surface: review` — a **review-track prose preset** (the review command menu): offered in the eval detail's
   remark-composer `/` dropdown; picking one PREFILLS the composer with the node's body (`{node}` /
   `{scenario}` / `{expected}` placeholders filled at insert time), and the human edits and sends it as an
   ORDINARY remark on the (node, scenario) thread — the preset adds no write mechanism of its own.
@@ -54,7 +54,7 @@ In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursivel
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
 (materialized to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), `loadAgentConfig` gathers
 agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize), and
-`loadReviewConfig` gathers review (served at `/api/plugins?surface=review` for [[review-commands]]'s
+`loadReviewConfig` gathers review (served at `/api/plugins?surface=review` for the review command menu's
 dropdown). Only
 **built/active** plugins gather — a `status: pending` node is declared intent, so it renders on the board but
 reaches no surface.

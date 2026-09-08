@@ -7,8 +7,6 @@ desc: The server + CLI — reads .spec and git, serves the API, and houses the s
 code:
   - spec-cli/src/index.ts
 related:
-  - spec-cli/src/eval-host.ts
-related:
   - spec-cli/src/reaper.ts
   - spec-cli/src/reaper.test.ts
   - spec-cli/src/supervise.ts
@@ -19,14 +17,13 @@ related:
 # spec-cli
 
 The backend package is `@spexcode/spec-cli`; its declared dependencies are `@spexcode/spec-core`,
-`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/transcript`, `@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
-host port with the session, issue, source-policy, and transport implementations.
-`eval-host.ts` is that one-way composition seam: it installs the concrete CLI capabilities at startup and does
-not duplicate the eval engine or its remark types. Its defining contract has a focused governance node.
+`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/transcript`, and
+`@spexcode/spec-forge`. It is the composition boundary for the session, issue, source-policy, transport,
+and content-addressed evidence implementations.
 
 ## raw source
 
-One of the SpexCode packages (with spec-core, the session package stack, spec-eval, spec-forge, and spec-dashboard). It is the server + CLI: read the
+One of the SpexCode packages (with spec-core, the session package stack, spec-forge, and spec-dashboard). It is the server + CLI: read the
 `.spec` tree and its git history, serve them over an API, ship the `spex` CLI, and house the
 **source-of-truth** guards (git-as-database, the worktree linker, the guards, the linter) here — under
 the CLI where they belong, not under the dashboard. It publishes compiled JavaScript; TypeScript remains
@@ -51,7 +48,7 @@ feature had no prior package edge; it is an explicit exception, not an unexamine
 | `023e91b4c` | Renamed `@spexcode/l0` to `@spexcode/spec-core`. | Same-change replacement: package name and path were renamed; `@spexcode/l0` did not remain as a second edge. |
 | `dff2d31c7` | Made `@spexcode/spec-core` importable and packable outside the monorepo. | The internal-only source package became the published boundary; no second core implementation was added. |
 | `2f8d5fb71` | `spec-core` added `@vscode/tree-sitter-wasm` for asynchronous syntax anchors. | Same-change replacement: the prior regex extractor in `packages/spec-core/src/anchors.ts` was replaced by the Tree-sitter extractor. |
-| `3d0e60e6b` | Formalized `spec-cli` edges to `@spexcode/spec-core`, `@spexcode/spec-eval`, and `@spexcode/spec-forge` and exposed package exports. | Same-change subtraction: dashboard/CLI relative imports were replaced by public package edges; no parallel relative implementation remained. |
+| `3d0e60e6b` | Formalized `spec-cli` edges to `@spexcode/spec-core` and `@spexcode/spec-forge` and exposed package exports. | Same-change subtraction: dashboard/CLI relative imports were replaced by public package edges; no parallel relative implementation remained. |
 | `377c832f4` | Extracted the first session protocol package. | Historical extraction; the package was later retired after the application cutover. |
 | `b1c36fb04` | Added `@spexcode/session-application` and `@spexcode/session-selflaunch` to `spec-cli`. | Same-change extraction: application composition and self-launch adapter implementations moved out of the CLI; the old copies were removed. |
 | `0443c68df` | Removed the retired `@spexcode/session-core` workspace edge. | Same-change subtraction: root build, launcher source closure, release plan, CI, lint roots and lockfile no longer build or ship the legacy package. |
@@ -68,23 +65,19 @@ an executable boundary check.
 `spec-cli` is the backend. It owns the read path (turn `.spec` + git into JSON) and the write path
 (the `spex` CLI driving worktrees/sessions); the dashboard is a thin HTTP caller. `index.ts` is the
 HTTP entrypoint — a Hono app that wires the loaders and the session state machine to routes — and is
-the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the
-eval endpoints' contract belongs to [[spec-eval]], so their churn — the eval-blob comment reframed to
-serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
-Its bounded Eval-detail route resolves a requested worktree scope before it resolves the addressed
-scenario: a vanished scope is explicitly reported as a fallback to trunk, while a declared-but-unmeasured
-scenario and a scenario absent from trunk remain separate response states. The HTTP seam never turns one
-of those facts into another by returning a generic missing review source.
+the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree). The HTTP seam also
+serves content-addressed evidence bytes and accepts uploads through one `/api/evidence` route; the dashboard
+and issue threads use that same transport.
 
 A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issues --json`,
-`board`, `review --json`, `eval ls --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
+`board`, `review --json`, `spec search --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
 without draining buffered pipe writes, silently truncating a large dump at the ~64KB pipe buffer, so those
 verbs exit through a shared **flush-then-exit** helper that waits for stdout to drain first — a >64KB piped
 board or issue dump arrives whole, never a JSON cut off mid-object that reads as complete.
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree in the
 compiled runtime closure** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-eval`, `spec-core`, `transcript`, `session-application`, `session-selflaunch`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
+(`spec-forge`, `spec-core`, `transcript`, `session-application`, `session-selflaunch`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
 reads via fs or never imports (the frontend is a separate vite server with its own HMR). In a source workspace
 the supervisor rebuilds that closure before it reloads; an installed package watches only its shipped `dist`.
 Watching only its own dir was a real gap: a merge touching `spec-forge` reached disk while the running child

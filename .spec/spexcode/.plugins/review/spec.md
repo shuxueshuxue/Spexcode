@@ -8,7 +8,7 @@ desc: Grouping shelf for the `surface: review` prose presets — the eval detail
 # review
 
 The **review-track** prose presets live here: leaf plugins whose body is a remark template the human
-fires from the eval detail's remark composer by typing `/<name>` ([[review-commands]]). Picking one
+fires from the eval detail's remark composer by typing `/<name>` (the review command menu). Picking one
 prefills the composer — the human edits and sends, and the result is an ordinary remark on the
 (node, scenario) thread; a preset adds prose, never a write mechanism.
 

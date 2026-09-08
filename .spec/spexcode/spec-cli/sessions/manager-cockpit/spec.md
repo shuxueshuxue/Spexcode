@@ -11,7 +11,6 @@ related:
   - spec-cli/src/cli.ts
   - packages/spec-core/src/git.ts
   - spec-cli/test/cockpit-eval-readout.mjs
-  - spec-eval/src/sessioneval.ts
 ---
 
 # manager-cockpit
@@ -78,11 +77,11 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   moved fingerprint always recomputes instead of serving last-known, and a rejected run is never cached.
   There is deliberately
   NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's eval scenarios, measured
-  through the real product ([[session-eval]] shows that evidence) — not by a language-specific automated
+  through the real product (session proof shows that evidence) — not by a language-specific automated
   checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct
   for any governed project, TS or Python or otherwise, rather than a `tsc` that only ever spoke TypeScript.
   The `evals` entry is that same principle turned outward: since soundness is proven by MEASUREMENT, the
-  cockpit hands the manager the measurement beside the git facts — [[session-eval]]'s four mutually exclusive
+  cockpit hands the manager the measurement beside the git facts — session proof's four mutually exclusive
   scenario categories, `{freshPass, freshFail, needReview, blind}`. It REPORTS and grades nothing: no
   threshold, no ok/not-ok, no block, and no unknown-coverage or measured/total aggregate riding along (that
   decomposition belongs to the toolbar that already renders it). It reads the session-eval projection that

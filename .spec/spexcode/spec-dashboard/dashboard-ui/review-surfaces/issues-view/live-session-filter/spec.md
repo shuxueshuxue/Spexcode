@@ -22,7 +22,7 @@ question: does the source session still EXIST on the board?
 
 ## expanded spec
 
-- **One facet, two surfaces, one token.** Both [[issues-view]] and [[evals-feed]] expose it through
+- **One facet, two surfaces, one token.** Both [[issues-view]] and the measurement feed expose it through
   [[review-chrome]]'s secondary low-cardinality Filters menu as the `session:present|missing` token — UI wording
   "Source session / Present / Missing" (中文「来源会话 / 仍在 / 已不在」). The words live/online/offline
   never appear on this facet: it asks presence, not connectivity. Picking a value is token surgery + a
@@ -35,7 +35,7 @@ question: does the source session still EXIST on the board?
   judgment is the ONE membership join this node owns — `@spexcode/spec-core`'s `sessionPresent` — so no surface
   grows a second one. A non-session author ('human', a github login) is honestly missing. `missing` is
   the complement, so the pair partitions every entry.
-- **Never conflated with scope.** `scope:<id>` picks the worktree DATA SOURCE ([[evals-view]]);
+- **Never conflated with scope.** `scope:<id>` picks the worktree DATA SOURCE (the measurement view);
   `session:` only classifies entries by their source session's presence. A session id is never a legal
   `session:` value — an id typed there simply matches nothing, honestly.
 - **Composition is honest.** Presence combines conjunctively with the query's other tokens over the same

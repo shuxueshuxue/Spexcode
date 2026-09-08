@@ -21,7 +21,6 @@ related:
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg
   - spec-cli/src/session-stamp.test.ts
-  - spec-eval/scenarios/harness-delivery-campaign.mjs
 ---
 
 # harness-adapter
@@ -53,7 +52,7 @@ mechanical proof green while a real session silently dropped every stop-gate rej
 A new or reworked adapter with a resident or controller-backed runtime merges only with per-behavior eval readings,
 each measured through a REAL dispatched session of that harness. The eight lifecycle behaviors, the replacement rows
 for adapters whose runtime shape removes a premise, and the prompt-delivery combination campaign are
-[[live-matrix]]'s contract; each harness node's `eval.md` declares its scenarios and this node files the aggregate.
+[[live-matrix]]'s contract; each harness node's `measurement contract` declares its scenarios and this node files the aggregate.
 
 ## expanded spec
 

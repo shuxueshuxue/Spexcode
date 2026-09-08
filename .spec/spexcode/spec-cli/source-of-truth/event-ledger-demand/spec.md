@@ -9,8 +9,6 @@ code:
   - packages/spec-core/src/git.ts#withEventLedgerDemand
   - packages/spec-core/src/git.ts#gitObjectInterpretation
 related:
-  - spec-eval/src/sessioneval.ts
-  - spec-eval/src/sessioneval-ledger-demand.api.test.ts
 ---
 # event-ledger-demand
 

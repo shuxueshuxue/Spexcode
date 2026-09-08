@@ -36,7 +36,6 @@ import { dirname, join } from 'node:path'
 const outputs = [
   'spec-cli/dist/cli.js',
   'packages/spec-core/dist/index.js',
-  'spec-eval/dist/index.js',
   'spec-forge/dist/index.js',
 ]
 for (const output of outputs) {
@@ -68,7 +67,7 @@ import { dirname, join } from 'node:path'
 const root = process.cwd()
 appendFileSync(join(root, 'build-count'), 'build\\n')
 await new Promise(resolve => setTimeout(resolve, 150))
-for (const output of ['spec-cli/dist/cli.js', 'packages/spec-core/dist/index.js', 'spec-eval/dist/index.js', 'spec-forge/dist/index.js']) {
+for (const output of ['spec-cli/dist/cli.js', 'packages/spec-core/dist/index.js', 'spec-forge/dist/index.js']) {
   const path = join(root, output)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, output.endsWith('/cli.js') ? 'console.log("compiled source workspace")\\n' : 'export {}\\n')
@@ -99,7 +98,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 const root = process.cwd()
 appendFileSync(join(root, 'build-count'), 'build\\n')
-for (const output of ['spec-cli/dist/cli.js', 'packages/spec-core/dist/index.js', 'spec-eval/dist/index.js', 'spec-forge/dist/index.js']) {
+for (const output of ['spec-cli/dist/cli.js', 'packages/spec-core/dist/index.js', 'spec-forge/dist/index.js']) {
   const path = join(root, output)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, output.endsWith('/cli.js') ? 'console.log("compiled source workspace")\\n' : 'export {}\\n')

@@ -5,7 +5,6 @@ hue: 280
 desc: PENDING — the agentic core. Per touched node, judge whether a PR's diff honors that node's spec intent, fed the spec + its tree + the node's diff slice + its eval scenarios. Structured verdict, not free text. Deterministic spec-touch matrix is its input. No code yet.
 related:
   - spec-cli/src/lint.ts
-  - spec-eval/src/sessioneval.ts
 ---
 # conformance-judge
 
@@ -28,7 +27,7 @@ code touched?)`:
 
 **Tier 1 — one judge per touched node, bounded and structured.** Not one agent over the whole PR. Each
 judge is fed: the node's spec body **plus its parent/siblings/children** (intent is only legible against
-the tree), the node's slice of the diff (already grouped by [[session-eval]]), and the node's eval readings
+the tree), the node's slice of the diff (already grouped by session proof), and the node's eval readings
 scenarios (the expected zero-loss behavior). It returns a **closed-schema** verdict —
 `{ verdict: conforms | diverges | spec-missing, severity: block | warn | note, rationale, evidence }` —
 never free prose. Judges run in parallel across nodes and are skipped entirely for a PR that touches no

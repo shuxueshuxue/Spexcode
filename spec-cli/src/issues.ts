@@ -9,7 +9,7 @@ export type Reply = {
   at: string
   body: string
   rid?: string
-  targetCodeSha?: string
+  targetSha?: string
   resolved?: boolean
   resolvedAt?: string
   resolvedBy?: string
@@ -33,7 +33,7 @@ export type Issue = {
 // A Reply is a plain thread post `{by, at, body}` — OR, when it carries the fields below, a REMARK
 // ([[remark-substrate]]): a reply that pins a RESOLVABLE concern to its host (an issue or a scenario). A
 // remark is not a new record type: it is a reply with the mutable `resolved` bit, a stable `rid` (so it is
-// addressable across retracts), and the `targetCodeSha` it was authored against (the reading it judges). A
+// addressable across retracts), and the `targetSha` it was authored against (the reading it judges). A
 // plain reply omits them all and parses/serializes unchanged (backward compatible). `isRemark` = rid set.
 export type IssueLabel = ForgeLabel
 

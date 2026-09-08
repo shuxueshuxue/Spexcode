@@ -10,7 +10,6 @@
   "workspaces": [
     "packages/*",
     "spec-cli",
-    "spec-eval",
     "spec-forge",
     "spec-dashboard"
   ],

@@ -289,8 +289,8 @@ test('worktree watcher observes source, rename, sidecar, and index inputs', asyn
     await waitFor(() => inputs > before, 'source rename was not observed')
 
     before = inputs
-    writeFileSync(join(specDir, 'evals.ndjson'), '{"scenario":"direct"}\n')
-    await waitFor(() => inputs > before, 'reading sidecar write was not observed')
+    writeFileSync(join(specDir, 'notes.ndjson'), '{"kind":"direct"}\n')
+    await waitFor(() => inputs > before, 'node attachment write was not observed')
 
     before = inputs
     writeFileSync(join(gitDir, 'index'), '1')

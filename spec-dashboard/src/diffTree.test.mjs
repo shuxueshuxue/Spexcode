@@ -8,12 +8,12 @@ const file = (path, extra = {}) => ({ path, status: 'modified', additions: 1, de
 test('a single-child directory chain collapses into one row so the leaf is not pushed off the panel', () => {
   const tree = buildDiffTree([
     file('.spec/spexcode/spec-cli/sessions/sessions-core/spec.md'),
-    file('.spec/spexcode/spec-cli/sessions/sessions-core/eval.md'),
+    file('.spec/spexcode/spec-cli/sessions/sessions-core/notes.md'),
   ])
   assert.equal(tree.length, 1)
   assert.equal(tree[0].kind, 'dir')
   assert.equal(tree[0].name, '.spec/spexcode/spec-cli/sessions/sessions-core')
-  assert.deepEqual(tree[0].children.map((c) => c.name), ['eval.md', 'spec.md'])
+  assert.deepEqual(tree[0].children.map((c) => c.name), ['notes.md', 'spec.md'])
 })
 
 test('a chain stops collapsing where it actually branches', () => {
@@ -73,8 +73,8 @@ test('an empty list is an empty tree rather than a phantom root row', () => {
 // genuinely indistinguishable is two SIBLINGS sharing a label, and that must never happen.
 test('siblings never share a label, however often a leaf name repeats across directories', () => {
   const tree = buildDiffTree([
-    file('.spec/a/spec.md'), file('.spec/a/eval.md'),
-    file('.spec/b/spec.md'), file('.spec/b/eval.md'),
+    file('.spec/a/spec.md'), file('.spec/a/notes.md'),
+    file('.spec/b/spec.md'), file('.spec/b/notes.md'),
     file('src/spec.md'),
   ])
   const walk = (nodes) => {

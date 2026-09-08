@@ -59,7 +59,7 @@ Day to day:
 | --- | --- |
 | `spex spec lint` | check the spec↔code graph — coverage, drift, and the living-body rules |
 | `spex session watch` | stream session transitions as they happen |
-| `spex guide` | print the setup workflow; topics cover the `spec.md` and `eval.md` formats |
+| `spex guide` | print the setup workflow; topics cover the `spec.md` format and evidence handoff |
 | `spex graph --json` | dump the current assembled view as JSON |
 
 The spec tree is ground truth and git is its database: every change is a `spec.md` node, **rewritten in

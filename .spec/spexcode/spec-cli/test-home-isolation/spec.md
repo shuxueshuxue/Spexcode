@@ -5,7 +5,6 @@ code:
   - scripts/test-home.mjs
 related:
   - spec-cli/package.json
-  - spec-eval/package.json
   - spec-cli/src/test-home.test.ts
 ---
 # test home isolation

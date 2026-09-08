@@ -241,8 +241,8 @@ test('closing returns to the last-focused tab across kinds before falling back t
   assert.deepEqual(closeDestination(file('x'), [file('L'), session('s')], 1, recent(file('x'), session('s'))), session('s'))
   // The same rule applies when the unrelated file is a published session resource.
   const resource = { page: 'sessions', param: 's1', query: { surface: 'resource:s1:file:README.md' } }
-  assert.deepEqual(closeDestination(file('eval.md'), [resource, specDocument('node')], 1,
-    recent(file('eval.md'), specDocument('node'), resource)), specDocument('node'))
+  assert.deepEqual(closeDestination(file('notes.md'), [resource, specDocument('node')], 1,
+    recent(file('notes.md'), specDocument('node'), resource)), specDocument('node'))
   // NO SAME-KIND SURVIVOR: the last-focused tab of any kind, not the positional neighbor
   assert.deepEqual(closeDestination(file('x'), [session('a'), board('issues'), session('b')], 1, recent(file('x'), session('b'), session('a'))), session('b'))
   // history naming tabs that already left the strip is skipped, never trusted

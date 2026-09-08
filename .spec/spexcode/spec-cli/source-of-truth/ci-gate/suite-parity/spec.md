@@ -20,7 +20,7 @@ Both failures are recorded, because they are the reason this node exists:
   removed, but the workflow line stayed. `npm test --workspace=` on a workspace that does not exist is a hard
   npm error, so every run died there. The gate was red for days on a package that no longer had any tests to
   run.
-- **A package no name reached.** `spec-eval`, `spec-forge` and `spec-dashboard` each declare a `test` script
+- **A package no name reached.**  `spec-forge` and `spec-dashboard` each declare a `test` script
   and none of them was ever listed. The dashboard's 438 tests passed on developer machines and were run by
   nothing on the forge, which is indistinguishable from having no tests at all.
 

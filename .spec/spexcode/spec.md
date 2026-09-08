@@ -13,9 +13,8 @@ intent that started it.
 
 Everything else is a child package: **spec-dashboard** (the node-graph UI), **spec-cli** (the server,
 the git-as-database reader, and the source-of-truth guards), **spec-forge** (a read-only tracer that
-resolves a forge's open issues/PRs to the spec nodes they serve), **spec-eval** (the
-loss-measurement system — each node's scenarios scored against their expected outcome, the signal the
-optimizer reads), plus the legacy **session-core** implementation that will be replaced by the published,
+resolves a forge's open issues/PRs to the spec nodes they serve), plus the legacy **session-core**
+implementation that will be replaced by the published,
 SQLite-backed [[session-protocol]] in one cutover with no compatibility package or re-export.
 
 Those packages implement **three stacked layers**, and keeping them distinct is what keeps the project

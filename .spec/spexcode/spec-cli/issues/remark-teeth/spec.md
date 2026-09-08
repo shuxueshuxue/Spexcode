@@ -4,26 +4,21 @@ status: active
 hue: 205
 desc: The teeth of the remark — an unresolved remark ages its scenario like a drift event (the 4th, non-git freshness axis), and clearing it needs BOTH a second-party resolve AND a fresh reading after that resolve. Plus the server-side overlay that lifts the (node,scenario)↔eval-thread join out of the dashboard: one join, keyed in trunk, overlaid read-time onto every surface.
 code:
-  - spec-eval/src/freshness.ts#staleAxes
 related:
   - spec-cli/src/issues.ts
-  - spec-eval/src/evaltab.ts
-  - spec-eval/src/sessioneval.ts
-  - spec-eval/src/cli.ts
   - packages/spec-core/src/graph.ts
-  - spec-eval/src/freshness.test.ts
 ---
 # remark-teeth
 
 The [[remark-substrate]] built the substrate: a remark is a reply carrying a resolvable bit and the
-codeSha it was authored against. This node gives that bit **teeth** — it makes an unresolved remark
+targetSha it was authored against. This node gives that bit **teeth** — it makes an unresolved remark
 actually *cost* something in the one loss signal the optimizer reads — and lifts the (node,scenario)↔eval
 join **server-side** so every surface reads the SAME overlay.
 
 ## The teeth — the non-git freshness axis
 
 Freshness has two git-derived axes (`code` | `scenario`): a reading stales when a governed
-file or the scenario's content moves past its codeSha. The ancestry verdict is unchanged across
+file or the scenario's content moves past its targetSha. The ancestry verdict is unchanged across
 repository sizes: ordinary histories use the cached DAG, while large histories use bounded governed
 path windows and Git reachability without retaining a whole commit/file graph. The remark adds an
 axis that is **not** git-derived — it is read from the trunk issue store's remark track:
@@ -46,8 +41,8 @@ follow, and they are the whole point:
 This is one computation, fed at the call sites — `freshness.ts` stays a **pure** function: it takes the
 scenario's remark track as an explicit parameter (`{resolved, resolvedAt}` signals) alongside the git
 indices, never reaching into the issue store itself. Every surface that scores a reading passes the same track,
-so the axis fires identically in `spex eval lint`, the eval tab, the board fold, the session proof, and
-the dashboard score ring. The CLI is the whole model: `spex eval lint` shows the `remark` axis with no
+so the axis fires identically in `measurement lint`, the eval tab, the board fold, the session proof, and
+the dashboard score ring. The CLI is the whole model: `measurement lint` shows the `remark` axis with no
 server running.
 
 ## The server-side overlay — one join, keyed in trunk
@@ -61,7 +56,7 @@ the CLI, and the annotator all read **one** join instead of each re-deriving it.
 
 The overlay is **read-time**, never a branch write: a human can remark an un-merged worktree eval and the
 teeth fire the instant it is read, with nothing merged. A remark **pins its reading** (R2): the overlay
-attaches it to the reading whose `codeSha` matches its `targetCodeSha`, or — when the target is dangling
+attaches it to the reading whose `targetSha` matches its `targetSha`, or — when the target is dangling
 (a since-superseded or renamed reading) — to the scenario's latest reading, so a dangling target never
 *hides* the remark. The teeth themselves are independent of that display attachment: they read the whole
 scenario track against the latest reading, so a remark whose exact target has scrolled out of history still

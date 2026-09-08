@@ -16,7 +16,7 @@ import { parseFrontmatter, repoRoot, specDir, gitTry } from '@spexcode/spec-core
 //     such precondition is checked while the tree is still untouched, so a refusal costs nothing.
 //  3. THE GATES STAY UP. The commit opens exactly ONE door in [[main-guard]] — `SPEXCODE_ALLOW_MAIN`, the
 //     named escape hatch — and never `--no-verify`. The neighbouring programmatic writers ([[local-issues]],
-//     [[human-ok]]) may skip the hook because their paths are unanchored DATA; a `spec.md` is the contract
+//     sign-off records may skip the hook because their paths are unanchored DATA; a `spec.md` is the contract
 //     itself, so it must pass the same spec-lint gate a session's commit passes. A refusal is reported
 //     verbatim, with the tree put back the way it was found.
 //  4. NOTHING IS STORED. The commit is the whole record: [[source-of-truth]] recomputes the node's version
@@ -128,7 +128,7 @@ export async function editSpecBody(id: string, patch: SpecBodyEdit): Promise<Spe
     `Body lines ${patch.startLine}-${patch.endLine} replaced through the dashboard's spec editor ([[spec-body-edit]]).`,
     ...(patch.reason ? ['', patch.reason] : []),
     '',
-    // Server-derived, exactly as [[human-ok]] derives its actor: the identity of a board edit is the person
+    // Server-derived: the identity of a board edit is the person
     // at the board, and no request body gets to claim to be someone else.
     'Session: human',
   ].join('\n')

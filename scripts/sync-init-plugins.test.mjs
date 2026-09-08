@@ -29,8 +29,6 @@ test('init plugin projection derives content, membership, links, and helper file
       '',
     ].join('\n'))
     write(join(plugins, 'shared', 'run.sh'), '#!/bin/sh\n', 0o755)
-    write(join(plugins, 'shared', 'eval.md'), '---\nscenarios:\n  - name: shared\n    code: .spec/spexcode/.plugins/shared/run.sh\n---\n')
-    write(join(plugins, 'shared', 'evals.ndjson'), '{"codeSha":"dogfood-only"}\n')
     write(join(plugins, 'held', 'spec.md'), '---\ntitle: held\nseed: false\n---\nheld\n')
     write(join(plugins, 'held', 'secret.txt'), 'secret\n')
 
@@ -69,11 +67,11 @@ test('production seed carries the high-risk measurement and Codex multi-file inv
   assert.ok(core.split(/\s+/).filter(Boolean).length <= 240, 'the always-on contract stays a compact invariant set')
   assert.match(core, /`spex help` is the authoritative command map/i)
   assert.match(core, /spex spec lint.*blocking correctness gate/i)
-  assert.match(core, /reading's `codeSha` must name that commit/i)
+  assert.doesNotMatch(core, /measurement ledger/i)
   const repair = text('prompts/reproduce-before-fix/spec.md')
   assert.match(repair, /one scenario[\s\S]*?fail→pass pair[\s\S]*?repair proof/i)
   assert.match(repair, /new intent has no prior failure to[\s\S]*?reproduce/i)
-  assert.match(repair, /spex guide eval/)
+  assert.match(repair, /real product/)
   assert.doesNotMatch(repair, /A, before editing/i)
   const comments = text('core/comment-altitude/spec.md')
   assert.match(comments, /Specs own intent.*Comments only navigate non-obvious local decisions/s)
@@ -92,9 +90,7 @@ test('production seed carries the high-risk measurement and Codex multi-file inv
   assert.ok(!projection.has('prompts/deploy-runbook/spec.md'), 'SpexCode fleet runbook is an explicit holdback')
   assert.ok(!projection.has('skills/taste/spec.md'), 'SpexCode engineering taste is an explicit holdback')
   assert.ok(!projection.has('review/spec.md'), 'review presets remain an explicit live-only holdback')
-  assert.ok(!projection.has('skills/e2e-review/spec.md'), 'e2e-review remains an explicit live-only holdback')
-  assert.ok(!projection.has('core/mark-active/eval.md'), 'dogfood hook scenarios remain explicit holdbacks')
-  assert.ok(!projection.has('core/stop-gate/eval.md'), 'dogfood hook scenarios remain explicit holdbacks')
+  assert.ok(!projection.has('skills/e2e-review/spec.md'), 'retired recording review skill is absent')
   assert.deepEqual(projectionDiff(projection), [], 'the checked-in production seed is the current projection')
 })
 
@@ -108,6 +104,7 @@ test('Codex multi-file hooks consider every path in one payload', () => {
       'hp_session_id() { printf session; }',
       'hp_store_dir() { printf %s "$HOOK_STORE"; }',
       'hp_code_path() { printf \'%s\\n\' "$HOOK_PATHS"; }',
+      'hp_profile_hook_enabled() { return 0; }',
       '',
     ].join('\n'))
     execFileSync('git', ['init', '-q'], { cwd: fixture })
@@ -117,6 +114,10 @@ test('Codex multi-file hooks consider every path in one payload', () => {
       '#!/bin/sh',
       'if [ "$1" = internal ] && [ "$2" = spec-governors ]; then',
       '  [ "$3" = src/a.ts ] && printf \'a\\t.spec/project/a/spec.md\\n\'',
+      '  exit 0',
+      'fi',
+      'if [ "$1" = internal ] && [ "$2" = hook-prompt ]; then',
+      '  if [ "$4" = --details ]; then printf \'owner:src/a.ts\\nowner:src/b.ts\'; else printf \'read .spec/project/a/spec.md\'; fi',
       '  exit 0',
       'fi',
       'printf "owner:%s" "$3"',

@@ -70,13 +70,13 @@ worktree state to inspect and continue with the immutable candidate tree.
   (`path#symbol` on either relation, [[code-anchor]]) must also resolve: dead (unit deleted/renamed),
   ambiguous (two same-named units), or an unparseable file all error with the repair spelled out.
   **Which file DECLARED the selector does not change this.** A scenario's `code:`/`related:` in an
-  eval.md writes the same `path#unit` and resolves through the same engine, so it is refused at the same
-  gate, and the finding names the scenario and the eval.md line to repair. Splitting one integrity fact
+  measurement contract writes the same `path#unit` and resolves through the same engine, so it is refused at the same
+  gate, and the finding names the scenario and the measurement contract line to repair. Splitting one integrity fact
   by declaration site is what let an unparseable governed file — anchored by dozens of scenarios and by
-  no node — pass this gate while it made every session's evaluation unavailable ([[session-eval]]).
+  no node — pass this gate while it made every session's evaluation unavailable (session proof).
   What does NOT cross is the drift WINDOW: a scenario's selector opens none, because a moved eval axis is
-  [[eval-core]] freshness, which stays advisory. That is the line — a **measurement gap never blocks**, a
-  **broken selector always did** — and `spex eval lint` keeps reporting the same resolution failure in its
+  the former measurement core freshness, which stays advisory. That is the line — a **measurement gap never blocks**, a
+  **broken selector always did** — and `measurement lint` keeps reporting the same resolution failure in its
   own worklist, where it explains why that scenario's reading is stuck rather than deciding the commit.
   Because the gate resolves the candidate's selectors only, one parse per candidate file is shared by
   every selector that names it, whichever file declared them. A

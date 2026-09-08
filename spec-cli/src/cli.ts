@@ -778,14 +778,11 @@ if (cmd === 'serve') {
   // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
-} else if (cmd === 'eval') {
-  console.error('spex eval is retired; product evidence is attached with `spex session files add`')
-  process.exit(2)
 } else if (cmd === 'evidence') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
   } else {
-    const { runEvidence } = await import('@spexcode/spec-eval/cli')
+    const { runEvidence } = await import('./evidence.js')
     await flushExit(await runEvidence(process.argv.slice(3)))
   }
 } else if (cmd === 'issue') {

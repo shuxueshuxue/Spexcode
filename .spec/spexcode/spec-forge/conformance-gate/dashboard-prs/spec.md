@@ -6,7 +6,6 @@ desc: PENDING — the dashboard surface of the CI Gate. A PR badge on each touch
 related:
   - spec-forge/src/resident.ts
   - spec-dashboard/src/SpecNode.jsx
-  - spec-eval/src/sessioneval.ts
 ---
 # dashboard-prs
 
@@ -23,7 +22,7 @@ display: it reuses the surfaces that already exist.
 - **PR review lane** — open PRs in the gate shown beside sessions-in-review, each carrying its gate verdict
   (`pending / conforms / diverges / blocked`). The CI gate is the headless twin of the
   [[manager-cockpit]] review a human runs, so the two belong in one lane.
-- **PR proof overlay** — clicking a PR opens [[session-eval]]'s overlay unchanged, rooted at the PR ref
+- **PR proof overlay** — clicking a PR opens session proof's overlay unchanged, rooted at the PR ref
   ([[forge-gate]]'s generalized root) instead of a session worktree, with [[conformance-judge]]'s per-node
   verdict layered on the diff.
 

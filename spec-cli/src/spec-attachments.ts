@@ -4,7 +4,7 @@ import { specDir } from '@spexcode/spec-core'
 import { readSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES, type SourceSlice } from './source-read.js'
 
 // [[node-attachments]]: a spec node's folder is the unit, and until now the board could see exactly one
-// file in it. Everything else a node carries — its eval contract, an evidence directory, a raw capture, a
+// file in it. Everything else a node carries — an evidence directory, a raw capture, a
 // working note written beside the spec that cites it — existed on disk and nowhere in the product.
 //
 // This is deliberately NOT the governed-source surface. `/api/source` answers to the coverage policy, and
@@ -17,9 +17,9 @@ import { readSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES, type SourceSlice } 
 const MAX_ENTRIES = 500
 const MAX_DEPTH = 4
 
-// The two files with their own surfaces: the body IS the node's document, and readings ARE the eval
-// timeline. Listing them here would offer a second, worse way to read what the board already renders well.
-const OWN_SURFACE = new Set(['spec.md', 'evals.ndjson'])
+// The body IS the node's document; listing it here would offer a second, worse way to read what the board
+// already renders well.
+const OWN_SURFACE = new Set(['spec.md'])
 
 export type NodeAttachment = { name: string; size: number }
 

@@ -47,19 +47,19 @@ const scratch = (): string => {
   return root
 }
 
-test('an ack stamp is an empty commit, so it reports as ack/eval only', () => {
+test('an ack stamp is an empty commit, so it reports as acknowledgement only', () => {
   const root = scratch()
   git(root, 'commit', '-q', '--allow-empty', '-m', 'ack: Spec-OK alpha', '--trailer', 'Spec-OK: alpha')
   assert.match(buildChangeReport({ repoRoot: root, rev: 'HEAD' }), /ack\/eval only, no body change \(empty=true\)/)
 })
 
-test('a code change under packages/ is a real change, never ack/eval only', () => {
+test('a code change under packages/ is a real change, never acknowledgement only', () => {
   const root = scratch()
   writeFileSync(join(root, 'packages', 'lib', 'a.ts'), 'one\ntwo\n')
   git(root, 'add', '.')
   git(root, 'commit', '-qm', 'code under packages/')
   const report = buildChangeReport({ repoRoot: root, rev: 'HEAD' })
-  assert.doesNotMatch(report, /ack\/eval only/)
+  assert.doesNotMatch(report, /acknowledgement only/)
   assert.match(report, /file packages\/lib\/a\.ts \(\+1 −0\), governed by node alpha/)
 })
 
@@ -78,12 +78,4 @@ test('a moved code: claim is reported as frontmatter, not as body prose', () => 
   assert.match(frontmatter, /status: active → retired/)
   // the governance rows must not also arrive as body lines, where they read as edited prose
   assert.doesNotMatch(report, /^[+-] {2}- packages\/lib\//m)
-})
-
-test('an evals.ndjson-only change stays ack/eval only', () => {
-  const root = scratch()
-  writeFileSync(join(root, '.spec', 'alpha', 'evals.ndjson'), '{"scenario":"s","score":1}\n')
-  git(root, 'add', '.')
-  git(root, 'commit', '-qm', 'eval reading')
-  assert.match(buildChangeReport({ repoRoot: root, rev: 'HEAD' }), /ack\/eval only, no body change \(empty=true\)/)
 })

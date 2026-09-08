@@ -142,7 +142,7 @@ theatre is invented for a model that has none. An actually empty issue store say
   remark reaches a reader already sitting on the thread. Only a new ADDRESS may wipe it to the loading
   face; a stamp tick re-reads quietly behind the painted thread.
 - **A human writes from here — to the issue's OWN store.** The composer is the ONE shared thread-composer
-  ([[event-detail]] docks the same component, `Thread.jsx`): a quiet bordered container, a borderless
+  (the thread detail docks the same component, `Thread.jsx`): a quiet bordered container, a borderless
   writing surface floored at two lines that auto-grows through [[composer]], the action row always visible —
   the `@`/`[[` trigger buttons opening the shared [[mentions]] autocomplete, the host lifecycle actions,
   and an icon-only Send at the row's end; a failed send surfaces its error in that row. A successful

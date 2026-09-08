@@ -43,11 +43,11 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   their canonical address is the tab identity, opening dedupes/focuses it, and closing it never tears down the
   session's tmux/PTY. `surface=evals` is deliberately not a new
   session face: route arrival REPLACES it with the canonical scoped Evals list `#/evals?q=scope:<id>` (the
-  same projection as [[session-eval]]), so one session reading has one Evals address family. Unknown face
+  same projection as session proof), so one session reading has one Evals address family. Unknown face
   values are ignored and the bare session resolution applies.
 - `session-eval` opens the scoped default list `#/evals?q=is:eval scope:<id>` — or, with
-  a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /
-  [[evals-view]]). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
+  a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages (session proof /
+  the measurement view). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
   remarkable, worktree-rooted reading of an un-merged branch — and the address every session DOOR wears:
   the console tab bar's and the phone session header's eval entries are REAL anchors whose href is this
   projection, and the scoped Evals pages mint every scoped href (rows, queue neighbors, the detail's way
@@ -57,12 +57,12 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form
   on arrival ([[side-nav]]) and nothing mints it anymore.
 - `issue` opens `#/issues/<issue-id>` — the issue's own DETAIL page ([[issues-view]]).
-- `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted ([[evals-view]]), path
+- `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted (the measurement view), path
   only (the detail hash carries no list filters); a not-yet-merged session reading's address is
   `session-eval`, not this. **Scenario-less**, `eval(nodeId)` is the node's AGGREGATE entry: the Evals LIST
   filtered to that node — `#/evals?q=is:eval node:<id>`, [[review-query]]'s canonical token
   text (the default view + the `node` qualifier, minted via `nodeEvalQuery`) — the address every aggregate
-  score/count affordance ([[eval-score-badge]]) mints. The list-filter grammar lives in this one projection
+  score/count affordance (the score badge) mints. The list-filter grammar lives in this one projection
   and nowhere else.
 - `hash` is the address a caller ALREADY HOLDS. It is the one kind that names no object, and it exists for
   the surface that received a canonical href from one of the kinds above and must now act on it — a review
@@ -86,7 +86,7 @@ an issue detail, the bare `#/evals` from a TRUNK eval detail, and the scoped DEF
 `session-eval` projection the doors mint, `scope:` token kept) from a SCOPED eval detail — "back" always
 means the list on the detail's own data-source axis. The scope never diverts the back arrow to the
 session console: a worktree-rooted reading reaches the terminal only through the scoped LIST's icon-only
-door ([[evals-view]]). The helper takes no history, referrer, or session-presence input
+door (the measurement view). The helper takes no history, referrer, or session-presence input
 at all, so a pushed visit and a direct open share one destination by construction.
 Consumers may choose button or anchor chrome, but they do not decide the route vocabulary. That keeps review
 objects first-class: issue and scenario references land on their owning review pages, never by accident on

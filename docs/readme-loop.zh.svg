@@ -22,5 +22,5 @@
   <text x="700" y="128" font-size="20" fill="#16495A" text-anchor="middle">agent 提交 · 优化器</text>
 
   <path d="M 908 384 C 780 482, 620 482, 494 390" fill="none" stroke="#B08A1E" stroke-width="4" marker-end="url(#zg)"/>
-  <text x="700" y="522" font-size="20" fill="#B08A1E" text-anchor="middle"><tspan font-family="ui-monospace, Menlo, Consolas, monospace">spex eval</tspan> · 测得的损失</text>
+  <text x="700" y="522" font-size="20" fill="#B08A1E" text-anchor="middle"><tspan font-family="ui-monospace, Menlo, Consolas, monospace">spex evidence</tspan> · 共享字节</text>
 </svg>

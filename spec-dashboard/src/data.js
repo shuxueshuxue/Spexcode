@@ -703,23 +703,14 @@ export async function postIssueThread({ concern, body, evidence, store }) {
   })
   return res.json()
 }
-// author a REMARK on an eval's (node, scenario) thread ([[remark-substrate]] / [[event-detail]]) — the
-// CLI-parity write the eval detail's composer uses (L: no dashboard-only path). The server find-or-creates
-// the one thread for the pair and appends the remark; identity is server-derived ('human'), never sent. A
-// scenario-scoped concern is a remark, never an issue (I1). Returns { ok, ref, rid, codeSha, outcomes }.
-export async function postRemark({ node, scenario, issue, body, codeSha, evidence }) {
+// author a REMARK on a node's concern thread ([[remark-substrate]]) — the
+// CLI-parity write the shared composer uses (L: no dashboard-only path). The server find-or-creates
+// the one thread for the pair and appends the remark; identity is server-derived ('human'), never sent.
+// Returns { ok, ref, rid, targetSha, outcomes }.
+export async function postRemark({ node, scenario, issue, body, targetSha, evidence }) {
   const res = await apiFetch('/api/remarks', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ node, scenario, issue, body, ...(codeSha ? { codeSha } : {}), ...(evidence?.length ? { evidence } : {}) }),
-  })
-  return res.json()
-}
-// the human sign-off on a scenario's latest reading ([[human-ok]]) — the CLI-parity write behind the ok
-// affordance (feed row + detail header): the server binds the ok to the latest reading and derives the
-// identity ('human') itself, never from this call. Returns { ok, already, humanOk } or { error }.
-export async function postEvalOk(node, scenario) {
-  const res = await apiFetch(`/api/specs/${encodeURIComponent(node)}/evals/ok`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario }),
+    body: JSON.stringify({ node, scenario, issue, body, ...(targetSha ? { targetSha } : {}), ...(evidence?.length ? { evidence } : {}) }),
   })
   return res.json()
 }

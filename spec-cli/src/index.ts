@@ -30,10 +30,7 @@ import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harn
 import { NATIVE_HARNESS_IDS } from './harness-select.js'
 import { codexHarness } from './codex-harness.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
-import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
-import { putBlob } from '@spexcode/spec-eval/cache'
-import { fileHumanReading } from '@spexcode/spec-eval/filing'
-import { fileHumanOk } from '@spexcode/spec-eval/humanok'
+import { readBlobByHash, putBlob } from '@spexcode/spec-core'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
@@ -251,28 +248,6 @@ app.get('/api/edit', async (c) => {
   }
   return c.json({ patch })
 })
-// the eval seam's WRITE half over HTTP ([[spec-eval]] filing.ts): a
-// programmatic caller files a reading (verdict + optional transcript) through the SAME append the CLI
-// uses. The dashboard does not call this — [[event-detail]] reads readings and hosts remarks, never files.
-app.post('/api/specs/:id/evals', async (c) => {
-  const b = await c.req.json().catch(() => null)
-  if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario, status, note?, transcript? }' }, 400)
-  const r = fileHumanReading(c.req.param('id'), b)
-  return r.ok ? c.json({ ok: true, reading: r.reading }) : c.json({ error: r.error }, 400)
-})
-// the HUMAN SIGN-OFF write ([[human-ok]]) — the dashboard's ok affordance and `spex eval ok` share this ONE
-// write (LAW L: no dashboard-only path). Identity is SERVER-DERIVED 'human', never the request body (the
-// same rule as /api/remarks). The write appends a monotonic human-ok event bound to the scenario's latest
-// reading and — on the trunk checkout — commits it straight to trunk; the board cache is invalidated
-// atomically with persistence so the writer's own refetch never races a stale cache.
-app.post('/api/specs/:id/evals/ok', async (c) => {
-  const b = await c.req.json().catch(() => null)
-  if (!b || typeof b.scenario !== 'string') return c.json({ error: 'body needs { scenario }' }, 400)
-  const r = fileHumanOk(c.req.param('id'), b.scenario, 'human')
-  if (!r.ok) return c.json({ error: r.error }, 400)
-  notifyBoardChanged('full')
-  return c.json({ ok: true, already: r.already, humanOk: r.humanOk })
-})
 // serve a reading's evidence blob by content hash (bytes never enter git): bad hash → 400, missing → 404,
 // else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).
 // HTTP Range is honored — a <video> can only SEEK when the server answers byte ranges (a browser clamps
@@ -456,11 +431,11 @@ app.post('/api/remarks', async (c) => {
   const host = typeof body?.scenario === 'string' && body.scenario
     ? { node: typeof body?.node === 'string' ? body.node : undefined, scenario: body.scenario as string }
     : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
-  const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
+  const targetSha = typeof body?.targetSha === 'string' ? body.targetSha : undefined
   try {
-    const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
+    const r = await remarkWithLoopIn(host, text, { targetSha, author: 'human', evidence })
     notifyBoardChanged('full')
-    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: [summarizeDispatch(r.outcomes), summarizeLoopIn(r.loopIn)].filter(Boolean).join('  |  ') }, 201)
+    return c.json({ ok: true, ref: r.ref, rid: r.rid, targetSha: r.targetSha, outcomes: [summarizeDispatch(r.outcomes), summarizeLoopIn(r.loopIn)].filter(Boolean).join('  |  ') }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)
   }

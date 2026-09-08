@@ -149,7 +149,7 @@ Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval door — a real anchor to the canonical session-scoped Evals address, carrying a bounded glance over the
-session's `evalSummary` — is [[eval-door]]'s, and it rides the frame's AMBIENT LINE rather than this document's
+session's `evalSummary` — is the session review entry's, and it rides the frame's AMBIENT LINE rather than this document's
 action slot: the slot holds verbs that act on the session, while the door is a persistent readout of how the
 session's measurement is doing. The console registers it only while its own pane is the READ document, because
 the workspace keeps hidden documents mounted and a readout left behind would describe a document nobody has open.
@@ -238,7 +238,7 @@ label, or document-local icon/action mapping. The registry remains the single ro
 colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution for dashboard-owned commands. Command Box exposes
 `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) also exposes the same
 primitive's relaunch action, and review is **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
-permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the
+permanent **Eval navigation tab**, always available for any selected session (see session proof): the
 ambient-line door or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
 consumed but inert for offline/queued sessions, using the same registry judgment as the button. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"

@@ -2,7 +2,6 @@ import { loadSpecs } from '@spexcode/spec-core'
 import type { ForgeDriver, ForgeIssue, ForgePR } from './port.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from './drivers.js'
 import { resolveLinks, type NodeLinks } from './links.js'
-import { resolveEvalPending, type NodeEvalPending } from './needs-eval.js'
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
@@ -63,37 +62,6 @@ async function links(args: string[]): Promise<number> {
   return 0
 }
 
-function renderPending(pending: NodeEvalPending[]): string {
-  const out: string[] = []
-  for (const n of pending) {
-    out.push(`\n${n.node}`)
-    for (const i of n.pending) out.push(`    #${i.number} ${i.state}  ${i.title}  (via ${i.via})  ${i.url}`)
-  }
-  return out.join('\n')
-}
-
-async function evalPending(args: string[]): Promise<number> {
-  const forge = await readForge(args)
-  if (!forge) return 2
-  const { driver, nodeIds, issues, prs } = forge
-  let resolved = resolveEvalPending(issues, prs, nodeIds)
-
-  const only = flag(args, 'node')
-  if (only) {
-    if (!nodeIds.includes(only)) { console.error(`spex issue links: no such node '${only}'`); return 1 }
-    resolved = resolved.filter((n) => n.node === only)
-  }
-
-  if (has(args, 'json')) { console.log(JSON.stringify(resolved, null, 2)); return 0 }
-  const nPending = resolved.reduce((a, n) => a + n.pending.length, 0)
-  console.log(
-    `spec-forge · ${driver.host} · ${resolved.length} node(s) with eval pending · ${nPending} issue(s)` +
-      ` · traced ${issues.length} issue(s), ${prs.length} pr(s)`,
-  )
-  if (resolved.length) console.log(renderPending(resolved))
-  return 0
-}
-
 export async function runIssueLinks(args: string[]): Promise<number> {
-  return has(args, 'pending') ? evalPending(args) : links(args)
+  return links(args)
 }

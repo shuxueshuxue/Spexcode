@@ -32,7 +32,7 @@ test('release producer keeps one complete ordered package set', () => {
   assert.equal(plan.version, JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version)
   assert.deepEqual(plan.entries.map((entry) => entry.id), [
     'transcript', 'transcript-ui', 'session-protocol', 'session-topology', 'session-runtime', 'session-events', 'session-application', 'session-selflaunch',
-    'core', 'dashboard', 'eval', 'forge', 'cli', 'root',
+    'core', 'dashboard', 'forge', 'cli', 'root',
   ])
   assert.equal(registryState(plan.entries, () => false), 'absent')
   assert.equal(registryState(plan.entries, () => true), 'complete')
@@ -41,18 +41,6 @@ test('release producer keeps one complete ordered package set', () => {
     () => requireAbsentRegistry('partial (@spexcode/spec-core)', plan.version),
     /refusing a partial or duplicate release/,
   )
-})
-
-test('release producer rejects a stale internal release reference before npm runs', () => {
-  const dir = fixture()
-  try {
-    changeManifest(dir, RELEASE_PACKAGES.find((entry) => entry.id === 'cli'), (manifest) => {
-      manifest.dependencies['@spexcode/spec-eval'] = '0.0.0'
-    })
-    assert.throws(() => releasePlan(dir), /references @spexcode\/spec-eval@0\.0\.0/)
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
 })
 
 test('release producer rejects a package version that drifts from the release set', () => {

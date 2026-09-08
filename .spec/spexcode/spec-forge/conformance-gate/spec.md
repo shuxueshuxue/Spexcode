@@ -5,7 +5,6 @@ hue: 280
 desc: PENDING design — the INWARD half of the [[deliver-port]] framework: an external PR enters as a from-PR session and is delivered a VERDICT (Check + comment). The scoping parent; its children are the forge + verdict drivers. No code yet.
 related:
   - spec-forge/src/port.ts
-  - spec-eval/src/sessioneval.ts
   - spec-cli/src/sessions.ts
 ---
 # conformance-gate
@@ -22,7 +21,7 @@ driver** (plus the **forge driver**'s write verbs it stands on) — the *inward*
 reviewed → accepted or rejected), mirror of the outward half (our own session → a PR). When a maintainer
 accepts, the same session simply retargets to `destination: trunk` — no separate merge path.
 
-> take the **[[session-eval]]** derived-evidence model — today fed only by an internal session's worktree —
+> take the **session proof** derived-evidence model — today fed only by an internal session's worktree —
 > generalize its root to **any PR branch**, add an **agentic conformance verdict** on top, and write that
 > verdict **back to the forge's execution plane** (a Check + a sticky comment).
 
@@ -58,7 +57,7 @@ definition (the graph) and execution (the forge) stay un-crossed, exactly as the
 - **[[conformance-judge]]** — the verdict driver's core: the per-node agentic intent verdict (Tier 1) and
   its deterministic Tier-0.5 spec-touch input.
 - **[[forge-gate]]** — the orchestration: `spex forge gate <PR>` + the CI workflow that runs it; also the
-  one change generalizing the [[session-eval]] evidence root from a session worktree to any PR ref.
+  one change generalizing the session proof evidence root from a session worktree to any PR ref.
 - **[[dashboard-prs]]** — the dashboard surface: PR badge, review lane, PR proof overlay (the open-PR
   sibling [[dashboard-issues]] deferred).
 
@@ -67,4 +66,4 @@ definition (the graph) and execution (the forge) stay un-crossed, exactly as the
 The whole subtree is **pending** — design only, no code. Out of scope until a build decision: any
 implementation, a second (GitLab) driver, auto-remediation past a Tier-2 suggestion. This parent owns only
 the cross-cutting shape and the load-bearing decision; [[ci-gate]] keeps the deterministic backstop,
-[[session-eval]] the evidence engine, [[spec-lint]] the graph rules.
+session proof the evidence engine, [[spec-lint]] the graph rules.

@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { rootSlots, touchRoot } from '@spexcode/spec-core'
 
-// [[root-lru]] — the policy that used to be written twice, verbatim in logic and in name, in git.ts and in
-// spec-eval's scenariofresh.ts. These lock the parts that made it worth sharing rather than re-typing.
+// [[root-lru]] — the policy that used to be written twice, verbatim in logic and in name. These lock the
+// parts that made it worth sharing rather than re-typing.
 
 test('an immutable key is shared: a root moving off it evicts only when no sibling still names it', () => {
   const roots = new Map<string, string>()

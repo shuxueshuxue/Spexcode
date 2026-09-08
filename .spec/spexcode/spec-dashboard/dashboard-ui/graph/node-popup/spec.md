@@ -39,7 +39,7 @@ default — the first of its real tabs — which is exactly what keeps the edit-
 mid-change node greets with its edit tab even if the previous node was showing spec). The intent half is
 the **spec doc** — an information board. A **stat bar** carries the
 node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **eval
-score** ([[eval-score-badge]]), and the **drift** count when a governed file outran the spec
+score** (the score badge), and the **drift** count when a governed file outran the spec
 ([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
 files are the document's own chips: a `code:` entry links to the file's `#/file/<path>` document
 ([[spec-view]], [[file-view]]). Ordinary activation navigates the current slot to that independent file
@@ -62,7 +62,7 @@ real issue fields as [[issues-view]], projected through shared configuration/dat
 popup-only filter implementation ([[review-filters]]). Short lists skip the affordance entirely. Its state belongs to the pane,
 survives tab switches while the popup stays open, and never mints a competing page address; following a
 result still lands on the canonical Issues detail route. The eval timeline mounts the corresponding
-domain configuration through that same mechanism ([[eval-tab]]). An **edit** tab makes a
+domain configuration through that same mechanism (the measurement view). An **edit** tab makes a
 node's in-flight change reviewable from the board: it exists **only** while the node has a pending overlay,
 and when it does it **leads** (first tab, editing-session count on its face), so a node mid-change — a
 freshly-added ghost most of all, otherwise near-empty on spec/history — opens with its change front-and-
@@ -76,7 +76,7 @@ plain labels — no visible key-digit markers (the digit keys still switch panes
 [[keyboard-nav]] and the help legend, not stamped on every caption) — and the two review tabs tally their
 state through ONE chip primitive: the shared [[review-chrome]] `ReviewState` icon + count, issues as
 open/closed, eval as fresh pass/fail read from the same `scenarioStates` join every score surface uses
-([[eval-score-badge]]); a zero count simply doesn't render, on either tab. The compact filter row those
+(the score badge); a zero count simply doesn't render, on either tab. The compact filter row those
 panes share leads with the ONE result summary — *showing X of Y* from [[paged-review]]'s current-page item
 count and full filtered `total`, never by treating the current 25 rows as the whole model — full words on desktop, a bare X/Y
 under the phone breakpoint with the sentence kept in the aria-label; no second control, no facet echo, no
@@ -84,7 +84,7 @@ repeat of what the caption already tallies. When `Y > X`, a true **View all** an
 Issues/Evals list with the same fixed `node:` and current compact query, so every result remains reachable.
 `panesFor` also
 registers an **eval** pane (a fourth reference face), but that pane's paged timeline data contract belongs
-to [[eval-tab]], just as the issues tab's content is
+to the measurement view, just as the issues tab's content is
 [[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's
 reframe into a verdict-over-evidence timeline is that node's evolution, never node-popup drift. The **history** tab is
 the one merged version log: the latest version sits expanded with its proof, older ones start collapsed and
@@ -99,8 +99,8 @@ persists after, so returning to the tab stays instant. A version's proof is
 the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the
 latest no longer shipped precomputed); a version with no recorded change says so plainly. That scaffold — scroll container,
 latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
-shared**: the eval pane ([[eval-tab]]) rides the same component (version rows + diff here, result rows
-+ screenshot there). Its embedded filter projects the same result-kind discriminator as [[evals-feed]],
+shared**: the eval pane (the measurement view) rides the same component (version rows + diff here, result rows
++ screenshot there). Its embedded filter projects the same result-kind discriminator as the measurement feed,
 never a popup-only legacy alias. The compact Evals filter projects verdict as its Fail/Pass section and
 human review as the distinct Needs review / Reviewed facet, so moving the canonical page's primary visual
 axis does not fork field semantics inside the popup.

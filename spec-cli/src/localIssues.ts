@@ -84,7 +84,7 @@ const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(
 // A REMARK ([[remark-substrate]]) is a reply carrying extra state, appended to the SAME sentinel as a
 // ` :: <space-joined k=v attrs>` tail (a plain reply has no tail → parses unchanged, backward compatible):
 //   rid=<id>            stable per-remark id — its presence marks the reply a remark
-//   sha=<targetCodeSha> the reading the remark was authored against
+//   sha=<targetSha> the reading the remark was authored against
 //   resolved=<by>@<at>  present only once resolved (absent ⟹ resolved:false)
 const REPLY_RE = /^<!-- reply: (.+?) @ (.+?)(?: :: (.+))? -->$/
 
@@ -129,20 +129,20 @@ const safeScalar = (t: string): string => t.replace(/[\r\n]+/g, ' ').trim()
 
 // the ` :: k=v k=v` remark tail on a reply sentinel ↔ the reply's remark fields. `undefined` attrs (a plain
 // reply) → no remark fields; `rid` present → the reply IS a remark ([[remark-substrate]]). Values are
-// space-free (ids, a codeSha, a session id, an ISO instant), so a space-split is unambiguous.
+// space-free (ids, a targetSha, a session id, an ISO instant), so a space-split is unambiguous.
 function parseRemarkAttrs(attrs: string | undefined): Partial<Reply> {
   if (!attrs) return {}
   const kv = new Map<string, string>()
   for (const tok of attrs.trim().split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) kv.set(tok.slice(0, i), tok.slice(i + 1)) }
   if (!kv.has('rid')) return {}
-  const out: Partial<Reply> = { rid: kv.get('rid'), targetCodeSha: kv.get('sha') ?? '', resolved: false }
+  const out: Partial<Reply> = { rid: kv.get('rid'), targetSha: kv.get('sha') ?? '', resolved: false }
   const r = kv.get('resolved')
   if (r) { const at = r.indexOf('@'); out.resolved = true; out.resolvedBy = r.slice(0, at); out.resolvedAt = r.slice(at + 1) }
   return out
 }
 function serializeRemarkAttrs(r: Reply): string {
   if (r.rid === undefined) return ''
-  const parts = [`rid=${r.rid}`, `sha=${r.targetCodeSha ?? ''}`]
+  const parts = [`rid=${r.rid}`, `sha=${r.targetSha ?? ''}`]
   if (r.resolved) parts.push(`resolved=${r.resolvedBy ?? ''}@${r.resolvedAt ?? ''}`)
   return ` :: ${parts.join(' ')}`
 }
@@ -293,7 +293,7 @@ function writeStoreBytes(p: Issue, message: string): boolean {
 
 // @@@ the shared trunk-data commit — the committing half of the store discipline, exported for OTHER
 // git-tracked data writes that need a durable landing with no worktree ritual behind them (the eval
-// sidecar's human-ok, [[human-ok]]). Same rules as the issue store's own write: only the trunk checkout
+// a prior sign-off record). Same rules as the issue store's own write: only the trunk checkout
 // itself commits (a linked-worktree caller gets 'not-primary' back and leaves its append for its own
 // session's ritual commit — the sidecar, unlike the issue store, legitimately lives per-branch and
 // merges); the commit is `--no-verify` and provably scoped to the one data path; the shared store lock
@@ -354,14 +354,14 @@ function mintRid(existing: Set<string>): string {
 }
 
 // a REMARK ([[remark-substrate]]) rides the SAME committed reply write, just stamping the remark fields: a
-// fresh unresolved bit + a minted stable rid + the codeSha it was authored against. Absent `remark` this is
+// fresh unresolved bit + a minted stable rid + the targetSha it was authored against. Absent `remark` this is
 // an ordinary reply, unchanged. Returns the thread; the new reply is its last, so a caller reads back its rid.
-export function reply(id: string, body: string, author?: string, evidence?: string[], remark?: { targetCodeSha: string }): Issue {
+export function reply(id: string, body: string, author?: string, evidence?: string[], remark?: { targetSha: string }): Issue {
   const by = author || currentSession()
   return commitStore(remark ? `remark(${id}): by ${by}` : `issue(${id}): reply by ${by}`, () => {
     const p = loadOne(id)   // fresh read under the lock → no lost-update when replies race
     const post: Reply = { by, at: new Date().toISOString(), body: body.trim() }
-    if (remark) { post.rid = mintRid(new Set(p.replies.map((r) => r.rid).filter((x): x is string => !!x))); post.targetCodeSha = remark.targetCodeSha; post.resolved = false }
+    if (remark) { post.rid = mintRid(new Set(p.replies.map((r) => r.rid).filter((x): x is string => !!x))); post.targetSha = remark.targetSha; post.resolved = false }
     p.replies.push(post)
     // an anchored annotation carries its frame blob: the reply's evidence hashes accrue onto the THREAD's
     // typed evidence[] (deduped), so the thread stays the one place a video finding's blobs are indexed.
@@ -374,7 +374,7 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 // The store is git-native data, so a human's write goes through the SAME open/reply the CLI uses (committed
 // straight to the trunk). @session remains text in that committed discussion; only @new dispatches after it.
 // Originator courtesy is composed above this store because it needs eval-aware candidate resolution.
-export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = reply(id, body, author, evidence, remark)
   return {
     thread,
@@ -460,18 +460,18 @@ function resolveRemarkHost(host: { issue?: string; node?: string; scenario?: str
 }
 
 // author a remark on a host — the ONE write both the CLI (`spex remark add`) and the server call. Stamps the
-// codeSha it was authored against (the worktree HEAD by default — R2). Returns the `<thread-id>#<rid>` ref.
+// targetSha it was authored against (the worktree HEAD by default — R2). Returns the `<thread-id>#<rid>` ref.
 export async function remarkOnHost(
   host: { issue?: string; node?: string; scenario?: string },
   body: string,
-  opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
+  opts: { targetSha?: string; author?: string; evidence?: string[] } = {},
+): Promise<{ ref: string; rid: string; targetSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
   const author = opts.author || currentSession()
-  const codeSha = opts.codeSha || headSha(repoRoot())
+  const targetSha = opts.targetSha || headSha(repoRoot())
   const id = resolveRemarkHost(host, author)
-  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetSha: targetSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
-  return { ref: `${id}#${rid}`, rid, codeSha, thread, author, outcomes }
+  return { ref: `${id}#${rid}`, rid, targetSha, thread, author, outcomes }
 }
 
 // a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.

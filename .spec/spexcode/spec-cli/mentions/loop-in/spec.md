@@ -11,7 +11,6 @@ related:
   - spec-cli/src/localIssues.ts
   - spec-cli/src/issues-cli.ts
   - spec-cli/src/index.ts
-  - spec-eval/src/filing.ts
 ---
 
 # loop-in

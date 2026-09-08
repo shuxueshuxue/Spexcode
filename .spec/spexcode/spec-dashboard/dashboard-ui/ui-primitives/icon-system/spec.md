@@ -65,7 +65,7 @@ the accessible name impossible to forget.
   (the accessible-name gap the audit found — e.g. the issues New button had neither).
 - **Components never hand-write an `<svg>`.** The side rail ([[side-nav]]),
   the session console's New/search pills, attach/busy glyphs, and compact type/merge/relaunch toolbar tools, the
-  lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers ([[event-detail]]), the modal
+  lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers (the thread detail), the modal
   close `×`, the issues New plus, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues
   drain's complete lifecycle also draws from here as the official filled `issue-opened` / `issue-closed`

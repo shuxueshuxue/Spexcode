@@ -1,9 +1,0 @@
-class Overloads {
-    int duplicate(int value) {
-        return value;
-    }
-
-    String duplicate(String value) {
-        return value;
-    }
-}

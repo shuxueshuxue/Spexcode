@@ -82,12 +82,12 @@ export function buildChangeReport(options: ChangeReportOptions): string {
   const specFiles = changed.filter(file => file.path.endsWith('/spec.md'))
   // @@@ an ack stamp is an EMPTY commit - `spex spec ack` commits `--allow-empty --only` with a Spec-OK
   // trailer, so it changes no file at all. Asking which files it touched is the wrong question; its whole
-  // signature is that the diff is empty. An eval reading only appends to an evals.ndjson.
-  const onlyAck = changed.length === 0 || changed.every(file => basename(file.path) === 'evals.ndjson')
+  // signature is that the diff is empty.
+  const onlyAck = changed.length === 0
   const lines: string[] = []
   lines.push(`spec change report ${sha}`)
   if (onlyAck) {
-    lines.push('ack/eval only, no body change (empty=true)')
+    lines.push('acknowledgement only, no body change (empty=true)')
   } else {
     const limit = Math.max(0, options.maxHunkLines ?? 40)
     for (const file of specFiles.sort((a, b) => a.path.localeCompare(b.path))) {

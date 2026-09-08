@@ -9,7 +9,6 @@ related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cockpit.ts
   - spec-cli/src/index.ts
-  - spec-eval/src/sessioneval.ts
   - packages/spec-core/src/git.ts
 ---
 

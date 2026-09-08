@@ -3812,6 +3812,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    The complaint this layout answers: an accordion of every changed file duplicated the panel's job while
    spending the height the diff itself needed, and vertical space is the scarcest thing on a review surface. */
 .diff-document { display:flex; flex-direction:column; min-height:0; height:100%; overflow:hidden; background:var(--paper); color:var(--ink); }
+.si-term-body:has(.diff-document) { background:var(--paper); }
 .diff-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:5px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
 .diff-refs { display:inline-flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
 .diff-refs strong { font-weight:var(--weight-medium); }
@@ -3856,6 +3857,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* the editor is the payload: it takes every pixel the two chrome rows leave */
 .diff-editor { flex:1; min-height:0; overflow:auto; }
+.diff-editor .cm-editor, .diff-editor .cm-mergeView, .diff-editor .cm-mergeViewEditors,
+.diff-editor .cm-mergeViewEditor, .diff-editor .cm-scroller { background:var(--paper) !important; color:var(--ink); }
+.diff-editor .cm-mergeViewEditor { border-color:var(--line); }
 .diff-editor .cm-line { cursor:pointer; }
 .diff-editor-split, .diff-editor-unified { min-height:0; overflow:auto; }
 /* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each

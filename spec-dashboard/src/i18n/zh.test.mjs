@@ -50,7 +50,7 @@ test('shortcut hints resolve from the registry, modifiers included', () => {
   assert.equal(shortcutHint('shell.pageEvals', 'shell.evals'), '⌥F')
   assert.equal(shortcutHint('graph.search', 'shell.search'), '/ · ⌥/')
   assert.equal(shortcutHint('shell.commandBox'), '⌥I')
-  assert.equal(shortcutHint('graph.newChild'), 'nn')
+  assert.equal(shortcutHint('graph.newChild'), '')
   assert.equal(shortcutHint('graph.del'), 'dd')
   assert.equal(shortcutHint('shell.contextToggle'), '⌥⇧C')
   assert.equal(shortcutHint('shell.tabNext'), '⌥⇧→')

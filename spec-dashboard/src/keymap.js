@@ -18,7 +18,6 @@ export const ACT = [
   { id: 'graph.cycle',     keys: ['o'],      rebind: true, desc: 'legend.graph.overlayCycle' },
   { id: 'graph.cycleRev',  keys: ['O'],      rebind: true, desc: 'legend.graph.overlayCycle' },
   { id: 'graph.fresh',     keys: ['['],      rebind: true, desc: 'legend.graph.fresh' },
-  { id: 'graph.evals',     keys: ['f'],      rebind: true, desc: 'legend.graph.evals' },
   // node chords — structural (a two-key grammar, not a single binding). `keys` is the leader that starts
   // the state machine; `sequence` is the complete physical grammar used by dispatch and every reader.
   { id: 'graph.del',       keys: ['d'], sequence: ['d', 'd'], rebind: false, desc: 'legend.graph.del' },
@@ -29,7 +28,6 @@ export const ACT = [
   // and the hint a control printed stopped matching the finger that learned it ([[side-nav]]). The named
   // doors below survive a reorder because they name a destination, not a position.
   { id: 'shell.newSession',  keys: ['Alt+KeyN'],   rebind: false, desc: 'legend.shell.newSession' },
-  { id: 'shell.evals',       keys: ['Alt+KeyF'],   rebind: false, desc: 'legend.shell.evals' },
   { id: 'shell.search',      keys: ['Alt+Slash'],  rebind: false, desc: 'legend.shell.search' },
   { id: 'shell.sessionPrevious', keys: ['Alt+ArrowUp'], rebind: false, desc: 'legend.shell.sessionPrevious' },
   { id: 'shell.sessionNext',     keys: ['Alt+ArrowDown'], rebind: false, desc: 'legend.shell.sessionNext' },

@@ -4,15 +4,6 @@ import en from './en.js'
 import zh from './zh.js'
 import { shortcutHint, withShortcut } from '../bindings.js'
 
-test('eval detail copy names filed measurements as results in both locales', () => {
-  assert.equal(en.detail.sideReading, 'result')
-  assert.equal(en.annotator.abMore({ n: 3 }), 'older results (3)')
-  assert.match(en.annotator.cmd.okDesc, /^sign off this result .* latest result only/)
-  assert.equal(zh.detail.sideReading, '结果')
-  assert.equal(zh.annotator.abMore({ n: 3 }), '更早的结果（3）')
-  assert.match(zh.annotator.cmd.okDesc, /^签核这条结果 .*当前最新结果/)
-})
-
 test('the authored control surface is consistently named Command Box in Chinese', () => {
   assert.equal(zh.session.commandBtn, 'Command Box')
   assert.equal(zh.session.commandBox, 'Command Box')
@@ -47,7 +38,6 @@ test('shortcut hints resolve from the registry, modifiers included', () => {
   // any more, so a reader asking for one gets no hint — never a digit the keyboard no longer fires.
   assert.equal(shortcutHint('shell.pageSessions'), '')
   assert.equal(shortcutHint('shell.pageIssues'), '')
-  assert.equal(shortcutHint('shell.pageEvals', 'shell.evals'), '⌥F')
   assert.equal(shortcutHint('graph.search', 'shell.search'), '/ · ⌥/')
   assert.equal(shortcutHint('shell.commandBox'), '⌥I')
   assert.equal(shortcutHint('graph.newChild'), '')

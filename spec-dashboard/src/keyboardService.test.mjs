@@ -6,7 +6,6 @@ import { ACT, displayKeysOf, chordSequence } from './keymap.js'
 const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 const graph = readFileSync(new URL('./GraphView.jsx', import.meta.url), 'utf8')
 const workspace = readFileSync(new URL('./workspace.jsx', import.meta.url), 'utf8')
-const eventDetail = readFileSync(new URL('./EventDetail.jsx', import.meta.url), 'utf8')
 const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 'utf8')
 const escStack = readFileSync(new URL('./escStack.js', import.meta.url), 'utf8')
 const service = readFileSync(new URL('./KeyboardService.jsx', import.meta.url), 'utf8')
@@ -27,8 +26,6 @@ test('help is a shell-owned overlay and remains global across routed views', () 
 
 test('all routed key owners use the one capture service', () => {
   assert.doesNotMatch(shell, /addEventListener\(['"]keydown/)
-  assert.match(eventDetail, /useKeyboardScope\(/)
-  assert.doesNotMatch(eventDetail, /addEventListener\(['"]keydown/)
   assert.match(reviewShell, /useKeyboardScope\(/)
   assert.doesNotMatch(reviewShell, /addEventListener\(['"]keydown/)
   assert.match(escStack, /export function consumeEscape/)
@@ -50,7 +47,6 @@ test('typing guard reaches graph and shared list/player owners', () => {
   assert.match(service, /allowTyping = false/)
   assert.match(service, /scopeOwnsEvent\(event, allowTyping\)/)
   assert.doesNotMatch(graph, /isTypingTarget/)
-  assert.doesNotMatch(eventDetail, /isTypingTarget/)
   assert.doesNotMatch(reviewShell, /isTypingTarget/)
 })
 
@@ -66,7 +62,7 @@ test('tab ordinals use only Meta/Ctrl and never restore Alt page jumps', () => {
   assert.deepEqual(ACT.filter((action) => /^shell\.page/.test(action.id)).map((action) => action.id), [])
   assert.doesNotMatch(shell, /shell\.page(?:Sessions|Evals|Issues|Settings)/)
   // the named doors that survive a reorder are untouched
-  for (const id of ['shell.newSession', 'shell.evals', 'shell.search'])
+  for (const id of ['shell.newSession', 'shell.search'])
     assert.ok(ACT.some((action) => action.id === id), `${id} must remain a shell door`)
 })
 

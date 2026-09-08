@@ -14,7 +14,7 @@ import { specPath } from './mentions.jsx'
 //
 // The palette used to carry two more (issues, scenarios) plus two "all results" doors into the review
 // lists, and that was a search box quietly growing a second job. An issue and a scenario are findings ABOUT
-// a node — they have real list pages built to filter and page them ([[issues-view]] / [[evals-view]]), and
+// a node — issues have a real list page built to filter and page them ([[issues-view]]), and
 // those pages are one ⌥digit away. Restating a page-1 slice of them under the jump-list gave the reader a
 // worse version of a surface that already exists, and cost two server round-trips on every keystroke to do
 // it. Deleting the planes deletes the round-trips with them.

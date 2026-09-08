@@ -11,8 +11,6 @@ related:
   - spec-cli/src/reviews.ts
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/IssuesPage.jsx
-  - spec-dashboard/src/EvalsFeed.jsx
-  - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx

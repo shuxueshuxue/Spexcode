@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { assertStatusOwnership } from './statusOwnership.js'
 
-const view = { kind: 'view', page: 'evals' }
+const view = { kind: 'view', page: 'issues' }
 
 test('view status contributions stay in the focused-document group', () => {
-  assert.doesNotThrow(() => assertStatusOwnership({ id: 'eval-count', side: 'right', text: '1' }, view))
+  assert.doesNotThrow(() => assertStatusOwnership({ id: 'issue-count', side: 'right', text: '1' }, view))
   assert.throws(() => assertStatusOwnership({ id: 'rail', side: 'left', text: 'x' }, view), /right group/)
 })
 
@@ -14,7 +14,7 @@ test('view status contributions stay in the focused-document group', () => {
 // usage rather than a rule. A document's glance is markup in the document-actions registry already; the
 // status registry states the same rule, so no view needs to be named to contribute one.
 test('a document may contribute its own glance, from any view', () => {
-  for (const page of ['graph', 'sessions', 'evals']) {
+  for (const page of ['graph', 'sessions', 'issues']) {
     const item = { id: `${page}-glance`, side: 'right', node: {} }
     assert.equal(assertStatusOwnership(item, { kind: 'view', page }), item)
   }

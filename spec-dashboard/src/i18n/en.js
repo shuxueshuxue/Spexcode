@@ -85,15 +85,11 @@ export default {
   },
   contextDock: {
     title: 'Context',
-    scenarios: 'Scenarios',
     issues: 'Issues',
     open: 'show context dock',
     close: 'hide context dock',
-    loading: 'loading scenarios…',
     loadingIssues: 'loading issues…',
-    noScenarios: 'no scenarios declared',
     noIssues: 'no open issues',
-    states: { pass: 'pass', fail: 'fail', stalePass: 'stale pass', staleFail: 'stale fail', missing: 'unmeasured', empty: 'unmeasured' },
   },
   empty: {
     title: 'Nothing open',
@@ -113,7 +109,6 @@ export default {
     graph: 'Graph',
     spec: 'Spec',
     sessions: 'Sessions',
-    evals: 'Evals',
     issues: 'Issues',
     settings: 'Settings',
     issueNew: 'New issue',
@@ -135,7 +130,6 @@ export default {
   place: {
     graph: 'Graph',
     sessions: 'Sessions',
-    evals: 'Evals',
     issues: 'Issues',
     settings: 'Settings',
     empty: 'Workspace',
@@ -149,7 +143,6 @@ export default {
     // a hint typed in here is a copy of a binding that no rebind can reach, and it drifted.
     sessions: 'Sessions',
     spec: 'Spec',
-    evals: 'Evals',
     issues: 'Issues',
     settings: 'Settings',
     projectChip: 'project: {name} — switch project',
@@ -276,9 +269,6 @@ export default {
     restore: 'restore hidden status items',
     // the ambient board tallies; each names its own door, because each item IS that door.
     nodes: ({ n }) => `${n} spec nodes — merged · active · drift · pending. Open the graph`,
-    evals: ({ pass, fail, stalePass, staleFail, empty }) =>
-      `eval scenarios: ${pass} fresh pass, ${fail} fresh fail, ${stalePass} stale pass, ${staleFail} stale fail, ${empty} unmeasured`,
-    openEvals: 'open the Evals view',
     issues: ({ n }) => `${n} open issues — open the issues view`,
     sessions: 'sessions by launcher — open the sessions console',
     launcher: ({ name }) => `${name}: running / needs-you / other — open the sessions console`,
@@ -295,29 +285,22 @@ export default {
     loadError: 'backend unreachable — the graph failed to load.',
     retry: 'retry',
   },
+  evidence: {
+    loadingTranscript: 'loading transcript…',
+    loadingData: 'loading data…',
+    data: 'structured data (JSON)',
+    dataInvalid: 'structured data — invalid JSON',
+    miss: 'original evidence is unavailable.',
+    noImage: 'no evidence capture attached.',
+    fullscreen: 'fullscreen',
+    exitFullscreen: 'exit fullscreen',
+  },
 
   // the crash panel a single pane shows when the view inside it threw ([[workspace-shell]]). Deliberately
   // two lines of copy: the message itself is the error's, not ours.
   viewError: {
     title: 'This view crashed.',
     retry: 'Retry',
-  },
-
-  evalsFeed: {
-    title: 'Evals',
-    kind: { video: 'video', image: 'image', all: 'all' },
-    summary: ({ n }) => `${n} current`,
-    datasetEmpty: 'No evals yet.',
-    noMatches: 'No evals match this view.',
-    annotate: 'open & annotate',
-    inSession: 'measured by this session',
-    okdTip: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
-    okChip: ({ n }) => `${n} ok’d`,
-    okChipTitle: 'show the fresh, human-ok’d scenarios the feed default-hides',
-    filedBy: ({ by }) => `filed by ${by}`,
-    filedAt: ({ at }) => `filed ${at} ago`,
-    sessionTag: 'session',
-    freshnessDeferred: 'freshness is pending; this row is ordered but not scored',
   },
 
   reviewState: {
@@ -329,7 +312,6 @@ export default {
     all: 'All',
     search: 'Search',
     searchIssues: 'Search issues',
-    searchEvals: 'Search evals',
     rowMenu: 'row actions',
     copyAddress: 'Copy address',
     clearSearch: 'Clear search',
@@ -343,9 +325,6 @@ export default {
     filters: 'Filters',
     activeFilters: ({ n }) => `${n} active filter${n === 1 ? '' : 's'}`,
     facetStore: 'Store',
-    facetVerdict: 'Verdict',
-    facetFreshness: 'Freshness',
-    facetKind: 'Evidence',
     facetAuthor: 'Author',
     facetLabel: 'Label',
     facetNode: 'Spec node',
@@ -357,8 +336,6 @@ export default {
     sessionMissing: 'Missing',
     openedBy: ({ by }) => `opened by ${by}`,
     openedAt: ({ at }) => `opened ${at} ago`,
-    verdict: { pass: 'Pass', fail: 'Fail', unmeasured: 'Unmeasured', deferred: 'Freshness pending', unscored: 'Unscored' },
-    freshness: { fresh: 'Fresh', stale: 'Stale' },
     pagination: 'Pagination',
     previous: 'Previous',
     next: 'Next',
@@ -368,52 +345,20 @@ export default {
   },
 
   reviewShell: {
-    evalNotFound: ({ node, scenario }) => `no eval found for ${node} · ${scenario}`,
-    evalUnmeasured: 'this scenario has not been measured yet',
-    scopeFallback: 'this session worktree no longer exists; the measurements below are from trunk',
     issueNotFound: ({ id }) => `no issue found for ${id}`,
-    backToEvals: '← all evals',
     backToIssues: '← all issues',
   },
 
   detail: {
-    sideReading: 'result',
-    sideFiler: 'filed by',
-    sideOk: 'human-ok',
     sideStore: 'store',
     sideLabels: 'labels',
     sideOriginator: 'opened by',
     sideNodes: 'spec nodes',
-    backToEvals: 'back to evals',
     backToIssues: 'back to issues',
-    sideQueue: 'continue reviewing',
-    queuePrev: 'previous',
-    queueNext: 'up next',
     sideIssue: 'issue',
     sideNode: 'spec node',
   },
 
-  annotator: {
-    title: 'annotator',
-    play: 'play',
-    pause: 'pause',
-    fullscreen: 'fullscreen',
-    exitFullscreen: 'exit fullscreen',
-    capturing: 'capturing frame…',
-    failed: 'failed — is the backend up?',
-    comments: ({ n }) => (n ? `review track (${n})` : 'review track'),
-    abOlder: 'older eval (‹ toward the A / reproduced bug)',
-    abNewer: 'newer eval (toward the B / verified fix ›)',
-    abLatest: 'latest',
-    abPos: ({ i, n }) => `${i} / ${n}`,
-    abMore: ({ n }) => `older results (${n})`,
-    okd: 'human-ok',
-    okBy: ({ by, at }) => `human-ok’d by ${by} · ${at}`,
-    menuReview: 'review commands',
-    cmd: {
-      okDesc: 'sign off this result — you reviewed it and agree with its verdict; binds to THIS latest result only, monotonic (no un-ok)',
-    },
-  },
   thread: {
     anchorNow: 'anchor',
     anchorTitle: 'anchor this comment to the current frame',
@@ -427,24 +372,7 @@ export default {
     resolveTitle: 'resolve this remark — a second party’s judgment that it is addressed (monotonic: no un-resolve)',
     retract: 'retract',
     retractTitle: 'withdraw your own unresolved remark — removes it from the thread',
-    anchorDegraded: 'this step is gone from the current eval — the m:ss is the frozen original, not seekable',
     originatorIssue: 'open the session that filed this issue: {by}',
-    originatorEval: 'open the session that filed this eval: {by}',
-  },
-
-
-  sessionEval: {
-    btn: 'eval',
-    btnTitle: "open this session's measured eval evidence on the Evals page",
-    scopeDoor: 'Back to session terminal',
-    none: 'no evaluation for this session yet',
-    unavailable: 'evaluation unavailable until the session model loads successfully.',
-    loadFailed: ({ reason }) => `session evaluation failed to load — ${reason}`,
-    export: 'export',
-    exportTitle: 'export this evaluation as a self-contained HTML report',
-    empty: 'nothing measured for this session yet.',
-    unmeasured: 'unmeasured',
-    unknownCoverage: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
   },
 
   time: {
@@ -471,10 +399,9 @@ export default {
       child: 'to the nearest child',
       zoom: 'zoom in / out · reset to overview',
       info: 'open the node-info popup (or double-click a node)',
-      search: 'search & jump across nodes, sessions, issues & scenarios',
+      search: 'search & jump across nodes, sessions, and issues',
       overlayCycle: 'cycle through nodes a worktree is changing (⇧ reverse)',
       fresh: 'start a fresh session on the focus node',
-      evals: 'open the evals page (the project’s current measured loss)',
       newChild: 'new child node under the focus (chord)',
       del: 'delete the focused node (chord)',
       settings: 'open settings (language…)',
@@ -482,7 +409,6 @@ export default {
     },
     shell: {
       newSession: 'open new session',
-      evals: 'open evals page',
       search: 'search sessions',
       sessionPrevious: 'select previous session',
       sessionNext: 'select next session',
@@ -599,10 +525,8 @@ export default {
     paneSpec: 'spec',
     paneHistory: 'history',
     paneIssues: 'issues',
-    paneEval: 'eval',
     paneEdit: 'edit',
     filterIssues: 'filter issues…',
-    filterScenarios: 'filter scenarios…',
     filterNone: 'nothing matches the filter.',
     noEdit: 'no pending change — this node has no live edit in flight.',
     editCommitted: 'committed',
@@ -628,57 +552,12 @@ export default {
     noChange: 'no recorded change yet — this spec is the latest ground truth.',
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',
-    eval: {
-      noScenarios: 'no scenarios declared — this node has no eval.md to measure.',
-      noReadings: 'no measurements yet — run `spex eval add` to file one. The declared scenarios:',
-      staleAxes: ({ axes }) => `stale: ${axes} moved since this eval`,
-      staleLabel: 'stale:',
-      staleReadoutTitle: 'this eval is behind — the axes that moved since it, and for the code axis which governed files drifted and by how many commits (+N)',
-      danglingTitle: 'this scenario was renamed or deleted — its remarks have no eval to attach to, but stay resolvable via their refs',
-      danglingGone: 'scenario gone',
-      pass: '✓ pass',
-      fail: '✗ fail',
-      note: '≈ note',
-      legacy: 'legacy',
-      expected: 'expected:',
-      noteLabel: 'note:',
-      loadingTranscript: 'loading transcript…',
-      loadingData: 'loading data…',
-      data: 'structured data (JSON)',
-      dataInvalid: 'structured data — invalid JSON',
-      miss: 'miss original file — the evidence was pruned from the cache.',
-      noImage: 'no evidence — the agent attested without a capture.',
-      shotAlt: ({ scenario }) => `captured evidence for ${scenario}`,
-      openDetail: "open this scenario's eval detail page",
-      passCount: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh & passing`,
-      failCount: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh & failing`,
-    },
   },
 
-  // The shell ledger's graph walk: per-node badges count distinct things; coverage counts scenarios.
+  // The shell ledger's graph walk: per-node badges count distinct things.
   stats: {
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
     issueTitle: ({ n }) => `${n} distinct open issue${n === 1 ? '' : 's'} linked to the tree — click to walk the nodes carrying them`,
-    scorePass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} measured fresh & passing — click to walk the nodes carrying them`,
-    scoreFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} measured fresh & failing — click to walk the nodes carrying them`,
-    scoreStalePass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} with a stale pass (code moved since the last passing measurement) — click to walk the nodes carrying them`,
-    scoreStaleFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} with a stale fail (code moved since the last failing measurement) — click to walk the nodes carrying them`,
-    scoreEmpty: ({ n }) => `${n} unmeasured or unscored scenario${n === 1 ? '' : 's'} (a blind spot) — click to walk the nodes carrying them`,
-  },
-
-  // the eval SCORE vocabulary — one set of words across the node-tile count, search, and the eval tab.
-  // `count` is the tile/stat-bar tally; `missing` is a declared-but-never-measured scenario.
-  score: {
-    pass: 'current pass — measured, fresh, and passing',
-    fail: 'current fail — measured, fresh, and failing',
-    stalePass: 'stale — last measured a pass, now out of date',
-    staleFail: 'stale — last measured a fail, now out of date',
-    empty: 'no current score — never measured, or no pass/fail verdict',
-    missing: 'not measured yet — no eval filed for this scenario',
-    count: ({ satisfied, total, outstanding }) =>
-      `${satisfied} of ${total} scenario${total === 1 ? '' : 's'} satisfied (fresh & passing)` +
-      (outstanding ? ` · ${outstanding} outstanding — failing, stale, or unmeasured` : ''),
-    openList: 'open the Evals list filtered to this node',
   },
 
   specNode: {
@@ -846,8 +725,6 @@ export default {
     diffNext: 'next change',
     diffSent: 'sent {n} comment(s)',
     diffUnsent: '{n} unsent comment(s)',
-    tabEval: 'eval',
-    tabEvalTitle: "open this session's evaluation on the Evals page",
     toolbarLabel: 'session terminal toolbar',
     conversationToolbarLabel: 'session conversation toolbar',
     switchToConversation: 'switch to conversation',
@@ -869,23 +746,6 @@ export default {
     closeResourceTab: 'close {name}',
     surfaceLabel: 'current session surface',
     toolbarToolsLabel: 'session tools',
-    evalLoading: "loading this session's eval summary",
-    evalDormant: "this session's eval summary is not computed — open Eval to measure it",
-    evalDormantLast: 'last known — this retained session is not being recomputed',
-    evalDormantKnown: ({ summary }) => `last known, not being recomputed — ${summary}`,
-    evalUnavailable: "this session's eval summary is unavailable",
-    evalUpdating: ({ summary }) => `updating this session's eval summary — last known: ${summary}`,
-    evalDisconnected: ({ summary }) => summary
-      ? `graph stream disconnected — last known: ${summary}`
-      : 'graph stream disconnected — eval summary has no last-known value',
-    evalFailedKnown: ({ summary }) => `eval summary update failed — last known: ${summary}`,
-    evalPass: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and passing`,
-    evalFail: ({ n }) => `${n} scenario${n === 1 ? '' : 's'} fresh and failing`,
-    evalReview: ({ n }) => `${n} measured scenario${n === 1 ? '' : 's'} stale or unscored and needing review`,
-    evalBlind: ({ n }) => `${n} declared scenario${n === 1 ? '' : 's'} not measured`,
-    evalUnknown: ({ n }) => `${n} changed frontend file${n === 1 ? '' : 's'} with unknown eval coverage`,
-    evalDoorSummary: ({ pass, fail, review, blind, unknown }) =>
-      `open this session's Evals page — ${pass} fresh pass, ${fail} fresh fail, ${review} need review, ${blind} unmeasured, ${unknown} unknown`,
     commandBox: 'Command Box',
     commandBtn: 'Command Box',
     commandTitle: 'open Command Box for an atomic prompt or graph command',
@@ -935,7 +795,6 @@ export default {
     // board commands — the `/` commands Command Box runs HERE (not in the agent). Agent workflows such as
     // /merge are plugin presets and deliberately have no dashboard-local label or availability copy.
     cmd: {
-      evalDesc: "open this session's Evals page — affected scenarios and measured evidence",
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',
       stopDesc: 'stop — kill the agent + tmux but KEEP the worktree, so it can be resumed',
       closeTitle: 'close this session (removes the worktree)',
@@ -998,7 +857,6 @@ export default {
     more: 'more',
     specsTab: 'specs',
     sessionsTab: 'sessions',
-    evalsTab: 'evals',
     issuesTab: 'issues',
     childrenTab: ({ n }) => `children ${n}`,
     liveEditors: ({ n }) => `${n} live editor${n === 1 ? '' : 's'}`,

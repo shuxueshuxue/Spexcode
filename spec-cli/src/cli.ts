@@ -1,15 +1,9 @@
 export {} // make this a module so top-level await is allowed
 // static import is fine here: mentions.ts is dependency-free at module level, and stripRefSigil is needed
-// by several verbs (spec owner, graph, issue/eval node args) — a CLI reference arg tolerates an optional @/[[ ]]
+// by several verbs (spec owner, graph, issue node args) — a CLI reference arg tolerates an optional @/[[ ]]
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
-// @@@hoisted because of an ARRAY type - the shipped Tree-sitter TypeScript grammar parses `import('x').T`
-// but NOT `import('x').T[]`, and one unparseable governed file makes every eval selector into it
-// unextractable ([[code-anchor]]), which takes down every session's eval summary ([[session-eval]]). This
-// is type-only, so it is erased and loads no module; the lazy `await import` below still owns startup cost.
 import type { PublicCommand } from './help.js'
-import { installEvalHost } from './eval-host.js'
-installEvalHost()
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const cmd = process.argv[2]
@@ -432,26 +426,6 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   return (await resolveSessionOrExit(selector)).id
 }
 
-// the [[session-eval]] EXPORT artifact behind `spex eval ls --session <SEL> --export`: fetch the
-// backend-rendered self-contained HTML, write it (--out, else a tmp file) or open it (--open). Never returns.
-async function evalExport(id: string): Promise<never> {
-  const { clientEvalExport } = await import('./client.js')
-  const r = await clientEvalExport(id)
-  if (!r.ok) { console.error(`no export for ${id} (status ${r.status})`); process.exit(1) }
-  const { writeFileSync } = await import('node:fs')
-  const { join } = await import('node:path')
-  const { tmpdir } = await import('node:os')
-  const out = flag('out') ?? join(tmpdir(), `spexcode-eval-${id.slice(0, 8)}.html`)
-  writeFileSync(out, r.body)
-  if (has('open')) {
-    const { spawn } = await import('node:child_process')
-    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open'
-    try { spawn(opener, [out], { detached: true, stdio: 'ignore' }).unref(); console.log(`opened ${out}`) }
-    catch { console.log(`wrote ${out} — couldn't auto-open, open it in a browser`) }
-  } else console.log(out)
-  process.exit(0)
-}
-
 // Internal lifecycle writers use the same local record-resolution rules as worker declarations, but the
 // porcelain done/park/ask dispatch below goes straight to its named handler.
 async function stateKit() {
@@ -462,7 +436,7 @@ async function stateKit() {
 // a trailing --help/-h prints help and exits BEFORE any verb runs, so a help probe never fires a
 // streaming/mutating command. It prints THAT command's usage when an entry exists (the second layer
 // of the help journey — see help.ts). Every leading positional is handed over as the verb phrase, so a
-// noun-verb probe answers about the verb on ANY drawer (`eval scenario ls` included) and help.ts decides
+// noun-verb probe answers about the verb on ANY drawer and help.ts decides
 // whether a page exists; unknown tokens preserve the drawer/map fallback. (Removed spellings never
 // reach here — the signpost table above already exited.)
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
@@ -674,7 +648,7 @@ if (cmd === 'serve') {
     process.exit(0)
   } else if (sub === 'owner') {
     // BOTH [[governed-related]] relations, distinctly: governors (code: — the verdict) and referencers
-    // (related: — pointers; coverage only, never drift, never eval freshness).
+    // (related: — pointers; coverage only, never drift).
     const { specOwners, specRelated } = await import('@spexcode/spec-core')
     const { loadConfig } = await import('./lint.js')
     const p0 = positionals(4)[0]
@@ -689,30 +663,14 @@ if (cmd === 'serve') {
     // the whole file.
     const whole = owners.filter((o) => !o.scoped)
     const names = (xs: { id: string; scoped?: boolean }[]) => xs.map((o) => `'${o.id}'${o.scoped ? ' (scoped)' : ''}`).join(', ')
-    const relLine = related.length ? `\n  also referenced by ${names(related)} (related: coverage only — no drift, no eval freshness)` : ''
+    const relLine = related.length ? `\n  also referenced by ${names(related)} (related: coverage only — no drift)` : ''
     if (owners.length === 0 && related.length === 0) {
       console.log(`${rel} — no spec claims this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
     } else if (owners.length === 0) {
       // related-only: lint's coverage is satisfied, so the per-edit hook stays silent (lint-consistent) —
       // but a human asking gets the honest nuance about what does and does not track this file.
       if (has('actionable')) process.exit(0)
-      // @@@ both axes - "nothing tracks its drift" is a verdict about the WHOLE tracking model
-      // ([[governed-related]]: spec nodes AND eval scenarios), so it cannot be spoken from the spec axis
-      // alone — a scenario's code: anchor drives eval freshness with no spec claim involved. Derived, never
-      // asserted: a message that enumerates one axis cannot report what the other holds. The empty
-      // nodeCode fallback is exact HERE and only here — reaching this branch means no spec node code:-claims
-      // the file, so no scenario can anchor to it by inheriting its node's claim, only by an explicit one.
-      const { evalNodes, scenarioCodeAxis } = await import('@spexcode/spec-eval/scenarios')
-      const anchored: string[] = []
-      for (const n of evalNodes(process.cwd())) {
-        for (const sc of n.scenarios) {
-          if (scenarioCodeAxis(sc.code).paths.includes(rel)) anchored.push(`'${n.id}' scenario '${sc.name}'`)
-        }
-      }
-      const tracking = anchored.length
-        ? `Its drift is tracked on the eval axis only: ${anchored.length} scenario${anchored.length === 1 ? '' : 's'} anchor${anchored.length === 1 ? 's' : ''} freshness to it (${anchored.join(', ')}), so changing it makes those measurements stale — but no spec body says what it should do`
-        : 'Nothing tracks its drift'
-      console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). ${tracking}; if your change is substantive, consider giving it a governing home.`)
+      console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). Nothing tracks its drift; if your change is substantive, consider giving it a governing home.`)
     } else if (whole.length <= maxOwners) {
       // a sanely-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
       // silent here, so the annotation fires only on an OVER-owned or uncovered file — rare and worth acting on.
@@ -739,7 +697,7 @@ if (cmd === 'serve') {
       ...(flag('note') !== undefined ? { note: flag('note') } : {}),
       parentSessionId: (await import('./sessions.js')).ownSessionId() ?? undefined,
     })
-    if (!has('always') && /ack\/eval only, no body change \(empty=true\)/.test(report)) {
+    if (!has('always') && /ack(?:nowledgement)?\s+only, no body change \(empty=true\)/.test(report)) {
       console.log('no body change')
     } else {
       process.stdout.write(`${report}\n`)
@@ -821,50 +779,8 @@ if (cmd === 'serve') {
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
 } else if (cmd === 'eval') {
-  const sub = process.argv[3]
-  if (sub === undefined) {
-    console.log((await import('./help.js')).commandHelp('eval'))
-  } else if (sub === 'ls' && flag('session') !== undefined) {
-    // the session EVAL read ([[session-eval]]'s interactive face as a CLI verb): the dashboard Eval tab's
-    // text twin. Renders the session's changed nodes with each DECLARED scenario at its CURRENT score
-    // (latest reading per scenario, worktree-rooted) — filed results keep the backend's newest-first order
-    // across ownership, the session's OWN measurements are ✦-marked, and blind spots follow. --export writes
-    // the self-contained HTML artifact instead.
-    const id = await resolveSelectorOrExit(flag('session')!)
-    if (has('export')) await evalExport(id)
-    const { clientEvals } = await import('./client.js')
-    const r = await clientEvals(id)
-    if (!r.ok) { console.error(`no evals for ${id} (status ${r.status})`); process.exit(1) }
-    if (has('json')) { console.log(JSON.stringify(r.model, null, 2)); await flushExit(0) }
-    const m = r.model
-    const own = m.items.filter((item) => item.inSession).length
-    console.log(`eval session  [${m.id}]`)
-    if (m.gates.length) console.log(`  gates  : ${m.gates.map((g) => `${g.ok ? '✓' : '✗'} ${g.label} — ${g.detail}`).join(' · ')}`)
-    if (own) console.log(`  ✦      : ${own} scenario(s) measured by THIS session (unmarked rows = evals filed by other sessions)`)
-    if (!m.items.length) console.log('\n  no affected scenarios to evaluate yet')
-    let lastNode: string | null = null
-    for (const e of m.items) {
-      if (e.node !== lastNode) {
-        console.log(`\n${e.node}`)
-        lastNode = e.node
-      }
-      if (e.filterKind === 'blind') {
-        console.log(`      ∅ unmeasured  ${e.scenario}  — declared, never measured (blind spot)`)
-        continue
-      }
-      const verdict = e.verdict?.status === 'pass' ? '✓ pass' : e.verdict?.status === 'fail' ? '✗ fail' : '· unscored'
-      const stale = e.fresh ? '' : ` (stale: ${(e.staleAxes || []).join(',')})`
-      console.log(`    ${e.inSession ? '✦' : ' '} ${verdict}${stale}  ${e.scenario}  — ${e.ts}${e.evaluator ? ` · ${e.evaluator}` : ''}`)
-    }
-  } else if (['add', 'ls', 'scenario', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
-    // node-scoped verbs — thin route; the logic lives in spec-eval.
-    const { runEval } = await import('@spexcode/spec-eval/cli')
-    await flushExit(await runEval(process.argv.slice(3)))
-  } else {
-    console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls/write | lint | ok | retract | clean  (spex help eval)`)
-    if (!sub.startsWith('--')) console.error(`  (the old \`spex eval <SEL>\` session read is now \`spex eval ls --session <SEL>\` [--export])`) // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
-    process.exit(2)
-  }
+  console.error('spex eval is retired; product evidence is attached with `spex session files add`')
+  process.exit(2)
 } else if (cmd === 'evidence') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
@@ -1202,7 +1118,6 @@ if (cmd === 'serve') {
     process.exit(1)
   } else if (sub === 'review') {
     const first = positionals(4)[0]
-    if (first === 'proof') signpost('spex review proof', 'spex eval ls --session <SEL> --export') // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     const { clientReview } = await import('./client.js')
     if (!first) { console.error('usage: spex session review <SEL>  (id | id-prefix | branch)'); process.exit(2) }
     const session = await resolveSessionOrExit(first)
@@ -1218,11 +1133,6 @@ if (cmd === 'serve') {
       console.log('  gates:')
       console.log(`    conflicts w/ main : ${g.conflictsWithMain ? 'YES' : 'no'}`)
       console.log(`    lint              : ${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)`)
-      // measured loss is REPORTED, never graded — and a projection that isn't ready says so instead of
-      // printing four zeros that would read as a clean session.
-      console.log(`    evals             : ${g.evals.phase === 'ready'
-        ? `${g.evals.freshPass} fresh pass, ${g.evals.freshFail} fresh fail, ${g.evals.needReview} need review, ${g.evals.blind} blind`
-        : `not measured yet (${g.evals.phase})`}`)
       console.log(`  diff (merge-base, ${r.diff.length} file(s)):`)
       for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
     }
@@ -1635,11 +1545,6 @@ if (cmd === 'serve') {
     if (!sock || !tid) { console.error('usage: spex internal codex-resume <sock> <threadId>'); process.exit(2) }
     const r = await codexResumeThread(sock, tid)
     if (r.ok) { console.log('resumed') } else { console.error(r.error); process.exit(1) }
-  } else if (sub === 'check-staged') {
-    // the pre-commit hook's eval backstop: a staged stray evidence blob or malformed eval.md rejects the
-    // commit. Logic lives in spec-eval; the hook shims here.
-    const { checkStaged } = await import('@spexcode/spec-eval/cli')
-    process.exit(checkStaged())
   } else if (sub === 'session-state') {
     // a lifecycle hook authors the session's state: active|awaiting|parked|error|asking
     // [--propose] [--note] [--session] — the machine face of the typeable done/park/ask declarations.

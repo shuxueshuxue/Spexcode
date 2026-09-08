@@ -9,15 +9,11 @@ import zhMessages from './i18n/zh.js'
 const here = dirname(fileURLToPath(import.meta.url))
 const read = (name) => readFileSync(join(here, name), 'utf8')
 const shell = read('ReviewShell.jsx')
-const evals = read('EvalsFeed.jsx')
-const page = read('EvalsPage.jsx')
-const detail = read('EventDetail.jsx')
 const issues = read('IssuesPage.jsx')
 const issueCard = read('IssueCard.jsx')
 const dashboard = read('Shell.jsx') + read('GraphView.jsx') + read('views.jsx')
 const css = read('styles.css')
 const filters = readFileSync(join(here, '../../packages/spec-core/src/review/reviewFilters.js'), 'utf8')
-const reviewPage = read('reviewPage.js')
 const nodeView = read('NodeView.jsx')
 const palette = read('SpecSearch.jsx')
 const data = read('data.js')
@@ -27,26 +23,21 @@ const icons = read('icons.jsx')
 const en = read('i18n/en.js')
 const zh = read('i18n/zh.js')
 
-test('issues and evals consume one GitHub ListView primitive set', () => {
-  for (const source of [evals, issues]) {
-    assert.match(source, /<ListPage/)
-    assert.match(source, /<FacetMenu/)
-    assert.match(source, /<SecondaryFilters/)
-    assert.match(source, /<ReviewListRow/)
-    assert.doesNotMatch(source, /FilterSelect/)
-  }
+test('Issues consumes the shared GitHub ListView primitive set', () => {
+  assert.match(issues, /<ListPage/)
+  assert.match(issues, /<FacetMenu/)
+  assert.match(issues, /<SecondaryFilters/)
+  assert.match(issues, /<ReviewListRow/)
+  assert.doesNotMatch(issues, /FilterSelect/)
   const issueList = issues.slice(0, issues.indexOf('export function IssueDetailPage'))
   assert.doesNotMatch(issueList, /<select\b/)
-  assert.doesNotMatch(evals, /<select\b/)
   assert.match(shell, /className="rl-query rq"/)
   assert.match(shell, /className="rl-sections" role=\{sectionsAreTabs \? 'tablist' : 'group'\}/)
   assert.match(shell, /className="rl-facets"/)
   assert.match(shell, /className="rl-row-grid"/)
   assert.match(shell, /!listOwnsKey\(event\.target, event\.key\)/)
-  for (const source of [evals, issues]) assert.doesNotMatch(source, /(?:eval|issue)FilterModel\(/)
-  assert.match(reviewPage, /export function useReviewPage/)
+  assert.doesNotMatch(issues, /issueFilterModel\(/)
   assert.match(serverReviews, /issueFilterModel\(issues, tokenFilterState\(text, 'issue'\)/)
-  assert.match(serverReviews, /evalFilterModel\(items, tokenFilterState\(text, 'eval'\)/)
   assert.match(filters, /export function filterReviewItems/)
 })
 
@@ -69,44 +60,27 @@ test('one visible token query is the whole list state — combobox, overlay, bou
 })
 
 test('every control is a token BUILDER over the committed text — no private filter state', () => {
-  for (const source of [evals, issues]) {
-    assert.match(source, /const surgery = \(key, value\) => /)
-    assert.match(source, /setToken\(text, key, value\)/)
-  }
+  assert.match(issues, /const surgery = \(key, value\) => /)
+  assert.match(issues, /setToken\(text, key, value\)/)
   // ONE parse → ONE matcher runs server-side before slicing; pages consume full-set counts from the
   // response and never rematch the current 25 rows.
-  assert.match(serverReviews, /tokenFilterState\(text, 'eval'\)/)
   assert.match(serverReviews, /tokenFilterState\(text, 'issue'\)/)
   assert.match(serverReviews, /paginateReview\(issues, model\.shown/)
-  assert.match(serverReviews, /paginateReview\(items, filtered\.shown/)
-  assert.match(evals, /const failCount = pageData\?\.counts\?\.fail \|\| \{\}/)
-  assert.match(evals, /const passCount = pageData\?\.counts\?\.pass \|\| \{\}/)
-  // the measured verdicts' freshness split is READ from the server fold, never re-derived from the slice.
-  assert.match(evals, /count: failCount\.fresh \|\| 0, countSuffix: staleSuffix\(failCount\.stale \|\| 0\)/)
-  assert.match(evals, /count: passCount\.fresh \|\| 0, countSuffix: staleSuffix\(passCount\.stale \|\| 0\)/)
-  assert.doesNotMatch(evals, /items\.(?:filter|reduce)\([^)]*fresh/)
   assert.match(issues, /const openCount = data\?\.counts\?\.open \|\| 0/)
   assert.match(issues, /surgery\('state', 'open'\)/)
   assert.match(issues, /surgery\('state', 'closed'\)/)
-  assert.match(evals, /surgery\('verdict', verdict === 'fail' \? '' : 'fail'\)/)
-  assert.match(evals, /surgery\('verdict', verdict === 'pass' \? '' : 'pass'\)/)
-  assert.match(evals, /label: reviewFacet\.label[\s\S]*surgery\('state', value\)/)
   // the default view is the BARE address; anything else exactly ?q=<raw text>
   assert.match(issues, /queryParam\(nextText, ISSUE_QUERY_DEFAULT\)/)
-  assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
 })
 
 test('bounded secondary consumers expose one real-entity page and direct full-list commands', () => {
   assert.match(nodeView, /useReviewPage\('issues', query, 1/)
-  assert.match(nodeView, /useReviewPage\('evals', query, 1, \{ pollMs: 0, view: 'timeline' \}\)/)
   assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
-  assert.match(nodeView, /summary=\{\{ shown: filterItems\.length, total: page\.data\.total \}\}/)
-  assert.equal((nodeView.match(/reviewListAddress\('evals', query\)/g) || []).length, 1)
   assert.match(nodeView, /reviewListAddress\('issues', query\)/)
-  assert.doesNotMatch(nodeView, /\bnode\.(?:issues|openIssues|evals|scenarios)\b/)
+  assert.doesNotMatch(nodeView, /\bnode\.(?:issues|openIssues)\b/)
 
   // The palette is NOT one of those consumers any more. It carries two planes — nodes and sessions, the
-  // things a tab can hold — and issues/scenarios go to their own list pages, which is what those pages are
+  // things a tab can hold — issues go to their own list page, which is what that page is
   // for. So it makes no review request at all: no page hook, no "all results" doors, no server-matched
   // plane to preserve an order for. Both planes now come out of the board the shell already handed it.
   assert.match(palette, /const BASE_PLANES = \['spec', 'session'\]/)
@@ -114,16 +88,13 @@ test('bounded secondary consumers expose one real-entity page and direct full-li
   assert.doesNotMatch(palette, /reviewListAddress/)
   assert.doesNotMatch(palette, /search-review-link/)
   assert.doesNotMatch(palette, /SERVER_MATCHED_PLANES/)
-  assert.doesNotMatch(palette, /\bissueQuery\b|\bevalQuery\b/)
+  assert.doesNotMatch(palette, /\bissueQuery\b/)
   assert.doesNotMatch(palette, /reviewList\.showing/)
-  assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues|evals|scenarios)\b/)
+  assert.doesNotMatch(palette, /\bs\.(?:issues|openIssues)\b/)
   // and the dictionaries lose the rows with it — a key nothing renders is a promise nothing keeps.
   for (const dict of [en, zh]) {
     assert.doesNotMatch(dict, /allIssues:/)
-    assert.doesNotMatch(dict, /allEvals:/)
   }
-  assert.match(reviewPage, /const inflightPages = new Map\(\)/)
-  assert.match(reviewPage, /if \(inflightPages\.has\(path\)\) return inflightPages\.get\(path\)/)
 })
 
 test('the committed text replays as a continuable edit — one trailing space, parked caret, display-only', () => {
@@ -146,16 +117,10 @@ test('the committed text replays as a continuable edit — one trailing space, p
 
 test('high-cardinality dimensions are token-only: no enumerating dropdowns, bounded suggestions', () => {
   // the big-list Author/Filer/Spec-node/session-scope menus are GONE
-  for (const source of [evals, issues]) {
-    assert.doesNotMatch(source, /facetAuthor|facetNode|facetFiler|facetScope/)
-    assert.doesNotMatch(source, /authorOptions|nodeOptions|filerOptions|scopeOptions/)
-  }
-  // suggestions come only from the data — and scope only from the board's sessions
+  assert.doesNotMatch(issues, /facetAuthor|facetNode|facetFiler|facetScope/)
+  assert.doesNotMatch(issues, /authorOptions|nodeOptions|filerOptions|scopeOptions/)
+  // suggestions come only from the issue data
   assert.match(issues, /author: facetOptions\(data, 'author'/)
-  assert.match(evals, /node: optionsOf\(pageData, 'node'/)
-  assert.match(evals, /scope: sessions\.map\(\(session\) => \(\{ value: session\.id/)
-  // the evidence default is a plain enum default, never data-dependent
-  assert.doesNotMatch(evals, /hasVideo|hasImage/)
 })
 
 test('the source-session facet speaks presence, never liveness', () => {
@@ -164,10 +129,8 @@ test('the source-session facet speaks presence, never liveness', () => {
   assert.match(filters, /fixedValues: \['present', 'missing'\]/)
   assert.match(filters, /reviewList\.facetSession/)
   assert.doesNotMatch(filters, /liveSession|facetLive|'live'/)
-  for (const source of [evals, issues]) {
-    assert.match(source, /sessionFacet/)
-    assert.doesNotMatch(source, /liveSession|liveOnly|facetLive/)
-  }
+  assert.match(issues, /sessionFacet/)
+  assert.doesNotMatch(issues, /liveSession|liveOnly|facetLive/)
   const enBlock = en.slice(en.indexOf('reviewList: {'), en.indexOf('reviewShell: {'))
   const zhBlock = zh.slice(zh.indexOf('reviewList: {'), zh.indexOf('reviewShell: {'))
   for (const block of [enBlock, zhBlock]) {
@@ -222,8 +185,6 @@ test('facet primitives keep an active missing value clearable', () => {
   assert.deepEqual(options([], 'dead-session', 'All'), [all])
   assert.deepEqual(options([{ value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
   assert.deepEqual(options([all, { value: 'live', label: 'Live' }], 'gone', 'All'), [all, { value: 'live', label: 'Live' }])
-  assert.match(evals, /<SecondaryFilters[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
-  assert.match(evals, /label: sessionFacet\.label, value: sessionFacet\.value/)
   assert.match(issues, /<SecondaryFilters[^>]*clearLabel=\{t\('reviewList\.all'\)\}/)
 })
 
@@ -245,9 +206,7 @@ test('one semantic secondary Filters trigger owns responsive active-group state'
   assert.match(secondary, /reviewList\.activeFilters/)
   assert.match(secondary, /<Icon name="chevron-down" size=\{12\} \/>/)
   assert.doesNotMatch(secondary, /ellipsis|kebab|More actions|moreFilters/)
-  for (const pageSource of [evals, issues]) {
-    assert.match(pageSource, /secondaryFilters=\{<SecondaryFilters label=\{t\('reviewList\.filters'\)\}/)
-  }
+  assert.match(issues, /secondaryFilters=\{<SecondaryFilters label=\{t\('reviewList\.filters'\)\}/)
   assert.equal(enMessages.reviewList.filters, 'Filters')
   assert.equal(enMessages.reviewList.activeFilters({ n: 1 }), '1 active filter')
   assert.equal(enMessages.reviewList.activeFilters({ n: 2 }), '2 active filters')
@@ -279,52 +238,13 @@ test('menus and section tabs share one keyboard and Escape contract', () => {
   assert.match(shell, /tabIndex=\{sectionsAreTabs \? \(index === activeSectionIndex \? 0 : -1\) : undefined\}/)
 })
 
-test('Issues keeps exhaustive tabs while Evals exposes honest non-exhaustive verdict filters', () => {
-  // no active section (a committed text without its section token) still leaves tab 0 focusable,
-  // and the one results panel stays labelled by that same fallback tab
-  assert.match(shell, /const activeSectionIndex = Math\.max\(0, sections\.findIndex/)
-  assert.match(shell, /tabIndex=\{sectionsAreTabs \? \(index === activeSectionIndex \? 0 : -1\) : undefined\}/)
-  // Issues remains the exhaustive lifecycle tablist; Evals declares a pressed-button group because
-  // unscored/unknown readings keep Fail/Pass/Unmeasured non-exhaustive.
-  assert.match(issues, /active: section === '' \|\| section === 'open'/)
-  assert.match(evals, /sectionMode="filters"/)
-  assert.match(evals, /active: verdict === 'fail'/)
-  assert.match(evals, /active: verdict === 'pass'/)
-  assert.match(evals, /active: verdict === 'unmeasured'/)
-  assert.match(shell, /aria-pressed=\{sectionsAreTabs \? undefined : section\.active\}/)
-  // blind rows travel through the SAME result-kind enum and stay in the default population, while
-  // All three counts come from the shared verdict section under the rest of the query.
-  assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.RESULT/)
-  assert.match(evals, /item\.filterKind === EVAL_FILTER_KIND\.BLIND/)
-  assert.doesNotMatch(evals, /reading: (?:true|false)/)
-  assert.match(evals, /count: failCount\.fresh/)
-  assert.match(evals, /count: passCount\.fresh/)
-  assert.match(evals, /count: unmeasuredCount/)
-  // the split's second number is the shared chip's own quiet suffix, part of the button, not a control —
-  // and it has TWO visible faces over ONE accessible name, so the phone condenses the word, never the count.
-  assert.match(shell, /<span className="rl-section-suffix" data-tip=\{section\.countSuffix\.text\}>/)
-  assert.match(shell, /<span className="sr-only">\{section\.countSuffix\.text\}<\/span>/)
-  assert.match(shell, /className="rl-section-suffix-full" aria-hidden="true">\{section\.countSuffix\.text\}/)
-  assert.match(shell, /className="rl-section-suffix-compact" aria-hidden="true">\{section\.countSuffix\.compact\}/)
-  assert.match(evals, /text: `\+\$\{n\} \$\{t\('reviewList\.freshness\.stale'\)\}`, compact: `\+\$\{n\}`/)
-  // the phone swaps the FACE; nothing ever hides the suffix element or its number.
-  assert.match(css, /\.rl-section-suffix-compact \{ display: none; \}/)
-  assert.match(css, /\.rl-section-suffix-full \{ display: none; \}\n\s*\.rl-section-suffix-compact \{ display: inline; \}/)
-  assert.doesNotMatch(css, /\.rl-section-suffix \{ display: none; \}/)
-  // a detail's way back to the list is the scoped DEFAULT list, never a scope-only text — minted by the
-  // ONE address projection
-  assert.match(page, /const listHref = sessionId \? addressHash\(sessionEvalAddress\(sessionId\)\) : routeHash\('evals'\)/)
-})
-
-test('secondary-filter radios, Issues tabs, and Evals verdict filters expose honest ARIA ownership', () => {
+test('secondary-filter radios and Issues tabs expose honest ARIA ownership', () => {
   assert.match(shell, /role="group"[\s\S]*aria-labelledby=\{`\$\{groupId\}-group-\$\{index\}`\}/)
   assert.match(shell, /className="rl-menu-label" id=\{`\$\{groupId\}-group-\$\{index\}`\}/)
   assert.match(shell, /role=\{sectionsAreTabs \? 'tablist' : 'group'\} aria-label=\{title\}/)
   assert.match(shell, /aria-controls=\{sectionsAreTabs \? panelId : undefined\}/)
   assert.match(shell, /role=\{sectionsAreTabs \? 'tabpanel' : 'region'\}/)
   assert.match(shell, /aria-label=\{sectionsAreTabs \? undefined : title\}/)
-  assert.match(evals, /<ReviewState kind="eval" state="fail" title=\{t\('reviewList\.verdict\.fail'\)\} showLabel/)
-  assert.match(evals, /<ReviewState kind="eval" state="pass" title=\{t\('reviewList\.verdict\.pass'\)\} showLabel/)
 
   const tabHandler = shell.slice(shell.indexOf("if (!['ArrowLeft', 'ArrowRight'"), shell.indexOf('tabs[next]?.click()'))
   assert.match(tabHandler, /'ArrowLeft', 'ArrowRight', 'Home', 'End'/)
@@ -332,31 +252,19 @@ test('secondary-filter radios, Issues tabs, and Evals verdict filters expose hon
 })
 
 test('one icon-label-tone mapping drives every review state home', () => {
-  assert.match(shell, /export const REVIEW_STATE_VISUALS = \{[\s\S]*issue:[\s\S]*eval:/)
+  assert.match(shell, /export const REVIEW_STATE_VISUALS = \{[\s\S]*issue:/)
   assert.match(shell, /open: \{ icon: 'issue-opened', tone: 'open'/)
   assert.match(shell, /closed: \{ icon: 'issue-closed', tone: 'closed'/)
-  assert.match(shell, /pass: \{ icon: 'circle-check', tone: 'pass'/)
-  assert.match(shell, /fail: \{ icon: 'circle-x', tone: 'fail'/)
-  assert.match(shell, /stalePass: \{ icon: 'circle-check-dashed', tone: 'stale'/)
-  assert.match(shell, /staleFail: \{ icon: 'circle-x-dashed', tone: 'stale'/)
-
-  assert.match(evals, /state=\{<ReviewState kind="eval" state=\{e\.state\}/)
   assert.match(issues, /state=\{<ReviewState kind="issue" state=\{status\}/)
   assert.match(issues, /<ReviewState kind="issue" state=\{status\} showLabel/)
-  assert.match(detail, /<ReviewState kind="eval" state=\{readingScore\(viewing\)\} showLabel/)
-  assert.match(detail, /<ReviewState kind="eval" state=\{state\} size=\{13\}/)
   assert.match(issueCard, /<ReviewState kind="issue" state=\{status\} showLabel/)
-  assert.doesNotMatch(`${evals}\n${detail}`, />\s*[✓✗☑]\s*</)
   assert.doesNotMatch(issueCard, /issue-state|[✓✗○]/)
   assert.doesNotMatch(css, /\.issue-state/)
   assert.match(shell, /className="review-state-icon" style=\{\{ width: size, height: size \}\}/)
   assert.match(css, /\.rl-row-state\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;[^}]*place-items:\s*center;/s)
-  for (const name of ['circle-check', 'circle-x', 'circle-check-dashed', 'circle-x-dashed', 'circle-minus', 'circle-dashed']) {
+  for (const name of ['circle-minus', 'circle-dashed']) {
     assert.match(icons, new RegExp(`'${name}': \\{ vb: 16, sw: 1\\.5`))
   }
-  assert.match(icons, /'circle-check-dashed': \{[^}]*strokeDasharray="2 2"/)
-  assert.match(icons, /'circle-x-dashed': \{[^}]*strokeDasharray="2 2"/)
-  assert.doesNotMatch(css, /\.review-state\.eval|\.rl-row-state[^}]*\.eval/)
 })
 
 test('graph keeps the full canvas and mounts no persistent focus sidebar', () => {
@@ -404,10 +312,7 @@ test('shared list empty state distinguishes a vacant dataset from a filtered zer
   assert.equal(message('loading'), 'loading')
 
   assert.match(issues, /hasData: \(data\?\.sourceTotal \?\? 0\) > 0,[\s\S]*dataset: t\('session\.issuesEmpty'\),[\s\S]*filtered: t\('session\.issuesNoMatch'\)/)
-  assert.match(evals, /hasData: \(pageData\?\.sourceTotal \?\? 0\) > 0,[\s\S]*dataset: t\('evalsFeed\.datasetEmpty'\),[\s\S]*filtered: t\('evalsFeed\.noMatches'\)/)
   for (const messages of [en, zh]) {
-    assert.match(messages, /datasetEmpty:/)
-    assert.match(messages, /noMatches:/)
     assert.match(messages, /issuesNoMatch:/)
   }
 })
@@ -418,70 +323,12 @@ test('the detail shell back affordance is a real derived anchor, never history.b
   assert.match(shell, /<Icon name="arrow-left" size=\{16\} \/>/)
   assert.match(icons, /'arrow-left':/)
   // no review surface ever navigates by history.back — the href derives from the canonical address
-  for (const src of [shell, page, detail, issues]) assert.doesNotMatch(src, /history\.back\(/)
-  // both pages derive the href through the ONE address helper ([[address-routing]]); the eval detail
-  // feeds the gate ONLY its canonical scope — trunk returns to the bare list, a scoped detail to its
-  // scoped default list (the door-minted address), never diverted by history or referrer
-  assert.match(page, /detailBackHash\('evals', sessionId\)/)
+  for (const src of [shell, issues]) assert.doesNotMatch(src, /history\.back\(/)
   assert.match(issues, /backHref=\{detailBackHash\('issues'\)\}/)
   // localized labels exist in both dictionaries; the retired console-back label is gone
   for (const dict of [en, zh]) {
-    assert.match(dict, /backToEvals:/)
     assert.match(dict, /backToIssues:/)
     assert.doesNotMatch(dict, /backToSession:/)
-  }
-})
-
-test('the scoped eval list owns the ONE terminal return door; details have no second home', () => {
-  // DetailShell has no generic action seam left behind for the retired detail door.
-  assert.doesNotMatch(shell, /className="ds-head-action"/)
-  assert.doesNotMatch(shell, /export function DetailShell\([^)]*\baction\b/)
-  // The one list door is a real icon-only anchor with one short localized accessible command.
-  assert.match(page, /export function EvalScopeDoor\(\{ sessionId \}\)/)
-  assert.match(page, /const label = t\('sessionEval\.scopeDoor'\)/)
-  assert.match(page, /<a className="se-door" href=\{addressHash\(sessionAddress\(sessionId\)\)\} data-tip=\{label\} aria-label=\{label\}>/)
-  assert.match(page, /<Icon name="arrow-left" size=\{16\} \/>\s*<\/a>/)
-  // Exactly one home, leading the gates DOM before gate spans and the trailing export action.
-  assert.equal((page.match(/<EvalScopeDoor sessionId=\{sessionId\} \/>/g) || []).length, 1)
-  assert.match(page, /<div className="se-gates">\s*<EvalScopeDoor sessionId=\{sessionId\} \/>/)
-  assert.doesNotMatch(page, /pageData\.gates\.map/)
-  assert.match(page, /className="se-gate bad se-unknown"/)
-  assert.match(page, /className="se-export"/)
-  assert.doesNotMatch(page, /const action = sessionId|action=\{action\}/)
-  // Stable target and dead detail-action geometry removed.
-  assert.match(css, /\.se-door \{[^}]*width: 32px; height: 32px;/)
-  assert.doesNotMatch(css, /\.ds-head-action/)
-  // the banner era is fully retired: no component, no markup, no parallel copy anywhere
-  for (const src of [shell, page, detail, css]) {
-    assert.doesNotMatch(src, /EvalScopeBanner/)
-    assert.doesNotMatch(src, /ds-banner/)
-    assert.doesNotMatch(src, /se-banner/)
-  }
-  // Issues and eval details seat no header action.
-  assert.doesNotMatch(issues, /EvalScopeDoor|ds-head-action/)
-  assert.match(en, /scopeDoor: 'Back to session terminal'/)
-  assert.match(zh, /scopeDoor: '返回会话终端'/)
-  for (const dict of [en, zh]) assert.doesNotMatch(dict, /scopeBanner|viewing evals from session|工作树——打开其终端/)
-})
-
-test('the continue-reviewing queue: two positional groups of shared-state anchors, absent when alone', () => {
-  // the queue consumes only the detail endpoint's bounded lightweight projection.
-  assert.match(page, /const n = detail\?\.neighbors \|\| \{ prev: \[\], next: \[\] \}/)
-  assert.doesNotMatch(page, /queueNeighbors|scope\.entries/)
-  // a trunk neighbor is a pure detail path; a scoped neighbor keeps the one scope token — both minted
-  // by the ONE address projection
-  assert.match(page, /href: addressHash\(sessionId \? sessionEvalAddress\(sessionId, e\.node, e\.scenario\) : evalAddress\(e\.node, e\.scenario\)\)/)
-  assert.match(page, /prev: n\.prev\.map\(row\), next: n\.next\.map\(row\)/)
-  // the rail renders the two labeled groups; an empty group renders no heading; no neighbor → no section
-  assert.match(detail, /\{\(queue\.prev\.length > 0 \|\| queue\.next\.length > 0\) && \(/)
-  assert.match(detail, /\[\['prev', t\('detail\.queuePrev'\)\], \['next', t\('detail\.queueNext'\)\]\]\.map\(\(\[dir, label\]\) => queue\[dir\]\.length > 0 && \(/)
-  assert.match(detail, /<a key=\{q\.key\} className="ds-queue-row" href=\{q\.href\}/)
-  assert.match(detail, /<ReviewState kind="eval" state=\{q\.state\} size=\{13\} \/>/)
-  // localized section + group labels exist in both dictionaries
-  for (const dict of [en, zh]) {
-    assert.match(dict, /sideQueue:/)
-    assert.match(dict, /queuePrev:/)
-    assert.match(dict, /queueNext:/)
   }
 })
 
@@ -514,9 +361,6 @@ test('an open review surface follows the board issue-freshness stamp, never boar
   assert.match(issues, /useIssueDetail\(id, freshness\)/)
   assert.match(issues, /\}, \[id, freshness, reload\]\)/)
   assert.match(issues, /if \(id !== shownId\.current\) \{ shownId\.current = id; setIssue\(null\); setError\(null\) \}/)
-  // the reading detail hosts the substrate's OTHER remark host and follows the same one stamp
-  assert.match(page, /function useEvalDetail\(param, sessionId, projection, enabled = true, freshness = null\)/)
-  assert.match(page, /\[enabled, node, scenario, sessionId, freshness,/)
 })
 
 test('New is a routed compose PAGE reusing the shared shells, never a pop-out over the list', () => {
@@ -556,7 +400,6 @@ test('pagination stays in the list page scroll flow below the list, outside the 
   assert.match(css, /\.rl-pagination \{ max-width: 100%; display: flex; flex-wrap: wrap;/)
   assert.doesNotMatch(css, /\.rl-pagination\s*\{[^}]*position:\s*sticky/)
   assert.match(css, /\.lp-head \{ position: sticky; top: 0;/)
-  assert.match(css, /\.se-gates \{ position: sticky; top: 0;/)
 })
 
 test('one side-rail value primitive renders every detail metadata row on both pages', () => {
@@ -574,12 +417,8 @@ test('one side-rail value primitive renders every detail metadata row on both pa
   // ride SideValue — the page keeps no parallel inline variant (fv-by / fv-chip / fv-link are gone)
   assert.match(issues, /<SideSection label=\{t\('detail\.sideIssue'\)\}>\s*<SideValue text=\{th\.id\} mono \/>/)
   assert.match(issues, /<SideValue key=\{id\} text=\{id\} mono tip=\{t\('session\.issuesFocusNode'\)\} href=\{addressHash\(graphNodeAddress\(id\)\)\} \/>/)
-  for (const src of [issues, detail]) assert.doesNotMatch(src, /fv-by|fv-chip|fv-link|ds-side-line/)
+  assert.doesNotMatch(issues, /fv-by|fv-chip|fv-link|ds-side-line/)
   assert.doesNotMatch(css, /\.fv-by|\.fv-chip|\.fv-link \{|\.ds-side-line|\.fv-originator-who/)
-  // the eval detail shows its spec node as a REAL labeled ref through the one graph address projection
-  assert.match(detail, /<SideSection label=\{t\('detail\.sideNode'\)\}>/)
-  assert.match(detail, /href=\{addressHash\(graphNodeAddress\(entry\.node\)\)\}/)
-  assert.doesNotMatch(detail, /onFocusNode/)
   // localized type labels exist in both dictionaries
   for (const dict of [en, zh]) {
     assert.match(dict, /sideIssue:/)
@@ -599,20 +438,11 @@ test('list metadata keeps native controls beside the real detail anchor', () => 
   assert.match(css, /\.rl-row-grid a, \.rl-row-grid button \{ pointer-events: auto; \}/)
   assert.match(issues, /IssueLabels labels=\{th\.labels\} onSelect=\{\(name\) => surgery\('label', name\)\}/)
   assert.match(issues, /<a className="rl-tag node" href=\{addressHash\(graphNodeAddress\(th\.nodes\[0\]\)\)\}>/)
-  assert.match(evals, /<a className="ef-node" href=\{addressHash\(graphNodeAddress\(e\.node\)\)\}/)
-  assert.match(evals, /filedBy', \{ by: reviewActorName\(e\.by\) \}/)
   assert.match(issues, /ISSUE_QUERY_KEYS = \['is', 'state', 'store', 'author', 'node', 'label', 'session'\]/)
 })
 
-test('media keeps intrinsic geometry — shrink-only, no flex-stretch, no forced width', () => {
-  // the clip + evidence media: intrinsic size capped by the column, never width:100% stretch
-  assert.match(css, /\.an-video \{ display: block; inline-size: auto; block-size: auto; max-inline-size: 100%;/)
-  assert.match(css, /\.an-image \{ display: block; inline-size: auto; block-size: auto; max-inline-size: 100%;/)
-  assert.match(css, /\.eval-video \{ display: block; inline-size: auto; block-size: auto; max-inline-size: 100%;/)
-  // media homes may not stretch their children wide (the flex-column default)
-  assert.match(css, /\.an-gallery \{ display: flex; flex-direction: column; align-items: flex-start;/)
+test('issue evidence media keeps intrinsic geometry — shrink-only, no flex-stretch', () => {
+  assert.match(css, /\.fv-reply-media \{ display: flex; flex-direction: column; align-items: flex-start;/)
   assert.match(css, /\.fv-reply-media \{ display: flex; flex-direction: column; align-items: flex-start;/)
   // the player chrome shrink-wraps the clip it plays, with only a bar-usability floor
-  assert.match(css, /\.an-player \{ inline-size: fit-content; min-inline-size: min\(360px, 100%\); max-inline-size: 100%; \}/)
-  assert.match(css, /\.an-stage \{ position: relative; inline-size: fit-content; max-inline-size: 100%;/)
 })

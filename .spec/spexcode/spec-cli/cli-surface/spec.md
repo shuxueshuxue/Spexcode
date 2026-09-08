@@ -33,8 +33,8 @@ needs a repository nor enters the noun-first command map.
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
-after its noun, so an id can never occupy a verb slot and no id is a reserved word. Seven noun drawers
-(`spec` · `session` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
+after its noun, so an id can never occupy a verb slot and no id is a reserved word. Six noun drawers
+(`spec` · `session` · `peer` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
 `init` · `materialize` · `doctor` · `serve` · `dashboard` · `open` · `guidance` · `uninstall`) allowed only because
 their object stays inside THIS project (`open` selects one of its nodes/sessions/files; `dashboard`'s object is
 the HOST's project set) — there is no free cross-project object slot — plus the two help surfaces (`help` ·
@@ -45,8 +45,7 @@ are lifecycle, `retract` is the author withdrawing their own record). Sub-comman
 rule: a distinct action, state transition, process, or self-categorized report is a verb; a filter,
 an alternate representation of the same read, a parameter of the same write, an input encoding, or
 routing (`--api`/`--port`) is a flag — which is why `doctor --contract`/`--conflicts`,
-`eval ls --session <SEL>`, and `issue links --pending` are flags, while `eval lint` (a report with
-its own finding classes) and `serve ui` (a different process) are verbs.
+`issue links --pending` is a flag, while `serve ui` (a different process) is a verb.
 
 `peer` is the host-level machine-link drawer: `spex peer connect <SSH-ADDRESS>` establishes a durable
 [[machine-peer]], `spex peer ls` reports the known links, and `spex peer disconnect <SSH-ADDRESS>` explicitly
@@ -164,7 +163,7 @@ the caller that a session carries no spec node, so the task — and any `[[<id>]
 in the prompt. It never launches a session. This is a removal signpost, and it replaces the flag with nothing.
 
 **The internal boundary.** Machine plumbing — `trunk`, `commit-surgery`, `refresh-footprint`,
-`check-staged`, `session-state`/`session-fail`/`session-idle`/`session-hook-state` (the hook-only canonical
+`session-state`/`session-fail`/`session-idle`/`session-hook-state` (the hook-only canonical
 lifecycle read — governed bit, status, proposal, tab-separated and never a note, so a Stop-gate shell never
 treats the runtime envelope as a second lifecycle database)/`commit-gate`, `hook-prompt`, `nudge`,
 `session-turn-fail`, `shared-runtime-spawn`, `codex-launch`/`codex-turn`, `claude-headless-run`, and `spec-governors` (the hook-stable `id<TAB>spec-path` projection of a
@@ -232,7 +231,7 @@ A machine dump names its human twin: `spex graph --json` is for programs, so whe
 single stderr line points at the readable `spex graph`. The hint is stderr-only and tty-gated, so
 piped output stays byte-identical.
 
-The startup `SPEX_PROFILE` selects the agent-facing surface: `full` (the default) preserves this complete map, `repo` exposes only `spec`, `eval`, `graph`, `guide`, `init`, `materialize`, `doctor`, `issue`, and `help`, and a JSON file names its `commands` (with optional `hooks`). Help projects only exposed nouns; a hidden noun is rejected non-zero with its profile and `SPEX_PROFILE=full` repair. Dispatch is never silent.
+The startup `SPEX_PROFILE` selects the agent-facing surface: `full` (the default) preserves this complete map, `repo` exposes only `spec`, `graph`, `guide`, `init`, `materialize`, `doctor`, `issue`, and `help`, and a JSON file names its `commands` (with optional `hooks`). Help projects only exposed nouns; a hidden noun is rejected non-zero with its profile and `SPEX_PROFILE=full` repair. Dispatch is never silent.
 verb is the bug this node exists to prevent), and capabilities that do not exist yet appear nowhere
 — help grows a line only when the verb lands. `cli.ts` remains the thin dispatch hub — verbs' logic
 lives in their own modules; `session-declarations.ts` owns the worker-authored `done` / `park` / `ask`
@@ -242,11 +241,11 @@ not this node's drift.
 `spex spec report [<rev>|<a..b>] [--note <text>] [--always]` is the CLI face of [[change-report]]:
 it defaults to `HEAD`, passes the revision window and note through to `buildChangeReport`, and uses the
 current session as the parent in its reread request. A report whose diff contains only ack stamps or
-`evals.ndjson` is silent except for `无正文变化` and exits zero; `--always` prints the complete report.
+an acknowledgement-only diff is silent except for `无正文变化` and exits zero; `--always` prints the complete report.
 
 The hub rule has a MECHANISM, and stating only the rule leaves the mechanism unprotected. Every dispatch site
 reaches its verb through a lazy `await import(...)` — around eighty of them, one per verb — and the point is
-what a single invocation must NOT pay for: `spex session ls` cannot afford to load the eval engine, the harness
+what a single invocation must NOT pay for: `spex session ls` cannot afford to load the evidence engine, the harness
 adapters, the forge drivers and every other verb's module before it prints a row. So a module graph that keeps
 each verb's logic in its own file while importing all of those files EAGERLY satisfies the sentence above and
 loses the property the sentence exists to buy. Both halves are the contract: logic lives elsewhere, AND the hub

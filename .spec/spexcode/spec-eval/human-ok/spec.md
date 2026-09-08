@@ -11,8 +11,6 @@ related:
   - spec-eval/src/cli.ts
   - spec-cli/src/localIssues.ts
   - spec-cli/src/index.ts
-  - spec-dashboard/src/EvalsFeed.jsx
-  - spec-dashboard/src/EventDetail.jsx
 ---
 # human-ok
 

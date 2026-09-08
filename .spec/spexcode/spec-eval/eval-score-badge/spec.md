@@ -3,13 +3,10 @@ title: eval-score-badge
 status: active
 hue: 160
 desc: The at-a-glance scenario vocabulary on score.jsx — a per-scenario COUNT (✓ satisfied / total) on each node tile, a ringed circle on every eval-tab row, and each scenario's classification TAG CHIPS, so a board sweep reads how many of a node's scenarios are satisfied, which are blind spots, and what each one is.
-code:
-  - spec-dashboard/src/score.jsx
 related:
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/SpecNode.jsx
   - spec-dashboard/src/address.js
-  - spec-dashboard/src/evalNav.test.mjs
 ---
 # eval-score-badge
 

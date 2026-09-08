@@ -6,7 +6,6 @@ import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import { configuredSessionApplication } from './session-application.js'
-import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
 import { apiBaseInfo, assertProjectMatch, displayStatusForProposal, optionArgv, toSession, type DisplayStatus, type Session, type DispatchResult } from './sessions.js'
 import { resolveSession, type Resolved } from './session-selectors.js'
 import { fromRaw } from './session-record.js'
@@ -358,64 +357,6 @@ export async function clientReview(id: string): Promise<CockpitReview | null> {
     if (!r.ok) throw new BackendError(`backend error ${r.status} reviewing ${id}`, r.status)
     return await r.json() as CockpitReview
   }, () => cockpitReview(id))
-}
-
-// GET /api/sessions/:id/evals?format=html — the rendered EXPORT artifact ([[session-eval]]): the
-// self-contained HTML the backend builds. The engine runs on the backend, so the CLI is a thin fetcher
-// that writes/opens these bytes — works against a remote backend unchanged. 404 → no such session.
-export type ExportResult = { ok: true; body: string } | { ok: false; status: number }
-export async function clientEvalExport(id: string): Promise<ExportResult> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/evals?format=html`)
-  if (r.ok) return { ok: true, body: await r.text() }
-  return { ok: false, status: r.status }
-}
-
-// The CLI's explicit aggregate walks the same 25-row pages as the dashboard. No server response contains
-// the full session model; aggregation exists only for this one-shot terminal rendering.
-type SessionEvalPage = {
-  items: any[]
-  page: number
-  pageCount: number
-  total: number
-  gates: any[]
-  unknown: number
-  revision: string
-  summary?: any
-  evalRevision?: SessionEvalRevision
-}
-export type EvalsResult = { ok: true; model: SessionEvalPage & { id: string } } | { ok: false; status: number }
-
-const evalRevisionKey = (revision: SessionEvalRevision): string =>
-  JSON.stringify([revision.epoch, revision.generation, revision.content])
-
-const formatEvalRevision = (revision: SessionEvalRevision | undefined): string =>
-  revision ? `${revision.epoch}@${revision.generation} (${revision.content})` : 'missing'
-
-export async function clientEvals(id: string): Promise<EvalsResult> {
-  const q = encodeURIComponent(`is:eval scope:${id}`)
-  const drifts: string[] = []
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const items: any[] = []
-    let first: SessionEvalPage | null = null
-    let snapshot: SessionEvalRevision | null = null
-    for (let page = 1;; page++) {
-      const r = await apiFetch(`/api/evals?q=${q}&page=${page}`)
-      if (!r.ok) return { ok: false, status: r.status }
-      const current = await r.json() as SessionEvalPage
-      first ??= current
-      if (current.pageCount > 1 && !current.evalRevision) {
-        throw new BackendError(`session eval page ${page}/${current.pageCount} for ${id} has no evalRevision; cannot assemble a consistent snapshot`)
-      }
-      snapshot ??= current.evalRevision ?? null
-      if (current.evalRevision && snapshot && evalRevisionKey(current.evalRevision) !== evalRevisionKey(snapshot)) {
-        drifts.push(`attempt ${attempt + 1}: ${formatEvalRevision(snapshot)} -> ${formatEvalRevision(current.evalRevision)} at page ${page}`)
-        break
-      }
-      items.push(...current.items)
-      if (page >= current.pageCount) return { ok: true, model: { ...first, id, items } }
-    }
-  }
-  throw new BackendError(`session eval snapshot changed during both fetch attempts for ${id} (${drifts.join('; ')}); retry the command`)
 }
 
 // POST /api/sessions/:id/merge — a human merge intent dispatched to the session's own agent.

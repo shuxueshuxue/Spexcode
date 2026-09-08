@@ -6,7 +6,6 @@ desc: The server half of review-chrome's ONE Issues/Evals paging protocol — st
 code:
   - spec-cli/src/reviews.ts
 related:
-  - spec-cli/src/reviews.test.ts
   - spec-cli/src/index.ts
   - packages/spec-core/src/review/reviewFilters.js
   - packages/spec-core/src/review/reviewQuery.js

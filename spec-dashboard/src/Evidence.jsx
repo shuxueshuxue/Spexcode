@@ -4,11 +4,8 @@ import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
 import { useEscLayer } from './escStack.js'
 
-// The ONE evidence renderer ([[event-detail]], U1): a content-addressed blob → the right media element,
-// identical in EVERY home evidence appears — the node eval tab's gallery ([[eval-tab]]), the eval
-// detail's stage ([[event-detail]] — whose annotate-a-loop CLIP player is the one deliberate
-// specialization; everything else on the stage renders here), and an issue/eval reply's inline links
-// ([[issues-view]]'s Thread). A typed entry ({hash, kind, state}) renders via EvidenceItem; a BARE hash
+// The ONE evidence renderer: a content-addressed blob → the right media element in an issue thread or
+// authored document. A typed entry ({hash, kind, state}) renders via EvidenceItem; a BARE hash
 // (a thread body's blob link — the body carries no kind) renders via BlobMedia, which resolves the kind
 // from the Content-Type the blob route already serves (one sniff at the server, [[video-evidence]] —
 // the client never grows a parallel magic-number table, and the reply schema never grows a type field).
@@ -37,8 +34,8 @@ export function Transcript({ hash }) {
       .catch(() => { if (live) setText('') })
     return () => { live = false }
   }, [hash])
-  if (text === null) return <pre className="eval-transcript loading">{t('nodeView.eval.loadingTranscript')}</pre>
-  return <pre className="eval-transcript">{text}</pre>
+  if (text === null) return <pre className="evidence-transcript loading">{t('evidence.loadingTranscript')}</pre>
+  return <pre className="evidence-transcript">{text}</pre>
 }
 
 // structured DATA evidence ([[evidence-kind-taxonomy]]) — a machine export (JSON) rendered as a validatable
@@ -63,18 +60,18 @@ export function DataBlock({ hash, collapsed = false }) {
       .catch(() => { if (live) setState({ text: '', valid: false }) })
     return () => { live = false }
   }, [hash])
-  if (state === null) return <pre className="eval-data loading">{t('nodeView.eval.loadingData')}</pre>
-  const head = state.valid ? t('nodeView.eval.data') : t('nodeView.eval.dataInvalid')
+  if (state === null) return <pre className="evidence-data loading">{t('evidence.loadingData')}</pre>
+  const head = state.valid ? t('evidence.data') : t('evidence.dataInvalid')
   if (collapsed) return (
-    <details className="eval-datawrap eval-datafold">
-      <summary className="eval-datahead">{head}</summary>
-      <pre className="eval-data">{state.text}</pre>
+    <details className="evidence-datawrap evidence-datafold">
+      <summary className="evidence-datahead">{head}</summary>
+      <pre className="evidence-data">{state.text}</pre>
     </details>
   )
   return (
-    <div className="eval-datawrap">
-      <div className="eval-datahead">{head}</div>
-      <pre className="eval-data">{state.text}</pre>
+    <div className="evidence-datawrap">
+      <div className="evidence-datahead">{head}</div>
+      <pre className="evidence-data">{state.text}</pre>
     </div>
   )
 }
@@ -121,8 +118,8 @@ export function FullscreenButton({ target, className = '' }) {
   }
   return (
     <button type="button" className={`an-fs ${className}`} onClick={toggle}
-      data-tip={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}
-      aria-label={fs ? t('annotator.exitFullscreen') : t('annotator.fullscreen')}>
+      data-tip={fs ? t('evidence.exitFullscreen') : t('evidence.fullscreen')}
+      aria-label={fs ? t('evidence.exitFullscreen') : t('evidence.fullscreen')}>
       <FullscreenIcon exit={fs} />
     </button>
   )
@@ -132,10 +129,10 @@ export function FullscreenButton({ target, className = '' }) {
 // shows (click-to-enlarge); a pruned entry (state 'miss') is the honest sentinel, never a broken media box.
 export function EvidenceItem({ e, alt = '', collapsed = false }) {
   const t = useT()
-  if (e.state === 'miss') return <div className="eval-noimg">{t('nodeView.eval.miss')}</div>
+  if (e.state === 'miss') return <div className="evidence-noimg">{t('evidence.miss')}</div>
   if (e.kind === 'transcript') return <Transcript hash={e.hash} />
   if (e.kind === 'data') return <DataBlock hash={e.hash} collapsed={collapsed} />
-  if (e.kind === 'video') return <video className="eval-video" src={blobUrl(e.hash)} controls preload="metadata" playsInline />
+  if (e.kind === 'video') return <video className="evidence-video" src={blobUrl(e.hash)} controls preload="metadata" playsInline />
   return <EvidenceImage hash={e.hash} alt={alt} />
 }
 

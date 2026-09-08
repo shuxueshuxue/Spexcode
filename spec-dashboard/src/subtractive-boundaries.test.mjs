@@ -43,7 +43,7 @@ test('Sessions archive pill opens the existing routed archive overlay', () => {
 })
 
 test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {
-  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'evals', 'issues', 'settings'])
+  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'issues', 'settings'])
   assert.equal(RAIL_PAGES.includes('graph'), false)
 })
 
@@ -60,7 +60,7 @@ test('sessions document owns the only forest and rail labels resolve through i18
   assert.doesNotMatch(shell, /suppressSessionRows|activeSessionId/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
   assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
-  assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
+  assert.match(shell, /if \(page === 'issues'\) return 'none'/)
   // The rail's sessions anchor unfolds the band and returns to the held session; it pre-selects NO dock
   // projection — writing one painted a transient sessions-projection dock on the DEPARTING document.
   assert.doesNotMatch(sideBar, /setDockMode\?\.\('sessions'\)/)
@@ -137,19 +137,14 @@ test('board details focus one dynamic top-level tab without evicting documents',
   const spec = { page: 'spec', param: 'node', query: null }
   const session = { page: 'sessions', param: 's1', query: null }
   let tabs = placeTab(placeTab([], spec, 'append'), session, 'append')
-  const evalDetail = { page: 'evals', param: 'node/scenario', query: null }
   const issueDetail = { page: 'issues', param: '42', query: null }
-  tabs = placeTab(placeTab(tabs, evalDetail), issueDetail)
+  tabs = placeTab(tabs, issueDetail)
 
-  assert.equal(tabKey(evalDetail), '#/evals')
   assert.equal(tabKey(issueDetail), '#/issues')
-  // the spec detail is a document and keeps its own address; only the two board details collapse
-  assert.deepEqual(tabs.map(tabKey), ['#/spec/node', '#/sessions/s1', '#/evals', '#/issues'])
+  assert.deepEqual(tabs.map(tabKey), ['#/spec/node', '#/sessions/s1', '#/issues'])
   assert.deepEqual(tabs.slice(2), [
-    { page: 'evals', param: 'node/scenario', query: null },
     { page: 'issues', param: '42', query: null },
   ])
-  assert.deepEqual(tabRoute(evalDetail), { page: 'evals', param: null, query: null })
   assert.deepEqual(tabRoute(issueDetail), { page: 'issues', param: null, query: null })
 })
 

@@ -3242,8 +3242,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .eval-top { display: flex; align-items: center; gap: 8px; }
 .eval-caret { flex: none; color: var(--muted); font-size: var(--type-meta); }
 .eval-scenario { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* the freshness signal is now the shared .score-badge circle (see score.jsx) — green/red fresh, grey stale,
-   empty = no current score — so a reading's row and its node's card badge speak ONE vocabulary (no more ⚠). */
+/* Shared review-state marks use one vocabulary and never depend on platform glyphs. */
 .eval-meta { display: flex; align-items: center; gap: 10px; font-size: var(--type-meta); color: var(--muted); }
 .eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: var(--radius); }
 /* verdict badge: the loss the agent measured — green ✓ pass / orange ✗ fail / blue ≈ note (hover for the

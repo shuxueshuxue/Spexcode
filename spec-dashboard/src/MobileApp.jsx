@@ -1,13 +1,12 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { STATUS } from './specMeta.js'
-import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, panesFor } from './NodeView.jsx'
+import { SpecPane, HistoryPane, IssuesPane, EditPane, useHistory, panesFor } from './NodeView.jsx'
 import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWindow.jsx'
 import { sessionHandle, sessionHeadline, sessionForest, STATUS_COLOR } from './session.js'
 import TimelineChat from './TimelineChat.jsx'
 import { createSession, useLaunchers } from './launch.js'
 import { navigate } from './route.js'
-import { addressHash, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { nextQuery } from './ReviewShell.jsx'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
@@ -16,18 +15,16 @@ import { ViewScopeProvider } from './ViewScope.jsx'
 import { createViewScope } from './viewScope.js'
 import { viewRouteContract } from './views.jsx'
 
-// the routed review pages ([[evals-view]] / [[issues-view]]) — the SAME components the desktop mounts,
-// reflowed to one column by [[review-chrome]]'s CSS; lazy so a phone that never opens them never
-// downloads the eval/annotator family.
-const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
+// the routed review page ([[issues-view]]) — the SAME component the desktop mounts, reflowed to one
+// column by [[review-chrome]]'s CSS.
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
 // one i18n-key per pane key panesFor() can return — MUST cover every key in NodeView's PANES (+ 'edit'),
-// or t(undefined) below would throw and blank the whole mobile screen. ('eval' was added to PANES later.)
-const PANE_T = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
+// or t(undefined) below would throw and blank the whole mobile screen.
+const PANE_T = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', edit: 'nodeView.paneEdit' }
 
 // live sessions whose pending ops touch this node = its live editors (mirror of App.jsx's liveEditorsOf —
 // a node never "belongs" to a session; the live link is the overlay, the set currently changing it).
@@ -66,8 +63,8 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
     ...base.map((p) => ({ key: p.key, label: t(PANE_T[p.key]) })),
   ]
   const [pane, setPane] = useState(null)
-  const [filters, setFilters] = useState({ issues: {}, eval: {} })
-  useEffect(() => { setPane(null); setFilters({ issues: {}, eval: {} }) }, [node.id])   // a fresh screen always opens on its first tab
+  const [filters, setFilters] = useState({ issues: {} })
+  useEffect(() => { setPane(null); setFilters({ issues: {} }) }, [node.id])   // a fresh screen always opens on its first tab
   const updateFilter = (kind, patch) => setFilters((current) => ({
     ...current,
     [kind]: nextQuery(current[kind], patch),
@@ -108,7 +105,6 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
         {active === 'spec' && <SpecPane node={node} />}
         {active === 'history' && <HistoryPane node={node} rows={rows} />}
         {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
-        {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}
         {active === 'edit' && <EditPane node={node} />}
       </div>
     </div>
@@ -127,9 +123,6 @@ function MobileSessionDetail({ s, sessions, onBack }) {
             {t(`status.${s.status}`)}{s.merges ? ` · ×${s.merges}` : ''} · <span className="m-sess-id8">{s.id.slice(0, 8)}</span>
           </span>
         </div>
-        <a className="m-sess-evalbtn" href={addressHash(sessionEvalAddress(s.id))} title={t('sessionEval.btnTitle')}>
-          {t('sessionEval.btn')}
-        </a>
       </div>
       <TimelineChat s={s} sessions={sessions} />
     </div>
@@ -246,13 +239,11 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
   // the desktop's per-tab draft cache).
   const [creating, setCreating] = useState(false)
   const [newDraft, setNewDraft] = useState('')
-  // the phone honors the [[side-nav]] route family for the review pages ([[mobile-ui]]): a #/evals or
-  // #/issues address (list or detail, shared link or tab tap) renders the SAME routed pages the desktop
-  // mounts, reflowed by [[review-chrome]]'s one-column CSS; Back is the browser's history. Specs/Sessions
-  // stay the phone-local planes.
+  // the phone honors the [[side-nav]] route family for the Issues page ([[mobile-ui]]): an #/issues
+  // address renders the SAME routed page the desktop mounts. Specs/Sessions stay the phone-local planes.
   // The host owns the address. Mobile is a view of the same routed surface, not a second router.
   const { page = 'graph', param = null } = route
-  const plane = page === 'evals' || page === 'issues' || page === 'settings' ? page : tab
+  const plane = page === 'issues' || page === 'settings' ? page : tab
   // Review pages are the same scoped views as desktop. The phone shell has no ViewHost component, so it
   // provides the route-owned scope at this boundary instead of weakening the views' required hook.
   const reviewScope = useMemo(() => createViewScope({
@@ -270,8 +261,7 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
     reviewScope.update({ route: { page, param, query: route.query || null }, active: true })
   }, [reviewScope, page, param, route.query])
   // a `#/sessions/<id>` address opens that session's conversation here too — the phone twin of the
-  // desktop console's deep link, and what makes the scoped eval pages' terminal door ([[evals-view]])
-  // a REAL door on a cold phone open. One-way route→state: leaving the detail via its back control
+  // desktop console's deep link. One-way route→state: leaving the detail via its back control
   // is phone-local and never rewrites the hash.
   useEffect(() => {
     if (page === 'sessions' && param) { setTab('sessions'); setOpenSessionId(param) }
@@ -288,9 +278,9 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
     setPath(targetPath)
   }, [page, param, byId, root])
   const pickPlane = (p) => {
-    if (p === 'evals' || p === 'issues') { navigate(p); return }
+    if (p === 'issues') { navigate(p); return }
     setTab(p)
-    if (page === 'evals' || page === 'issues' || page === 'settings') navigate(p === 'specs' ? 'graph' : 'sessions')
+    if (page === 'issues' || page === 'settings') navigate(p === 'specs' ? 'graph' : 'sessions')
   }
   // a filer/originator chip click on a review page opens that session's conversation here.
   const openSession = (id) => { setTab('sessions'); setOpenSessionId(id); navigate('sessions', id) }
@@ -308,14 +298,12 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
   return (
     <div className="m-app">
       <main className="m-main">
-        {plane === 'evals' || plane === 'issues' || plane === 'settings' ? (
+        {plane === 'issues' || plane === 'settings' ? (
           <div className="m-review">
             <ViewScopeProvider scope={reviewScope.scope}>
               <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
                 {plane === 'settings'
                   ? <Settings />
-                  : plane === 'evals'
-                  ? <EvalsPage param={param} query={route.query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} />
                   : <IssuesPage param={param} query={route.query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />}
               </Suspense>
             </ViewScopeProvider>
@@ -350,9 +338,6 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, r
         <button className={plane === 'sessions' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('sessions')}>
           <span className="m-tabbar-ico">◐</span>{t('mobile.sessionsTab')}
           {sessions.length > 0 && <span className="m-tabbar-badge">{sessions.length}</span>}
-        </button>
-        <button className={plane === 'evals' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('evals')}>
-          <span className="m-tabbar-ico">✓</span>{t('mobile.evalsTab')}
         </button>
         <button className={plane === 'issues' ? 'm-tabbar-btn on' : 'm-tabbar-btn'} onClick={() => pickPlane('issues')}>
           <span className="m-tabbar-ico">◎</span>{t('mobile.issuesTab')}

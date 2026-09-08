@@ -10,7 +10,6 @@
     ".": "./dist/index.js",
     "./bin/spex.mjs": "./bin/spex.mjs",
     "./ranker": "./dist/ranker.js",
-    "./eval-host": "./dist/eval-host.js",
     "./package.json": "./package.json"
   },
   "files": [

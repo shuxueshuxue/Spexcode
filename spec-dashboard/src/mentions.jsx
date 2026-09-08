@@ -8,8 +8,8 @@ import { useEscLayer } from './escStack.js'
 // The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (session)
 // triggers, their ranking, and the dropdown — shared by every input box that takes the grammar (the session
 // console's New prompt, its Command Box and the Conversation composer in SessionInterface.jsx /
-// TimelineChat.jsx, the Issues page's reply/new-thread composers in IssuesPage.jsx, the eval remark composer
-// in EventDetail.jsx). One implementation, never a per-surface fork. References only edit the current draft;
+// TimelineChat.jsx, and the Issues page's reply/new-thread composers in IssuesPage.jsx). One implementation,
+// never a per-surface fork. References only edit the current draft;
 // the exact @new token opens the shared worker launcher door. A host that also takes `/` commands arms the
 // same hook's slash palette instead of keeping a menu state machine of its own.
 

@@ -52,7 +52,6 @@ function lazyRetry(importer) {
 const GraphView = lazyRetry(() => import('./GraphView.jsx'))
 const SpecView = lazyRetry(() => import('./SpecView.jsx'))
 const FileView = lazyRetry(() => import('./FileView.jsx'))
-const EvalsPage = lazyRetry(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
 const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
@@ -71,13 +70,6 @@ function SpecWorkspaceView({ param, query }) {
 // `useRoute` and were the only views breaking the contract above. It went unnoticed while every view was
 // unmounted the moment it stopped showing; once documents stay mounted ([[workspace-shell]]'s pool), a
 // board still reading the global address would follow the reader into whatever they opened next.
-function EvalsView({ param, query }) {
-  const { specs, sessions, issuesStamp } = useBoard()
-  const { reload } = useBoardApi()
-  const scope = useViewScope()
-  const onOpenSession = (id) => scope.open({ page: 'sessions', param: id, query: null })
-  return <EvalsPage param={param} query={query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={onOpenSession} />
-}
 function IssuesView({ param, query }) {
   const { specs, sessions, issuesStamp } = useBoard()
   const scope = useViewScope()
@@ -87,7 +79,7 @@ function IssuesView({ param, query }) {
 function SettingsView() { return <Settings /> }
 
 // `surface` selects the host chrome; `document(page, param)` marks what the workspace working set may hold.
-// Spec, Evals, and Issues are top-level workspace destinations: each page kind has one stable tab identity,
+// Spec and Issues are top-level workspace destinations: each page kind has one stable tab identity,
 // while an object/detail selector is route state shown inside that tab. The `resident` flag names this
 // identity rule only; tabs.js decides whether the page has actually been opened and must be shown.
 // Graph remains an addressable legacy view, not a top-level tab.
@@ -104,7 +96,6 @@ export const VIEWS = Object.freeze({
   sessions: { component: SessionsView, surface: 'workspace', document: (_page, param) => param != null && param !== 'new', icon: 'sessions', className: 'view-sessions' },
   // Findings share the workspace shell. `resident` makes the bare top-level address the one tab identity;
   // `tabModel.tabRoute` collapses detail selectors onto it without losing the detail route in the URL.
-  evals:    { component: EvalsView,    surface: 'workspace', document: true, resident: true, icon: 'evals', className: 'view-evals' },
   issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, icon: 'issues', className: 'view-issues' },
   empty:    { component: EmptyView,    surface: 'workspace', document: false, className: 'view-empty' },
 })

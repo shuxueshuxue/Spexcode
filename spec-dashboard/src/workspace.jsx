@@ -11,7 +11,7 @@ import { scopedKey } from './project.js'
 //   · the API context holds only functions, memoised on nothing that changes.
 //   · the STATE context holds the values, and only the components that render them subscribe.
 
-const BoardState = createContext(null)     // { specs, sessions, issuesStamp, boardLive, identity, catalog, graphOnly }
+const BoardState = createContext(null)     // { specs, sessions, issuesStamp, identity, catalog, graphOnly }
 const BoardApi = createContext(null)       // { reload }
 
 export function BoardProvider({ value, reload, children }) {

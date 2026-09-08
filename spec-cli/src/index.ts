@@ -34,7 +34,6 @@ import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
 import { putBlob } from '@spexcode/spec-eval/cache'
 import { fileHumanReading } from '@spexcode/spec-eval/filing'
 import { fileHumanOk } from '@spexcode/spec-eval/humanok'
-import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnavailableError } from '@spexcode/spec-eval/sessioneval'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
@@ -44,15 +43,13 @@ import { listNodeAttachments, readNodeAttachment } from './spec-attachments.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
-import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
+import { issuesReview } from './reviews.js'
 import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
-import { installEvalHost } from './eval-host.js'
 import { configuredSessionApplication, setSessionApplicationCommitObserver } from './session-application.js'
 import { editSpecBody, readSpecBodyEdit, SpecBodyEditError } from './spec-body-edit.js'
 
-installEvalHost()
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -66,7 +63,6 @@ setSessionApplicationCommitObserver(() => notifyBoardChanged('sessions'))
 startUploadReaper()
 app.use('/api/*', cors())
 app.onError((error, c) => {
-  if (error instanceof SessionEvalUnavailableError) return c.json({ error: error.message }, 503)
   // a record that cannot carry state is a CONFLICT with the caller's request, not a server fault: the refusal
   // is deliberate and already carries its own diagnosis + repair ([[sessions-core]]). Answering 500 with a
   // stack would hide exactly the sentence the human needs.
@@ -344,37 +340,6 @@ app.get('/api/guidance', (c) => c.json(buildGuidanceCatalog().toJSON()))
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors
 // the issues-workflow on/off switch so the frontend hides the view when the feature is OFF.
 app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.query('q'), c.req.query('page'))))
-// Evals uses the identical paged-review response. `scope:` inside q selects the worktree source; without
-// it the source is the current cached board. Filtering/counts always precede the one 25-row slice.
-app.get('/api/evals', etag(), async (c) => {
-  const scope = c.req.query('q')?.match(/(?:^|\s)scope:([^\s]+)/)?.[1]
-  await ensureBoardFileWatchers(scope)
-  const page = await evalsReview(c.req.query('q'), c.req.query('page'), { view: c.req.query('view') })
-  return page ? c.json(page) : c.json({ error: 'no such review source' }, 404)
-})
-// The exact impact graph proves a scope's membership and selector decisions. It is deliberately a named
-// read: paged Evals rows retain their own reasons but never transport this scope-sized projection.
-app.get('/api/evals/impact', etag(), async (c) => {
-  const scope = c.req.query('scope')?.trim()
-  if (!scope) return c.json({ error: 'scope is required' }, 400)
-  await ensureBoardFileWatchers(scope)
-  const model = await buildSessionEvals(scope)
-  return model
-    ? c.json({ scope, impact: model.impact, evalRevision: model.evalRevision })
-    : c.json({ error: 'no such review source' }, 404)
-})
-// ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
-// most five lightweight neighbors. A missing worktree scope resolves explicitly to trunk; it never
-// serializes another scenario's history or the scoped model.
-app.get('/api/evals/detail', etag(), async (c) => {
-  // Detail is a bounded, direct eval read. It builds only the addressed scope and must not
-  // synchronously reconcile the global worktree watcher registry before answering.
-  const node = c.req.query('node')?.trim()
-  const scenario = c.req.query('scenario')?.trim()
-  if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)
-  const detail = await evalDetailReview(node, scenario, c.req.query('scope')?.trim() || null)
-  return c.json(detail)
-})
 // the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
 // resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
 // id, or a forge id (`<host>#<n>`); unknown → 404 (eval-remark threads are not issues, so they 404 here too).
@@ -734,15 +699,6 @@ app.post('/api/sessions/:id/diff-comments/send', async (c) => {
   const ids = Array.isArray(body?.ids) ? body.ids.filter((id: unknown): id is string => typeof id === 'string') : undefined
   const result = await sendDiffComments(c.req.param('id'), ids)
   return c.json(result, result.ok ? 200 : 409)
-})
-// The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,
-// use /api/evals pages; a bare request fails loudly rather than reopening a hidden full JSON path.
-app.get('/api/sessions/:id/evals', async (c) => {
-  if (c.req.query('format') === 'html') {
-    const m = await buildExportModel(c.req.param('id'))
-    return m ? c.html(renderExportHtml(m)) : c.text('no such session', 404)
-  }
-  return c.json({ error: 'interactive eval rows use /api/evals pagination; use ?format=html only for export' }, 400)
 })
 // the session's live pane as text (one-shot snapshot) for a backend client (`spex session show --capture`). Empty and fail
 // stay distinct: an empty pane is 200 with empty body; unknown id → 404, offline (no live pane) → 409, error → 502.

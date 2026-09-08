@@ -1,7 +1,6 @@
 import { deriveStatus } from './specs.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { publishReviewSnapshot, type IssueSourceRevision } from './reviewSnapshot.js'
-import { evalReviewState } from './review/reviewFilters.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -26,26 +25,6 @@ export type BoardSnapshot = {
   issues: any[]
   issuesStamp: string
   issueSource: IssueSourceRevision
-  evalTimelines: Map<string, any>
-  sessionEvalProjections: Map<string, any>
-}
-
-// The server-only review snapshot keeps latest readings verbatim. Graph JSON receives only counts.
-export function latestPerScenario<T extends { scenario: string }>(readings: T[]): T[] {
-  const seen = new Set<string>()
-  return readings.filter((r) => !seen.has(r.scenario) && (seen.add(r.scenario), true))
-}
-
-export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) {
-  type State = 'pass' | 'fail' | 'stalePass' | 'staleFail' | 'empty'
-  const latest = new Map(latestPerScenario(readings).map((reading) => [reading.scenario, reading]))
-  const summary = { total: scenarios.length, pass: 0, fail: 0, stalePass: 0, staleFail: 0, empty: 0 }
-  for (const scenario of scenarios) {
-    const reading = latest.get(scenario.name)
-    const state = (reading ? evalReviewState(reading) : 'empty') as State
-    summary[state]++
-  }
-  return summary
 }
 
 // @@@ a shelved row carries no delta ([[archive]]) - the board has TWO producers (a full buildBoard and the
@@ -56,7 +35,7 @@ export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) 
 const rowOps = (s: { path: string; archived?: boolean }, opsByPath: Record<string, any[]>): any[] =>
   (s.archived ? [] : opsByPath[s.path] || [])
 
-export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, issueSource, evalTimelines, sessionEvalProjections }: BoardSnapshot) {
+export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, issueSource }: BoardSnapshot) {
   const worktrees = layout.worktrees.filter((w) => !w.isMain)
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
@@ -119,10 +98,7 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
   const isOpen = (i: { status: string }) => i.status === 'open'
   // `issuesStamp` above is that ONE board-level freshness stamp, over EVERY thread — noded or nodeless,
   // both stores, BOTH remark hosts. It is folded from the whole store and NOT from the split `merged`: a
-  // scenario-hosted remark lands on an eval track the issue read splits out ([[eval-issue-split]]), so a
-  // carrier folded over the issue half alone left an open READING blind to every remark on it — the write
-  // moved no board byte, [[graph-delta]] correctly suppressed the no-change broadcast, and the push never
-  // fired at all. The per-node fold below stays [[graph-lean]]-slim (no reply payloads).
+  // Every remark stays on its issue thread. The per-node fold below stays [[graph-lean]]-slim (no reply payloads).
   const issuesByNode: Record<string, any[]> = {}
   for (const issue of merged)
     for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)
@@ -136,17 +112,7 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
     }
   }
 
-  // The L1 adapter calculates current eval timelines once. Latest rows/declarations stay server-only for
-  // paged review; graph nodes receive the explicit per-state count projection and nothing row-shaped.
-  const evalReviewNodes = nodes.flatMap((n) => {
-    const timeline = evalTimelines.get(n.id)
-    if (!timeline?.hasEvalFile) return []
-    const latest = latestPerScenario(timeline.readings)
-    n.reviewSummary = { ...(n.reviewSummary || {}), evals: nodeEvalSummary(timeline.scenarios, latest) }
-    return [{ id: n.id, hue: n.hue, scenarios: timeline.scenarios, evals: latest, readings: timeline.readings }]
-  })
-
-  publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes, issueSource })
+  publishReviewSnapshot({ issues: merged, issueSource })
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
@@ -154,7 +120,6 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
     ...s,
     source: s.path,
     ops: rowOps(s, opsByPath),
-    evalSummary: sessionEvalProjections.get(s.id),
   }))
 
   // One resolved identity projection feeds title, favicon, rail, and catalog compatibility. A worktree
@@ -167,7 +132,7 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
 // @@@ spliceSessions — the SESSIONS-ONLY producer ([[graph-cache]]). A session-scoped change (a lifecycle
 // write, a liveness/activity poll flip) reshapes only the board's `sessions` rows — the node/meta units are
 // untouched — so the cache re-derives ONLY the sessions and splices them onto the previous board verbatim,
-// skipping the whole loadSpecs/layout/eval assembly a full buildBoard() pays. The adapter supplies every
+// skipping the whole loadSpecs/layout assembly a full buildBoard() pays. The adapter supplies every
 // live input:
 // each row is decorated EXACTLY as buildBoard's sess mapping (`{...s, source: s.path, ops}`), and every
 // path's `ops` is REUSED from the previous board (a path→ops map). A session path absent in `prev` gets []
@@ -177,7 +142,6 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
 export async function spliceSessions(
   prev: Awaited<ReturnType<typeof buildBoard>>,
   sessions: any[],
-  sessionEvalProjections: Map<string, any>,
 ): Promise<Awaited<ReturnType<typeof buildBoard>>> {
   const activeSources = new Set(sessions.map((session) => session.path))
   const opsByPath: Record<string, any[]> = {}
@@ -186,7 +150,6 @@ export async function spliceSessions(
     ...s,
     source: s.path,
     ops: rowOps(s, opsByPath),
-    evalSummary: sessionEvalProjections.get(s.id),
   }))
   // Archive and close are subtractive topology changes: their worktree leaves the working set, so its
   // overlays must leave in the same cheap publication as its row. Filtering the already-built units is exact
@@ -234,7 +197,7 @@ export async function spliceSessions(
 
 // A full producer may finish after the session lane has already shown a newer row. Reuse that published
 // projection on the full topology without another store read: topology owns the current per-path ops, while
-// the published row owns lifecycle/eval fields. This is deliberately synchronous so a full completion never
+// the published row owns lifecycle fields. This is deliberately synchronous so a full completion never
 // waits for a quiet session store.
 export function rebasePublishedSessions(
   topology: Awaited<ReturnType<typeof buildBoard>>,

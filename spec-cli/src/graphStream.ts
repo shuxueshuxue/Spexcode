@@ -2,22 +2,14 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, existsSync, type Dirent, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
-import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch, isTrashWorktreePath } from '@spexcode/spec-core'
+import { sessionsRoot, gitCommonDir, repoRoot, isTrashWorktreePath } from '@spexcode/spec-core'
 import { resolveDatabasePath } from '@spexcode/session-selflaunch'
 import { listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { hotSignature, warmSignature } from './session-liveness.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, readBoard, type Board } from './graphCache.js'
 import { diffFromPosition, positionOf, type Position } from '@spexcode/spec-core'
-import {
-  holdSessionEvalProjectionObserver,
-  invalidateSessionEvalProjections,
-  releaseSessionEvalProjectionObserver,
-  setSessionEvalProjectionNotify,
-  setSessionEvalProjectionWarmup,
-} from '@spexcode/spec-eval/sessioneval'
 
 type Scope = 'sessions' | 'full'
-type EvalTarget = 'all' | { id?: string; path?: string }
 type Notify = () => void
 type Frame = { event: string; data: string; id?: string }
 type DeltaSend = (frame: Frame) => void
@@ -231,7 +223,7 @@ export function isSessionCreateCandidateRegistryEvent(relativePath: string, cand
 
 // under SPEXCODE_BOARD_DEBUG=1, every broadcast logs its changed unit keys + trigger tags + build ms.
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
-function traceLatency(stage: 'sessions-signal' | 'session-projection-complete' | 'broadcast', detail: Record<string, unknown> = {}): void {
+function traceLatency(stage: 'sessions-signal' | 'broadcast', detail: Record<string, unknown> = {}): void {
   if (DEBUG) console.warn(`spec-cli: graph latency ${JSON.stringify({ at: Date.now(), stage, ...detail })}`)
 }
 // the set of trigger tags accrued SINCE THE LAST BROADCAST — each fireChanged adds its scope, the cold tick
@@ -295,7 +287,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       patrolPending = false
       const sessionsFirst = sessionRefreshRequested
       sessionRefreshRequested = false
-      let servedSessionProjection = sessionsFirst
+      let servedSessionRefresh = sessionsFirst
       let board: unknown
       // share the route's single-flight build ([[graph-cache]]); fireChanged() already invalidated the
       // cache (at the accumulated scope), so this gets a fresh build/splice (or joins one a concurrent poll
@@ -319,7 +311,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
         if (outcome.value === null) {
           boardWait.catch(() => {})
           board = await getBoardForSessionRefresh()
-          servedSessionProjection = true
+          servedSessionRefresh = true
           if (validate) patrolPending = true
           dirty = true // the full wait was preempted only for delivery; it remains owed.
         } else {
@@ -336,7 +328,6 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
         continue
       }
       const buildMs = Date.now() - t0
-      if (servedSessionProjection) traceLatency('session-projection-complete', { patrol: validate })
       // the board names itself ONCE, where it was built ([[graph-cache]]): this `tag` is the very value
       // /api/graph publishes as its ETag, so a client that applied this frame can quote it back on the
       // fallback poll and be answered bodyless instead of re-fetching what the patch just delivered.
@@ -346,7 +337,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       // result could name it. A normal frame consumes its whole trigger set, including a no-op frame.
       const tags = [...triggerTags]
       triggerTags.clear()
-      if (servedSessionProjection)
+      if (servedSessionRefresh)
         for (const tag of tags) if (tag === 'full' || tag === 'patrol') triggerTags.add(tag)
       if (sessionsFirst && full) dirty = true
       const anchor = newestPublished()
@@ -363,7 +354,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
         if (deltaData.length < fullFrame.data.length) frame = { event: 'graph-delta', data: deltaData, id: tag }
       }
       remember(tag, ok ? positionOf(units) : null)
-      traceLatency('broadcast', { event: frame.event, sessionProjection: servedSessionProjection, tags, changedKeys })
+      traceLatency('broadcast', { event: frame.event, sessionRefresh: servedSessionRefresh, tags, changedKeys })
       for (const send of [...deltaSubs]) { try { send(frame) } catch { /* swept on abort */ } }
       for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
       // ---- repair accounting: a real (tag-moved) broadcast whose ONLY trigger was the cold-tick patrol
@@ -382,11 +373,8 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
 // carries its own change SCOPE: full and sessions are independent obligations, not a max-scope replacement.
 // With delta subscribers the debounced fire rebuilds and broadcasts (plain subs then ride the same
 // tag-moved gate — no spurious refetches); without them it stays the zero-build legacy notify.
-function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
-  // Advance eval input generations BEFORE invalidating/building the board, so the first frame caused by an
-  // input event is `updating(lastKnown)`. Summary completion calls this function without a target.
+function fireChanged(scope: Scope = 'full'): void {
   if (scope === 'sessions') traceLatency('sessions-signal')
-  if (evalTarget) invalidateSessionEvalProjections(evalTarget)
   const pending = addPendingGraphChange({ full: pendingFull, sessions: pendingSessions }, scope)
   pendingFull = pending.full
   pendingSessions = pending.sessions
@@ -417,10 +405,7 @@ function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
 // (it can fail to attach), and the nudge makes the sub-second rename guarantee deterministic. Same
 // debounced funnel as every other source; defaults to 'full' but the rename route passes 'sessions'.
 export const notifyBoardChanged = (scope: Scope = 'full'): void =>
-  fireChanged(scope, scope === 'full' ? 'all' : undefined)
-
-// Stable summary batches re-enter the SAME session-unit graph path; this is not a second transport.
-setSessionEvalProjectionNotify(() => fireChanged('sessions'))
+  fireChanged(scope)
 
 // ---- ONE repair scheduler for every filesystem source ----
 // A source the platform refuses keeps its observer hold and is retried by THIS timer alone — never by a
@@ -488,7 +473,7 @@ function ensureWatcher(root: string): void {
     root,
     source: 'store',
     scope: 'sessions',
-    onInput: () => { dropBranchIndex(); fireChanged('sessions') },   // a created/renamed session may own a new branch
+    onInput: () => fireChanged('sessions'),
     onFailure: (error) => {
       if (storeWatcher === registry) storeWatcher = null
       noteSourceFailure('store', error)
@@ -571,43 +556,16 @@ function ensureSessionDatabaseWatcher(): void {
 
 // ---- event source 2: git refs (a commit/merge reshapes the tree the moment the ref moves) → 'full' ----
 // refs/ recursively for loose refs (heads, worktree branches), plus the common dir itself non-recursively
-// for packed-refs rewrites and HEAD flips. Ordinary graph units still have the patrol; eval projections are
-// observer-held across a failure and only become current after a replacement watch authorizes a rescan.
+// for packed-refs rewrites and HEAD flips.
 type RegistryGroup = {
   root: string
   close(): void
 }
 let refsWatchers: RegistryGroup | null = null
-const REFS_OBSERVER = 'graph:refs'
 
-// @@@ the moved ref NAMES its scope - the watcher has always known which ref moved and threw it away, so
-// every ref movement anywhere invalidated every session's evaluation. On a host carrying dozens of branches
-// and a bot that commits continuously that means nothing is ever warm: observed on adopter-a as an input
-// generation of 1208 against a last-known 254. A session's fingerprint reads exactly three refs — its own
-// tip, the base tip, and their merge-base — so a ref that is neither cannot move it. `packed-refs` and
-// `HEAD` stay broad on purpose: a packed update rewrites many refs behind ONE event, so it names nothing.
-// the index is read from the session store, so it is only ever stale when that store moved — and the store
-// has its own watcher, which drops it. A ref burst therefore costs one map lookup, not 76 record reads.
-let branchIndexMemo: Map<string, string> | null = null
-function branchIndex(): Map<string, string> {
-  return (branchIndexMemo ??= sessionBranchIndex())
-}
-function dropBranchIndex(): void { branchIndexMemo = null }
-
-export function evalTargetForRef(ref: string | undefined, base: string, branches: Map<string, string>): EvalTarget | undefined {
-  if (ref === undefined) return 'all'          // an unnamed movement must assume the worst
-  const rel = ref.replace(/\\/g, '/')
-  if (!rel.startsWith('heads/')) return undefined   // tags and remotes feed no session fingerprint
-  const branch = rel.slice('heads/'.length)
-  if (!branch) return 'all'
-  if (branch === base) return 'all'            // every merge-base may have moved
-  const id = branches.get(branch)
-  return id ? { id } : undefined               // a branch no session owns moves no session's evaluation
-}
-
-export function watchSessionEvalRefs(
+export function watchRefs(
   common: string,
-  onInput: (ref?: string) => void,
+  onInput: () => void,
   onFailure: (error: Error) => void,
 ): RegistryGroup {
   let attached: TreeWatcherRegistry[] = []
@@ -630,7 +588,7 @@ export function watchSessionEvalRefs(
     root: join(common, 'refs'),
     source: 'refs',
     scope: 'full',
-    onInput: (_event, rel) => onInput(rel),
+    onInput: () => onInput(),
     onFailure: fail,
   })
   attached.push(refs)
@@ -641,7 +599,7 @@ export function watchSessionEvalRefs(
     source: 'refs-common',
     scope: 'full',
     recursive: false,
-    onInput: (_event, file) => { if (file === 'packed-refs' || file === 'HEAD') onInput() },   // names nothing -> 'all'
+    onInput: (_event, file) => { if (file === 'packed-refs' || file === 'HEAD') onInput() },
     onFailure: fail,
   })
   attached.push(commonFiles)
@@ -653,7 +611,7 @@ export function watchSessionEvalRefs(
 function refsWatcherFailed(error: Error): void {
   refsWatchers = null
   noteSourceFailure('refs', error)
-  if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
+  fireChanged('full')
 }
 
 function ensureRefsWatcher(common = activeCommonRoot): void {
@@ -661,18 +619,16 @@ function ensureRefsWatcher(common = activeCommonRoot): void {
   if (refsWatchers?.root === common) return
   if (refsWatchers) { refsWatchers.close(); refsWatchers = null }
   if (isDisabled('refs')) {
-    if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
     return
   }
   if (!mayAttach('refs')) return
   try {
-    refsWatchers = watchSessionEvalRefs(common, (ref) => fireChanged('full', evalTargetForRef(ref, mainBranch(), branchIndex())), refsWatcherFailed)
+    refsWatchers = watchRefs(common, () => fireChanged('full'), refsWatcherFailed)
     noteSourceHealthy('refs')
-    if (releaseSessionEvalProjectionObserver(REFS_OBSERVER)) fireChanged('full')
   } catch (error) {
     refsWatchers = null
     noteSourceFailure('refs', error)
-    if (holdSessionEvalProjectionObserver(REFS_OBSERVER, 'all')) fireChanged('full')
+    fireChanged('full')
   }
 }
 
@@ -689,7 +645,6 @@ type WorktreeWatch = {
   close(): void
 }
 const worktreeWatchers = new Map<string, WorktreeWatch>()
-const worktreeObserver = (name: string): string => `graph:worktree:${name}`
 const worktreeSource = (name: string): string => `worktree:${name}`
 const PROJECT_ROOT_SOURCE = 'project-root'
 let projectRootWatcher: TreeWatcherRegistry | null = null
@@ -747,11 +702,11 @@ function ensureProjectRootWatcher(): void {
     source: PROJECT_ROOT_SOURCE,
     scope: 'full',
     ignore: ignoredProjectRootPath,
-    onInput: () => fireChanged('full', 'all'),
+    onInput: () => fireChanged('full'),
     onFailure: (error) => {
       if (projectRootWatcher === registry) projectRootWatcher = null
       noteSourceFailure(PROJECT_ROOT_SOURCE, error)
-      fireChanged('full', 'all')
+      fireChanged('full')
       // A served checkout disappearing is terminal for this backend. Retrying a missing root forever leaves
       // the orphan process alive after fixture/deployment teardown and turns every repair pass into a spin.
       if (!existsSync(root)) scheduleProjectRootExit(root)
@@ -765,7 +720,7 @@ function ensureProjectRootWatcher(): void {
   noteSourceHealthy(PROJECT_ROOT_SOURCE)
 }
 
-export function watchSessionEvalWorktree(
+export function watchWorktree(
   wtPath: string,
   gitDir: string,
   onInput: () => void,
@@ -823,7 +778,7 @@ function watcherFailed(name: string, path: string, error: Error): void {
   // never a periodic sweep and never a re-walk driven by whatever read noticed the failure.
   dropWorktreeWatcher(name)
   noteSourceFailure(worktreeSource(name), error)
-  if (holdSessionEvalProjectionObserver(worktreeObserver(name), { path })) fireChanged('full')
+  fireChanged('full')
 }
 
 const forcedWorktreeSessions = new Set<string>()
@@ -855,7 +810,7 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
     if (isTrashWorktreePath(wtPath)) continue
     const normalizedPath = resolve(wtPath)
     if (!wantedPaths.has(normalizedPath)) {
-      if (dropWorktreeWatcher(e.name)) released = releaseSessionEvalProjectionObserver(worktreeObserver(e.name)) || released
+      if (dropWorktreeWatcher(e.name)) released = true
       noteSourceHealthy(worktreeSource(e.name))
       continue
     }
@@ -869,35 +824,31 @@ async function reconcileWorktreePass(forcedSessions: Set<string>, era: number, c
     if (!mayAttach(worktreeSource(e.name))) continue
     try {
       // the entry's `gitdir` file points at the worktree's `<tree>/.git` (file or dir); its parent is the tree.
-      const row = watchSessionEvalWorktree(
+      const row = watchWorktree(
         wtPath,
         join(dir, e.name),
-        () => fireChanged('full', { path: wtPath }),
+        () => fireChanged('full'),
         (error) => watcherFailed(e.name, wtPath, error),
       )
       if (era !== watcherEra) { row.close(); return }
       worktreeWatchers.set(e.name, row)
       noteSourceHealthy(worktreeSource(e.name))
-      if (rootChanged) fireChanged('full', { path: wtPath })
-      // The replacement is live before its hold is removed. This delta authorizes one double-read rescan,
-      // so edits made anywhere in the unwatched interval are inside the new generation's fingerprint.
-      if (releaseSessionEvalProjectionObserver(worktreeObserver(e.name))) fireChanged('full')
+      if (rootChanged) fireChanged('full')
     } catch (error) {
-      // An attach failure is observable: mark unknown/full now. The repair scheduler owns the reattach; no
-      // patrol is allowed to call the eval projection current meanwhile.
+      // An attach failure is observable; the repair scheduler owns the reattach.
       noteSourceFailure(worktreeSource(e.name), error)
-      if (holdSessionEvalProjectionObserver(worktreeObserver(e.name), { path: wtPath })) fireChanged('full')
+      fireChanged('full')
     }
   }
   for (const name of worktreeWatchers.keys()) if (!wantedNames.has(name)) {
     dropWorktreeWatcher(name)
-    released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
+    released = true
   }
   for (const source of [...heldSources]) {
     const name = source.startsWith('worktree:') ? source.slice('worktree:'.length) : null
     if (name && !wantedNames.has(name)) {
       noteSourceHealthy(source)
-      released = releaseSessionEvalProjectionObserver(worktreeObserver(name)) || released
+      released = true
     }
   }
   if (released) fireChanged('full')
@@ -928,7 +879,6 @@ function reconcileWorktrees(forceSessionId?: string): Promise<void> {
   })
   return flight
 }
-const WORKTREE_REGISTRY_OBSERVER = 'graph:worktree-registry'
 let deferredRegistryChange = false
 let deferredRegistryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -937,7 +887,7 @@ function flushDeferredRegistryChange(): void {
   deferredRegistryChange = false
   if (deferredRegistryTimer) { clearTimeout(deferredRegistryTimer); deferredRegistryTimer = null }
   void reconcileWorktrees()
-  fireChanged('full', 'all')
+  fireChanged('full')
 }
 
 // A crashed or disconnected create request must not leave the registry event deferred forever. The normal
@@ -957,7 +907,7 @@ export function flushDeferredWorktreeRegistryChange(): void {
   flushDeferredRegistryChange()
 }
 
-export function watchSessionEvalRegistry(
+export function watchWorktreeRegistry(
   dir: string,
   onInput: (event: 'rename' | 'change', relativePath: string) => void,
   onFailure: (error: Error) => void,
@@ -984,14 +934,14 @@ function registryWatcherFailed(error: Error): void {
   registryWatcher = null
   registryReady = false
   noteSourceFailure('worktree-registry', error)
-  if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
+  fireChanged('full')
 }
 
 async function ensureWorktreeRegistry(forceSessionId?: string): Promise<void> {
   const common = activeCommonRoot
   if (!common) return
   const dir = resolve(join(common, 'worktrees'))
-  // The registry watcher already reconciles add/remove events. Re-scanning every ordinary graph/evals read
+  // The registry watcher already reconciles add/remove events. Re-scanning every ordinary graph read
   // turns a large worktree registry into an artificial request latency floor; only a scoped read may demand
   // one target after startup, while the unscoped hot path reuses the attached live watchers.
   // an attached registry short-circuits the scan for ordinary reads, but a REPAIR pass exists precisely to
@@ -1008,7 +958,6 @@ async function ensureWorktreeRegistry(forceSessionId?: string): Promise<void> {
   if (registryReady && (forceSessionId || repairing)) { await reconcileWorktrees(forceSessionId); return }
   if (isDisabled('worktrees')) {
     registryReady = true
-    if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
     return
   }
   if (!mayAttach('worktree-registry')) return
@@ -1018,23 +967,22 @@ async function ensureWorktreeRegistry(forceSessionId?: string): Promise<void> {
     catch (error) { console.error(`spec-cli: graph watcher 'worktree-registry' could not create ${dir}: ${error instanceof Error ? error.message : String(error)}`) }
     // a registry add/remove is itself a 'full' change (a new/gone worktree reshapes the overlay); also
     // reconcile the per-worktree `.spec` watchers on every registry event.
-    registryWatcher = watchSessionEvalRegistry(dir, (_event, relativePath) => {
+    registryWatcher = watchWorktreeRegistry(dir, (_event, relativePath) => {
       if (isSessionCreateCandidateRegistryEvent(relativePath, pendingSessionCreateWorktreePaths())) {
         deferRegistryChange()
         return
       }
       void reconcileWorktrees()
-      fireChanged('full', 'all')
+      fireChanged('full')
     }, registryWatcherFailed)
     noteSourceHealthy('worktree-registry')
   } catch (error) {
     registryWatcher = null
     registryReady = false
     noteSourceFailure('worktree-registry', error)
-    if (holdSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER, 'all')) fireChanged('full')
+    fireChanged('full')
   }
   await reconcileWorktrees(forceSessionId)   // attach for the live/demanded worktrees that already exist
-  if (registryWatcher && releaseSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER)) fireChanged('full')
 }
 
 // Attach the canonical filesystem sources before an HTTP snapshot starts summary work. This closes the
@@ -1079,11 +1027,8 @@ export function closeBoardFileWatchers(): void {
   if (projectRootLivenessTimer) { clearInterval(projectRootLivenessTimer); projectRootLivenessTimer = null }
   for (const [name, row] of worktreeWatchers) {
     row.close()
-    releaseSessionEvalProjectionObserver(worktreeObserver(name))
   }
   worktreeWatchers.clear()
-  releaseSessionEvalProjectionObserver(REFS_OBSERVER)
-  releaseSessionEvalProjectionObserver(WORKTREE_REGISTRY_OBSERVER)
   activeStoreRoot = null
   activeCommonRoot = null
 }
@@ -1127,7 +1072,6 @@ function stopSourcesIfIdle(): void {
   // so they age — but a position is only ever subtracted from the current board, never replayed, so an old
   // one still produces a correct patch and an unreachable one degrades to a full.
   if (deltaSubs.size === 0) patrolPending = false
-  if (deltaSubs.size === 0) setSessionEvalProjectionWarmup(false)
   if (plainSubs.size + deltaSubs.size > 0) return
   if (hotPoller) { clearInterval(hotPoller); hotPoller = null; lastHot = '' }
   if (warmPoller) { clearInterval(warmPoller); warmPoller = null; lastWarm = '' }
@@ -1177,7 +1121,6 @@ export async function boardStream(c: Context) {
     const notify: Notify = () => { void stream.writeSSE({ event: 'graph-changed', data: 'x' }).catch(() => {}) }
     if (delta) {
       deltaSubs.add(send)
-      setSessionEvalProjectionWarmup(true)
       ensureColdTick()
     } else { plainSubs.add(notify) }
     ensurePollers()

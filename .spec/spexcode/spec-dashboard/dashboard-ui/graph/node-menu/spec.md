@@ -30,8 +30,9 @@ node mutation behind them:
   against the current dashboard document. It therefore preserves the current public origin and `/p/<project>/`
   scope rather than baking a tunnel host into the product. Clipboard API denial or an HTTP context falls back
   to the browser copy path; the row briefly changes to copied or copy failed before the menu dismisses.
-- **send to a session** — opens the node popup's existing prose composer with the whole node attached, so
-  the reader can edit the message, choose a live target or launcher, and send through the ordinary dispatch.
+- **send to a session** — opens the existing prose composer directly over the graph with the whole node
+  attached, so the reader can edit the message, choose a live target or launcher, and send through the
+  ordinary dispatch without opening a second reading surface.
 - **delete node** (danger-tinted) — the `dd` chord's pre-filled instruction.
 
 Deleting a node stays prompt-driven agent work, never a direct server op, so a mis-aimed right-click can't

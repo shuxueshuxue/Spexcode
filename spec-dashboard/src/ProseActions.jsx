@@ -264,9 +264,10 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   useEffect(() => {
     if (!openSend || !bodyReady || !node) return
     setNodeMenuOpen(true)
+    const point = typeof openSend === 'object' ? openSend : null
     open({ key: 'send', preset: null, jump: false }, {
-      clientX: window.innerWidth / 2,
-      clientY: window.innerHeight / 2,
+      clientX: point?.x ?? window.innerWidth / 2,
+      clientY: point?.y ?? window.innerHeight / 2,
     })
   }, [openSend, bodyReady, node?.id])
   // the address chip's pick: a session id, or a new session — with the launcher it named, remembered the

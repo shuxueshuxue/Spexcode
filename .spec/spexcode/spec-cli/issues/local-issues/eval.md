@@ -102,7 +102,7 @@ scenarios:
       node id; the unrelated merge stays silent (the hook is guarded to `merge node/*`).
   - name: post-merge-nudge-matches-the-tree-it-fired-in
     tags: [cli]
-    code: spec-cli/src/localIssues.ts
+    code: spec-cli/src/localIssues.ts#nudge
     related: [spec-cli/templates/hooks/post-merge]
     description: >-
       Land a `node/<id>` branch the way the merge skill does it — `git worktree add --detach` a temporary

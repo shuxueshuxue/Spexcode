@@ -1714,6 +1714,17 @@ if (cmd === 'serve') {
       console.error(`spex internal hook-prompt: ${error instanceof Error ? error.message : String(error)}`)
       process.exit(2)
     }
+  } else if (sub === 'hook-merge') {
+    // Called by dispatch.sh ONLY when two or more handlers on one event emitted JSON ([[dispatcher-runtime]]).
+    // Parts arrive NUL-separated on stdin because a handler's stdout may contain anything, newlines included.
+    const { mergeHookOutputs } = await import('./hook-merge.js')
+    const chunks: Buffer[] = []
+    for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk))
+    const parts = Buffer.concat(chunks).toString('utf8').split('\0')
+    if (parts.length && parts[parts.length - 1] === '') parts.pop()   // printf '%s\0' leaves a trailing empty
+    const { stdout, warnings } = mergeHookOutputs(parts)
+    for (const warning of warnings) console.error(warning)
+    process.stdout.write(stdout)
   } else if (sub === 'nudge') {
     // the post-merge hook prints the (toggle-aware) issue nudge for a merged node — never typed.
     const { nudge } = await import('./localIssues.js')

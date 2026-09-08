@@ -263,6 +263,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   }
   useEffect(() => {
     if (!openSend || !bodyReady || !node) return
+    setNodeMenuOpen(true)
     open({ key: 'send', preset: null, jump: false }, {
       clientX: window.innerWidth / 2,
       clientY: window.innerHeight / 2,

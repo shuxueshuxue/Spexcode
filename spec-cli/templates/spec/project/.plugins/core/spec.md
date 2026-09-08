@@ -20,5 +20,4 @@ than finished: declare `park`, not `done`/`awaiting`, until the child reports a 
    Update that current-state body with any changed intent.
 2. **Commit before declare:** commit the code and spec it justifies before done or merge; independent intent gets
    its own node.
-3. **Keep the loss signal honest:** run `spex spec lint` (the blocking correctness gate) and `spex eval lint --changed`. Measure changed scenarios
-   through the real product, commit the verified tree, then file with `spex eval add`; the reading's `codeSha` must name that commit.
+3. **Keep the loss signal honest:** run `spex spec lint` (the blocking correctness gate). Prove changed behaviour through the real product and hand the evidence to the reviewer with `spex session files add`.

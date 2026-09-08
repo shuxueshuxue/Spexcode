@@ -19,7 +19,8 @@ the node first (the clicked tile stays screen-stable while the camera absorbs an
 anchor contract as click), so the menu always acts on the node under the cursor and the board visibly agrees
 about which node that is.
 
-The menu exposes the node document door, one address handoff, and the shared session dispatch:
+The menu exposes the node verbs plus one document door and one address handoff, with no new node mutation
+behind them:
 
 - **node info** — the node's own `#/spec/<id>` document ([[spec-view]]), which is this menu's door to
   reading the node. It lands in the workspace's current Spec tab rather than a second one, because a spec
@@ -29,11 +30,13 @@ The menu exposes the node document door, one address handoff, and the shared ses
   against the current dashboard document. It therefore preserves the current public origin and `/p/<project>/`
   scope rather than baking a tunnel host into the product. Clipboard API denial or an HTTP context falls back
   to the browser copy path; the row briefly changes to copied or copy failed before the menu dismisses.
-- **send to a session** — the same node mention dispatch used by the document and explorer surfaces.
+- **new session** — a fresh New Session pre-seeded with the node mention (the `[` verb).
+- **new child node** — the `nn` chord's pre-filled instruction.
 - **delete node** (danger-tinted) — the `dd` chord's pre-filled instruction.
 
-Deleting a node stays prompt-driven agent work, never a direct server op, so a mis-aimed right-click can't
-destroy anything.
+The two chord items inherit the chords' safety contract ([[keyboard-nav]]): they only pre-seed a New
+Session prompt the human completes and confirms — creating or deleting a node stays prompt-driven agent
+work, never a direct server op, so a mis-aimed right-click can't destroy anything.
 
 **Overlay sessions.** When the node carries session overlay(s) — a live worktree whose pending ops
 currently touch it — the menu appends, below a divider from the

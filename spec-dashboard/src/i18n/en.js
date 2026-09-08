@@ -590,7 +590,8 @@ export default {
     copyUrl: 'copy node URL',
     copied: 'copied',
     failed: 'copy failed',
-    send: 'send to a session',
+    newSession: 'new session',
+    newChild: 'new child node…',
     del: 'delete node…',
   },
 
@@ -598,7 +599,7 @@ export default {
   proseActions: {
     groupLabel: 'selected passage — send to a session, or edit it here',
     nodeGroupLabel: 'current node actions',
-    nodeSend: 'send to a session',
+    nodeSend: 'Send current node to a session',
     nodeCopy: 'Copy node link',
     nodeCopied: 'node link copied',
     act: {

@@ -5,7 +5,7 @@ import { useT } from './i18n/index.jsx'
 import { copyAddress, graphNodeAddress } from './address.js'
 import SessionPicker from './SessionPicker.jsx'
 
-export default function NodeContextMenu({ menu, onClose, onInfo, onSend, onDelete, sessions = [], onOpenSession }) {
+export default function NodeContextMenu({ menu, onClose, onInfo, onFresh, onNewChild, onDelete, sessions = [], onOpenSession }) {
   const t = useT()
   const [copyState, setCopyState] = useState(null)
 
@@ -50,7 +50,8 @@ export default function NodeContextMenu({ menu, onClose, onInfo, onSend, onDelet
       <ContextMenuGroup>
         <ContextMenuItem icon="info" onClick={pick(onInfo)}>{t('nodeMenu.info')}</ContextMenuItem>
         <ContextMenuItem icon="copy" onClick={copyUrl}>{t(copyState ? `nodeMenu.${copyState}` : 'nodeMenu.copyUrl')}</ContextMenuItem>
-        <ContextMenuItem icon="send" onClick={pick(onSend)}>{t('nodeMenu.send')}</ContextMenuItem>
+        <ContextMenuItem icon="sessions" onClick={pick(onFresh)}>{t('nodeMenu.newSession')}</ContextMenuItem>
+        <ContextMenuItem icon="plus" onClick={pick(onNewChild)}>{t('nodeMenu.newChild')}</ContextMenuItem>
       </ContextMenuGroup>
       <ContextMenuSeparator />
       <ContextMenuGroup>

@@ -20,6 +20,7 @@ export const ACT = [
   { id: 'graph.fresh',     keys: ['['],      rebind: true, desc: 'legend.graph.fresh' },
   // node chords — structural (a two-key grammar, not a single binding). `keys` is the leader that starts
   // the state machine; `sequence` is the complete physical grammar used by dispatch and every reader.
+  { id: 'graph.newChild',  keys: ['n'], sequence: ['n', 'n'], rebind: false, desc: 'legend.graph.newChild' },
   { id: 'graph.del',       keys: ['d'], sequence: ['d', 'd'], rebind: false, desc: 'legend.graph.del' },
   // modals
   { id: 'graph.settings',  keys: [','],      rebind: true, desc: 'legend.graph.settings' },

@@ -15,7 +15,7 @@ import { shortcutHint } from './bindings.js'
 //
 // The menu prints each command's CURRENT binding beside it ([[keyboard-nav]]'s hint reader), so the menu is
 // where the keyboard is learned rather than a substitute for it.
-export default function ExplorerContextMenu({ menu, onClose, owningNodeOf, onSend }) {
+export default function ExplorerContextMenu({ menu, onClose, owningNodeOf }) {
   const t = useT()
   const [copyState, setCopyState] = useState(null)
 
@@ -58,9 +58,6 @@ export default function ExplorerContextMenu({ menu, onClose, owningNodeOf, onSen
       {menu.kind === 'node' && (
         <>
           <ContextMenuGroup>
-            <ContextMenuItem icon="send" onClick={act(() => onSend?.(menu.id))}>
-              {t('nodeMenu.send')}
-            </ContextMenuItem>
             <ContextMenuItem icon="plus" hint={newTabHint} onClick={act(() => openNewTab('spec', menu.id))}>
               {t('tabs.openInNewTab')}
             </ContextMenuItem>

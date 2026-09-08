@@ -42,8 +42,10 @@ const clamp = (z) => Math.max(GRAPH_MIN_ZOOM, Math.min(GRAPH_MAX_ZOOM, z))
 
 // These only PREFILL a plain instruction the launched agent carries out itself — node create/delete is
 // prompt-driven work, never a server op ([[mentions]]: the issue store is the only programmatic surface).
+const NEW_CHILD_CHORD = chordSequence('graph.newChild').join('')
 const DELETE_CHORD = chordSequence('graph.del').join('')
 const CHORDS = {
+  [NEW_CHILD_CHORD]: (id) => `Create a new spec node under [[${id}]] — choose a kebab-case id, write its spec.md at contract altitude with a code: list, implement it, then propose merge. What it should be: `,
   [DELETE_CHORD]: (id) => `Delete the [[${id}]] spec node — remove its dir, repoint or fold its governed code, fix any [[…]] refs, recover its intent from git history, then propose merge. Why: `,
 }
 const CHORD_KEYS = Object.keys(CHORDS)
@@ -83,7 +85,6 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
   })
   useEffect(() => { try { if (focusId) sessionStorage.setItem(scopedKey('spex.focus'), focusId) } catch { /* */ } }, [focusId])
   const [overlay, setOverlay] = useState(false)   // node-info popup (opened by `i`)
-  const [sendOverlayId, setSendOverlayId] = useState(null)
   const [pane, setPane] = useState('spec')
   const setSeed = setCompose   // a board chord hands text to the sessions view through the workspace
   const [nodeMenu, setNodeMenu] = useState(null)  // node right-click menu: { x, y, id } | null ([[node-menu]])
@@ -616,7 +617,8 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => scope.open({ page: 'spec', param: focusRef.current.id, query: null })}
-          onSend={(id) => { setNodeMenu(null); setSendOverlayId(id); setFocusId(id); setOverlay(true) }}
+          onFresh={(id) => startNew(`[[${id}]] `)}
+          onNewChild={(id) => startNew(CHORDS[NEW_CHILD_CHORD](id))}
           onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}
@@ -647,8 +649,8 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
         {/* the `i`/Enter lens ([[node-popup]]): follows the focus, remounts per node. The surgery that
             extracted this view once dropped this line entirely while keeping all its key handling — a
             popup with working keys and no body. */}
-        {overlay && <NodeView key={sendOverlayId || focus.id} node={byId[sendOverlayId] || focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
-          openSend={!!sendOverlayId} onClose={() => { setOverlay(false); setSendOverlayId(null) }} />}
+        {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly}
+          onClose={() => setOverlay(false)} />}
       </div>
     </div>
   )

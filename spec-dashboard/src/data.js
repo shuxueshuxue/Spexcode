@@ -236,8 +236,7 @@ export async function apiFetch(input, init) {
 // display, so no latch can be forgotten and no seal can be misplaced.
 //
 // What it names is the board this client has ACCEPTED from the server — which is what the transfer decision
-// is about. The session-eval generation guard in acceptSessionEvalBoard is a rendering policy layered above
-// that and deliberately not part of the identity.
+// is about.
 let heldUnits = null
 let heldVersion = 0
 let heldFingerprint = { version: -1, tag: '' }
@@ -485,44 +484,6 @@ export function subscribeBoardLive({ onBoard, onLegacyChange, onStatus }) {
   onStatus?.(false)
   bump()   // arm from the subscribe instant, so a stream that never comes up at all still breaches
   return () => { closed = true; deadman.disarm(); try { es?.close() } catch { /* already closed */ } }
-}
-
-// Session eval generations are ordered inside one backend epoch. A full graph may authoritatively rebase
-// the epoch after a backend restart; a delta or same-epoch full may only advance. Rejected rows retain the
-// last accepted projection, so a malformed/late board can never roll the toolbar backward.
-export function acceptSessionEvalBoard(board, seen, authoritative = false) {
-  if (!board?.sessions) return board
-  const live = new Set(board.sessions.map((session) => session.id))
-  if (authoritative) for (const id of seen.keys()) if (!live.has(id)) seen.delete(id)
-  let changed = false
-  const sessions = board.sessions.map((session) => {
-    const projection = session.evalSummary
-    if (!projection || !Number.isInteger(projection.generation) || !projection.epoch) return session
-    const prior = seen.get(session.id)
-    const newEpoch = prior && prior.epoch !== projection.epoch
-    const accept = !prior
-      || (newEpoch ? authoritative : projection.generation >= prior.generation)
-    if (accept) {
-      // A restarted backend may authoritatively rebase to a cold `loading` generation. The old epoch can
-      // never remain current, but its stable value is still useful as explicit last-known until this epoch
-      // publishes ready. This prevents a reconnect/remount from flashing 0/0 without weakening the rebase.
-      const oldStable = prior?.projection?.phase === 'ready' && prior.projection.value
-        ? { generation: prior.projection.generation, revision: prior.projection.revision, value: prior.projection.value }
-        : prior?.projection?.lastKnown
-      const accepted = newEpoch && !projection.value && !projection.lastKnown && oldStable
-        ? { ...projection, lastKnown: oldStable }
-        : projection
-      seen.set(session.id, { epoch: accepted.epoch, generation: accepted.generation, projection: accepted })
-      if (accepted !== projection) {
-        changed = true
-        return { ...session, evalSummary: accepted }
-      }
-      return session
-    }
-    changed = true
-    return { ...session, evalSummary: prior.projection }
-  })
-  return changed ? { ...board, sessions } : board
 }
 
 // The backend carries one resolved identity object. Legacy fields remain read-only compatibility for a

@@ -1,18 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { invalidReviewPageHash, parseRoute, routeHash, legacyEvalHash, legacyReviewHash, queryString, sessionSurfaceHash } from './route.js'
-import { addressHash, addressUrl, evalAddress, graphNodeAddress, routeAddress, sessionEvalAddress, sessionSurfaceAddress, specAddress } from './address.js'
+import { invalidReviewPageHash, parseRoute, routeHash, legacyReviewHash, queryString, sessionSurfaceHash } from './route.js'
+import { addressHash, addressUrl, graphNodeAddress, routeAddress, sessionSurfaceAddress, specAddress } from './address.js'
 
 // The URL layer's two axes ([[side-nav]]): the PATH names the object, the QUERY carries view state — one
-// ?q=<raw token text> for the review lists ([[review-query]]) — and every legacy shape (session-eval
-// path, structured filter params) normalizes to the canonical form at the parse layer.
+// ?q=<raw token text> for the review lists ([[review-query]]) and legacy structured filter params normalize
+// to the canonical form at the parse layer.
 
 test('parseRoute splits path and query inside the hash', () => {
-  assert.deepEqual(parseRoute('#/evals'), { page: 'evals', param: null, query: {} })
   assert.deepEqual(parseRoute('#/graph/node-a'), { page: 'graph', param: 'node-a', query: {} })
-  assert.deepEqual(parseRoute('#/evals?q=is%3Aeval+state%3Areviewed'), { page: 'evals', param: null, query: { q: 'is:eval state:reviewed' } })
-  assert.deepEqual(parseRoute('#/evals/my-node/my%20scenario?q=scope%3Aabc'),
-    { page: 'evals', param: 'my-node/my scenario', query: { q: 'scope:abc' } })
   assert.deepEqual(parseRoute('#/sessions/abc'), { page: 'sessions', param: 'abc', query: {} })
   assert.deepEqual(parseRoute('#/sessions/abc?surface=terminal'), { page: 'sessions', param: 'abc', query: { surface: 'terminal' } })
   // an unknown address and a cold hash land on the sessions face, with no selector.
@@ -21,11 +17,9 @@ test('parseRoute splits path and query inside the hash', () => {
   assert.deepEqual(parseRoute(''), { page: 'sessions', param: null, query: {} })
 })
 
-test('session eval face redirects to the canonical scoped Evals address', () => {
-  assert.equal(sessionSurfaceHash('#/sessions/abc?surface=evals'), '#/evals?q=is%3Aeval%20scope%3Aabc')
+test('session conversation face stays on the session object address', () => {
   assert.equal(sessionSurfaceHash('#/sessions/abc?surface=conversation'), null)
   assert.equal(addressHash(sessionSurfaceAddress('abc', 'conversation')), '#/sessions/abc?surface=conversation')
-  assert.equal(addressHash(sessionSurfaceAddress('abc', 'evals')), '#/evals?q=is%3Aeval%20scope%3Aabc')
 })
 
 test('resource faces stay on the session object address and round-trip as a normal tab identity', () => {
@@ -44,9 +38,9 @@ test('parseRoute keeps the explicit empty workspace address and carries no selec
 })
 
 test('routeHash round-trips through parseRoute, q leading and the rest sorted', () => {
-  const h = routeHash('evals', 'node-a/scenario b', { q: 'state:reviewed' })
-  assert.equal(h, '#/evals/node-a/scenario%20b?q=state%3Areviewed')
-  assert.deepEqual(parseRoute(h), { page: 'evals', param: 'node-a/scenario b', query: { q: 'state:reviewed' } })
+  const h = routeHash('issues', 'node-a', { q: 'state:closed' })
+  assert.equal(h, '#/issues/node-a?q=state%3Aclosed')
+  assert.deepEqual(parseRoute(h), { page: 'issues', param: 'node-a', query: { q: 'state:closed' } })
   // the same state always prints the same address, whatever the object key order
   assert.equal(queryString({ session: 's1', kind: 'all' }), queryString({ kind: 'all', session: 's1' }))
   assert.equal(
@@ -57,57 +51,19 @@ test('routeHash round-trips through parseRoute, q leading and the rest sorted', 
   assert.equal(routeHash('issues', null, { q: null, store: '' }), '#/issues')
 })
 
-test('legacy #/sessions/<id>/eval normalizes to the evals family (replace source, never re-minted)', () => {
-  // the LIST door lands on the scoped DEFAULT view — the visible text says exactly that
-  assert.equal(legacyEvalHash('#/sessions/abc/eval'), '#/evals?q=is%3Aeval%20scope%3Aabc')
-  // a DETAIL address carries only the scope token, never list filters
-  assert.equal(legacyEvalHash('#/sessions/abc/eval/my-node/my-scenario'),
-    '#/evals/my-node/my-scenario?q=scope%3Aabc')
-  // a scenario name with slashes survives — the detail page splits on the FIRST '/'
-  assert.equal(legacyEvalHash('#/sessions/abc/eval/n/a/b'), '#/evals/n/a/b?q=scope%3Aabc')
-  // non-legacy shapes pass through untouched
-  assert.equal(legacyEvalHash('#/sessions/abc'), null)
-  assert.equal(legacyEvalHash('#/evals/n/s'), null)
-  assert.equal(legacyEvalHash('#/graph'), null)
-})
-
 test('legacy structured review params replay into the one ?q token text', () => {
   assert.equal(legacyReviewHash('#/issues?state=closed&author=w-1'),
     '#/issues?q=is%3Aissue%20state%3Aclosed%20author%3Aw-1')
   assert.equal(legacyReviewHash('#/issues?concluded=1'), '#/issues?q=is%3Aissue%20state%3Aclosed')
   assert.equal(legacyReviewHash('#/issues?live=1'), '#/issues?q=is%3Aissue%20state%3Aopen%20session%3Apresent')
-  assert.equal(legacyReviewHash('#/evals?ok=1'), '#/evals?q=is%3Aeval%20state%3Areviewed')
-  assert.equal(legacyReviewHash('#/evals?session=s-9&verdict=fail'),
-    '#/evals?q=is%3Aeval%20verdict%3Afail%20scope%3As-9')
   // the old free-text q rides along as ONE quoted phrase
   assert.equal(legacyReviewHash('#/issues?store=github&q=long+title'),
     '#/issues?q=is%3Aissue%20state%3Aopen%20store%3Agithub%20%22long%20title%22')
   // a legacy state equal to the default collapses to the BARE canonical address
   assert.equal(legacyReviewHash('#/issues?state=open'), '#/issues')
-  assert.equal(legacyReviewHash('#/evals?kind=all'), '#/evals')
-  // a legacy DETAIL address keeps only its worktree scope
-  assert.equal(legacyReviewHash('#/evals/n/s?session=abc'), '#/evals/n/s?q=scope%3Aabc')
-  assert.equal(legacyReviewHash('#/evals/n/s?kind=video'), '#/evals/n/s')
   // canonical addresses are already home — no rewrite
-  assert.equal(legacyReviewHash('#/evals'), null)
-  assert.equal(legacyReviewHash('#/evals?q=verdict%3Afail'), null)
   assert.equal(legacyReviewHash('#/issues?q=frobnicate%3Axyz'), null)
   assert.equal(legacyReviewHash('#/graph'), null)
-})
-
-test('the normalized legacy detail address re-parses to the same (node, scenario, scope)', () => {
-  const canon = legacyEvalHash('#/sessions/s-1/eval/side-nav/rail-order')
-  const r = parseRoute(canon)
-  assert.equal(r.page, 'evals')
-  assert.equal(r.param, 'side-nav/rail-order')
-  assert.equal(r.query.q, 'scope:s-1')
-})
-
-test('legacy and object session-eval addresses converge on the canonical evals hash', () => {
-  const canonical = '#/evals/shell-layout/tab%20switch?q=scope%3Aabc'
-  assert.equal(legacyEvalHash('#/sessions/abc/eval/shell-layout/tab%20switch'), canonical)
-  assert.equal(addressHash(sessionEvalAddress('abc', 'shell-layout', 'tab switch')), canonical)
-  assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval%20scope%3Aabc')
 })
 
 test('graph node addresses carry the focused node in the graph path', () => {
@@ -126,38 +82,14 @@ test('routeAddress is a pure bridge from shared address vocabulary to ViewScope 
   assert.deepEqual(routeAddress(sessionSurfaceAddress('abc', 'terminal')), {
     page: 'sessions', param: 'abc', query: { surface: 'terminal' },
   })
-  assert.deepEqual(routeAddress(evalAddress('node-a')), {
-    page: 'evals', param: null, query: { q: 'is:eval node:node-a' },
-  })
 })
 
-test('detailBackHash: each review detail returns to the list on its own data-source axis', async () => {
-  const { detailBackHash, addressHash, sessionEvalAddress } = await import('./address.js')
-  // a TRUNK eval detail returns to the bare list; list filters never ride a detail address
-  assert.equal(detailBackHash('evals'), '#/evals')
-  // a SCOPED eval detail returns to its scoped DEFAULT list — byte-identical to the address the
-  // session doors mint (one projection), scope token kept, never the terminal console
-  assert.equal(detailBackHash('evals', 'abc'), '#/evals?q=is%3Aeval%20scope%3Aabc')
-  assert.equal(detailBackHash('evals', 'abc'), addressHash(sessionEvalAddress('abc', null, null)))
-  assert.equal(detailBackHash('evals', 'abc').includes('sessions'), false)
+test('detailBackHash returns to the issue list on its own data-source axis', async () => {
+  const { detailBackHash } = await import('./address.js')
   // an issue detail returns to the issues list
   assert.equal(detailBackHash('issues'), '#/issues')
   // deterministic: same page+scope → same href, no history/referrer input exists in the signature
-  assert.equal(detailBackHash('evals', 'abc'), detailBackHash('evals', 'abc'))
-})
-
-test('eval addresses: concrete → the canonical detail, scenario-less → the node-filtered list', () => {
-  // the DETAIL address carries no list filters — path only.
-  assert.equal(addressHash(evalAddress('eval-score-badge', 'count-renders')), '#/evals/eval-score-badge/count-renders')
-  assert.equal(addressHash(evalAddress('n', 'a b')), '#/evals/n/a%20b')
-  // the AGGREGATE entry (no scenario) is the Evals LIST filtered to the node — the ONE canonical
-  // token text (default view + node qualifier), minted only through evalAddress/nodeEvalQuery.
-  assert.equal(addressHash(evalAddress('eval-score-badge')),
-    '#/evals?q=is%3Aeval%20node%3Aeval-score-badge')
-  const r = parseRoute(addressHash(evalAddress('side-nav')))
-  assert.equal(r.page, 'evals')
-  assert.equal(r.param, null)
-  assert.equal(r.query.q, 'is:eval node:side-nav')
+  assert.equal(detailBackHash('issues', 'abc'), detailBackHash('issues', 'abc'))
 })
 
 test('review page state keeps GitHub page-1 action history and repairs only invalid values', () => {
@@ -168,5 +100,4 @@ test('review page state keeps GitHub page-1 action history and repairs only inva
   assert.equal(invalidReviewPageHash('#/issues?page=1'), null)
   assert.equal(invalidReviewPageHash('#/issues?page=999999'), null)
   assert.equal(invalidReviewPageHash('#/issues?page=0'), '#/issues')
-  assert.equal(invalidReviewPageHash('#/evals?q=is%3Aeval&page=nope'), '#/evals?q=is%3Aeval')
 })

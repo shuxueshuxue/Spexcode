@@ -10,7 +10,6 @@ related:
   - spec-dashboard/src/noticeTiming.js
   - spec-dashboard/src/transientNotice.test.mjs
   - spec-dashboard/src/Root.jsx
-  - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
@@ -30,22 +29,28 @@ derived expiry at publication: **3.2 seconds plus 70 ms per message code point, 
 seconds**. That gives concise acknowledgements the familiar five seconds while giving a long result enough
 reading time. The derived value is the one source for both the dismissal timer and the progress rule. A caller
 may explicitly opt into another duration or a persistent notice only when the product contract needs it;
-silence never means permanent. A notice has a close control, pauses its remaining lifetime while hovered or
-keyboard-focused, and resumes only after both have left, so readable copy is not removed while a human is
-interacting with it. A close or expiry removes only that notice; separate actions remain a compact newest-last
-stack rather than overwriting one another.
+silence never means permanent. A notice has a close control, pauses its remaining lifetime while a pointer
+**moves over** it or it holds keyboard focus, and resumes only after both have left, so readable copy is not
+removed while a human is interacting with it. Motion is what counts as a reader, never mere presence: a notice
+is published wherever the pointer already happens to be resting, and reading that as interaction would freeze
+the notice on its first frame with no motion left to release it — an acknowledgement that outlives its own
+expiry and sits in the corner until the human moves the mouse. A close or expiry removes only that notice;
+separate actions remain a compact newest-last stack rather than overwriting one another.
 
-The viewport is fixed to the dashboard's **top-right** edge, above page content and below modal/popup layers. Its calm,
+The viewport is fixed to the dashboard's **bottom-right** edge, clear of the status strip, above page content and
+below modal/popup layers. The top-right is where the window's own menus open, and an acknowledgement of work
+already finished must not stand in front of the controls a human is still using. Its calm,
 single-row Obsidian-like grammar is the existing palette: a small semantic icon, concise text, and a familiar
-close icon in a lightly raised, theme-native surface. The first notice occupies the stable top edge; later
-notices grow the sequence downward with a tight, consistent gap and matching width. The stack is bounded to half
+close icon in a lightly raised, theme-native surface. The newest notice occupies the stable bottom edge; earlier
+ones are pushed upward with a tight, consistent gap and matching width. The stack is bounded to half
 the viewport height for bursts, scrolls when necessary, and pins new feedback into view instead of covering the
 whole working surface. Notices with an expiry also show a two-pixel semantic-color progress rule along their
 bottom edge; it is the visual lifecycle cue only, with no remaining-time label. The rule pauses and resumes with
-the notice timer while hovered or keyboard-focused, and is omitted for persistent notices. It uses dashboard CSS
+the notice timer under the same motion-or-focus rule, and is omitted for persistent notices. It uses dashboard CSS
 variables only, including the existing unified type scale; a theme flip reskins it without component logic. On
-narrow screens it respects the safe top and right edges, uses the available width, and remains in the top half
-rather than covering a thumb-reachable navigation control.
+narrow screens the phone shell's own tab bar owns the bottom edge, so there the stack keeps the safe top and right
+edges, uses the available width, and remains in the top half rather than covering a thumb-reachable navigation
+control.
 
 This is a completion/failure surface, not a substitute for state. A control that is actively posting keeps
 its local disabled/busy state, and a form error that a person must repair stays next to that form. Once an

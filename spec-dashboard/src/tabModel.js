@@ -8,7 +8,7 @@ import { routeHash } from './route.js'
 // A tab's identity is the object address, minus whatever part of that address is a SELECTOR rather than a
 // document. Base session faces are selectors: changing `?surface=conversation|terminal|diff` must update the
 // URL without replacing or multiplying the session tab. A resident BOARD's detail is a selector too — the
-// strip names the board, never the selection, so two "Evals" tabs would be a strip nobody can read.
+// strip names the board, never the selection, so two issue tabs would be a strip nobody can read.
 // Published resources are the exception among session queries: they are file-class workspace objects, so
 // their resource selector remains in the identity — a resource and its session are two tabs, not two faces.
 export const isResourceRoute = (route) => route?.page === 'sessions' && typeof route?.query?.surface === 'string'
@@ -20,7 +20,7 @@ export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
 // from minting a tab per node, and it cost the strip its headline law: no gesture could mint a second Spec
 // tab, so "open in a new tab" on a spec silently overwrote the document the reader was reading. A spec
 // carries no face selector of its own, so its query is still dropped.
-const RESIDENT_BOARDS = new Set(['evals', 'issues', 'settings'])
+const RESIDENT_BOARDS = new Set(['issues', 'settings'])
 export const tabRoute = (route) => RESIDENT_BOARDS.has(route?.page)
   ? { ...route, param: null, query: null }
   : (route?.page === 'spec' && route?.param) || (route?.page === 'sessions' && route?.param && !isResourceRoute(route))

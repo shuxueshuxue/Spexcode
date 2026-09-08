@@ -21,7 +21,7 @@ export type CliProfile = Readonly<{
   hooks: ReadonlySet<string>
 }>
 
-const REPO_COMMANDS = ['spec', 'eval', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
+const REPO_COMMANDS = ['spec', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
 const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
 const REPO_HOOKS = new Set(['spec-first', 'spec-of-file', 'comment-altitude'])
 
@@ -73,8 +73,7 @@ its backend explicitly — the flag always wins. Bare, it resolves: worker env /
 recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING). A password-gated explicit
 gateway accepts --password <pw> (or SPEXCODE_PASSWORD); its self-signed certificate needs explicit --insecure.`
 
-const JSON_NOTE = `One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
-scenario ls · issue ls/show/links) take --json.`
+const JSON_NOTE = `One-shot payload reads (graph · spec search · session ls/show/review · issue ls/show/links) take --json.`
 
 const MENTION_NOTE = `Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg included.
 [[node]] names a topic; @session names a retained session for the receiving agent to inspect, contact with
@@ -200,7 +199,7 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
   --depth N     limit levels below the shown root; prunes are counted, never silent
   --json        the full payload (tree · overlay · sessions), identical to GET /api/graph — machine
                 food; with --focus/--depth it is that filtered subtree as nested objects instead
-  --public      deterministic read-only Spec Graph payload; excludes sessions, issues, evals, and write state
+  --public      deterministic read-only Spec Graph payload; excludes sessions, issues, and write state
   --out <path>  write the public graph index to a file instead of stdout (only with --public)
   --content-dir <path>  write one read-only spec document per node for a static host (only with --public)`,
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
@@ -407,7 +406,7 @@ search — which spec node GOVERNS a topic, ranked by user-story relevance (whic
 behaviour a code-grep misses). Run it BEFORE touching code: the node's spec.md body is the current
 contract. The corpus is English — query in English.
 
-owner — the reverse edge: a file's GOVERNORS (code: — drives drift + eval freshness) and REFERENCERS (related:
+owner — the reverse edge: a file's GOVERNORS (code: — drives drift) and REFERENCERS (related:
 — coverage only), with the verdict spelled out (uncovered / related-only / sanely governed /
 over-owned → split the file). --actionable prints NOTHING unless action is needed (hook use).
 
@@ -424,7 +423,7 @@ leaf id reused) · mention (a [[id]] naming no node). Warns: coverage · drift
 "ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
 per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·
 confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the prepared reference hook; bypass SPEXCODE_SKIP_LINT=1);
-contrast \`spex eval lint\`, which is pure advisory and never blocks anyone. \`--json\` writes the
+--json writes the
 versioned machine report to stdout (source candidates + structured findings); its exit code still blocks
 on errors.
 
@@ -437,62 +436,6 @@ edit the spec instead — same commit as the code.`,
   session: {
     line: 'session <verb>        the worktree state machine: new · ls · watch · wait · review · merge · send · …',
     body: sessionDrawerHelp(),
-    see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
-  },
-  eval: {
-    line: 'eval <verb>           the measurement system: add · ls · scenario ls/write · lint · ok · retract · clean',
-    body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
-                    [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
-       spex eval ls [<node>|.] [--json]                a node's eval timeline, newest first
-       spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
-       spex eval ls --session <SEL> --export [--open | --out <path>]
-       spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; JSON = canonical index
-       spex eval scenario write --mutation <json> < eval.md       propose one canonical metadata mutation
-       spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
-       spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest measurement
-       spex eval retract [<node>|.] [--scenario <name>] [--last | --ts <iso>] [--note <why>]
-       spex eval clean [--keep-latest | --all]         GC the content-addressed evidence cache
-
-add — file an eval of a scenario against its expected: the loss signal the optimizer reads.
-Measure through the REAL product surface, never by reasoning about the code. Evidence kind follows
-the behaviour: MOVING/timed behaviour records a --video; a STATIC end state screenshots --image;
-backend/CLI files a --result transcript. A fix's evidence is a fail→pass pair on the SAME scenario.
-
-ls — node-scoped bare (its per-scenario eval history); session-scoped with an EXPLICIT --session
-(never type-sniffed): filed evals are newest-first across nodes and source ownership; own measurements
-are ✦-marked, evals filed by other sessions are unmarked, and blind spots follow measured rows. --export writes ONE self-contained
-HTML artifact (diff · evidence inlined · gates) for CI/sharing.
-
-scenario ls — the DECLARED contracts, no evals: text may show the latest verdict and --unmeasured is its blind-spot
-worklist; --json emits the complete canonical semantic/measurement index with stable hashes and fixed-tree provenance
-(--unmeasured is text-only because the JSON projection never reads the eval sidecar).
-
-scenario write — the fixed-tree declaration writer for an external measurement guard: stdin is the authoritative
-eval.md, --mutation is one closed JSON insert/delete request for one scenario's test metadata, and stdout is only
-the proposed eval.md bytes. It reads no worktree or runner and fails without stdout on malformed or ambiguous input.
-
-lint — the measurement layer's findings: malformed eval.md (eval-schema) · unmeasured (eval-missing) ·
-stale (eval-drift) · orphaned remark tracks (eval-dangling) · governed source with no eval.md
-(eval-coverage — the same name and shape as spec lint's coverage, one rule per layer) · over-owned
-files (eval-owners). --changed scopes to the nodes THIS branch touched. spec lint's errors block
-commits; eval lint is PURE ADVISORY, always exit 0 — a measurement gap never blocks anyone.
-
-ok — the human's reviewed-and-agreed mark on the scenario's LATEST measurement: an appended, monotonic
-sign-off bound to that one immutable measurement (a newer measurement or staleness releases it on its own —
-no un-ok exists). The evals feed default-hides a fresh, ok'd scenario; a governed session is refused
-(an agent's judgment on a measurement is a remark, never a self-blessing).
-
-clean — garbage-collects the content-addressed evidence cache against what the sidecars still reference.
-Bare it removes only UNREFERENCED blobs (nothing a filed reading names is touched); --keep-latest also drops
-the evidence of superseded readings, keeping each scenario's latest; --all empties the cache and reads no
-sidecar. It prints how many files it removed and how many it kept, with the mode it ran in.
-
-retract — the sanctioned undo for a botched filing: APPENDS a retraction event (traceable, never
-deletes a line); the previous eval becomes latest again, or the scenario honestly returns to
-unmeasured.
-
-${JSON_NOTE}`,
-    see: 'spex guide eval (the eval.md scenario format + evidence rules) · spex evidence (bare byte transport)',
   },
   issue: {
     line: 'issue <verb>          concern threads, local + forge merged: ls · show · open · reply · close · promote · links',
@@ -520,12 +463,12 @@ close — routes by the issue's own store too, so a thread ends where it lives.
 promote — moves an OPEN local issue to the forge as one recorded action.
 
 links — the read-only forge trace: which open forge issues/PRs serve which spec node (--pending
-narrows to threads still awaiting an eval).
+narrows to threads still awaiting a response).
 
 The issues workflow's on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle
 verb — edit the JSON; \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
-    see: 'spex remark (pin a resolvable concern to an issue or scenario) · spex evidence put (stash evidence bytes)',
+    see: 'spex remark (pin a resolvable concern to an issue) · spex evidence put (stash evidence bytes)',
   },
   remark: {
     line: 'remark <verb>         resolvable pins on a host: add · resolve · retract',
@@ -537,7 +480,7 @@ The resolvable interaction primitive: \`add\` pins a concern to a HOST — a loc
 (\`--scenario\` present ⇒ the positional is a node; otherwise it is an issue id — the flag decides,
 never type-sniffing). A SECOND agent \`resolve\`s it (never the author); the AUTHOR \`retract\`s their
 own. The whole loop is CLI-first; the dashboard adds no capability.`,
-    see: 'spex issue (the thread hosts) · spex eval ls (scenario hosts)',
+    see: 'spex issue (the thread hosts) · spex evidence put (attach evidence bytes)',
   },
   evidence: {
     line: 'evidence put|get      content-addressed bytes: put stashes & prints the hash, get reads back',
@@ -545,21 +488,21 @@ own. The whole loop is CLI-first; the dashboard adds no capability.`,
        spex evidence get <hash> [-o <file>]
 
 put writes bytes into the shared content-addressed evidence cache and prints the hash — transport
-only, no eval filed. Use the hash with --evidence on issues/remarks; re-putting the same content
+only. Use the hash with --evidence on issues/remarks; re-putting the same content
 restores pruned or cloned-away evidence.
 
 get is the symmetric read: hash in, bytes out. Local cache first (no backend needed — the evidence
 is usually on this disk), then the backend on a local miss; both missing fails loud naming each
 path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
-    see: 'spex eval add (file an eval WITH evidence) · spex issue open --evidence <hash>',
+    see: 'spex issue open --evidence <hash>',
   },
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec/eval file formats · .spec/spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec format · evidence handoff · .spec/spexcode.json · footprint',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
-       spex guide eval       the eval.md scenario format + how loss is measured and filed
+       spex guide eval       retired: attach product evidence with \`spex session files add\`
        spex guide settings   every .spec/spexcode.json / .spec/spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
 
@@ -576,7 +519,6 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   trunk             print the resolved source-of-truth branch (the pre-commit main-guard captures it)
   commit-surgery    pre-commit footprint anchor: unconditional materialize + staged-index repair
   refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
-  check-staged      pre-commit eval backstop: reject staged stray evidence files / malformed eval.md
   session-state <st> --session <id>   a lifecycle hook authors the session's state
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
@@ -584,6 +526,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)
   hook-prompt <name>                  render canonical model-facing text for a runtime hook
   nudge <node>      the post-merge hook prints the issue nudge for a merged node
+  hook-merge        fold NUL-separated handler stdouts (stdin) into one payload when two speak JSON
   shared-runtime-spawn <cwd> <log> <pid> <scope> <cmd> [args…]  detached adapter control plane (launch script)
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)
@@ -717,7 +660,7 @@ export function overviewHelp(): string {
   const visible = (name: string) => profileAllowsCommand(profile, name)
   const projectLines = ['graph', 'init', 'materialize', 'doctor', 'uninstall', 'serve', 'dashboard', 'open', 'guidance']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
-  const nounLines = ['spec', 'session', 'peer', 'eval', 'issue', 'remark', 'evidence', 'flat']
+  const nounLines = ['spec', 'session', 'peer', 'issue', 'remark', 'evidence', 'flat']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   const manualLines = ['guide'].filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   return `spex — SpexCode CLI (spec↔code graph${full ? ' + worktree session state machine' : ''})
@@ -741,6 +684,6 @@ ${full ? `  ${SEL_NOTE.split('\n').join('\n  ')}\n  ${JSON_NOTE.split('\n').join
   ${ROUTING_NOTE.split('\n').join('\n  ')}
 ${full ? `  ${MENTION_NOTE.split('\n').join('\n  ')}` : ''}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide eval · guide settings · guide footprint.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide settings · guide footprint.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

@@ -11,8 +11,6 @@ related:
   - spec-eval/src/sessioneval.ts
   - spec-eval/src/cli.ts
   - packages/spec-core/src/graph.ts
-  - spec-dashboard/src/EventDetail.jsx
-  - spec-dashboard/src/EvalsPage.jsx
   - spec-eval/src/freshness.test.ts
 ---
 # remark-teeth

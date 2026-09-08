@@ -3,11 +3,6 @@ title: evals-view
 status: active
 hue: 200
 desc: The dashboard's Evals surface as GitHub-style TWO pages — a ListView query + Fail/Pass/Unmeasured loss axis + secondary human-review/freshness/evidence builders over structured anchors, and a standalone evidence detail reached by PUSH; merged and worktree/session loss share this route family and [[review-chrome]].
-code:
-  - spec-dashboard/src/EvalsPage.jsx#EvalsPage
-  - spec-dashboard/src/EvalsPage.jsx#EvalsListPage
-  - spec-dashboard/src/EvalsPage.jsx#EvalDetailPage
-  - spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor
 related:
   - spec-dashboard/src/Root.jsx
   - spec-dashboard/test/evals-entry.e2e.mjs

@@ -11,7 +11,7 @@ function RootContent() {
   const t = useT()
 
   // The public artifact has one face only. It must bypass the live review fast-path as well as the
-  // normal App router, otherwise a direct #/issues or #/evals URL would wake a review transport before
+  // normal App router, otherwise a direct #/issues URL would wake a review transport before
   // App can normalize it back to the graph.
   if (PUBLIC_GRAPH_ONLY) {
     return (

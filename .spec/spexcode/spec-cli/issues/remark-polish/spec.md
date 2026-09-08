@@ -5,7 +5,6 @@ hue: 208
 desc: M4 of the eval/issue/remark refactor — the closing polish. Three independent strands over the built substrate: an anchor's canonical form is its STEP-NAME (m:ss derived from the current clip, surviving a re-measure), a remark's authoring reaches an agent through a NOTIFICATION fallback chain (filer → node's governing session → nobody, never a resolve), and a dangling remark track (renamed/deleted scenario) surfaces at node level instead of vanishing.
 related:
   - spec-dashboard/src/Thread.jsx
-  - spec-dashboard/src/EventDetail.jsx
   - spec-cli/src/mentions.ts
   - spec-cli/src/localIssues.ts
   - spec-eval/src/evaltab.ts

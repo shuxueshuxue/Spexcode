@@ -77,10 +77,6 @@ const ICONS = {
     vb: 18, sw: 1.4,
     node: <><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M4.6 6.5 l2.6 2.3 -2.6 2.3 M9 12.4 h4" /></>,
   },
-  evals: {
-    vb: 18, sw: 1.4,
-    node: <><path d="M2.5 15.5 v-11" /><path d="M2.5 15.5 h13" /><rect x="4.6" y="10" width="2.6" height="3.5" rx="0.5" /><rect x="8.7" y="7" width="2.6" height="6.5" rx="0.5" /><path d="M13 6 l1.4 1.4 L16.5 3.6" /></>,
-  },
   issues: {
     vb: 18, sw: 1.4,
     node: <><path d="M2.5 3.5 h13 v8.4 h-7 l-3.6 3 v-3 h-2.4 z" /><path d="M5.4 6.7 h7.2 M5.4 9.2 h4.8" /></>,

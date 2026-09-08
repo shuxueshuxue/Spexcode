@@ -15,7 +15,7 @@ Land the current SpexCode session's branch; do not dispatch another merge reques
    discard it, fold it into your commit, or hide it behind an unverified stash.
 2. Commit this session's intended spec and code first. In this worktree, merge the latest source-of-truth
    head into the session branch. Resolve conflicts here, then rerun the focused proof, build, `spex spec lint`,
-   and `spex eval lint --changed` required by the changed behavior.
+   required by the changed behavior.
 3. Immediately before landing, verify
    `git merge-base --is-ancestor <source-head> <session-head>`. If it fails, sync again. A clean textual merge
    is not product proof.

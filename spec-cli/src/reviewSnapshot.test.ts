@@ -2,15 +2,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { issueSourceCurrent, publishReviewSnapshot, readReviewSnapshot, type ReviewSnapshot } from '@spexcode/spec-core'
 
-test('review snapshot publication replaces Issues and Evals as one atomic generation', () => {
+test('review snapshot publication replaces the issue projection as one atomic generation', () => {
   const first: ReviewSnapshot = {
     issues: [{ id: 'i-1' }],
-    evalNodes: [{ id: 'n-1', scenarios: [{ name: 's-1' }], evals: [], readings: [] }],
     issueSource: { forge: 1, local: 0 },
   }
   const second: ReviewSnapshot = {
     issues: [{ id: 'i-2' }, { id: 'i-3' }],
-    evalNodes: [{ id: 'n-2', scenarios: [], evals: [{ scenario: 's-2' }], readings: [{ scenario: 's-2' }] }],
     issueSource: { forge: 2, local: 1 },
   }
 
@@ -19,7 +17,6 @@ test('review snapshot publication replaces Issues and Evals as one atomic genera
   publishReviewSnapshot(second)
   assert.strictEqual(readReviewSnapshot(), second)
   assert.deepEqual(readReviewSnapshot().issues.map((issue) => issue.id), ['i-2', 'i-3'])
-  assert.deepEqual(readReviewSnapshot().evalNodes.map((node) => node.id), ['n-2'])
   assert.deepEqual(readReviewSnapshot().issueSource, { forge: 2, local: 1 })
 })
 

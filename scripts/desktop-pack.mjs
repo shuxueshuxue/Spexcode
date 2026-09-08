@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -105,7 +105,6 @@ function installExternalDependencies(packageManifests) {
   const installManifest = { name: 'spexcode-desktop-runtime', version: original.version, private: true, type: 'module', dependencies, optionalDependencies }
   writeFileSync(rootManifestPath, `${JSON.stringify(installManifest, null, 2)}\n`)
   run('npm', ['install', '--omit=dev', '--ignore-scripts', '--no-package-lock', '--no-audit', '--no-fund'], { cwd: bundle })
-  original.spexcodeCommit = original.spexcodeCommit
   writeFileSync(rootManifestPath, `${JSON.stringify(original, null, 2)}\n`)
 }
 

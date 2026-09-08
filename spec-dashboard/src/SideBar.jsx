@@ -16,17 +16,12 @@ import { iconFor } from './viewCatalog.js'
 
 const ENTRIES = RAIL_PAGES
 
-// Resident review tabs own their detail/query address. The rail is only a destination link; keeping a
-// second last-address map here allowed Evals/Issues to drift from the workspace tab that was actually open.
+// The rail is only a destination link; review detail state stays in the route.
 const railHref = (page) => routeHash(page)
 
 // Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
 // so an entry names the binding by id and the hint is resolved at render — never typed into the label.
-// Only Evals has one: the positional ⌥-digit row is gone, and an entry with no accelerator gets no hint
-// rather than an invented one. The dock panel switch has no page key either — it is a state control.
-const PAGE_KEYS = {
-  evals: ['shell.evals'],
-}
+const PAGE_KEYS = {}
 
 // The dock's one rail control owns only open/closed state. Projection choice belongs to the route link
 // that led there; it never gets the route's active styling and never navigates by itself. It is deliberately

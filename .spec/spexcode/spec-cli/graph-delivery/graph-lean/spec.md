@@ -7,7 +7,6 @@ code:
   - packages/spec-core/src/graph.ts#buildBoard
 related:
   - spec-cli/src/graphSnapshot.ts
-  - spec-cli/src/graph.test.ts
   - packages/spec-core/src/reviewSnapshot.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SpecSearch.jsx

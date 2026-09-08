@@ -3,8 +3,6 @@ title: evals-feed
 status: active
 hue: 200
 desc: The Evals ListView rows and filters through [[review-chrome]] — latest result per scenario, structured state/title/filer/time/kind rows, Fail/Pass/Unmeasured quick filters, secondary human-review/freshness/evidence/presence builders, and token-only node/filer/scope over ONE visible query; media stays strictly lazy.
-code:
-  - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
   - spec-eval/src/evaltab.ts
   - packages/spec-core/src/graph.ts

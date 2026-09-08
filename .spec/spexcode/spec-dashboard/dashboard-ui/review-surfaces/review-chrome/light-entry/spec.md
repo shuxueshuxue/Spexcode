@@ -6,7 +6,6 @@ code:
   - spec-dashboard/src/Root.jsx#Root
 related:
   - spec-dashboard/src/App.jsx
-  - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/route.js

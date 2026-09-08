@@ -42,12 +42,6 @@ const outsideViewport = ({ x, y }) => x < 0 || y < 0 || x > window.innerWidth ||
 // closed in another tab, an issue not yet loaded) the raw selector shows rather than a blank chip — an
 // address that names nothing is still an address the reader typed.
 
-// The eval detail's two halves, as the address carries them: `#/evals/<node>/<scenario>`.
-export const evalDetailParts = (param) => {
-  const i = String(param || '').indexOf('/')
-  return i > 0 ? { node: param.slice(0, i), scenario: param.slice(i + 1) } : { node: param || '', scenario: '' }
-}
-
 function label(tab, { specs, sessions, t }) {
   if (tab.page === 'graph') return t('tabs.graph')
   // a document names itself: a node by its own title, a file by its basename. The strip does not invent a
@@ -58,7 +52,6 @@ function label(tab, { specs, sessions, t }) {
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
   // Review details are route state inside one dynamic top-level tab. The tab keeps the stable board name;
   // the URL still carries the selected scenario or issue for copy/back/refresh.
-  if (tab.page === 'evals') return t('tabs.evals')
   if (tab.page === 'issues') return t('tabs.issues')
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')
@@ -81,10 +74,7 @@ function label(tab, { specs, sessions, t }) {
 // The dot repeats the board's own four-state vocabulary rather than inventing a tab-specific one, so a tab
 // says the same thing about a node that its tile does.
 function TabDot({ tab, specs, sessions }) {
-  // an eval detail wears the dot of the NODE it measures. Its own verdict is not on the board — it takes a
-  // detail request to know — and a tab must never mint a fetch to draw itself; the node it belongs to is
-  // is what the reader navigated through to get here, and is the same dot that node's tile wears.
-  const specId = tab.page === 'spec' ? tab.param : (tab.page === 'evals' && tab.param ? evalDetailParts(tab.param).node : null)
+  const specId = tab.page === 'spec' ? tab.param : null
   if (specId) {
     const node = specs?.find((s) => s.id === specId)
     if (!node || !STATUS[node.status]) return null
@@ -114,9 +104,9 @@ function TabKindIcon({ tab }) {
 export function placeLabel(route, ctx) {
   const { page, param } = route || {}
   if (page === 'spec' || page === 'file' || (page === 'sessions' && param)) return label(route, ctx)
-  // a board DETAIL names its object here too, so the window title says which reading is open rather than
+  // an issue DETAIL names its object here too, so the window title says which thread is open rather than
   // repeating the board's name at every one of its details.
-  if ((page === 'evals' || page === 'issues') && param) return label(route, ctx)
+  if (page === 'issues' && param) return label(route, ctx)
   return ctx.t(`place.${page}`)
 }
 

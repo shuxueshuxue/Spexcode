@@ -3242,8 +3242,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .eval-top { display: flex; align-items: center; gap: 8px; }
 .eval-caret { flex: none; color: var(--muted); font-size: var(--type-meta); }
 .eval-scenario { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* the freshness signal is now the shared .score-badge circle (see score.jsx) — green/red fresh, grey stale,
-   empty = no current score — so a reading's row and its node's card badge speak ONE vocabulary (no more ⚠). */
+/* Shared review-state marks use one vocabulary and never depend on platform glyphs. */
 .eval-meta { display: flex; align-items: center; gap: 10px; font-size: var(--type-meta); color: var(--muted); }
 .eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: var(--radius); }
 /* verdict badge: the loss the agent measured — green ✓ pass / orange ✗ fail / blue ≈ note (hover for the
@@ -3485,9 +3484,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
 
-/* [[transient-notices]]: fixed feedback belongs at the top-right, above page content, but yields to menus and modals. */
+/* [[transient-notices]]: fixed feedback belongs at the bottom-right, above page content, but yields to menus
+   and modals. The bottom offset clears the status strip, which is a real row of the window, not page content. */
 .tn-viewport {
-  position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right)); bottom: auto; z-index: 50;
+  position: fixed; bottom: calc(var(--line-status) + max(12px, env(safe-area-inset-bottom))); right: max(16px, env(safe-area-inset-right)); top: auto; z-index: 50;
   display: flex; flex-direction: column; gap: 6px; width: min(400px, calc(100vw - 32px)); max-block-size: min(50dvh, 32rem);
   overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: thin;
 }
@@ -3516,6 +3516,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .tn-notice[data-paused='true'] .tn-progress { animation-play-state: paused; }
 @keyframes tn-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 640px) {
+  /* the phone shell's own navigation owns the bottom edge, so the stack stays at the top there. */
   .tn-viewport { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); bottom: auto; width: min(440px, calc(100vw - 20px)); }
 }
 @media (prefers-reduced-motion: reduce) { .tn-notice, .tn-progress { animation: none; } .tn-progress { transform: scaleX(1); } }

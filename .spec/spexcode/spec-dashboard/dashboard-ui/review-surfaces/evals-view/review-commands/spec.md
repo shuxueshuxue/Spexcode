@@ -3,10 +3,7 @@ title: review-commands
 status: active
 hue: 200
 desc: The review track's slash-command surface — '/' at the start of the eval-detail composer's line opens a command menu, whether typed or inserted by its compact discoverability button. Built-in verbs (/ok) hold their when-gate in ONE registry (the sessionCommands pattern) and are the sole dashboard door to their act; `surface: review` plugin presets (/refuse) prefill the composer, and the send stays an ordinary remark.
-code:
-  - spec-dashboard/src/reviewCommands.js
 related:
-  - spec-dashboard/src/EventDetail.jsx
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/mentions.jsx
   - spec-dashboard/src/sessionCommands.js

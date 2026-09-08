@@ -1,7 +1,7 @@
 // @@@ spex graph - the CLI's human-readable graph view: the same assembled board the dashboard's
 // tidy-tree renders, as an indented terminal tree. Pure presentation over buildBoard()'s nodes —
-// no read path of its own; status colours and badge semantics mirror the dashboard (drift /
-// stale-eval / open-issues counts). Governed by the spex-tree spec node.
+// no read path of its own; status colours and issue badges mirror the dashboard. Governed by the
+// spex-tree spec node.
 
 // the subset of a board node this view consumes (buildBoard attaches more; we read only these).
 export type TreeNode = {
@@ -14,7 +14,6 @@ export type TreeNode = {
   ghost?: boolean
   reviewSummary?: {
     issues?: { open: number }
-    evals?: { stalePass: number; staleFail: number }
   }
 }
 
@@ -23,14 +22,6 @@ export type TreeOpts = { node?: string; depth?: number; color?: boolean }
 // dashboard status palette mapped onto ANSI: merged=green, active=cyan (live/in-flight, distinct
 // from the warning yellow), drift=yellow (the dashboard's warning colour), pending=muted grey.
 const STATUS_ANSI: Record<string, string> = { merged: '32', active: '36', drift: '33', pending: '90' }
-
-// stale-eval count: declared scenarios whose LATEST reading exists but is no longer fresh.
-// board `evals` is already latest-per-scenario, so this is a straight filter — the same freshness
-// axis the dashboard's grey ✓/✗ badges read (score.jsx readingScore).
-function staleYatsu(n: TreeNode): number {
-  const summary = n.reviewSummary?.evals
-  return summary ? summary.stalePass + summary.staleFail : 0
-}
 
 function childrenIndex(nodes: TreeNode[]): Map<string | null, TreeNode[]> {
   const byParent = new Map<string | null, TreeNode[]>()
@@ -65,8 +56,6 @@ export function renderTree(nodes: TreeNode[], opts: TreeOpts = {}): string {
     const parts: string[] = []
     if (n.ghost) parts.push(c('90', 'ghost'))
     if (n.drift) parts.push(c('33', `drift:${n.drift}`))
-    const stale = staleYatsu(n)
-    if (stale) parts.push(c('90', `stale:${stale}`))
     if (n.reviewSummary?.issues?.open) parts.push(c('31', `issues:${n.reviewSummary.issues.open}`))
     return parts.length ? '  ' + parts.join(' ') : ''
   }
@@ -109,7 +98,7 @@ export function treeJson(nodes: TreeNode[], opts: TreeOpts = {}): object[] {
     const pruned = opts.depth !== undefined && depth >= opts.depth
     return {
       id: n.id, title: n.title, status: n.status, version: n.version ?? 0,
-      drift: n.drift ?? 0, staleYatsu: staleYatsu(n), openIssues: n.reviewSummary?.issues?.open ?? 0,
+      drift: n.drift ?? 0, openIssues: n.reviewSummary?.issues?.open ?? 0,
       ...(n.ghost ? { ghost: true } : {}),
       children: pruned ? kids.map((k) => k.id) : kids.map((k) => shape(k, depth + 1)),
     }

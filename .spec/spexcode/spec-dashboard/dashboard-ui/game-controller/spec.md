@@ -40,7 +40,7 @@ not a companion feature; it is the mode's text input method.
 
 ## why not an OS-level remapper
 
-An earlier shape of this node was a standalone OS remapper in its own repo (an [[extensions]] satellite)
+An earlier shape of this node was a standalone OS remapper in its own repo (an `extensions` satellite)
 emitting real keystrokes, because a page could neither fake trusted keys nor reach the OS voice hotkey.
 Both reasons fell: dispatching action ids needs no key events at all, and voice stops needing any OS
 facility once the backend owns ASR. What survives from that survey: no third-party mapper (AntiMicroX /

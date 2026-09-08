@@ -17,7 +17,6 @@ import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
 import { PROJECT_ID, hubHref, projectHref, scopedKey } from './project.js'
 import { STATUS, STATUS_ORDER, summarizeBoard } from './specMeta.js'
-import { ScoreBadge } from './score.jsx'
 import { nextGraphStatNode } from './GraphStats.jsx'
 import { sessionHeadline, sessionZone } from './session.js'
 import ContextDock from './ContextDock.jsx'
@@ -52,7 +51,7 @@ import { createViewScope } from './viewScope.js'
 const dockFor = (page) => {
   // Review surfaces are full-width throughout their address family. A detail route must not inherit the
   // previous Spec/Explorer projection from workspace state; that state belongs only to document routes.
-  if (page === 'issues' || page === 'evals') return 'none'
+  if (page === 'issues') return 'none'
   if (page === 'settings') return 'none'
   // Sessions is a complete document surface: SessionInterface owns its forest/list and console. Keeping a
   // finding dock here (even with rows suppressed) leaves an empty dock header beside the same list.
@@ -263,14 +262,6 @@ function ShellStatus() {
   return null
 }
 
-const SCORE_VIEW = [
-  { state: 'pass', always: true, titleKey: 'scorePass' },
-  { state: 'fail', always: true, titleKey: 'scoreFail' },
-  { state: 'stalePass', titleKey: 'scoreStalePass' },
-  { state: 'staleFail', titleKey: 'scoreStaleFail' },
-  { state: 'empty', titleKey: 'scoreEmpty' },
-]
-
 function BoardStat({ name, count, title, onClick, children }) {
   return (
     <button type="button" className="sb-tally-button" data-board-stat={name} data-tip={title}
@@ -289,16 +280,16 @@ const storedGraphFocus = () => {
 // They used to hang off the graph, so the moment the graph stopped being where a reader lands, the window
 // stopped saying how the work was doing at all — a status bar with one item on it, which is a band that
 // says nothing. These four are true of the WORKSPACE rather than of whichever document is open, and each
-// one is a door to the board that can act on it: nodes → the graph, the eval verdicts → the evals list,
-// open issues → the issues list, the live sessions → the sessions console.
+// one is a door to the board that can act on it: nodes → the graph, open issues → the issues list,
+// and live sessions → the sessions console.
 //
 // Restraint is the point: the resting state is muted text and the board's own status dots, and an item
-// spends a `kind` colour ONLY where a number is asking for something — a failing eval, a session waiting
-// on a human. A count that is merely large stays quiet.
+// spends a `kind` colour ONLY where a number is asking for something — a session waiting on a human.
+// A count that is merely large stays quiet.
 //
 // This is the only ledger on every route, graph included. On the graph its category buttons reuse
-// [[graph-stats]]'s walk; elsewhere issue/eval buttons keep opening their boards, while node categories
-// enter the graph already focused on the first node they count.
+// [[graph-stats]]'s walk; elsewhere issue buttons keep opening their board, while node categories enter
+// the graph already focused on the first node they count.
 function LauncherSessionTally({ launcher, sessions, onOpen, tooltip }) {
   const harness = harnessForId(launcher.harness)
   const Glyph = harness.Glyph
@@ -370,7 +361,6 @@ function BoardStatus({ specs, sessions, page }) {
   const tally = useMemo(() => summarizeBoard(specs || []), [specs])
   // whose turn is it — the same `need`/`run` partition the finding dock groups its rows by, not a second
   // idea of "live" invented for the bar.
-  const { fail } = tally.scoreCount
   const walkGraph = (ids) => {
     const id = nextGraphStatNode(ids, storedGraphFocus())
     if (id) navigate('graph', id, { replace: page === 'graph' })
@@ -395,29 +385,6 @@ function BoardStatus({ specs, sessions, page }) {
             <i className="sb-status-dot" style={{ background: STATUS[k].color }} />
           </BoardStat>
         ))}
-        {stale}
-      </span>
-    ),
-  })
-  useStatusItem({
-    id: 'ledger-evals', side: 'right', priority: 42,
-    kind: fail > 0 ? 'error' : undefined,
-    tooltip: t('statusBar.evals', tally.scoreCount),
-    node: (
-      <span className="sb-tally">
-        {SCORE_VIEW.map(({ state, always, titleKey }) => {
-          const count = tally.scoreCount[state]
-          if (!count && !always) return null
-          return (
-            <BoardStat key={state} name={`eval-${state}`} count={count}
-              onClick={graphOrBoard(tally.scoreNodes[state], 'evals')}
-              title={page === 'graph'
-                ? t(`stats.${titleKey}`, { n: count })
-                : `${t(`score.${state}`)} · ${t('statusBar.openEvals')}`}>
-              <ScoreBadge state={state} />
-            </BoardStat>
-          )
-        })}
         {stale}
       </span>
     ),
@@ -597,7 +564,6 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     }
     if (event.altKey && !event.metaKey && !event.ctrlKey) {
       if (!graphOnly && firesEvent('shell.newSession', event)) { event.preventDefault(); navigate('sessions', 'new'); return true }
-      if (!graphOnly && firesEvent('shell.evals', event)) { event.preventDefault(); closePalette(); navigate('evals'); return true }
       // the ⌥ chord is the door that survives a TYPING context, and in this workspace a typing context is a
       // session console: `/` above is swallowed by the composer and xterm's helper, exactly as the
       // native-control restraint requires. So it stays session-scoped — that is where it is reachable from.

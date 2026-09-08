@@ -39,7 +39,18 @@ candidate `code:` or `related:` declaration changes no governed subject or node 
 scope check allows it before full lint; `.spec/.issues/*` is the zero-process common case for dashboard writes,
 and the pre-commit hook performs the same Git-only classification before materialize/eval checks. The claim
 set comes from the candidate specs, not `lint.governedRoots` (that setting controls source discovery and a
-spec may explicitly govern a path outside it). Governance metadata (`.spec` nodes and config), any declared
+spec may explicitly govern a path outside it).
+
+**A skip that hides a coverage gap names it.** Deciding to skip requires both the changed paths and the claim
+set, so the classification already knows which changed paths are source under `lint.governedRoots` that no
+candidate spec claims — and adding exactly such a file is, by definition, a candidate that touches nothing
+governed. The one commit shape that CREATES a coverage gap was therefore the one shape that skipped in
+silence, leaving no way to tell a checked commit from an unchecked one after the fact. The skip now lists
+those paths on stderr before exiting. This changes no verdict: coverage is a warning in full lint and this
+gate still allows the commit; the discovery policy is read from the candidate's own config, like the full
+pending lint, and the report costs no extra Git because it filters the short changed list already in hand.
+
+Governance metadata (`.spec` nodes and config), any declared
 source path, and every multi-parent candidate stay on the full candidate lint path; a merge may introduce
 reachable side-branch debt even when its first-parent result tree only adds an issue file. If a ref update is
 rejected, Git leaves the ref, index, sequencer state, and merge state untouched; the diagnostic names both the

@@ -1,10 +1,9 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { readConfig, configPath, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
-import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
-import { EVAL_FILE, parseScenarios } from '@spexcode/spec-eval/scenarios'
-import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
+import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
+import { DEFAULT_TEST_GLOBS, isSourcePath, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
 export const SPEC_LINT_REPORT_PROJECTION = 'spex.spec-lint.report'
@@ -23,11 +22,10 @@ export type LintConfig = {
   sourceExtensions: string[] | null // compatibility shorthand compiled into sourceIncludeGlobs
   testGlobs: string[]           // globs EXCLUDED from coverage; set [] to govern tests too
   maxOwners: number          // warn when a file is governed (code:) by > this many nodes
-  scenarioTags: string[]     // the closed vocabulary an eval scenario's `tags:` must draw from; extend it to mint a new tag
   scopedCodeMiss: 'warn' | 'ignore' // the file-level drift ADVISORY on a selector-scoped code: file whose window has no
                              // selector hit ([[code-anchor]]). 'warn' (default) keeps today's drift warning; 'ignore'
                              // silences ONLY that advisory — hit blocks, bare code drift, integrity, acks, related
-                             // semantics, and eval freshness are all untouched by this knob.
+                             // semantics are untouched by this knob.
 }
 const DEFAULT_CONFIG: LintConfig = {
   governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
@@ -36,7 +34,6 @@ const DEFAULT_CONFIG: LintConfig = {
   sourceExtensions: null,
   testGlobs: DEFAULT_TEST_GLOBS,
   maxOwners: 3,
-  scenarioTags: ['frontend-e2e', 'backend-api', 'cli', 'desktop', 'mobile'],
   scopedCodeMiss: 'warn',
 }
 export function loadConfig(root: string, pendingSource?: string | null): LintConfig {
@@ -123,25 +120,54 @@ function pendingChangedPaths(root: string, tip: string): string[] {
     return [...new Set(changed.filter(Boolean))]
   } catch { return [] }
 }
+// what the cheap pending classification concluded, and what it had to compute to conclude it.
+export type PendingScope = {
+  // does this candidate reach the full lint path at all?
+  touchesGoverned: boolean
+  // changed paths that ARE source under `governedRoots` and that NO candidate spec claims. Only ever
+  // populated on the skip path, where nothing else will name them.
+  uncoveredSources: string[]
+}
+
 // Cheap pending classification for the reference hook. It reads only the candidate tree and claims; it
 // never constructs either history index. A normal lint call deliberately does not use this
 // shortcut so its full findings/oracle contract remains unchanged.
-export async function pendingTouchesGoverned(root: string, tip: string): Promise<boolean> {
+// @@@ the skip path still owes an answer - this predicate needs the changed paths AND the claim set to
+// decide, so the set of "changed source nothing claims" is already in hand when it decides to skip. It used
+// to return a bare boolean and throw that set away, which made the ONE commit shape that creates a coverage
+// gap — adding a source file no spec claims — the ONE shape that touches nothing governed and is therefore
+// skipped in silence. The verdict is unchanged (coverage is a warning, never a gate); what changes is that
+// the skip stops being indistinguishable from a clean check.
+export async function pendingScope(root: string, tip: string): Promise<PendingScope> {
+  const governed = { touchesGoverned: true, uncoveredSources: [] as string[] }
   // A merge can introduce reachable side-branch debt without changing the result tree. The first-parent
   // diff is insufficient for a scope proof, so all multi-parent candidates stay on the full lint path.
   const parentCount = git(['-C', root, 'rev-list', '--parents', '-n1', tip]).trim().split(/\s+/).length - 1
-  if (parentCount > 1) return true
+  if (parentCount > 1) return governed
   const changed = pendingChangedPaths(root, tip)
-  if (!changed.length) return true
+  if (!changed.length) return governed
   // `governedRoots` is source discovery policy, not the set of actual code claims: a spec may deliberately
   // govern a path outside those roots. Read only the candidate spec tree (no history/drift indexes) so the
   // scope proof follows the same code:/related: declarations that lint later enforces.
   const specs = await loadSpecs(root, { tip, history: null, drift: null })
   const claims = specs.flatMap((spec) => [...spec.code, ...spec.related])
-  return changed.some((path) => claims.some((claim) => relationClaimsPath(claim, path))
+  const claimed = (path: string) => claims.some((claim) => relationClaimsPath(claim, path))
+  const touchesGoverned = changed.some((path) => claimed(path)
     || path === 'spexcode.json' || path === 'spexcode.local.json'
     || (path.startsWith('.spec/') && !path.startsWith('.spec/.issues/'))
     || path === '.spec')
+  if (touchesGoverned) return governed
+  // Same discovery policy full lint's coverage rule uses, applied to the SHORT changed list rather than the
+  // whole tree: no extra git, no tree walk, and the answer is the same one coverage would give. The policy
+  // is read from the CANDIDATE, like the full pending lint does — judging the candidate against the
+  // worktree's roots would name files the commit itself never claimed to govern.
+  const cfg = loadConfig(root, treeFileText(root, tip, '.spec/spexcode.json') ?? treeFileText(root, tip, 'spexcode.json'))
+  const underGovernedRoot = (path: string) => cfg.governedRoots.some((rootDir) =>
+    rootDir === '.' || path === rootDir || path.startsWith(`${rootDir}/`))
+  return {
+    touchesGoverned: false,
+    uncoveredSources: changed.filter((path) => underGovernedRoot(path) && isSourcePath(path, cfg)),
+  }
 }
 
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
@@ -223,7 +249,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
       if (!scopedPaths.has(f)) owners.set(f, [...(owners.get(f) ?? []), s.id])
     }
     // one-govern: a node is source of truth for at most ONE file — DISTINCT base paths; several
-    // `path#symbol` selectors on the same file are one subject — so drift/eval/ack have a single
+    // `path#symbol` selectors on the same file are one subject — so drift and acknowledgements have a single
     // unambiguous subject (see [[governed-related]]). >1 is a defect — pick the true subject, demote the
     // rest to related. ERROR (the node-side twin of too-many-owners' file-side bound). 0 is fine.
     if (s.code.length > 1)
@@ -231,7 +257,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   }
   // a file is COVERED if any node GOVERNS (code:) or merely REFERENCES (related:) it; integrity covers both.
   // `related:` is the coverage net: govern is a sharp ideally-one-file pointer, so most files are reached by
-  // related, not govern (see [[governed-related]]). It carries coverage but never drift, never eval freshness.
+  // related, not govern (see [[governed-related]]). It carries coverage but never drift.
   for (const s of specs) for (const f of s.related) {
     if (!existsAtTip(f))
       out.push({ level: 'error', rule: 'integrity', spec: s.id, file: f, msg: `spec '${s.id}' lists a missing related file: ${f}` })
@@ -361,49 +387,28 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   // intersect any pinned unit's line range — extracted from the file AS OF that commit, by the
   // extension's ONE designated extractor — is ONE anchor-drift ERROR naming the hit selectors, unless a
   // Spec-OK ack covers it. On related:, the SAME engine yields only a soft warn on a hit — a scoped
-  // related miss is silent (never blocks, no ack, no eval freshness). Resolution failures are never
+  // related miss is silent (never blocks, no acknowledgement). Resolution failures are never
   // silent for either relation: a dead or ambiguous selector, a selector on a directory, and an
   // unparseable working-tree file ERROR. An extension with no designated extractor, or a designated
   // extractor that cannot run here, also ERRORS but skips those anchors so the remaining checks continue.
   type AnchorLintQuery = { id: string; version: number; relation: 'code' | 'related'; path: string; symbols: string[]; win: DriftPathEvent[] }
   type AnchorLintStep = { finding: Finding } | { query: AnchorLintQuery }
-  // @@@ one gate over every declared selector - an anchor source is a node's own `code:`/`related:` OR one
-  // eval scenario's. Both write the same `path#unit` and both resolve through the same [[code-anchor]]
-  // engine, so a dead, ambiguous, or unparseable one is the same integrity fact and is refused at the same
-  // gate. What does NOT cross is the drift WINDOW: `drift` is true only for a node's own relation, because
-  // a window over an eval axis is [[eval-core]]'s freshness, and a measurement gap must never block.
+  // @@@ one gate over every declared selector - an anchor source is a node's own `code:`/`related:`. Both
+  // relations write the same `path#unit` and resolve through the same [[code-anchor]] engine.
   // `owner` names the declaration site so the repair points at the file that actually holds the selector.
   type AnchorSource = { relation: 'code' | 'related'; entries: readonly RelationEntry[]; drift: boolean; owner: string; repair: string }
   const nodeSource = (s: any, relation: 'code' | 'related', entries: readonly RelationEntry[]): AnchorSource =>
     ({ relation, entries, drift: true, owner: `'${s.id}'`, repair: `the spec's ${relation}: entry` })
-  const scenarioSources = (s: any): AnchorSource[] => {
-    const evalPath = join(dirname(s.path), EVAL_FILE)
-    if (!existsAtTip(evalPath)) return []
-    let scenarios
-    // A malformed eval.md is `spex eval lint`'s eval-schema finding, not this gate's: refusing to parse it
-    // here would turn one measurement-layer typo into a blocked commit.
-    try { scenarios = parseScenarios(textAtTip(evalPath) ?? '') } catch { return [] }
-    return scenarios.flatMap((sc) => ([
-      // ONLY the scenario's OWN declarations. An empty scenario `code:` inherits the node's axis, and those
-      // entries are already this node's source above — re-reading them here would double-report one selector.
-      { relation: 'code' as const, raw: sc.code },
-      { relation: 'related' as const, raw: sc.related },
-    ] as const).flatMap(({ relation, raw }) => raw?.length
-      ? [{ relation, entries: parseRelation([...raw], relation).entries, drift: false,
-           owner: `'${s.id}' scenario '${sc.name}'`, repair: `the scenario's ${relation}: entry in ${evalPath}` }]
-      : []))
-  }
   const readyWarned = new Set<string>()
   const anchorSteps: AnchorLintStep[] = []
   // One parse per candidate file per run, shared by every source that anchors it. Without it a file many
-  // scenarios anchor is re-extracted once per scenario, and extraction is the expensive half of this gate.
+  // Each scoped anchor is re-extracted once, and extraction is the expensive half of this gate.
   const unitsAtTip = new Map<string, { units: any } | { error: string }>()
   const objectFormat = gitObjectFormat(root)
   for (const s of specs) {
     for (const src of [
       nodeSource(s, 'code', s.codeScoped),
       nodeSource(s, 'related', s.relatedScoped),
-      ...scenarioSources(s),
     ]) {
       const { relation, drift, owner, repair } = src
       for (const { path, selectors } of src.entries) {
@@ -490,7 +495,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
             : `update the spec in this commit, or clear this older debt with 'spex spec ack ${id} --reason "…"' before retrying the candidate`
       out.push({ level: 'error', rule: 'anchor-drift', spec: id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${id}' v${version} [${shas}]${parseNote} — the anchored contract's code moved: ${remedy}` })
     } else
-      out.push({ level: 'warn', rule: 'related-drift', spec: id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${id}') was changed by ${hits.length} commit(s) since v${version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no ack, no eval staleness)` })
+      out.push({ level: 'warn', rule: 'related-drift', spec: id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${id}') was changed by ${hits.length} commit(s) since v${version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no acknowledgement)` })
   }
 
   // drift: a governed file has commits NOT yet reflected in its spec. Judged by true git ancestry —
@@ -511,7 +516,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
 
   // related drift: the SOFT tier ([[governed-related]]). A referenced file moved ahead of the node's
   // version — a nudge that a dependency shifted. Same ancestry basis as govern drift, but WARN-only,
-  // never reaching the commit gate (driftGate reads govern) or eval freshness. It is COMMON (shared substrate and
+  // never reaching the commit gate (driftGate reads govern). It is COMMON (shared substrate and
   // faces change often without re-versioning every referrer), so per-file it is a wall; like
   // too-many-owners it collapses to ONE summary line, with the per-file detail riding the board
   // (relatedDriftFiles). It stays a soft edge, never a per-file interruption.
@@ -520,7 +525,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     const byNode = new Map<string, number>()
     for (const d of rd) byNode.set(d.id, (byNode.get(d.id) ?? 0) + 1)
     const worst = [...byNode].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => `${id}(${n})`).join(', ')
-    out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no ack, no eval staleness). Most: ${worst}` })
+    out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no acknowledgement). Most: ${worst}` })
   }
 
   return { sourceFiles: governed.slice().sort(), findings: out }

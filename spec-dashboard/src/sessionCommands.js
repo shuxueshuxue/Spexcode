@@ -6,11 +6,6 @@ export const UI_COMMANDS = [
   { name: 'command', color: 'blue', icon: 'command', button: true, typed: false, pressed: true, anchor: 'right',
     when: (session) => !!session?.status && session.status !== 'offline' && session.status !== 'queued' && session.liveness !== 'offline',
     labelKey: 'session.commandBtn', titleKey: 'session.commandTitle', shortcut: 'shell.commandBox' },
-  // eval's surface is the session-scoped Evals page, not a console-local tab or lifecycle button — the typed
-  // `/eval` navigates through the same permanent door rendered in the toolbar (`button: false`, available for
-  // every session state; an offline input is disabled, but the registry still states the honest capability).
-  { name: 'eval', color: 'cyan',   button: false, when: (session) => !!session?.status,
-    labelKey: 'sessionEval.btn', titleKey: 'sessionEval.btnTitle', descKey: 'session.cmd.evalDesc' },
   { name: 'relaunch', color: 'blue', icon: 'rotate-ccw', button: true, typed: false,
     when: (session) => !!session?.status && session.status !== 'queued' && session.status !== 'retired' && session.liveness === 'offline',
     labelKey: 'session.relaunch', titleKey: 'session.relaunchTitle' },

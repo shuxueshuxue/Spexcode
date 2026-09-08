@@ -44,7 +44,7 @@ export function firesEvent(id, event) {
 // what that key is RIGHT NOW rather than carrying a copy.
 //
 // The copies were the bug. Every hint used to be typed into the translated label — `'Search (/)'`,
-// `'Evals (⌥3 / ⌥F)'`, `'…(Alt+I)'` — in two languages, in three different glyph dialects, and unreachable
+// `'…(Alt+I)'` — in two languages, in three different glyph dialects, and unreachable
 // by a rebind. So a tooltip could name a key the keyboard no longer fired, and a chord the registry held
 // could reach the reader with its modifiers stripped or not at all. Resolving here means a hint cannot be
 // stale, cannot disagree with the legend, and cannot exist for an action that has no binding.

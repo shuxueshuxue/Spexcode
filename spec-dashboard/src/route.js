@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from '@spexcode/spec-core/review'
+import { ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery } from '@spexcode/spec-core/review'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
 // bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/sessions, #/graph, #/graph/<node>,
-// #/sessions/<id>, #/evals[?query], #/evals/<node>/<scenario>[?query], #/issues[?query], #/issues/<id>,
+// #/sessions/<id>, #/issues[?query], #/issues/<id>,
 // #/settings) — deliberately not the History API: the dashboard ships as a static dist behind plain file
 // servers/gateways with no index.html fallback, and a hash route needs nothing from the server. No router
 // dependency.
 //
 // The hash carries TWO axes (the GitHub list-URL grammar): the PATH names the object (a page, a detail),
-// the QUERY carries view state (a list's filters, the evals session scope) — so a filtered list is a
+// the QUERY carries view state (a list's filters) — so a filtered list is a
 // copyable, Back-restorable address and every consumer re-derives its whole state from the URL.
 
 // `spec` and `file` are DOCUMENT addresses — a node detail read as a resident document, a governed file read on its own.
@@ -18,11 +18,11 @@ import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 // nowhere to be addressed from and reading one meant opening a popup over whatever page was showing.
 // `empty` is the workspace holding NOTHING — an address because the state must be landable, reloadable and
 // leaveable. It is not a rail destination or document; only closing the last tab mints it ([[tab-strip]]).
-export const PAGES = ['graph', 'spec', 'file', 'sessions', 'evals', 'issues', 'settings', 'empty']
+export const PAGES = ['graph', 'spec', 'file', 'sessions', 'issues', 'settings', 'empty']
 // The rail is the workspace's top-level board bar. Spec is a resident board destination; a node or file
 // route projects back onto it instead of making the selected top-level board disappear. Graph remains
 // directly addressable for legacy links but is no longer a workspace destination or rail entry.
-export const RAIL_PAGES = ['spec', 'sessions', 'evals', 'issues', 'settings']
+export const RAIL_PAGES = ['spec', 'sessions', 'issues', 'settings']
 // The pages a static publication can actually answer. A published tree carries the spec index and one
 // document per node and nothing else, so Spec (with File and Graph as its neighbours) is the whole of what
 // it can serve — the live-only destinations have no data behind them here.
@@ -45,9 +45,8 @@ export function queryString(query) {
   return s ? `?${s}` : ''
 }
 
-// '#/graph/node-a' → { page: 'graph', param: 'node-a' }. '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
-// 'node/scenario' (the canonical eval DETAIL address — each segment decoded; the page splits on the first
-// '/'). '#/issues/<id>' → the issue detail. Anything after '?' inside the hash is the query axis.
+// '#/graph/node-a' → { page: 'graph', param: 'node-a' }. '#/sessions/abc' → { page: 'sessions', param: 'abc' }.
+// '#/issues/<id>' → the issue detail. Anything after '?' inside the hash is the query axis.
 // Anything unknown lands on sessions — the workspace's daily face. The graph remains an addressable legacy
 // view, but no unknown or cold address should silently put it on screen.
 export function parseRoute(hash) {
@@ -68,62 +67,40 @@ export function parseRoute(hash) {
   return { page, param, query }
 }
 
-// the LEGACY session-eval address ([[session-eval]]): '#/sessions/<id>/eval[/<node>/<scenario>]' → its
-// canonical [[evals-view]] form — the scoped default list ('#/evals?q=is:eval state:current scope:<id>')
-// or the scope-only detail ('#/evals/<node>/<scenario>?q=scope:<id>').
-// Pure: returns the canonical hash, or null when the hash isn't the legacy shape. The rewrite happens at
-// the parse layer (useRoute, with replace) so old links keep working and no page-level effect races it.
-export function legacyEvalHash(hash) {
-  const h = (hash || '').replace(/^#\/?/, '')
-  const path = h.split('?')[0]
-  const parts = path.split('/').filter(Boolean)
-  if (parts[0] !== 'sessions' || parts[2] !== 'eval') return null
-  const id = decodeURIComponent(parts[1] || '')
-  if (!id) return null
-  const node = parts[3] ? decodeURIComponent(parts[3]) : null
-  const scenario = parts.length > 4 ? parts.slice(4).map(decodeURIComponent).join('/') : null
-  const param = node && scenario ? `${node}/${scenario}` : null
-  return routeHash('evals', param, { q: param ? `scope:${id}` : scopedEvalQuery(id) })
-}
-
-// Session faces are URL state, except Evals: the session-scoped Evals list already owns that
-// address family ([[session-eval]]), so a face-shaped link is one replace into the canonical list.
+// Session faces are URL state; a face-shaped link with a resource surface is normalized by the session view.
 export function sessionSurfaceHash(hash) {
   const { page, param, query } = parseRoute(hash)
   if (page !== 'sessions' || !param || !query.surface) return null
-  if (query.surface === 'evals') return routeHash('evals', null, { q: scopedEvalQuery(param) })
   const resource = typeof query.surface === 'string' && query.surface.startsWith('resource:') && query.surface.length > 'resource:'.length
   if (query.surface !== 'conversation' && query.surface !== 'terminal' && query.surface !== 'diff' && !resource) return null
   return null
 }
 
-// the LEGACY structured review params ([[review-query]]): an old '#/evals|#/issues' address carrying
+// the LEGACY structured review params ([[review-query]]): an old '#/issues' address carrying
 // state/concluded/store/author/node/filer/verdict/freshness/kind/live/ok/session params replays as the
 // FULL visible token text (the page default with each param surgically applied) — a DETAIL address keeps
 // only its worktree scope, never list filters. Returns the canonical hash, or null when the address is
 // already canonical (bare, or ?q= only).
 export function legacyReviewHash(hash) {
   const { page, param, query } = parseRoute(hash)
-  if (page !== 'evals' && page !== 'issues') return null
+  if (page !== 'issues') return null
   if (!hasLegacyParams(query)) return null
   if (param != null) {
     return routeHash(page, param, query.session ? { q: `scope:${query.session}` } : null)
   }
-  const defaultText = page === 'issues' ? ISSUE_QUERY_DEFAULT : EVAL_QUERY_DEFAULT
-  const text = legacyQueryText(defaultText, query)
-  return routeHash(page, null, sameQuery(text, defaultText) ? null : { q: text })
+  const text = legacyQueryText(ISSUE_QUERY_DEFAULT, query)
+  return routeHash(page, null, sameQuery(text, ISSUE_QUERY_DEFAULT) ? null : { q: text })
 }
 
 export function invalidReviewPageHash(hash) {
   const { page, param, query } = parseRoute(hash)
-  if ((page !== 'evals' && page !== 'issues') || param != null || query.page == null) return null
+  if (page !== 'issues' || param != null || query.page == null) return null
   if (/^[1-9]\d*$/.test(query.page) && Number.isSafeInteger(Number(query.page))) return null
   const { page: _invalid, ...rest } = query
   return routeHash(page, null, rest)
 }
 
-// a param's '/'-separated segments are encoded one by one so a multi-segment param (evals' node/scenario)
-// keeps its path shape while each segment stays hash-safe.
+// A param's '/'-separated segments are encoded one by one so each segment stays hash-safe.
 export const routeHash = (page, param, query = null) =>
   `#/${page}${param ? `/${String(param).split('/').map(encodeURIComponent).join('/')}` : ''}${queryString(query)}`
 
@@ -140,12 +117,12 @@ export function navigate(page, param = null, { replace = false, query = null } =
   } else window.location.hash = h
 }
 
-// the live route — one hashchange subscription, parsed; the legacy shapes (session-eval path, structured
-// review params) normalize here (replace — idempotent across multiple mounted subscribers) before any
+// the live route — one hashchange subscription, parsed; legacy structured issue params normalize here
+// (replace — idempotent across multiple mounted subscribers) before any
 // page sees them.
 const currentRoute = () => {
   // Normalize every incoming hash before the shell sees it, so a deep link cannot leave a published tree
-  // claiming an Issues/Evals surface it has no data for. Spec is the landing face — the same address the
+  // claiming a review surface it has no data for. Spec is the landing face — the same address the
   // live dashboard opens a project on.
   if (PUBLIC_GRAPH_ONLY) {
     const face = parseRoute(window.location.hash)
@@ -153,7 +130,7 @@ const currentRoute = () => {
     window.history.replaceState(null, '', '#/spec')
     return parseRoute('#/spec')
   }
-  const legacy = legacyEvalHash(window.location.hash) || sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
+  const legacy = sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
     window.history.replaceState(null, '', legacy)
     return parseRoute(legacy)

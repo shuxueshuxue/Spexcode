@@ -7,7 +7,6 @@ code:
   - packages/spec-core/src/review/session.js#sessionPresent
 related:
   - spec-dashboard/src/IssuesPage.jsx
-  - spec-dashboard/src/EvalsFeed.jsx
   - packages/spec-core/src/review/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
 ---

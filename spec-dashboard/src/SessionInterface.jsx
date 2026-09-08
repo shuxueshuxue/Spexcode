@@ -8,13 +8,10 @@ import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } 
 import { useAttachQueue } from './useAttachQueue.jsx'
 import { harnessForId } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
-import { ReviewState } from './ReviewShell.jsx'
-import { TabCount } from './score.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import SessionForestPanel from './SessionForestPanel.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
-import { addressHash, routeAddress, sessionEvalAddress } from './address.js'
 import { routeHash } from './route.js'
 import { markNewTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
@@ -45,7 +42,7 @@ import { useDocumentAction } from './documentActions.jsx'
 import TabStrip from './TabStrip.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
-import { usePaneActive, useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 import { useSessionListState } from './sessionListState.js'
 
@@ -350,64 +347,6 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
   )
 }
 
-// The session action projection consumes only the canonical graph session projection. Last-known survives input invalidation,
-// tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
-// `rowPresent` separates the two ways a projection can be absent. A selected row that carries none is a
-// retained record the board no longer projects at all — a closed session leaves the graph and is served from
-// the archive index plus its id-addressed detail, neither of which carries eval summary — so it is dormant, exactly like the backend's own
-// dormant phase. Only a selection with no row yet is still arriving.
-export function sessionEvalDisplay(projection, connected = true, rowPresent = false) {
-  if (!projection) return { phase: rowPresent ? 'dormant' : 'loading' }
-  const stable = projection.phase === 'ready' && projection.value
-    ? projection.value
-    : projection.lastKnown?.value
-  if (!connected) return stable ? { phase: 'disconnected', ...stable } : { phase: 'disconnected' }
-  if (projection.phase === 'ready' && projection.value) return { phase: 'ready', ...projection.value }
-  // Dormant carries its last-known counts when it has them, and never a spinner: nothing is recomputing them.
-  if (projection.phase === 'dormant') return stable ? { phase: 'dormant', ...stable } : { phase: 'dormant' }
-  if (projection.phase === 'updating') return stable ? { phase: 'updating', ...stable } : { phase: 'loading' }
-  if (projection.phase === 'error') return stable ? { phase: 'error', ...stable } : { phase: 'error' }
-  return { phase: 'loading' }
-}
-
-function SessionEvalStats({ summary }) {
-  const t = useT()
-  const hasValue = Number.isInteger(summary.total)
-  if (!hasValue && summary.phase === 'loading') {
-    return <span className="si-eval-wait" data-tip={t('session.evalLoading')}><Icon name="loader" size={12} className="si-eval-spinner" /></span>
-  }
-  if (!hasValue && summary.phase === 'dormant') {
-    return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalDormant')} size={12} /></span>
-  }
-  if (!hasValue) {
-    return <span className="si-eval-wait"><ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} size={12} /></span>
-  }
-  return (
-    <span className={`si-eval-stats ${summary.phase}`} aria-hidden="true">
-      {summary.pass > 0 && (
-        <TabCount kind="eval" state="pass" cls="st-pass secondary" n={summary.pass} label={t('session.evalPass', { n: summary.pass })} />
-      )}
-      {summary.fail > 0 && (
-        <TabCount kind="eval" state="fail" cls="st-fail secondary" n={summary.fail} label={t('session.evalFail', { n: summary.fail })} />
-      )}
-      {summary.review > 0 && (
-        <TabCount kind="eval" state="review" cls="st-review secondary" n={summary.review} label={t('session.evalReview', { n: summary.review })} />
-      )}
-      {summary.blind > 0 && (
-        <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.blind} label={t('session.evalBlind', { n: summary.blind })} />
-      )}
-      {summary.unknown > 0 && (
-        <TabCount kind="eval" state="missing" cls="st-empty blind" n={summary.unknown} label={t('session.evalUnknown', { n: summary.unknown })} />
-      )}
-      {summary.phase === 'updating' && <Icon name="loader" size={11} className="si-eval-spinner si-eval-phase" />}
-      {summary.phase === 'dormant' && <ReviewState kind="eval" state="missing" title={t('session.evalDormantLast')} className="si-eval-phase" size={11} />}
-      {(summary.phase === 'disconnected' || summary.phase === 'error') && (
-        <ReviewState kind="eval" state="missing" title={t('session.evalUnavailable')} className="si-eval-phase" size={11} />
-      )}
-    </span>
-  )
-}
-
 // Window-level (capture) key handling, not panel onKeyDown: arrowing off the New Session tab unmounts its
 // textarea, so a panel listener would lose focus and kill nav; a window listener is focus-independent.
 
@@ -493,7 +432,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher, onSettings }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenArchive, onOpenSearch, reload, boardLive = false, archiveRequested = false, surface = null, route = null }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenArchive, onOpenSearch, reload, archiveRequested = false, surface = null, route = null }) {
   const t = useT()
   const scope = useViewScope()
   const { notify } = useTransientNotice()
@@ -660,7 +599,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // Conversation owns the shared command-shaped footer, so the transient terminal Command Box opener is
   // intentionally present but disabled on that surface instead of creating a second input face.
   const commandAvailable = !conversationSurface && uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
-  const evalSummary = sessionEvalDisplay(sessionActive ? selSession?.evalSummary : null, boardLive, !!selSession)
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
   const footerState = sessionFooterState(selSession)
   const resourceCatalog = selSession ? [
@@ -1084,11 +1022,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // `/merge` arrive through the plugin preset/skill path and never acquire a second dashboard runner.
   const runners = {
     command: () => { if (commandOpen) closeCommandBox(); else setCommandOpen(true) },
-    // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
-    // the typed /eval navigates to the session-scoped list through the ONE [[address-routing]] projection
-    // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
-    // address as a REAL anchor.
-    eval: () => { if (sessionActive) scope.open(routeAddress(sessionEvalAddress(active))) },
     relaunch: resumeAndReturnToWorking,
     stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → read-only Conversation
     close: (owner) => act('close', undefined, owner),
@@ -1133,48 +1066,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // each composer's attachment path ([[file-attach]]): its own queue, picker, and drop ring
   const newAttach = useAttachQueue({ inputRef: taRef, setValue: setPrompt, variant: 'new' })
   const commandAttach = useAttachQueue({ inputRef: msgRef, setValue: setMsg, variant: 'command' })
-  // THE EVAL DOOR'S ONE SENTENCE. The summary is a projection with phases, not a number that is either
-  // there or not, so the door says which phase it is reading and carries the last-known counts through
-  // every phase that still has them — a door that silently printed stale counts would be the same control
-  // in two different truths.
-  const evalKnownTitle = Number.isInteger(evalSummary.total) ? t('session.evalDoorSummary', evalSummary) : ''
-  const evalDoorTitle = evalSummary.phase === 'ready'
-    ? evalKnownTitle
-    : evalSummary.phase === 'updating'
-      ? t('session.evalUpdating', { summary: evalKnownTitle })
-      : evalSummary.phase === 'disconnected'
-        ? t('session.evalDisconnected', { summary: evalKnownTitle })
-        : evalSummary.phase === 'dormant'
-          ? (evalKnownTitle ? t('session.evalDormantKnown', { summary: evalKnownTitle }) : t('session.evalDormant'))
-          : evalSummary.phase === 'loading'
-            ? t('session.evalLoading')
-            : evalKnownTitle
-              ? t('session.evalFailedKnown', { summary: evalKnownTitle })
-              : t('session.evalUnavailable')
-  // THE SESSION'S EVAL DOOR lives on the AMBIENT LINE ([[status-bar]]), not in the document-action band.
-  // The band is a row of verbs that act on the document; this is one persistent readout of how the
-  // document's measurement is doing, which is the fact a status line exists to hold. It rides the right
-  // group beside the console's other document fact (unread resources) and outside the workspace ledger.
-  //
-  // IT MUST NOT LEAK ONTO A NEIGHBOUR. The workspace keeps documents MOUNTED while hidden ([[workspace-shell]]'s
-  // pool), so "am I rendered" is not "am I the document being read" — registering on mount alone would leave
-  // a session's eval glance sitting on the line while the reader is looking at a spec. The pane's own active
-  // flag is that distinction, and passing null disposes the registration in the same effect that made it, so
-  // the door leaves the line on the tab switch itself rather than one paint later.
-  const paneShowing = usePaneActive()
-  const evalDoorShowing = paneShowing && sessionActive && uiCmds.some((command) => command.name === 'eval')
-  useStatusItem(evalDoorShowing ? {
-    id: 'session-eval', side: 'right', priority: 25,
-    tooltip: evalDoorTitle,
-    node: (
-      <a className="si-eval-door" data-action="eval" href={addressHash(sessionEvalAddress(active))}
-        data-tip={evalDoorTitle} aria-label={evalDoorTitle}>
-        <Icon name="evals" size={14} />
-        <SessionEvalStats summary={evalSummary} />
-      </a>
-    ),
-  } : null)
-
   const documentKey = sessionActive
     ? routeHash('sessions', active, requestedSurface ? { surface: requestedSurface } : null)
     : null
@@ -1274,14 +1165,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
       }
-      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals) — is
-      // reserved over the console too: fall through
+      // the app's GLOBAL ⌥ command family — ⌥N (New Session composer) — is reserved over the console: fall through
       // UNHANDLED so the App-level window listener (registered after this child's, so next in the capture
       // chain) routes it — never forwarded to tmux. Matched by e.code for the same mac ⌥-dead-key reason as
       // ⌥I. ⌘/⌃ variants stay with the browser (⌘N/⌃N are its hard-reserved new-window accelerator anyway).
       // The ⌥-digit row left the reserve with the bindings it protected: the shell claims no digit now, so
       // holding one back would only make ⌥1 a key that does nothing anywhere.
-      if (e.altKey && !e.metaKey && !e.ctrlKey && ['KeyN', 'KeyF'].includes(e.code)) return
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'KeyN') return
       // a completion menu owns navigation/commit/dismiss while it's open — on the New Session prompt
       // OR Command Box. Capture claims Enter before the textarea, so accepting never also sends.
       if (menu) {
@@ -1427,8 +1317,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             }}
           >
               <SessionDocumentActions document={documentKey} actions={documentActions} />
-              {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
-                  contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
                 className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${diffSurface ? ' is-diff' : ''}${activeResource ? ' is-resource' : ''}`}
                 id={activeResource ? `si-resource-panel-${activeResource.id}` : `si-${activeBaseSurface}-panel-${active}`}

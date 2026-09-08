@@ -10,8 +10,6 @@ related:
   - spec-eval/src/filing.ts
   - spec-eval/src/sessioneval.ts
   - spec-dashboard/src/Evidence.jsx
-  - spec-dashboard/src/EventDetail.jsx
-  - spec-dashboard/src/EvalsFeed.jsx
 ---
 # evidence-kind-taxonomy
 

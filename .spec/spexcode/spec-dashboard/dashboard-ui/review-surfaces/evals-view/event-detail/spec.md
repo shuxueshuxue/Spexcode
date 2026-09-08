@@ -3,10 +3,6 @@ title: event-detail
 status: active
 hue: 200
 desc: The ONE evidence+reply detail (U1), store-agnostic — the content of the Evals DETAIL page ([[evals-view]], inside [[review-chrome]]'s shell): status band wearing the verdict badge + A/B strip; the MAIN column an evidence WORKSPACE (video under a custom review-track scrubber, the human scrubs and circles; gallery/transcripts/data through the one Evidence renderer) followed by the (node,scenario) remark thread with the composer DOCKED STICKY at the column's foot; the reading/session metadata (evaluator, time, filer liveness, human-ok, staleness readout) in the side rail. Reads readings and hosts remarks; never files one.
-code:
-  - spec-dashboard/src/EventDetail.jsx#EventDetail
-  - spec-dashboard/src/EventDetail.jsx#StepRail
-  - spec-dashboard/src/EventDetail.jsx#EvalRemarks
 related:
   - spec-eval/src/evaltab.ts
   - spec-cli/src/index.ts

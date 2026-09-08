@@ -1,7 +1,6 @@
 import { Handle, Position } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
 import { labelColor } from './color.js'
-import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 import { middleEllipsis } from './specMeta.js'
 export { middleEllipsis } from './specMeta.js'
@@ -98,7 +97,6 @@ export default function SpecNode({ data, selected }) {
           </span>
         )}
         <IssueBadge summary={data.reviewSummary?.issues} t={t} />
-        <ScenarioCount summary={data.reviewSummary?.evals} />
         <Editors data={data} />
       </div>
       {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}

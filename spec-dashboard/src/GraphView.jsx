@@ -27,9 +27,7 @@ import { useViewScope } from './ViewScope.jsx'
 import { Icon } from './icons.jsx'
 
 // code-split the heavy leaves off the desktop entry chunk: the session console drags in xterm (+addons),
-// the evals/issues pages the video annotator — none of which the first graph paint needs. SessionInterface
-// still MOUNTS immediately (warm terminals — its chunk is fetched right after the shell paints); the routed
-// pages fetch on first visit.
+// and the issues page is fetched on first visit. SessionInterface still MOUNTS immediately (warm terminals).
 
 const nodeTypes = { spec: SpecNode }
 // Layout coordinates name the node centre. Initial dimensions let React Flow place a new fixed-format tile
@@ -74,7 +72,7 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
   useEffect(() => {
   }, [graphOnly, page])
   // SessionInterface owns live terminals, so it stays mounted after the first visit. Do not eagerly mount
-  // it on graph/evals/issues routes: a cold dashboard should not open every session transport just because
+  // it on graph/issues routes: a cold dashboard should not open every session transport just because
   // the console is available as a sibling route.
   // focus survives a reload / a mobile↔desktop breakpoint remount within this tab (sessionStorage, so a
   // fresh tab still opens on the root); a stale saved id is fine — focusRaw below falls back to the root.
@@ -168,14 +166,11 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
     [nodeMenu, specs, sessions],
   )
   // one routing for BOTH palettes (board `/` and session-board ⌥+/): each row carries an app address
-  // (graph node, session tab, issue detail, or eval detail). The palette's caller supplies only the view
+  // (graph node, session tab, or issue detail). The palette's caller supplies only the view
   // callbacks needed for non-hash state; the address helper owns the route shape.
 
   // sel ↔ URL, two one-way syncs that converge: a deep-linked / history-walked `#/sessions/<sel>` applies
-  // its param to the selection; a selection made in the UI is ECHOED into the hash with replace (the tab
-  // echo is automatic state-naming — pages and details push, see route.js). The legacy
-  // `#/sessions/<id>/eval[/…]` shape never reaches here — the route layer normalizes it to the Evals
-  // family ([[session-eval]]) before any parse lands.
+  // its param to the selection; a selection made in the UI is ECHOED into the hash with replace.
 
 
   const children = useMemo(() => specs2.filter((s) => s.parent === focus.id), [specs2, focus])
@@ -392,7 +387,7 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
 
   // focus-return boundary ([[focus-return]]): a transient overlay (search / help / node popup) takes focus
   // when it opens; when the LAST one closes, hand focus back to whoever held it — else the docked sink.
-  // Never <body>. Pages (the session board, evals, issues, settings) are surfaces with their own focus discipline,
+  // Never <body>. Pages (the session board, issues, settings) are surfaces with their own focus discipline,
   // not transient overlays, so they stay out of this set.
   const anyOverlay = overlay
   const hadOverlay = useRef(anyOverlay)
@@ -411,7 +406,7 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
     const go = (t, e) => { if (!t) return false; e.preventDefault(); e.stopPropagation(); setKbdMode(true); focusNode(t.id); return true }
     // only one pane is mounted, so the first matching `.ov-body` descendant is the scroller (scroll.js drops a stale target)
     const bumpScroll = (delta) => popupScroll(
-      document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
+      document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-edit'), delta)
     const onKey = (e) => {
       if (helpOpen) {
         if (e.key === 'Escape' || firesKey('graph.help', e.key)) { e.preventDefault(); e.stopPropagation(); toggleHelp(); return true }
@@ -432,10 +427,10 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
       // Graph tiles never collide: nodesFocusable is off, so board focus is never DOM focus on a control.
       if ((e.key === 'Enter' || e.key === ' ') && e.target?.closest?.('button, a[href], input, select, textarea, summary')) return false
       if (page === 'sessions') return false // the session interface owns ALL its keys (arrows / Enter / typing / Esc / the graph)
-      // the Evals and Issues pages own their own keys (j/k list-walk, their inputs, their own Esc stack) —
-      // EvalsPage / IssuesPage handle them. Esc does NOT route pages anywhere ([[side-nav]]) — leaving is
+      // The Issues page owns its own keys (j/k list-walk, its inputs, its own Esc stack). Esc does NOT route
+      // pages anywhere ([[side-nav]]) — leaving is
       // the rail, an address, or history.
-      if (page === 'evals' || page === 'issues') return false
+      if (page === 'issues') return false
       // the settings page: `,` toggles back home; typing inside its shortcut-capture stays its own
       if (page === 'settings') {
         if (firesKey('graph.settings', e.key)) { e.preventDefault(); e.stopPropagation(); scope.open({ page: 'graph', param: null, query: null }); return true }
@@ -521,8 +516,6 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
       // [-key (the [[node]] mention opener): jump to a
       // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
       else if (!graphOnly && firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `); return true }
-      // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
-      else if (!graphOnly && firesKey('graph.evals', e.key)) { e.preventDefault(); scope.open({ page: 'evals', param: null, query: null }); return true }
       return false
     }
     return onKey(event)

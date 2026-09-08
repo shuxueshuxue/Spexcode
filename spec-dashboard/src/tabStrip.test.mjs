@@ -96,18 +96,18 @@ test('resource tabs name the resource only, without leaking the owning session t
   assert.doesNotMatch(source, /return `\$\{title\} · \$\{resource\?\.label \|\| key\}`/)
 })
 
-test('resident review tabs share the workspace strip and every board keeps the activity rail', () => {
-  // Evals, Issues, and Settings are resident tabs. Issues is the focused reading surface with no workspace
-  // dock, but the rail — the top-level board switch — never disappears under any board.
+test('resident issue tabs share the workspace strip and keep the activity rail', () => {
+  // Issues and Settings are resident tabs. Issues is the focused reading surface with no workspace dock,
+  // but the rail — the top-level board switch — never disappears.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
   assert.match(shell, /<SideBar page=\{page\} graphOnly=\{graphOnly\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
   assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
-  assert.match(shell, /if \(page === 'issues' \|\| page === 'evals'\) return 'none'/)
+  assert.match(shell, /if \(page === 'issues'\) return 'none'/)
 })
 
 test('resident tabs and the activity rail share view-owned page icons', () => {
-  for (const [page, icon] of [['spec', 'graph'], ['evals', 'evals'], ['issues', 'issues']]) {
+  for (const [page, icon] of [['spec', 'graph'], ['issues', 'issues']]) {
     assert.match(views, new RegExp(`${page}:\\s+\\{[^\\n]*resident: true, icon: '${icon}'`))
   }
   assert.match(builtInViewPlugins, /settings:\s*\{[\s\S]*?resident: true,[\s\S]*?icon: 'settings'/)

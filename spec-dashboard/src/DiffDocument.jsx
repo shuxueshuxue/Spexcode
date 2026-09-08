@@ -263,9 +263,9 @@ export default function DiffDocument({ sessionId }) {
     load()
   }
   const send = async () => { const res = await apiFetch(sessionUrl(sessionId, 'diff-comments', 'send'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (res.ok) load() }
-  if (state.phase === 'loading') return <div className="diff-state">{t('session.diffLoading')}</div>
-  if (state.phase === 'unavailable') return <div className="diff-state diff-unavailable">{t('session.diffUnavailable')}{state.detail ? <code className="diff-oids">{state.detail}</code> : null}</div>
-  if (state.phase === 'error') return <div className="diff-state error">{t('session.diffFailed', { message: state.error?.message || String(state.error) })}</div>
+  if (state.phase === 'loading') return <div className="diff-document diff-document-state"><div className="diff-state">{t('session.diffLoading')}</div></div>
+  if (state.phase === 'unavailable') return <div className="diff-document diff-document-state"><div className="diff-state diff-unavailable">{t('session.diffUnavailable')}{state.detail ? <code className="diff-oids">{state.detail}</code> : null}</div></div>
+  if (state.phase === 'error') return <div className="diff-document diff-document-state"><div className="diff-state error">{t('session.diffFailed', { message: state.error?.message || String(state.error) })}</div></div>
   // What the branch itself has to say, decided by the backend's branchState — never inferred from a list length.
   const branchNote = state.data.branchState === 'no-commits'
     ? <div className="diff-state diff-no-commits">{t('session.diffNoCommits')}</div>

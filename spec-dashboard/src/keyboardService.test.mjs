@@ -78,19 +78,16 @@ test('desktop tab close keeps the Alt chord and adds browser-style Meta/Ctrl W',
 })
 
 test('fixed chord display is complete while rebindable display follows live keys', () => {
-  const child = ACT.find((action) => action.id === 'graph.newChild')
   const del = ACT.find((action) => action.id === 'graph.del')
   const settings = ACT.find((action) => action.id === 'graph.settings')
-  assert.deepEqual(chordSequence('graph.newChild'), ['n', 'n'])
   assert.deepEqual(chordSequence('graph.del'), ['d', 'd'])
-  assert.deepEqual(displayKeysOf(child), ['nn'])
   assert.deepEqual(displayKeysOf(del), ['dd'])
   assert.deepEqual(displayKeysOf(settings, [';']), [';'])
 })
 
 test('structural chord dispatch is registry-owned, not a second literal grammar', () => {
   assert.match(graph, /import \{ chordSequence \} from '\.\/keymap\.js'/)
-  assert.match(graph, /const NEW_CHILD_CHORD = chordSequence\('graph\.newChild'\)\.join\(''\)/)
+  assert.doesNotMatch(graph, /graph\.newChild/)
   assert.match(graph, /const DELETE_CHORD = chordSequence\('graph\.del'\)\.join\(''\)/)
   assert.doesNotMatch(graph, /CHORDS\.nn|CHORDS\.dd/)
   assert.match(keymap, /export const chordSequence/) // the registry is the reader and dispatch source

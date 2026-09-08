@@ -523,8 +523,28 @@ export function retractRemark(ref: string, by: string): { thread: Issue; rid: st
 // the post-merge nudge TEXT ([[local-issues]]) — produced HERE so the toggle and the wording live in one
 // place; the post-merge git hook is a thin caller that just echoes this. Returns '' when the feature is OFF,
 // so the hook prints nothing.
+// @@@ never ask for what this tree will refuse - the store is trunk-committing, so `issue open` from a linked
+// worktree is rejected by requirePrimaryStore. This nudge fires wherever the merge ran, which is often such a
+// worktree, and it used to print the open command anyway: the system demanding the very thing it forbids, with
+// the refusal arriving only after the agent tried. The predicate is the SAME one the write enforces, read
+// here rather than re-derived by the hook, so the instruction and the enforcement can never disagree.
 export function nudge(node: string): string {
   if (!issuesEnabled()) return ''
+  const canOpenHere = overrideStoreDir() !== null || isPrimaryCheckout()
+  const record = canOpenHere
+    ? [
+      '     spex issue ls                            # read first — reply if already raised',
+      '     spex issue open "<concern>" [--node <id>]   # else open one',
+      'A supervisor drains the store later. (Advisory — skip if nothing is owed.)',
+    ]
+    : [
+      '     spex issue ls                            # reads work from here',
+      '   Opening one does NOT work from this tree: the store commits to the trunk',
+      '   checkout and a write from a linked worktree is refused. So carry the concern',
+      '   out in your declaration note instead and let the supervisor open it, or run',
+      '   the open from the trunk checkout.',
+      '(Advisory — skip if nothing is owed.)',
+    ]
   return [
     '── issues ─────────────────────────────────────────────────────────',
     `Your work (${node || 'this node'}) just landed. Two issue checks before you close:`,
@@ -538,9 +558,7 @@ export function nudge(node: string): string {
     "   forget to-do that doesn't earn a spec node. NOT a bug tracker (that is the",
     '   spec graph + the forge), NOT your assigned task or a fix you are about to',
     '   make — those need no issue. Only the taste that would otherwise evaporate:',
-    '     spex issue ls                            # read first — reply if already raised',
-    '     spex issue open "<concern>" [--node <id>]   # else open one',
-    'A supervisor drains the store later. (Advisory — skip if nothing is owed.)',
+    ...record,
     '───────────────────────────────────────────────────────────────────',
   ].join('\n')
 }

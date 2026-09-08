@@ -584,6 +584,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)
   hook-prompt <name>                  render canonical model-facing text for a runtime hook
   nudge <node>      the post-merge hook prints the issue nudge for a merged node
+  hook-merge        fold NUL-separated handler stdouts (stdin) into one payload when two speak JSON
   shared-runtime-spawn <cwd> <log> <pid> <scope> <cmd> [args…]  detached adapter control plane (launch script)
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)
   codex-turn   <sock> <threadId> <text…>  fire a follow-up turn on an owned thread (tests/scripts)

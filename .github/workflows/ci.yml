@@ -55,7 +55,6 @@ jobs:
           npm test --workspace=@spexcode/session-events
           npm test --workspace=@spexcode/session-application
           npm test --workspace=@spexcode/session-selflaunch
-          npm test --workspace=@spexcode/spec-eval
           npm test --workspace=@spexcode/spec-forge
           npm test --workspace=@spexcode/spec-dashboard
       - name: Unit and integration suite

@@ -75,7 +75,7 @@ function defaultTarget(live) {
   return [...live].sort((a, b) => (b.created || 0) - (a.created || 0))[0]?.id || 'new'
 }
 
-export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear }) {
+export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear, openSend = false }) {
   const t = useT()
   const { sessions = [], specs = [] } = useBoard()
   const { launchers, launcher, pickLauncher } = useLaunchers()
@@ -261,6 +261,9 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     setJump(action.jump)
     setPanel({ kind: 'send', x, y })
   }
+  useEffect(() => {
+    if (openSend && bodyReady && node) open({ key: 'send', preset: null, jump: false }, { clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 })
+  }, [openSend, bodyReady, node?.id])
   // the address chip's pick: a session id, or a new session — with the launcher it named, remembered the
   // way the New tab remembers its own pick, so the two launch doors never disagree.
   const address = ({ id, launcher: name }) => {

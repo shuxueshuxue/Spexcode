@@ -256,8 +256,8 @@ function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): Board
 function revisionCarriedBySessionSplice(
   base: BoardInputRevision,
   sample: Pick<SessionInputRevision, 'sessions'>,
-  board: Board,
-  stable: boolean,
+  _board: Board,
+  _stable: boolean,
 ): BoardInputRevision {
   return {
     full: base.full,

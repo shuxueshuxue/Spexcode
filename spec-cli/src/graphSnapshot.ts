@@ -1,7 +1,7 @@
 import { loadSpecs, requireGitWorkspace } from '@spexcode/spec-core'
 import { resolveLayout } from '@spexcode/spec-core'
 import { listSessions } from './sessions.js'
-import { driftIndex, historyIndex, pruneHistoryCaches, repoRoot } from '@spexcode/spec-core'
+import { pruneHistoryCaches, repoRoot } from '@spexcode/spec-core'
 import { residentForgeRevision, residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { boardThreads } from './issues.js'

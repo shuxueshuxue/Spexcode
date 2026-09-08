@@ -1025,7 +1025,7 @@ export function closeBoardFileWatchers(): void {
   projectRootWatcher?.close()
   projectRootWatcher = null
   if (projectRootLivenessTimer) { clearInterval(projectRootLivenessTimer); projectRootLivenessTimer = null }
-  for (const [name, row] of worktreeWatchers) {
+  for (const [_name, row] of worktreeWatchers) {
     row.close()
   }
   worktreeWatchers.clear()

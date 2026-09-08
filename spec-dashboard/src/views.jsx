@@ -1,6 +1,6 @@
 import { lazy } from 'react'
 import SessionsView from './SessionsView.jsx'
-import { useBoard, useBoardApi } from './workspace.jsx'
+import { useBoard, useBoardApi as _useBoardApi } from './workspace.jsx'
 import { registerPlugin, seedCoreViews, viewRegistry, viewRouteContract } from './viewCatalog.js'
 import { createSettingsViewPlugin } from './builtInViewPlugins.js'
 import { useViewScope } from './ViewScope.jsx'

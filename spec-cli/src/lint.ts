@@ -2,7 +2,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { readConfig, configPath, repoRoot, git, gitObjectFormat, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/spec-core'
 import { bodyMentions, loadSpecs, parseFrontmatter } from '@spexcode/spec-core'
-import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, parseRelation, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
+import { extractors, extractorFor, extOf, extractCachedBlob, blobShaForContent, parseCodeEntry, relationClaimsPath, resolveSelectors, windowEvents, anchorHitQueries, type RelationEntry } from '@spexcode/spec-core'
 import { DEFAULT_TEST_GLOBS, isSourcePath, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }

@@ -221,7 +221,7 @@ function MobileSessions({ sessions, openId, setOpenId, creating, setCreating, ne
   )
 }
 
-export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard, route = {} }) {
+export default function MobileApp({ specs, sessions, issuesStamp, _reloadBoard, route = {} }) {
   const t = useT()
   const byId = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
   const root = useMemo(() => specs.find((s) => !s.parent) || specs[0], [specs])

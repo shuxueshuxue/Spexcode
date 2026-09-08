@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, extractors, extractorFor, resolveAnchor, blobShaForContent, extractCachedBlob, resetBlobExtractionCacheForTests } from '@spexcode/spec-core'
+import { type Extractor, parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, extractors, extractorFor, resolveAnchor, blobShaForContent, extractCachedBlob, resetBlobExtractionCacheForTests } from '@spexcode/spec-core'
 import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
@@ -104,7 +104,7 @@ test('Tree-sitter is shipped with SpexCode rather than resolved from the governe
 test('live anchor extraction cache reuses a blob and invalidates on a changed blob', async () => {
   resetBlobExtractionCacheForTests()
   let calls = 0
-  const x = {
+  const x: Extractor = {
     id: 'counting', claims: () => true, ready: () => true,
     memoKey: (filename: string) => filename,
     extract: async (content: string) => { calls++; return [{ name: content, kind: 'function', start: 1, end: 1 }] },

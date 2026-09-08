@@ -148,6 +148,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     revealSpecPath(path)
   }, [focusId, parentOf])
   const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
+  const sendNode = useCallback((id) => navigate('spec', id, { query: { send: '1' } }), [])
   const [menu, setMenu] = useState(null)
   // A path's owner is already in the board the tree is built from, so "reveal owning node" needs no lookup
   // route: the first node whose `code:` claims the path IS the answer [[one-govern]] guarantees is single.
@@ -220,7 +221,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
           </Section>
         )}
       </div>
-      <ExplorerContextMenu menu={menu} onClose={closeMenu} owningNodeOf={owningNodeOf} />
+      <ExplorerContextMenu menu={menu} onClose={closeMenu} owningNodeOf={owningNodeOf} onSend={sendNode} />
       <button type="button" className="ft-graph-entry" data-tip={t('fileTree.graph')} aria-label={t('fileTree.graph')}
         onClick={openSpecGraph}>
         <Icon name="graph" size={14} />

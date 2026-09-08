@@ -104,8 +104,9 @@ like every other.
 A tree row's verbs were reachable only by a gesture a reader had to already know: ⌘/ctrl-click opens a row
 in its own tab, and nothing announced it. A right-click is where a workspace is
 asked what it can do with the thing under the cursor, so every explorer row answers one: a spec node offers
-the same vocabulary it offers on the graph ([[node-graph]]'s node menu) — open in a new tab, reveal on the
-graph, copy its link, copy its id — and a file offers open in a new tab, copy its link, copy its path, and
+the same vocabulary it offers on the graph ([[node-graph]]'s node menu) — send the node through the shared
+prose composer, open in a new tab, reveal on the graph, copy its link, copy its id — and a file offers open
+in a new tab, copy its link, copy its path, and
 **reveal owning node** only when some node's `code:` actually claims that path. A directory offers the one
 verb it has, because a folder is not a document ([[disk-tree]]).
 

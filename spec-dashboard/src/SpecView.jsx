@@ -11,7 +11,7 @@ import { useBoard } from './workspace.jsx'
 // same node must never be two implementations that can disagree about what the node says; the popup keeps
 // its place as a quick lens on board focus, and this is where a node is READ.
 
-export default function SpecView({ param }) {
+export default function SpecView({ param, query }) {
   const t = useT()
   const { specs } = useBoard()
   const node = useMemo(() => specs?.find((s) => s.id === param), [specs, param])
@@ -26,7 +26,7 @@ export default function SpecView({ param }) {
         <SpecPane node={node} />
         {/* the prose pane's selection layer ([[prose-dispatch]]) — pure z-layers over the reading column,
             so the document's own geometry is exactly what it was without it. */}
-        <ProseActions node={node} hostRef={proseRef} />
+        <ProseActions node={node} hostRef={proseRef} openSend={query?.send === '1'} />
       </div>
     </div>
   )

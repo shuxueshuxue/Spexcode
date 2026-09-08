@@ -615,7 +615,7 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => scope.open({ page: 'spec', param: focusRef.current.id, query: null })}
-          onSend={(id) => scope.open({ page: 'spec', param: id, query: { send: '1' } })}
+          onSend={(id) => startNew(`[[${id}]] `)}
           onDelete={(id) => startNew(CHORDS[DELETE_CHORD](id))}
           sessions={menuSessions}
           onOpenSession={openSession}

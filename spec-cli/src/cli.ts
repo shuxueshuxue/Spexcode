@@ -746,11 +746,21 @@ if (cmd === 'serve') {
     }
     await flushExit(0)
   } else if (sub === 'lint') {
-    const { specLintReport, pendingTouchesGoverned, DRIFT_GUIDANCE } = await import('./lint.js')
+    const { specLintReport, pendingScope, DRIFT_GUIDANCE } = await import('./lint.js')
     const pending = flag('pending')
     if (pending && process.env.SPEXCODE_GATE_SCOPE_ONLY === '1') {
-      const touches = await pendingTouchesGoverned(process.cwd(), pending)
-      if (!touches) process.exit(76)
+      const scope = await pendingScope(process.cwd(), pending)
+      if (!scope.touchesGoverned) {
+        // The gate is allowing this commit either way — coverage is a warning, never a gate ([[spec-lint]]).
+        // But "nothing governed was touched" and "this commit added source nobody governs" are the same exit
+        // code, and only one of them is a debt. Name it here, because the skip means no other run will.
+        if (scope.uncoveredSources.length) {
+          console.error(`• SpexCode: ${scope.uncoveredSources.length} new source file(s) here are claimed by no spec, so this commit was not linted:`)
+          for (const path of scope.uncoveredSources) console.error(`    ${path}`)
+          console.error('  Give each a home in a spec node\'s `code:` (one file) or `related:` — `spex spec search <topic>` finds the node. Allowed to land; coverage is a warning.')
+        }
+        process.exit(76)
+      }
     }
     const report = await specLintReport(undefined, undefined, {
       tip: pending || 'HEAD',

@@ -59,7 +59,7 @@ export function isSourceFile(root: string, path: string, policy: SourcePolicy): 
   return isTextWorktreeFile(root, path)
 }
 
-function isSourcePath(path: string, policy: SourcePolicy): boolean {
+export function isSourcePath(path: string, policy: SourcePolicy): boolean {
   if (isSpexCodeData(path)) return false
   if (policy.sourceIncludeGlobs !== null && !policy.sourceIncludeGlobs.some((glob) => globToRe(glob).test(path))) return false
   if (policy.sourceExcludeGlobs.some((glob) => globToRe(glob).test(path))) return false

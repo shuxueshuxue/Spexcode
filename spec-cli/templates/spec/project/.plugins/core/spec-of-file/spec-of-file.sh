@@ -19,6 +19,13 @@ profile_status=$?
 [ "$profile_status" -ne 0 ] && exit "$profile_status"
 S="${SPEX:-spex}"
 payload=$(cat 2>/dev/null)
+# @@@ decide you have nothing to do BEFORE doing any work - this hook is bound to EVERY PostToolUse, but it
+# only has something to say about a code MUTATION. The mutation verdict is a pure read of the payload we are
+# already holding, so it is the cheapest question available and it must be asked first: a Read/Grep/Bash tool
+# call has to leave here having spawned nothing. Session-store and repository resolution below both cost
+# subprocesses and are useless to a non-mutating call.
+paths=$(hp_code_path "$payload" mutate)
+[ -n "$paths" ] || exit 0
 sid=$(hp_session_id "$payload"); [ -n "$sid" ] || exit 0
 sdir=$(hp_store_dir "$sid") || exit 0
 repo=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
@@ -46,10 +53,8 @@ hp_actionable_repo_path() {
   printf '%s' "$rel"
 }
 
-# the code file(s) just MUTATED (empty when this tool didn't mutate a file, e.g. a pure read). A codex
-# multi-file apply_patch yields several paths (one per line) — annotate EACH governed code file, once.
-paths=$(hp_code_path "$payload" mutate)
-[ -n "$paths" ] || exit 0
+# `paths` was resolved above, before any subprocess. A codex multi-file apply_patch yields several paths
+# (one per line) — annotate EACH governed code file, once.
 led="$sdir/spec-of-file-seen"   # dedupe: once per session per file. Lists already-annotated paths.
 msg=""
 while IFS= read -r path; do

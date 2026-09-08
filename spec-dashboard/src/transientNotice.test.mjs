@@ -21,7 +21,10 @@ test('transient notices expire by readable length, honor overrides, and remain d
   assert.throws(() => resolveNoticeDuration('short', -1), /non-negative finite number/)
   assert.match(notice, /const \{ kind, duration \} = noticeOptions\(text, options\)/)
   assert.match(notice, /window\.setTimeout\(\(\) => dismiss\(id\), remaining\)/)
-  assert.match(notice, /onPointerEnter=\{\(\) => setInteraction\(notice\.id, 'pointer', true\)\}/)
+  // MOVE, never ENTER: a notice published under a resting pointer must not read that pointer as a reader.
+  assert.doesNotMatch(notice, /onPointerEnter=/)
+  assert.match(notice, /onPointerMove=\{\(\) => setInteraction\(notice\.id, 'pointer', true\)\}/)
+  assert.match(notice, /onPointerLeave=\{\(\) => setInteraction\(notice\.id, 'pointer', false\)\}/)
   assert.match(notice, /onFocus=\{\(\) => setInteraction\(notice\.id, 'focus', true\)\}/)
   assert.match(notice, /const paused = interaction\.pointer \|\| interaction\.focus/)
   assert.match(notice, /<IconButton icon="x"[^>]*onClick=\{\(\) => dismiss\(notice\.id\)\}/)
@@ -49,14 +52,16 @@ test('review surfaces and the session console publish through the shared mechani
 })
 
 test('notice chrome stays palette-native and below interactive overlays', () => {
-  assert.match(css, /\.tn-viewport\s*\{[^}]*position:\s*fixed;[^}]*top:\s*max\(16px, env\(safe-area-inset-top\)\);[^}]*right:\s*max\(16px, env\(safe-area-inset-right\)\);[^}]*bottom:\s*auto;[^}]*z-index:\s*50;[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*6px;[^}]*max-block-size:\s*min\(50dvh, 32rem\);[^}]*overflow-y:\s*auto;/s)
+  // the stack sits at the BOTTOM-right, clear of the status strip — the top-right belongs to the menus.
+  assert.match(css, /\.tn-viewport\s*\{[^}]*position:\s*fixed;[^}]*bottom:\s*calc\(var\(--line-status\) \+ max\(12px, env\(safe-area-inset-bottom\)\)\);[^}]*right:\s*max\(16px, env\(safe-area-inset-right\)\);[^}]*top:\s*auto;[^}]*z-index:\s*50;[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*gap:\s*6px;[^}]*max-block-size:\s*min\(50dvh, 32rem\);[^}]*overflow-y:\s*auto;/s)
   // a notice FLOATS, so it is painted the raised rung like every other pop-over ([[typography]]) — the
   // point of the assertion is that the tone comes from the palette, never from a literal.
   assert.match(css, /\.tn-notice\s*\{[^}]*color:\s*var\(--ink2\);[^}]*background:\s*color-mix\(in srgb, var\(--raised\) 96%, transparent\);/s)
   assert.match(css, /\.tn-notice\s*\{[^}]*flex:\s*0 0 auto;[^}]*min-block-size:\s*42px;/s)
   assert.match(css, /\.tn-notice\.success\s*\{\s*--tn-tone:\s*var\(--green\);\s*\}/)
   assert.match(css, /\.tn-notice\.error\s*\{\s*--tn-tone:\s*var\(--red\);\s*\}/)
-  assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.tn-viewport\s*\{[^}]*top:\s*max\(10px, env\(safe-area-inset-top\)\);[^}]*right:\s*max\(10px, env\(safe-area-inset-right\)\);[^}]*bottom:\s*auto;/s)
+  // the phone shell keeps the top edge: its own tab bar owns the bottom.
+  assert.match(css, /@media \(max-width: 640px\)\s*\{[\s\S]*?\.tn-viewport\s*\{[^}]*top:\s*max\(10px, env\(safe-area-inset-top\)\);[^}]*right:\s*max\(10px, env\(safe-area-inset-right\)\);[^}]*bottom:\s*auto;/s)
   assert.match(css, /\.tn-progress\s*\{[^}]*animation:\s*tn-progress var\(--tn-duration\) linear forwards;/s)
   assert.match(css, /\.tn-notice\[data-paused='true'\] \.tn-progress\s*\{\s*animation-play-state:\s*paused;/s)
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.tn-notice, \.tn-progress \{ animation: none; \} \.tn-progress \{ transform: scaleX\(1\); \} \}/)

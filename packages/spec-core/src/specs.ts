@@ -125,12 +125,13 @@ function walk(dir: string, parent: string | null, acc: Raw[]) {
 export function mintIds(segs: string[][]): string[] {
   // NFC pins one canonical byte form for a non-ASCII dir name (macOS hands out NFD basenames), so a typed
   // `[[中文节点]]` (NFC, what an IME emits) string-matches the minted id on every platform.
-  const suffix = (s: string[], k: number) => s.slice(s.length - k).join('_').normalize('NFC')
-  return segs.map((s, i) => {
-    let k = 1
-    while (k < s.length && segs.some((o, j) => j !== i && o.length >= k && suffix(o, k) === suffix(s, k))) k++
-    return suffix(s, k)
+  const suffixes = segs.map((s) => Array.from({ length: s.length }, (_, i) => s.slice(s.length - i - 1).join('_').normalize('NFC')))
+  const counts: Map<string, number>[] = []
+  for (const names of suffixes) names.forEach((name, i) => {
+    const count = counts[i] ??= new Map()
+    count.set(name, (count.get(name) ?? 0) + 1)
   })
+  return suffixes.map((names) => names.find((name, i) => counts[i].get(name) === 1) ?? names.at(-1) ?? '')
 }
 
 // re-key each node via the mint (overrides walk's placeholder basename id/parent); the second loop

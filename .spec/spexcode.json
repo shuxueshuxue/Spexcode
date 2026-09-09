@@ -2,8 +2,8 @@
   "harnesses": ["claude", "codex", "opencode", "pi", "pi-headless", "codex-headless"],
   "lint": {
     "governedRoots": ["spec-dashboard/src", "spec-cli/src", "packages/session-protocol/src", "packages/session-topology/src", "packages/session-selflaunch/src", "spec-forge/src"],
-    "sourceExtensions": ["ts", "tsx", "js", "jsx"],
-  }
+    "sourceExtensions": ["ts", "tsx", "js", "jsx"]
+  },
   "doctor": {
     "altitude": { "lineBudget": 50, "charBudget": 4200, "sizeable": 35, "dense": 1.3, "steps": 3 },
     "breadth": { "maxChildren": 8 }

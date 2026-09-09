@@ -58,8 +58,14 @@ includes Git's temporary index for `--only`, pathspec and `-a` commits, never a 
 so unstaged files cannot supply context for absent bytes. There is no history walk or persistent cache.
 Use the existing frontmatter parser and canonical id mint on batched tree blobs: `loadSpecs` derives
 history and drift (measured 1.69 s for 375 nodes), while its filesystem-only lite view does not expose
-candidate relations. The commit-context invocation has a 0.3 s budget on this repository; timings belong
-in evidence, never in the printed block.
+candidate relations. The budget is at most 200 ms incremental work over the same launcher's nearly empty
+`internal trunk` invocation; process and launcher startup are the baseline, not graph work. Interleaved
+fresh-process measurements on this repository's anchored proof candidate give a 208 ms baseline and
+197 ms median paired increment (individual increments 164–229 ms under shared host load). The full
+context invocation's median is 398 ms. Graph reading accounts for 95 ms, diff/index work 34 ms, and
+anchor extraction plus row construction 51 ms; trailer writing takes another 5 ms. These measurements
+are evidence for the budget, never text in the commit block. The path scales with candidate declarations
+and changed anchored source, not the repository's commit history.
 
 No hook is added. Dogfood installs the canonical template with `npm run hooks`; adopters receive it through
 `spex materialize` (also during `spex init`). The template resolves the committing checkout's CLI first,

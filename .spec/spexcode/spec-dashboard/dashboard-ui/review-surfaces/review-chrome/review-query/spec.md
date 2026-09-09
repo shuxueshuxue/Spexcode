@@ -2,7 +2,7 @@
 title: review-query
 status: active
 hue: 205
-desc: The ONE token-query engine behind both review lists — scanner/parser/serializer, token surgery, last-wins matcher, legacy-param replay, and bounded inline autocomplete — pure JS with named exports any consumer can reuse.
+desc: The ONE token-query engine behind the Issues list — scanner/parser/serializer, token surgery, last-wins matcher, legacy-param replay, and bounded inline autocomplete — pure JS with named exports any consumer can reuse.
 code:
   - packages/spec-core/src/review/reviewQuery.js
 related:
@@ -39,15 +39,13 @@ and the server paging surface that needs canonical review addresses.
   engine, reached through its token→state bridge; no second predicate exists here.
 - **Default view = bare address.** queryParam compares token-normalized text against the page default
   (Issues `is:issue state:open`) — equal or empty means the bare page address, anything else exactly
-  `?q=<raw text>`. The evidence default is `all` with no hidden data-dependent fallback.
+  `?q=<raw text>`.
 - **A surface that wants "this object's rows" asks for a TEXT, never a second filter path.** The named
-  builders — `nodeIssueQuery(node)`, with `scopedEvalQuery` / `nodeEvalQuery` still exported beside it
-  and called by nothing — are each the page default with one qualifier applied through the same surgery
-  above, so a door and the list it leads to are literally one query. That is what keeps an aggregate
-  affordance honest: the node popup's issues pane and [[context-dock]]'s issues panel cannot develop
-  private ideas of what "open" or "this node's" means,
-  because none of them owns a predicate. Adding a builder is adding one line here, and it is the only place
-  a canonical filtered address is minted.
+  builder — `nodeIssueQuery(node)` — is the page default with one qualifier applied through the same
+  surgery above, so a door and the list it leads to are literally one query. That is what keeps an
+  aggregate affordance honest: the node popup's issues pane and [[context-dock]]'s issues panel cannot
+  develop private ideas of what "open" or "this node's" means, because neither owns a predicate. Adding a
+  builder is adding one line here, and it is the only place a canonical filtered address is minted.
 - **Legacy params replay as the full visible state.** An old structured list address rebuilds the
   default text with each param surgically applied — state/concluded→state:, ok=1→state:reviewed,
   kind→evidence: (kind=all → nothing), store/author/node/filer/verdict/freshness→their token,

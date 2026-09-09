@@ -36,18 +36,17 @@ physical key reaches a handler that performs the action; `-` means no action (th
 controls may still receive it). `graph*` includes the graph-only public face where noted. This is the
 pre-refactor state measured from the source and spot-checked in Chromium against the running dashboard.
 
-| registry action | graph (address only) | spec / file | sessions | evals | issues | settings | empty |
+| registry action | graph (address only) | spec / file | sessions | issues | settings | empty |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `nav.up`, `nav.down`, `nav.parent`, `nav.child` | fire; Shift passes through popup lens | - | - | - | - | - | - |
-| `graph.zoomIn`, `graph.zoomOut`, `graph.zoomReset` | fire | - | - | - | - | - | - |
-| `graph.info` (`i` / Enter) | fire; popup owns Enter as inert | - | - | - | - | - | - |
-| `graph.search` (`/`) | fire; node palette | - | - | - | - | - | - |
-| `graph.cycle`, `graph.cycleRev` | fire | - | - | - | - | - | - |
-| `graph.fresh` (`[`) | fire; new-session route | - | - | - | - | - | - |
-| `graph.evals` (`f`) | fire; evals route | - | - | - | - | - | - |
-| `graph.newChild`, `graph.del` chords | fire | - | - | - | - | - | - |
-| `graph.settings` (`,`) | fire to settings; settings-page toggle is dead | - | - | - | - | - | - |
-| `graph.help` (`?`) | fire; graph legend | - | - | - | - | - | - |
+| `nav.up`, `nav.down`, `nav.parent`, `nav.child` | fire; Shift passes through popup lens | - | - | - | - | - |
+| `graph.zoomIn`, `graph.zoomOut`, `graph.zoomReset` | fire | - | - | - | - | - |
+| `graph.info` (`i` / Enter) | fire; popup owns Enter as inert | - | - | - | - | - |
+| `graph.search` (`/`) | fire; node palette | - | - | - | - | - |
+| `graph.cycle`, `graph.cycleRev` | fire | - | - | - | - | - |
+| `graph.fresh` (`[`) | fire; new-session route | - | - | - | - | - |
+| `graph.newChild`, `graph.del` chords | fire | - | - | - | - | - |
+| `graph.settings` (`,`) | fire to settings; settings-page toggle is dead | - | - | - | - | - |
+| `graph.help` (`?`) | fire; graph legend | - | - | - | - | - |
 
 The shell-level vocabulary was present only inside `GraphView`'s mounted effect, despite [[side-nav]]
 declaring it window-global. Therefore `Alt+1..5`, `Alt+N`, `Alt+F`, `Alt+/`, and the global slash/search

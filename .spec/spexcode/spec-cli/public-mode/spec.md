@@ -37,7 +37,7 @@ loopback, no TLS, no gate — a pure additive switch over [[spec-cli]]'s supervi
 change (it already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
 This is a trusted collaboration gateway, not the anonymous public artifact. [[public-spec-graph]] builds
-the latter as static files with no gateway, API, terminal, session, issue, eval, or write surface; neither
+the latter as static files with no gateway, API, terminal, session, issue, or write surface; neither
 mode is a weaker spelling of the other.
 
 **The SPA fallback is for routes, never for files.** Only an extensionless path (`/issues/3`) falls back

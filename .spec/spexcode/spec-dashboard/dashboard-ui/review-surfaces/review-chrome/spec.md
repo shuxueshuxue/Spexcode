@@ -2,7 +2,7 @@
 title: review-chrome
 status: active
 hue: 205
-desc: The ONE shared paged-review contract and page chrome both review surfaces render — request-layer slices, GitHub ListView query/section/facet/pagination chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — so #/evals and #/issues cannot drift into near-identical dialects.
+desc: The ONE shared paged-review contract and page chrome the Issues pages render — request-layer slices, GitHub ListView query/section/facet/pagination chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — kept in one module apart from the page that uses it.
 code:
   - spec-dashboard/src/ReviewShell.jsx#ListPage
   - spec-dashboard/src/ReviewShell.jsx#DetailShell
@@ -16,15 +16,15 @@ related:
 
 ## raw source
 
-Evals and Issues are GitHub-style list/detail pairs built from ONE component set. The old master-detail
-copies proved the drift risk. Shared ListView/query/facet/row/state primitives and DetailShell live here;
+Evals and Issues were GitHub-style list/detail pairs built from ONE component set, after their old
+master-detail copies proved the drift risk. Shared ListView/query/facet/row/state primitives and DetailShell live here;
 domain-only behavior stays in its page. No empty abstraction or page-local near-copy is allowed.
 
 ## expanded spec
 
 - **ONE visible, editable token query is the whole list state** ([[review-query]] is the engine). The
-  32px combobox shows the raw text — Issues defaults to `is:issue state:open`, Evals to
-  `is:eval` — and every control is only a query BUILDER over the COMMITTED text: section
+  32px combobox shows the raw text — Issues defaults to `is:issue state:open` — and every control is
+  only a query BUILDER over the COMMITTED text: section
   tabs and low-cardinality facet menus perform token surgery and PUSH, so a pick is always visible as
   text and no control owns private filter state. **The committed text replays as a CONTINUABLE edit**:
   the visible value is the trimmed tokens plus exactly ONE trailing ASCII space with the caret parked
@@ -58,17 +58,17 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   that menu (not matching rows): desktop excludes a facet still visible beside the trigger, while 390px
   includes every displaced group; zero has no badge. Its accessible name includes the same active count.
   Tab counts are computed under the REST of the query. A section may also carry ONE quieter count SUFFIX
-  beside its number when its domain splits that section ([[review-filters]]; Evals' stale remeasurement
-  debt): it is part of the same button — its label, its accessible name, never a second control or a second
+  beside its number when its domain splits that section ([[review-filters]]): it is part of the same
+  button — its label, its accessible name, never a second control or a second
   pill of equal weight. The page supplies it as a full text plus its COMPACT face, and the phone width shows
   the compact one while the accessible name and tooltip keep the full text — the same condense-the-face rule
   a direct facet follows. What condenses is wording; a count this chrome was given is never hidden at any
   width. When no secondary group has real options and none
   is active, the trigger is absent: no real options means no fake control. An ACTIVE value whose menu
   option vanished keeps a cheap All off-switch (the visible text is the canonical release).
-  Issues uses the left controls as its exhaustive Open/Closed tablist. Evals uses the SAME slot and rhythm
-  as a named Fail/Pass/Unmeasured pressed-button quick-filter group because the axis is non-exhaustive; no
-  button is pressed on the honest all-verdict default. Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
+  Issues uses the left controls as its exhaustive Open/Closed tablist; a non-exhaustive axis takes the SAME
+  slot and rhythm as a pressed-button quick-filter group, with no button pressed on its all-values default.
+  Menu open focuses the checked/first radio; Arrow/Home/End rove; Escape restores the trigger, while a
   SELECTION releases like every builder — into the query input, its trigger keeping focus only when the
   pick changed nothing — and outside click keeps clicked focus. Each secondary facet is its own named
   radio group inside the menu,
@@ -82,7 +82,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   direct may condense its visible face to the selected value while its accessible name stays fully qualified;
   section, direct-facet, and secondary-filter controls never overlap even when both filters are active.
   The header there takes only the lines its OWN content needs — one 49px row when everything fits, exactly
-  two contained lines when it does not (a split count pushes Evals over; Issues stays at one) — and its
+  two contained lines when it does not (Issues stays at one) — and its
   rendered content always fits inside its own box. It never clips a control against that box, drops one, or
   lets the page scroll sideways: when the width budget runs out the header grows DOWNWARD, the list starts
   lower, and every control keeps its ≥44px target.
@@ -92,8 +92,8 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   BEFORE slicing, then returns only `{ items, page, perPage, total, sourceTotal, pageCount, prev, next,
   revision, counts, facets, section }`: `items` is at most one page; `sourceTotal` distinguishes a vacant
   source from a filtered-zero view; counts and facet options describe the complete filtered population
-  under their documented rest-of-query rules. The two pages, trunk and scoped Evals, and every
-  issue store consume this same shape. No frontend receives a full collection in order to slice or hide it,
+  under their documented rest-of-query rules. Every issue store consumes this same shape. No frontend
+  receives a full collection in order to slice or hide it,
   and no endpoint wraps a full collection beside a cosmetic page.
   The revision names the stable source snapshot used for count and slice. Local/aggregate sources define a
   deterministic merge order and revision; forge adapters push page/per-page/filter/sort to native host
@@ -116,9 +116,9 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   themselves from an honest empty page. At 390px the same controls wrap without horizontal overflow; no
   mobile-only pagination dialect exists.
 - **Matching is [[review-filters]], not page code.** The canonical ListViews bridge their ONE parsed token
-  text into that shared Issue/Eval engine and render its data-derived options; [[node-popup]] and
-  the measurement view project the same adapters into one extremely compact embedded control with popup-local
-  state. This node owns the presentations and canonical address behavior — never a second parser or a
+  text into that shared engine and render its data-derived options; [[node-popup]] projects the same
+  adapters into one extremely compact embedded control with popup-local state. This node owns the
+  presentations and canonical address behavior — never a second parser or a
   second field predicate.
 - **Rows use ONE two-level information grammar.** Every navigable row exposes one full-row REAL `<a>` detail
   anchor, while the shared structured content is its sibling so a node URL or a filter chip is never nested
@@ -141,14 +141,13 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   works — and copy-address is in the menu precisely because suppressing the native one would otherwise take
   away the single thing being a real anchor was buying. The menu mints its actions from the row's OWN href
   rather than re-deriving an address from the row's data, which would be the same address minted twice.
-- **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for eval verdicts
-  (fresh/stale pass/fail and unmeasured/legacy) and issue lifecycle (open vs every concluded state). Evals
-  list leading marks, detail status, and every A/B reading selector consume it; Issues list/detail and the
-  compact `IssueCard` entries consume the same issue half. In list rows the shared primitive fixes one
-  optical box, rendered size, stroke weight, and alignment for every issue/eval state, so switching domain
-  or state never shifts the row; detail contexts may still request their own explicit size. Glyphs come only
-  from [[icon-system]] — no page-local SVG, CSS dot, raw status pill, Unicode check/cross, or Eval-only
-  alignment patch. Small overview surfaces may add counts beside the primitive, but never mint another
+- **State is one data-driven primitive.** The shared mapping owns `icon + label + tone` for issue
+  lifecycle (open vs every concluded state); Issues list/detail, the compact `IssueCard` entries and the
+  context dock consume it. In list rows the shared primitive fixes one optical box, rendered size, stroke
+  weight, and alignment for every issue state, so switching state never shifts the row; detail contexts may
+  still request their own explicit size. Glyphs come only from [[icon-system]] — no page-local SVG, CSS
+  dot, raw status pill, Unicode check/cross, or page-only alignment patch. Small overview surfaces may add
+  counts beside the primitive, but never mint another
   state mapping.
 - **`DetailShell` follows GitHub's issue grammar:** title/meta HEADER, STATUS band, MAIN content with an
   optional docked composer, and a metadata SIDE rail. It is the shell for every STANDALONE page in these
@@ -164,8 +163,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   title FIRST line's visual center — at every width and language, and a wrapping title keeps the anchor
   tied to line one, never re-centered against the whole block. No page or breakpoint may add its own
   pixel offset, and the anchor keeps its ≥24px hit target and focus ring. The header has no generic
-  trailing action slot: detail-local exits belong in their actual content contract, and scoped Evals
-  deliberately expose only the list-return arrow here (the measurement view). Source failure
+  trailing action slot: detail-local exits belong in their actual content contract. Source failure
   and honest not-found are distinct faces. On desktop the SIDE rail is **sticky in its grid column**
   (never `position:fixed`): while a long main column scrolls, the rail pins near the scrollport top so
   the metadata stays on screen — grid containment keeps it off the header (which scrolls away normally)

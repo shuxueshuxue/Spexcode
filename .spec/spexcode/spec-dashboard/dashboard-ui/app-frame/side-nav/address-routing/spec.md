@@ -2,7 +2,7 @@
 title: address-routing
 status: active
 hue: 205
-desc: A single dashboard address vocabulary for clickable references — graph nodes, sessions, issues, and evals — projected to canonical hash URLs and executed through one navigation helper.
+desc: A single dashboard address vocabulary for clickable references — graph nodes, spec documents, sessions and their faces, issues, and review lists — projected to canonical hash URLs and executed through one navigation helper.
 code:
   - spec-dashboard/src/address.js
 related:
@@ -41,29 +41,11 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   its existing meaning — the per-session base-surface preference — while the explicit query is the only visible
   selector and is written only by a user navigation gesture. Resource faces are ordinary session object tabs:
   their canonical address is the tab identity, opening dedupes/focuses it, and closing it never tears down the
-  session's tmux/PTY. `surface=evals` is deliberately not a new
-  session face: route arrival REPLACES it with the canonical scoped Evals list `#/evals?q=scope:<id>` (the
-  same projection as session proof), so one session reading has one Evals address family. Unknown face
-  values are ignored and the bare session resolution applies.
-- `session-eval` opens the scoped default list `#/evals?q=is:eval scope:<id>` — or, with
-  a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages (session proof /
-  the measurement view). This is the address an MR/CI note pastes so a reviewer one-clicks into the live,
-  remarkable, worktree-rooted reading of an un-merged branch — and the address every session DOOR wears:
-  the console tab bar's and the phone session header's eval entries are REAL anchors whose href is this
-  projection, and the scoped Evals pages mint every scoped href (rows, queue neighbors, the detail's way
-  back to the scoped list) through it too. Only that scoped list exposes the separate real anchor back
-  to `#/sessions/<id>`; details first return to their canonical scoped list, so the scope grammar lives
-  here and nowhere else. The old
-  `#/sessions/<id>/eval[/<node>/<scenario>]` shape is LEGACY: the route layer normalizes it to this form
-  on arrival ([[side-nav]]) and nothing mints it anymore.
+  session's tmux/PTY. Unknown face values are ignored and the bare session resolution applies.
 - `issue` opens `#/issues/<issue-id>` — the issue's own DETAIL page ([[issues-view]]).
-- `eval` opens `#/evals/<node>/<scenario>` — the eval's own DETAIL page, TRUNK-rooted (the measurement view), path
-  only (the detail hash carries no list filters); a not-yet-merged session reading's address is
-  `session-eval`, not this. **Scenario-less**, `eval(nodeId)` is the node's AGGREGATE entry: the Evals LIST
-  filtered to that node — `#/evals?q=is:eval node:<id>`, [[review-query]]'s canonical token
-  text (the default view + the `node` qualifier, minted via `nodeEvalQuery`) — the address every aggregate
-  score/count affordance (the score badge) mints. The list-filter grammar lives in this one projection
-  and nowhere else.
+- `review-list` opens a review board with a committed query — `#/issues?q=<query>` — the address a
+  list-filter affordance mints (the node popup's *View all* anchor carries its fixed `node:` qualifier
+  through it). The list-filter grammar lives in this one projection and nowhere else.
 - `hash` is the address a caller ALREADY HOLDS. It is the one kind that names no object, and it exists for
   the surface that received a canonical href from one of the kinds above and must now act on it — a review
   row hands its own `href` to its context menu, and the menu copies THAT. The alternative is to rebuild an
@@ -80,17 +62,14 @@ the same transaction instead of giving graph focus a second state channel.
 document URL, preserving its origin and project pathname (`/p/<id>/`) without a public-host setting. A copy
 action therefore hands over a URL a recipient can open in the same deployment, not a bare hash or a local-only
 address.
-`detailBackHash(page, scopeId)` is the review details' **return gate** — the compact back anchor's href
+`detailBackHash(page)` is the review details' **return gate** — the compact back anchor's href
 ([[review-chrome]]'s DetailShell), derived ONLY from the detail's own canonical address: `#/issues` from
-an issue detail, the bare `#/evals` from a TRUNK eval detail, and the scoped DEFAULT list (the same
-`session-eval` projection the doors mint, `scope:` token kept) from a SCOPED eval detail — "back" always
-means the list on the detail's own data-source axis. The scope never diverts the back arrow to the
-session console: a worktree-rooted reading reaches the terminal only through the scoped LIST's icon-only
-door (the measurement view). The helper takes no history, referrer, or session-presence input
-at all, so a pushed visit and a direct open share one destination by construction.
+an issue detail, `#/spec` from any other page — "back" always means the list on the detail's own
+data-source axis. The helper takes no history, referrer, or session-presence input at all, so a pushed
+visit and a direct open share one destination by construction.
 Consumers may choose button or anchor chrome, but they do not decide the route vocabulary. That keeps review
-objects first-class: issue and scenario references land on their owning review pages, never by accident on
-the bound spec node or a node-popup tab.
+objects first-class: issue references land on their owning review pages, never by accident on the bound
+spec node or a node-popup tab.
 
 Review list addresses also carry the ONE pagination grammar. Page follows `q` when one exists. Pagination
 anchors preserve q and change only page, including minting explicit `page=1` when returning to the first

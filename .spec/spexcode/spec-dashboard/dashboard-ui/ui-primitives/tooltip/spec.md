@@ -48,6 +48,6 @@ Behaviour, the modern contract:
   `role=tooltip` bubble. Multi-line tips (`\n` joins) render as lines, not one blob.
 
 The migrated surfaces are the interactive chrome: the [[side-nav]] rail, the
-HUD/help and action buttons, session pills/avatars/status glyphs, chips and badges across the node,
-evals, and issues views. The phone face keeps native `title=` (no hover there, and the layer mounts only
+HUD/help and action buttons, session pills/avatars/status glyphs, chips and badges across the node
+and issues views. The phone face keeps native `title=` (no hover there, and the layer mounts only
 in the desktop shell).

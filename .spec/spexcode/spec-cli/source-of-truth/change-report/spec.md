@@ -18,8 +18,8 @@ set difference over the two parsed frontmatter blocks, never a match on the diff
 path, and a path carries no marker saying which key holds it. Those rows are named on the status line and are
 excluded from the body, so a moved claim reads as governance and never as edited prose. Non-spec files are shown
 with Git numstat and the governing node resolved from the tip tree's `code:` claims. A revision that changes no
-file at all — an ack stamp is an empty commit, so its whole signature is the empty diff — or that touches only
-`measurement records` readings emits one line stating `ack/eval only, no body change (empty=true)`. The report ends with
+file at all — an ack stamp is an empty commit, so its whole signature is the empty diff — emits one line
+stating `acknowledgement only, no body change (empty=true)`. The report ends with
 the fixed parent-session reread request; `note` is copied verbatim, or `the sender gave no reason` when absent. The
 report is machine-facing product output, so it is written in English like every other line the CLI and backend
 print — the reader's own language belongs to authored content, never to tool output. No semantic
@@ -27,5 +27,5 @@ interpretation or generated explanation is added.
 
 The porcelain `spex spec report` is a thin projection of this function. It names the report node on the CLI
 surface, defaults to `HEAD`, and preserves the function's note and parent-session fields. The CLI may suppress
-the body for an ack/eval-only diff unless `--always` is requested; the underlying function remains deterministic
+the body for an ack-only diff unless `--always` is requested; the underlying function remains deterministic
 and always returns its complete text.

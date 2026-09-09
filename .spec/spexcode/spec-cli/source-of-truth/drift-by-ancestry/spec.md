@@ -34,8 +34,8 @@ project historical path identities through the current tip, and apply in-memory 
 `rev-list` is not an alternate representation: even `--full-history` can miss pre-rename events, while `--follow`
 cannot model path reuse or parallel rename forks. The one event/project/filter mode avoids a per-node history
 walk, so "scale with history, not node count" remains a correctness shape, not a performance promise. The same
-rule feeds every consumer of the signal — the [[spec-lint]] drift warning, board drift counts, and eval engine's
-code/scenario freshness axes (the former measurement core) — with no parallel heuristic beside it.
+rule feeds every consumer of the signal — the [[spec-lint]] drift warning and board drift counts — with no
+parallel heuristic beside it.
 
 The exact implementation is an event fold followed by a read-time project/filter. The ordinary drift fold reads
 one NUL-framed Git raw-identity event per commit: a status and one path, or the two endpoints of a rename, with
@@ -51,21 +51,9 @@ to write time or to read time. This is a cost bound, not permission to change dr
 The reference corpus measurements and the independent baseline CLI remain proof evidence for semantic behavior,
 not a claim that the current one-shot CLI has a lower wall-clock slope. Any future optimization must first prove a
 positive control, then compare a separate implementation against this Git-derived path at pinned tips.
-A sha the walk never met — not reachable from HEAD — keeps a conservative rule on the drift side: drift measured
-*from* it reads 0 (no basis on HEAD to measure from). A reading stamped *with* it no
-longer folds into a blanket stale: where ancestry can't testify, eval freshness falls back to comparing
-CONTENT between the anchor's tree and HEAD (the former measurement core's content fallback) — a fold, rebase,
-squash-merge or cherry-pick that left governed content byte-identical reads fresh, and only an
-anchor whose commit object is truly gone stays conservatively stale (named as such). Distinguishing
-a genuine orphan from a reachable-but-unmerged branch is still never attempted — the content compare
-is honest for both without ref-scanning beyond the one HEAD walk. The fallback keeps the walk's cost
-promise too: its git lookups are memoized over immutable objects — a full sha names a fixed tree
-forever, so a (sha, path) resolution never invalidates — and a rebuild over a fully-orphaned corpus
-(an adopter history rewrite) pays in-memory lookups, scaling with distinct anchors, never with
-readings × rebuilds. That promise binds every such memo's bound: sized above the largest adopter
-reading corpus — one entry per (reading, path) worst case — since a bound below the corpus's
-distinct keys turns the fixed-order rebuild into whole-memo eviction thrash, memoized in name but
-forking every pass. Among *parallel* version commits
+A sha the walk never met — not reachable from HEAD — keeps a conservative rule: drift measured *from* it
+reads 0 (no basis on HEAD to measure from). Distinguishing a genuine orphan from a reachable-but-unmerged
+branch is never attempted — there is no ref-scanning beyond the one HEAD walk. Among *parallel* version commits
 of one node (two branches each re-versioning it), the base stays the walk-newest row — an ambiguity
 only a merge resolves.
 
@@ -84,12 +72,10 @@ re-baseline, not a regression.
 `eventsSince(idx, sha, path)` is where that rule lives, once: the commits touching `path` that are NOT
 ancestors of `sha`, i.e. the ones in `sha..HEAD` by true DAG reachability. `null` is its honest third answer —
 the anchor commit is unreachable (folded, rebased, cherry-picked away), so ancestry cannot testify at all and
-the caller must say what it does about that. Each layer decorates the same window with what is genuinely its
-own: the spec layer subtracts ack cover (an ack is spec-only and never a reading-freshness rule), and the eval
-layer falls back to comparing content when the window is `null`. What no caller may do is restate the
-reachability rule itself — retyping it is how it came to exist four times (`driftPathWindow` here, plus
-`changedSince`, the code window, and `codeDrift` in the eval layer), each with its own null handling to get
-subtly wrong.
+the caller must say what it does about that. The spec layer decorates that window with what is genuinely
+its own — it subtracts ack cover — and says what it does about `null`. What no caller may do is restate the
+reachability rule itself — retyping it is how it once existed four times, each with its own null handling
+to get subtly wrong.
 
 Reachability is a property of a topology projection, not of HEAD specifically. The memo, its batch entrance and
 the membership test read that shape alone, so a caller needing the past of revisions HEAD cannot reach builds a

@@ -33,7 +33,7 @@ the Issues detail + compose preview, the thread, the session timeline) plus its 
 ## raw source
 
 Agent- and human-authored prose shows up on five surfaces: a spec node's body, an issue's detail body,
-every thread reply (issue threads and eval remarks alike), the Issues compose preview, and the session
+every thread reply (plain replies and remarks alike), the Issues compose preview, and the session
 timeline's messages. It is ONE kind of content, and it is currently produced by THREE different
 mechanisms:
 
@@ -157,7 +157,7 @@ made this node necessary.
   renderer — a rewritten implementation that cannot satisfy them is wrong by definition, and re-deriving
   a second set of rules for the same behaviour is how the two dialects were born in the first place. The
   reusable TimelineChat selection/copy acceptance matrix and its oracle boundary are archived beside this
-  node in `migration-payload.md`; the node's eval scenario points at the executable gate.
+  node in `migration-payload.md`.
 - **Expect OTHER nodes' fixtures to break on depth, and fix them semantically.** Rendering real Markdown
   makes a prose surface's DOM deeper: text that used to be the container's first child now sits inside a
   paragraph, an emphasis, a list item. Any existing test — in any node — that reaches into one of the four
@@ -171,10 +171,10 @@ made this node necessary.
   content; it never SOURCES an expectation. The math-copy proof above stays anchored to author-written
   literals — a fixture whose expected text is read out of the rendered tree would be checking the engine
   against the engine's own output, and the triple-copy defect would sail through it.
-- **Each migrated surface re-measures its own scenario.** The body surfaces carry eval scenarios that
-  already assert rendered Markdown (headings/tables/lists, no raw `##` or pipes) and, for the thread,
-  playing evidence media; every one of them is re-measured through the real browser as it moves, so the
-  unification is proven surface by surface instead of claimed once.
+- **Each migrated surface is proven through the real browser as it moves.** The body surfaces must show
+  rendered Markdown (headings/tables/lists, no raw `##` or pipes) and, for the thread, playing evidence
+  media; each is checked in a real browser as it migrates, so the unification is proven surface by
+  surface instead of claimed once.
 - **The renderer boundary is reviewed by the engine's own node, per surface.** The console node that
   brought the parser holds review over the BOUNDARY and its invariants — not over any page's UX — and at
   minimum sees three commits: the core token tree with the first body surface, the thread's semantic

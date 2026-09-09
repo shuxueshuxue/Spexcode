@@ -2,7 +2,7 @@
 title: paged-review
 status: active
 hue: 205
-desc: The server half of review-chrome's ONE Issues/Evals paging protocol — stable source projection and revision, shared query matching, full-set counts/facets, then one 25-row slice.
+desc: The server half of review-chrome's ONE Issues paging protocol — stable source projection and revision, shared query matching, full-set counts/facets, then one 25-row slice.
 code:
   - spec-cli/src/reviews.ts
 related:
@@ -13,38 +13,29 @@ related:
 
 # paged-review
 
-Issues and Evals share one server paging operation. A request names domain, committed token query, and a
-positive page; `perPage` is the product constant 25. Canonical current lists, scoped Evals, the node Issues
-pane, the node Eval timeline mode, and search-palette review planes all consume the same response protocol.
-The domain source first becomes one deterministic
-ordered population under one stable revision: merged local/forge Issues are newest-first with an id
-tie-break; trunk and scoped Evals are current declared scenarios' latest readings ordered by filed time
-newest-first regardless of source ownership, followed by blind scenarios that have no filed time with a
-deterministic identity tie-break. An unmeasured row is never promoted ahead of a filed reading. Session
-presence is joined before matching. A filed row whose freshness computation is explicitly deferred remains
-orderable by its filed time, but is tagged `deferred` and cannot enter the measured fresh/stale verdict
-split; source failures remain loud rather than turning such a row into an empty response.
+The Issues pages consume one server paging operation. A request names the committed token query and a
+positive page; `perPage` is the product constant 25. The canonical Issues list, the node Issues pane and the
+context dock all consume the same response protocol. The source first becomes one deterministic ordered
+population under one stable revision: merged local/forge Issues are newest-first with an id tie-break.
+Session presence is joined before matching; a source failure remains loud rather than turning into an empty
+response.
 
 The server imports [[review-filters]] and [[review-query]] directly. There is no server copy of tokenization,
 qualifier mapping, or field predicates. It applies source selection, matching, section counts, and facet
 derivation over the complete population, then slices exactly once. The response is the shared
 `{items,page,perPage,total,sourceTotal,pageCount,prev,next,revision,counts,facets,section}` shape plus
-bounded domain metadata (issue enablement/write stores; scoped eval unknown coverage). `sourceTotal`
-distinguishes a vacant source from a filtered-zero view. `items.length <= 25`; neither a hidden full
-collection nor a second full-list field rides beside it. A scoped Eval page composes no manager gate into that
-page; conflict, lint, ahead, and committed remain together on explicit review/export. The exact scoped impact graph is a separate named
-read, `GET /api/evals/impact?scope=<id>`: it preserves the selector/delta proof for a caller that asks for
-it, while the paged list keeps only each rendered row's own impact reasons.
+bounded domain metadata (issue enablement and write stores). `sourceTotal` distinguishes a vacant source
+from a filtered-zero view. `items.length <= 25`; neither a hidden full collection nor a second full-list
+field rides beside it. No page composes a manager gate; conflict, lint, ahead, and committed remain
+together on explicit review.
 
 An Issues `label:` query is ordinary shared filtering: label-chip interaction changes only the committed
 token text, then this same operation derives matching rows, counts, facets, and the next 25-row slice.
 
-A `counts` entry is one number, or the named buckets of a section the adapter SPLIT — Evals' measured
-verdicts arrive as `counts.pass`/`counts.fail` = `{fresh,stale}` while `counts.unmeasured` stays a number.
-The buckets are that verdict's whole population, folded HERE, once, over the complete filtered set before
-the slice, so a browser holding 25 rows never re-derives them; `section.options[].count` keeps carrying the
-same sections' whole totals for the compact menu faces. Trunk, `scope:`, and node-timeline responses all
-speak this one shape.
+A `counts` entry is one number, or the named buckets of a section the adapter SPLIT. Either is that
+section's whole population, folded HERE, once, over the complete filtered set before the slice, so a browser
+holding 25 rows never re-derives it; `section.options[].count` keeps carrying the same sections' whole
+totals for the compact menu faces. The canonical list and the node pane speak this one shape.
 
 A requested positive page beyond `pageCount` is preserved and returns HTTP 200 with empty items. Previous
 and Next continue to requested-1/requested+1 in that overflow state; an in-range last page has no Next.
@@ -52,9 +43,9 @@ Missing/invalid/non-positive input repairs to page 1. Source failures are loud a
 empty slice. The revision hashes only stable, observable source/filter inputs, never wall-clock generation
 time, so count and slice identify the same snapshot and an unchanged request remains cacheable.
 
-The current Issue/Eval populations are published as a server-only atomic [[review-snapshot]] during graph
+The current Issue population is published as a server-only atomic [[review-snapshot]] during graph
 assembly, then omitted from graph serialization; review requests reuse that snapshot rather than rebuilding
-or crawling it. Node timeline mode loads only its addressed node before filtering/slicing.
+or crawling it.
 
 Forge resident refresh may use native host pagination and incremental windows at the adapter boundary; a
 browser review request reads that resident snapshot and never starts a host-wide or per-row N+1 crawl. When
@@ -65,34 +56,5 @@ writes this page cannot see, so its own close would stay visible in the list unt
 happened to republish. A held graph flight that captured older source state cannot satisfy the request;
 source state already at the required revision stays on the cached snapshot path.
 
-The same protocol family owns Eval detail without reopening a full-list channel. One bounded detail request
-names `(scope?, node, scenario)` and returns the selected current row, that scenario's complete newest-first
-A/B history, metadata, a stable response revision, and a Continue Reviewing projection containing at most five
-lightweight `{node,scenario,state}` neighbors plus source `total`, zero-based `index`, and the named `default`
-order. Neighbor groups preserve the source's stable list order, nearest to the selected row first, with the
-forward side taking the odd slot and boundary capacity refilling from the other side. No other scenario's
-history or reconstructable row rides the response. Trunk detail reads the server-only atomic review snapshot;
-scoped detail projects the worktree engine and returns
-`evalRevision {epoch,generation,content}`, plus its summary when it holds one that describes the whole scope.
-A focused detail has measured only what it renders, so it omits the counts instead of folding its window; a
-browser therefore fences on the content revision, which is the stronger identity, and compares counts only
-when they are present.
-
-The detail source and scenario are two independent facts. `scope` names the resolved source and
-`requestedScope` preserves what the address asked for; when that worktree is gone, `scopeFallback: "trunk"`
-states that the response is the trunk reading rather than a failed source. `availability` is exactly
-`measured`, `unmeasured` (a declared scenario with no reading), or `missing` (no such trunk declaration).
-Thus a source disappearance never impersonates a missing eval, and an unmeasured declaration never becomes
-an empty detail or a not-found object.
-
-A detail response is bounded in COST the same way it is bounded in bytes. Sequence — which scenarios are in
-play, in what order, and therefore the selected row's `index` and the source `total` — is derived from
-identity and filed time alone, never from freshness, so it is read for the whole population without a single
-freshness probe. Verdicts are then measured only for the rows the response actually publishes: the selected
-one and a window guaranteed to contain every neighbor the projection may choose. The two are separate reads
-over one population and MUST order it identically, or Back and Continue Reviewing would disagree with the
-list this detail was opened from; nothing else in the response can expose a divergence, so that equality is
-pinned directly. A row whose freshness was never computed may order a list and may never state a verdict. A browser that has observed a newer graph projection discards and
-retries the old response; equal generations require equal content revisions. The session HTML export is the
-only full-model transport exception. Issue detail remains a separate single-object `/api/issues/:id` read and
+Issue detail remains a separate single-object `/api/issues/:id` read and
 never falls back to graph or list rows.

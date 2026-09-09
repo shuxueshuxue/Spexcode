@@ -32,7 +32,7 @@ disclose their own children, while the explorer head's collapse-folders door can
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
 projection it shows and whether it exists at all. A node or a governed file belongs with the explorer.
-**Bare evals, issues and settings boards have no sidebar, while their object details retain the dock.** The
+**Bare issues and settings boards have no sidebar, while their object details retain the dock.** The
 Sessions route mounts no finding dock: the Sessions document draws its own forest sidebar
 ([[session-console]]), and that forest folds from the same rail control through the same open/closed state,
 so the reader has one fold rather than two. Projection selection is secondary state: the spec and graph

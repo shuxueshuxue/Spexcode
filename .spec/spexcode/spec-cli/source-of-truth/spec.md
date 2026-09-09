@@ -26,9 +26,9 @@ database, reading must scale with history, not with the number of nodes.
 A node's whole observable state is **derived here, not stored** — version (its count of content
 commits), drift (governed code that moved ahead of the latest version), session (commit attribution),
 and status. The loader reads `.spec` from the filesystem and overlays these git-derived facts. The
-loader itself takes the **checkout root as a parameter** (default: the backend's own checkout): an eval
-surface rooted at a session's worktree loads the spec tree from that same root, so a branch-ADDED node
-exists for it — the pending-proposal principle applied to node existence, not only to readings. Nothing
+loader itself takes the **checkout root as a parameter** (default: the backend's own checkout): a read
+rooted at a session's worktree loads the spec tree from that same root, so a branch-ADDED node exists for
+it — the pending-proposal principle applied to node existence. Nothing
 is persisted beside it: no datastore, no hash files — every fact is recomputed from git on read. Drift is netted against acknowledgement by the one ack-cover rule [[drift-by-ancestry]] states.
 
 **A body reference is NOT a loaded edge.** The loader used to resolve every `[[id]]` a body names into a
@@ -52,7 +52,7 @@ is caller-owned, build-local input, not a resident cache: ordinary filesystem re
 HEAD-owned indexes keep their current behavior.
 
 Ownership itself has one relation algebra: exact path, directory prefix, or glob. The loader, candidate claim
-preflight, eval changed-set selection, and session impact all call the same pure matcher; an immutable snapshot
+preflight, and session impact all call the same pure matcher; an immutable snapshot
 changes where declarations are read, never what a declaration claims.
 
 Two principles keep that derivation cheap on a long-running server:
@@ -94,6 +94,6 @@ one source. `codeEntries`/`relatedEntries` are the relation; `code`/`related` ar
 consumers that want files, and `codeScoped`/`relatedScoped` the selector-bearing subset for the anchor
 engine. Deriving all of them here, once, from a single parse is what keeps every downstream layer from
 re-deriving one shape out of another: a consumer handed only the views had to mint `path#selector` strings
-and re-parse them to recover entries the loader already held, which is precisely the round-trip the eval
-layer's fixed-revision projection used to perform. Publish the source, derive the views; never ship only the
+and re-parse them to recover entries the loader already held, which is precisely the round-trip a
+downstream fixed-revision projection once performed. Publish the source, derive the views; never ship only the
 views and make someone reconstruct the source.

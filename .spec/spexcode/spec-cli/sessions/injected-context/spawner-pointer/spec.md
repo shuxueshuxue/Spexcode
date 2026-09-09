@@ -21,7 +21,7 @@ child is then blind to the very context it was created to continue, and blind si
 
 The fix is not to teach the fork or the landing about nesting. Both would have to learn a **second base** —
 what this branch forked from, distinct from what it merges into — which splits every base question in the
-system (the overlay's own-work diff, the ahead gate, session-eval's fork point, the review diff, the merge
+system (the overlay's own-work diff, the ahead gate, the review diff, the merge
 target) into two, and the landing would still carry the spawner's unreviewed commits into whatever the
 child merges into, because git merge carries ancestry. Tell the child **where its spawner works** instead,
 and let it decide whether to look. Provenance the agent can act on, not only a dashboard fold.

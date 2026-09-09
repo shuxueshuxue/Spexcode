@@ -2,7 +2,7 @@
 title: graph-lean
 status: active
 hue: 175
-desc: The graph payload is a lean summary — no Issues/Evals row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
+desc: The graph payload is a lean summary — no Issues row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
 code:
   - packages/spec-core/src/graph.ts#buildBoard
 related:
@@ -53,46 +53,30 @@ above it (a non-OK response is shown but never cached). The search corpus revali
 seeded instantly from the last one; the open overlay is keyed by node id so switching never flashes
 one node's prose under another's header.
 
-**Issues and Evals rows are absent, not merely shortened.** A graph node carries one explicit
-`reviewSummary`: issue open/closed counts plus open ids for distinct-count/walk identity, and Eval state
-counts (`total/pass/fail/stalePass/staleFail/empty`). It carries no `issues`, `openIssues`, `evals`, or
-`scenarios` arrays and no row title/body/evidence from which either main review list could be reconstructed.
+**Issues rows are absent, not merely shortened.** A graph node carries one explicit `reviewSummary`:
+issue open/closed counts plus open ids for distinct-count/walk identity. It carries no `issues` or
+`openIssues` arrays and no row title/body/evidence from which the review list could be reconstructed.
 Tile badges, popup captions, graph stats, the CLI tree, and any other first-paint glance consume only this
-projection. The complete local/forge Issue population and current Eval population stay in one server-only
-snapshot produced atomically with the graph build; the Issue half carries one content revision per issue store
-it was built from — the resident forge slice and the local store alike — so a late write to any of them can be
+projection. The complete local/forge Issue population stays in one server-only snapshot produced atomically
+with the graph build; it carries one content revision per issue store it was built from — the resident forge
+slice and the local store alike — so a late write to any of them can be
 republished without putting rows on the graph wire, and no store's write is invisible to the read.
 [[paged-review]] filters/counts/slices that snapshot when a row surface actually opens. Server memory is not
 serialized by graph JSON, graph SSE, or delta units.
 
-**A session row carries its eval glance, never its eval model.** The row's `evalSummary` is
-session proof's cached lean projection: process epoch, monotonic input generation, loading/updating/ready/error
-phase, content revision when stable, the seven counts, and an optional last-known stable value while updating or
-failed. It is already batch-produced and content-addressed before graph assembly; `buildBoard` and the sessions
-splice only attach the cached projection. No graph request, subscriber, or session row calls the full
-`buildSessionEvals`, and scenarios/readings/evidence remain behind their demand routes.
-
-**A ZCode child may point at that glance only through an explicit identity assertion.** A session row may carry
+**A ZCode child points at a session row only through an explicit identity assertion.** A session row may carry
 `zcodeChildSessionIds`, the exact opaque ZCode child ids durably asserted for that SpexCode session. The array is
-absent when no assertion exists; it is never a zero-valued eval result. A consumer matches a current
-`childSessionId` only by exact membership, then reads that *same row's* `evalSummary`; it does not join on title,
-branch, worktree, parent task, or timing. One child id has one live SpexCode owner: repeating the same pair is
+absent when no assertion exists. A consumer matches a current `childSessionId` only by exact membership, then
+reads that *same row*; it does not join on title, branch, worktree, parent task, or timing. One child id has one
+live SpexCode owner: repeating the same pair is
 idempotent, while an attempted second owner is a loud conflict. The assertion lives only with its session record,
 so closing that record removes both the graph row and its pointer; a later session may then assert the id anew.
 
-**Demand routes own rows all the way down.** `/api/specs/lite` remains the node prose corpus but carries no
-scenario declarations; the search palette requests its bounded Issue/Eval planes through [[paged-review]].
-Those page-1 slices are summaries, not dead ends: beside the ranked matches, the palette exposes native
-keyboard-reachable anchors to the canonical Issues and Evals lists, preserving the current query and naming
-each plane's server total. The anchors are commands outside the ranked results, so pagination metadata never
-masquerades as a matched entity and every scenario's full declared prose remains reachable without restoring
-scenario rows to the graph or lite corpus.
-The node popup requests `node:`-filtered Issue rows and a paged Eval timeline through the same protocol.
-A direct Eval detail loads only the selected scenario's complete A/B history plus at most five lightweight
-ordered neighbors through [[paged-review]]'s ONE bounded detail projection; trunk and scoped sources share
-that response shape, and scoped detail keeps session proof's generation/revision fence. Issue detail loads
-its one addressed thread. No failed demand read falls back to graph rows, because there are deliberately none.
-The self-contained session HTML export is the only full-model transport exception.
+**Demand routes own rows all the way down.** `/api/specs/lite` remains the node prose corpus; the search
+palette ranks nodes and sessions from the board it was handed and makes no review request of its own
+([[paged-palette]]). The node popup requests `node:`-filtered Issue rows through [[paged-review]]. Issue
+detail loads its one addressed thread. No failed demand read falls back to graph rows, because there are
+deliberately none.
 
 This node holds the lean-payload contract those cuts extend, beside the freshness-side [[graph-stream]],
 the change-side [[graph-delta]], and the compute-side [[graph-cache]] — the lean payload is now also BUILT

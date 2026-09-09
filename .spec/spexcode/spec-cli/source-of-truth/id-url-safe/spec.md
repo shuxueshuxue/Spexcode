@@ -38,10 +38,10 @@ Latin, control chars) the mint never has to repair.
 
 The mint is ONE, and every id producer shares it. The spec loader's node walk mints ids through the same
 exported function, over the same universe (every spec node — a leaf that collides among spec nodes is
-disambiguated even when only one of them carries a measurement contract), so `measurement filing` answer to exactly
-the id the board and scan print. Before this, the eval engine keyed nodes to the bare leaf name — a second id scheme
-that diverged on every collision: the canonical id read as "no measurable node" while the bare leaf silently hit
-whichever colliding node the walk met first, so no colliding node could reliably take a reading.
+disambiguated whichever of them a caller names), so every id a surface prints is exactly the id the board
+prints. Before this, a second id scheme keyed nodes to the bare leaf name and diverged on every collision:
+the canonical id read as "no such node" while the bare leaf silently hit whichever colliding node the walk
+met first.
 
 Because the mint guarantees it, every RESOLVE site is uniform and needs no special-casing:
 

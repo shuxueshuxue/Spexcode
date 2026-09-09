@@ -38,14 +38,14 @@ on the pane being read, and only when it lacks that pane does the popup fall bac
 default — the first of its real tabs — which is exactly what keeps the edit-leads rule below intact (a
 mid-change node greets with its edit tab even if the previous node was showing spec). The intent half is
 the **spec doc** — an information board. A **stat bar** carries the
-node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, the aggregate **eval
-score** (the score badge), and the **drift** count when a governed file outran the spec
-([[source-of-truth]]) — so score and drift live in the popup now, not only on the tile. Below it the governed
+node's at-a-glance signals, the same the tile speaks: derived **status**, **version**, and the **drift**
+count when a governed file outran the spec ([[source-of-truth]]) — so drift lives in the popup too, not
+only on the tile. Below it the governed
 files are the document's own chips: a `code:` entry links to the file's `#/file/<path>` document
 ([[spec-view]], [[file-view]]). Ordinary activation navigates the current slot to that independent file
 document; the tab model supplies held navigation when the reader asks for another tab. Under them, what the
-node **carries** ([[node-attachments]]): the rest of its own folder — its eval contract, an evidence
-directory, a raw capture — uses the same file-document address grammar behind its node-owned API gate.
+node **carries** ([[node-attachments]]): the rest of its own folder — an evidence directory, a raw
+capture, a note beside the spec — uses the same file-document address grammar behind its node-owned API gate.
 The popup remains a reference lens; it does not embed a source reader or make prose and code one screen.
 Then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
@@ -61,8 +61,7 @@ embedded face of the canonical Issues filter**: the same query parsing, conjunct
 real issue fields as [[issues-view]], projected through shared configuration/data adapters rather than a
 popup-only filter implementation ([[review-filters]]). Short lists skip the affordance entirely. Its state belongs to the pane,
 survives tab switches while the popup stays open, and never mints a competing page address; following a
-result still lands on the canonical Issues detail route. The eval timeline mounts the corresponding
-domain configuration through that same mechanism (the measurement view). An **edit** tab makes a
+result still lands on the canonical Issues detail route. An **edit** tab makes a
 node's in-flight change reviewable from the board: it exists **only** while the node has a pending overlay,
 and when it does it **leads** (first tab, editing-session count on its face), so a node mid-change — a
 freshly-added ghost most of all, otherwise near-empty on spec/history — opens with its change front-and-
@@ -73,20 +72,16 @@ last diff at once, not a reload — but **revalidated** each open, since a pendi
 `panesFor(node)` is the single source of which tabs exist and their order — both the tab bar and App's
 keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. The tab CAPTIONS are
 plain labels — no visible key-digit markers (the digit keys still switch panes; that vocabulary belongs to
-[[keyboard-nav]] and the help legend, not stamped on every caption) — and the two review tabs tally their
-state through ONE chip primitive: the shared [[review-chrome]] `ReviewState` icon + count, issues as
-open/closed, eval as fresh pass/fail read from the same `scenarioStates` join every score surface uses
-(the score badge); a zero count simply doesn't render, on either tab. The compact filter row those
-panes share leads with the ONE result summary — *showing X of Y* from [[paged-review]]'s current-page item
+[[keyboard-nav]] and the help legend, not stamped on every caption) — and the issues tab tallies its
+state on its face as an open count and a closed count; a zero count simply doesn't render. The compact
+filter row that pane carries leads with the ONE result summary — *showing X of Y* from [[paged-review]]'s current-page item
 count and full filtered `total`, never by treating the current 25 rows as the whole model — full words on desktop, a bare X/Y
 under the phone breakpoint with the sentence kept in the aria-label; no second control, no facet echo, no
 repeat of what the caption already tallies. When `Y > X`, a true **View all** anchor opens the canonical
-Issues/Evals list with the same fixed `node:` and current compact query, so every result remains reachable.
-`panesFor` also
-registers an **eval** pane (a fourth reference face), but that pane's paged timeline data contract belongs
-to the measurement view, just as the issues tab's content is
-[[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's
-reframe into a verdict-over-evidence timeline is that node's evolution, never node-popup drift. The **history** tab is
+Issues list with the same fixed `node:` and current compact query, so every result remains reachable.
+`panesFor` registers exactly the spec, history and issues panes (edit joins them while a change is in
+flight); the issues tab's content is [[dashboard-issues]]', while this node owns the popup shell and the
+panes themselves. The **history** tab is
 the one merged version log: the latest version sits expanded with its proof, older ones start collapsed and
 reveal one at a time on the **down gesture** once you've finished the open one — scrolling past its end, *or*
 a `j`/`↓` keypress when there is nothing left to scroll (a short history with no scrollbar, or the bottom of
@@ -94,21 +89,18 @@ a long one). Tying reveal to the gesture, not to scroll movement alone, is what 
 dead-ending with older versions forever hidden (a header click also toggles by hand). Disclosure stays
 strictly per-entry: there is no expand-all control or bulk-expand replacement, so the down gesture and
 row-header toggle remain the complete interaction. The version log itself
-fetches **when the history tab first shows** (lazy, like eval/edit — most popup opens never visit it) and
+fetches **when the history tab first shows** (lazy, like edit — most popup opens never visit it) and
 persists after, so returning to the tab stays instant. A version's proof is
 the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the
 latest no longer shipped precomputed); a version with no recorded change says so plainly. That scaffold — scroll container,
-latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic and
-shared**: the eval pane (the measurement view) rides the same component (version rows + diff here, result rows
-+ screenshot there). Its embedded filter projects the same result-kind discriminator as the measurement feed,
-never a popup-only legacy alias. The compact Evals filter projects verdict as its Fail/Pass section and
-human review as the distinct Needs review / Reviewed facet, so moving the canonical page's primary visual
-axis does not fork field semantics inside the popup.
+latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic**:
+the history tab is its one rider, and a row's outbound affordance renders as a sibling of its toggle, never
+nested inside it.
 
 The "change it in place" surface — the live terminal — belongs to the *session* doing the changing
 (`Enter`; see [[session-console]] and [[command-box]]), keyed to that session rather than pinned to a node.
 The graph-only static build is a read-only projection: it supplies the node body from the embedded public
-document, exposes only the spec pane, and never attempts backend eval/history/issues/edit requests. The full
+document, exposes only the spec pane, and never attempts backend history/issues/edit requests. The full
 dashboard keeps the complete pane registry above. The panel sizes to **itself**, never to xterm's measured
 width (each pane scrolls its own content, no stray horizontal scrollbar) — but that sizing lives in `styles.css`, the dashboard's shared stylesheet governed by
 [[node-graph]]; this node owns only the popup component, so a style change elsewhere is never drift here.

@@ -2,7 +2,7 @@
 title: node-attachments
 status: active
 hue: 190
-desc: The rest of a spec node's folder — everything it carries besides its body and its readings, listed and read through the node itself.
+desc: The rest of a spec node's folder — everything it carries besides its body, listed and read through the node itself.
 code:
   - spec-cli/src/spec-attachments.ts
 related:

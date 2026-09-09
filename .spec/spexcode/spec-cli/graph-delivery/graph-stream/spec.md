@@ -78,7 +78,7 @@ sessions splice reads the store). The leaf is one registration whatever the stor
 like every other source, and its file identity is part of [[graph-cache]]'s session revision, so a held or
 disabled leaf degrades to the patrol's cadence rather than to silence. (2) the git dir's refs
 (loose refs recursively, `packed-refs`/`HEAD`) → 'full' — a commit legitimately reshapes nodes, drift, overlays and
-eval anchors at once, which is why refs stay full-scope rather than pretending to a narrower domain. (3)
+code anchors at once, which is why refs stay full-scope rather than pretending to a narrower domain. (3)
 TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms HOT tier (`hotSignature`
 — pure-syscall death detection over launch-registered pids) and a ~1s WARM tier (`warmSignature` — one
 merged tmux call for window/title state plus the rendezvous tri-state), both → 'sessions'. (4) the
@@ -102,13 +102,8 @@ request dies. Only `.git` transport metadata (covered by its own watchers) and `
 are ignored; generated project paths are not guessed away, because an adopter may govern them — with one
 named exception: generated BUILD output (`dist`, and the `.dist-next-*`/`.dist-previous-*` staging dirs the
 launcher rotates) is never governed source, so its thousands of writes are ignored rather than invalidating the board. A
-pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. For the eval
-projection specifically, losing either the refs observer or a worktree observer places a keyed hold before the
-graph rebuild: the affected summary remains updating with last-known and cannot compute current while the source
-is absent. Worktree resubscription retries with bounded backoff while the hold remains; the successful attempt
-installs its replacement first, removes only that source's hold, then advances and performs an authoritative
-rebuild. A persistent failure remains held and every retry remains only an observer repair — it never certifies
-data or substitutes a periodic fingerprint build. And (0) the exported explicit nudge (`notifyBoardChanged`) for
+pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. And (0)
+the exported explicit nudge (`notifyBoardChanged`) for
 a server-side mutation that must show regardless of watcher health — a successful session create, `/rename`, and
 a successful `/close` pass 'sessions', while the issue/remark write routes pass 'full' **atomically with their
 store persist**
@@ -178,12 +173,12 @@ re-attempt it, because a refused registration re-tried by whatever noticed it is
 became a per-read re-walk of every worktree. Reattachment belongs to ONE repair schedule with exponential
 backoff, shared across sources because the exhausted resource is shared; it states how many sources it
 holds and when it will try again. A source that comes back clears its own hold, and an episode with nothing
-left held resets the backoff. While a source is held its eval projection stays observer-held and visibly
-non-current, and the changes it would have seen are found by the cold-tick patrol and reported as the
-repairs they are. Coverage degrades to the patrol's cadence; it never degrades to silence.
+left held resets the backoff. While a source is held, the changes it would have seen are found by the
+cold-tick patrol and reported as the repairs they are. Coverage degrades to the patrol's cadence; it never
+degrades to silence.
 
-Registry ownership follows the source lifetime, not a graph build. Repeated `/api/graph`, invalidation, and
-scoped Eval reads reuse the same `(root, scope)` registry. A worktree path changing under one git registry
+Registry ownership follows the source lifetime, not a graph build. Repeated `/api/graph` reads and
+invalidations reuse the same `(root, scope)` registry. A worktree path changing under one git registry
 entry closes the old root and index handles before installing the replacement; worktree removal closes both.
 Changing the resolved session-store/git root closes every registry from the old source set, and an explicit
 `closeBoardFileWatchers()` drains all file handles, holds and the pending repair timer when the backend
@@ -213,17 +208,8 @@ patrol cannot be the ONLY unprompted sampler. [[graph-cache]] closes it from the
 last input sample has aged past this same cadence starts one, so whoever is actually looking pays, and with
 nobody looking nothing runs. `SPEXCODE_DISABLE_WATCHERS` (csv: store, session-db, refs, worktrees, project-root) deliberately blinds
 a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
-broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
-generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains
-event-driven under session proof's observer holds.
-
-The patrol is deliberately **not an eval-summary correctness source** (session proof). It neither advances a
-session eval input generation nor starts a periodic fingerprint/build. Session-eval coherence is a state machine
-over canonical events: a relevant refs/worktree/explicit-write event first increments the affected cache
-generation and makes the session unit `updating(lastKnown)`, then the existing graph debounce ships that state;
-the stable latest-generation result later replaces it through this same envelope. A burst increments through its
-events but may publish/build only the newest generation. No summary-specific SSE, WebSocket, endpoint poll, or
-timer exists.
+broadcast's changed units, trigger tags and refresh cost. No second timer or fingerprint poller exists: the
+one cold tick verifies ordinary board inputs.
 
 A refresh consumes its trigger set only after it successfully validates or produces a board. Producer,
 watchdog, or validation failure leaves every existing cause owed, including watcher signals that arrived while
@@ -278,8 +264,7 @@ subscriber). With delta subscribers the debounced fire rebuilds ONCE through [[g
 `getBoard()` (the SSE rebuild and a concurrent `/api/graph` poll share one assembly), broadcasts the patch,
 and notifies plain streams only when the content tag actually moved. A failed source keeps the server serving
 but fails loudly, closes its partial registry, and retries under its observer hold. The patrol can still repair
-ordinary graph units and reports that repair; an eval input source that cannot start instead leaves its
-projection observer-held and visibly non-current until the source is restored.
+ordinary graph units and reports that repair.
 
 **Reconnect is free, and the ping is a contract.** A backend hot-reload drops the stream; `EventSource`
 auto-reconnects and the fresh `graph-full` re-anchors the patch chain with no client-side repair logic. The

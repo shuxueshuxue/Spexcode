@@ -1,10 +1,10 @@
 ---
-title: eval-issue-split
+title: issue-remark-split
 status: active
 hue: 30
-desc: M3 of the eval/issue/remark refactor — kill "forum" at the substrate, read-time-SPLIT eval-remark tracks OUT of the issue surfaces (they are the eval scoreboard's data, not the issue drain), and reach U1 (one EventDetail component). One store, two complementary reads by concern key.
+desc: One issue store with two read-time tracks: drainable issue threads and scenario-scoped remarks, separated by concern while preserving shared storage and reply semantics.
 ---
-# eval-issue-split
+# issue-remark-split
 
 ## raw source
 

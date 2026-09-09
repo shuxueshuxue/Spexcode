@@ -12,7 +12,7 @@ related:
 # remark-polish
 
 M4 is the closing milestone of the eval/issue/remark refactor: the substrate ([[remark-substrate]]), the
-teeth ([[remark-teeth]]), and the split + one detail component ([[eval-issue-split]] / the thread detail) are
+teeth ([[remark-teeth]]), and the split + one detail component ([[issue-remark-split]] / the thread detail) are
 built; this node polishes three edges the invariant set (E2, the R3 dispatch clause, directive 5) left
 sharp. The three strands are independent and share no new record type or schema growth — each is one
 computation reused on every surface, CLI-first.

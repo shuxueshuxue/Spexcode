@@ -356,8 +356,6 @@ export default {
   },
 
   thread: {
-    anchorNow: 'anchor',
-    anchorTitle: 'anchor this comment to the current frame',
     mentionActor: 'insert @ — mention a session',
     mentionNode: 'insert [[ — link a spec node',
     originatorIssue: 'open the session that filed this issue: {by}',

@@ -2097,34 +2097,18 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .fv-close-issue.fv-life-promote:hover { background: var(--blue); color: var(--paper); border-color: var(--blue); }
 .fvd-body { font-size: var(--type-body); }
 
-.fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; transition: background .15s, border-color .15s; }
-/* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
-.fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
-.fv-reply.sel { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 9%, transparent); }
+.fv-reply { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; }
 .fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--ui-font); font-size: var(--type-meta); }
 .fv-reply-by { color: var(--blue); font-weight: var(--weight-semibold); }
 .fv-reply-at { color: var(--muted); }
-/* a time anchor (`▶m:ss · step`) on a reply — a clickable chip that seeks the clip; static (no video) reads plain. */
+/* a time anchor (`▶m:ss · step`) on a reply — a static chip; nothing here seeks a clip. */
 .fv-anchor { font-family: var(--mono); font-size: var(--type-meta); color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: var(--radius); padding: 1px 6px; cursor: pointer; }
-.fv-anchor:hover { background: var(--orange); color: var(--paper); }
-.fv-anchor.static { cursor: default; }
-.fv-anchor.static:hover { background: color-mix(in srgb, var(--orange) 12%, transparent); color: var(--orange); }
-/* E2 degraded: the step is gone from this reading's timeline, so the frozen m:ss is readable but not
-   seekable — muted + dashed to read as "shown, but not a live link". */
-.fv-anchor.static.degraded { color: var(--muted); background: transparent; border-style: dashed;
-  border-color: color-mix(in srgb, var(--muted) 45%, var(--line)); }
-.fv-anchor.static.degraded:hover { color: var(--muted); background: transparent; }
+  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: var(--radius); padding: 1px 6px; }
 /* blobs carried inline by a reply — rendered by the ONE shared evidence renderer (Evidence.jsx), sized to
    their home: full-width in the thread body, thumbnail strip in the composer preview. */
 .fv-reply-media { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
 /* the composer's staged evidence previews (derived from the draft's blob links). */
 .fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-/* ⏱ — stamp the current frame's anchor onto the comment (only over a clip). */
-.fv-anchor-btn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: var(--type-meta); color: var(--orange); background: var(--panel2);
-  border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
-.fv-anchor-btn:hover { background: var(--orange); color: var(--paper); }
-
 /* the human write path ([[issues-view]]): New is its own PAGE (#/issues/new), composing inside the shared
    DetailShell's main column; replies compose in the detail. No pop-out, no dialog. */
 .fv-new-page { display: flex; flex-direction: column; gap: 16px; }

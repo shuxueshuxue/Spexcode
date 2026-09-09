@@ -16,8 +16,8 @@ related:
 
 ## raw source
 
-Two pages held a discussion — an issue's detail ([[issues-view]], both stores) and a scenario's
-(node,scenario) remark thread — and both rendered the SAME component, `Thread.jsx`, while both nodes'
+Two pages held a discussion — an issue's detail ([[issues-view]], both stores) and a second, since-retired
+discussion page — and both rendered the SAME component, `Thread.jsx`, while both nodes'
 bodies said so out loud: the second one's spec called it *the SAME shared `Thread.jsx` the issue detail
 uses*, and pointed at the issue page for the composer's shape. So the file was **described by two
 nodes and governed by neither**: nothing tracked its drift, no version answered for it, and a change to the
@@ -29,13 +29,13 @@ one governing home, and the two pages reference it instead of re-describing it.
 - **ONE thread surface, every home.** The reply list and its composer are one component set, not a per-page
   copy: an issue thread, local or forge — store never changes the thread's shape — renders the same
   replies, the same composer, the same marks in every home. A home supplies DATA and handlers (what
-  to post through, whose node leads the mention list, whether a clip can be seeked); it never supplies a
-  variant of the thread.
+  to post through, whose node leads the mention list); it never supplies a variant of the thread.
 - **A reply's marks live IN the reply.** A reply is `{ by, at, body }` and may carry a time anchor
   (`▶m:ss · step`) and evidence blobs. Those are rendered from the reply's own text by the one shared
   [[prose-renderer]] — node references, time anchors and evidence are its semantic tokens, and this node
-  supplies only what each token DOES in a thread (navigate, seek, show) — so every home that shows a thread
-  shows them; a home that cannot act on one (no clip to seek) renders it inert rather than hiding it. A reply
+  supplies only what each token DOES in a thread (navigate, show) — so every home that shows a thread
+  shows them. A time anchor is one such mark: no home supplies a clip to seek, so it renders as a static
+  chip rather than being hidden, and the composer offers no stamp for it. A reply
   row carries no per-reply verb and no state badge: the thread's lifecycle acts (close, promote) ride the
   composer's action row, never a reply.
 - **The writing surface is not this node's to invent.** The composer's shell — the quiet bordered container,

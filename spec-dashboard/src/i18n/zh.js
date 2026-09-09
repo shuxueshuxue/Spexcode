@@ -350,8 +350,6 @@ export default {
   },
 
   thread: {
-    anchorNow: '锚定',
-    anchorTitle: '把这条评论锚定到当前帧',
     mentionActor: '插入 @ —— 提及会话',
     mentionNode: '插入 [[ —— 引用规格节点',
     originatorIssue: '打开发起此 issue 的会话：{by}',

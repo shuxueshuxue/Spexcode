@@ -269,9 +269,9 @@ app.get('/api/evidence/:hash', (c) => {
   }
   return c.body(new Uint8Array(r.bytes), 200, base)
 })
-// the WRITE half of the blob store ([[annotator]]): the annotator captures a circled video frame to a PNG
-// and stashes the bytes here, content-addressed (same putBlob the eval cache uses). The returned hash is
-// what an anchored comment references (image link in the body, and the typed evidence[] on its thread) —
+// the WRITE half of the blob store ([[evidence-put]]): a client stashes evidence bytes (a captured frame,
+// an image) here, content-addressed (the same putBlob every evidence reader resolves). The returned hash is
+// what a thread body references (an image link in the prose, and the typed evidence[] on its thread) —
 // bytes never enter git. Raw body, sniffed by the same content-addressed name. Empty → 400, over cap → 413.
 app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())

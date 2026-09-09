@@ -107,7 +107,6 @@ const LEGACY_PARAMS = {
   state: (v) => ['state', v],
   concluded: (v) => (v === '1' ? ['state', 'closed'] : null),
   ok: (v) => (v === '1' ? ['state', 'reviewed'] : null),
-  verdict: (v) => ['verdict', v],
   freshness: (v) => ['freshness', v],
   kind: (v) => (v === 'all' ? null : ['evidence', v]),
   store: (v) => ['store', v],
@@ -115,7 +114,6 @@ const LEGACY_PARAMS = {
   node: (v) => ['node', v],
   filer: (v) => ['filer', v],
   live: (v) => (v === '1' ? ['session', 'present'] : null),
-  session: (v) => ['scope', v],
 }
 
 export const hasLegacyParams = (query) =>
@@ -127,7 +125,7 @@ export const hasLegacyParams = (query) =>
 const freeTextToken = (v) => (/[\s:"]/.test(v) ? `"${v.replace(/"/g, '')}"` : v)
 
 // a legacy LIST address replays as the FULL visible state: the page's default tokens with each legacy
-// param surgically applied (live=1→session:present, session=<id>→scope:<id>, ok=1→state:reviewed,
+// param surgically applied (live=1→session:present, ok=1→state:reviewed,
 // kind→evidence:), the free-text q appended as ONE bare/phrase token preserving the old
 // single-substring search. Returns null when nothing legacy is present.
 export function legacyQueryText(defaultText, query) {
@@ -146,7 +144,7 @@ export function legacyQueryText(defaultText, query) {
 
 // inline autocomplete at the caret — client-side and BOUNDED. A bare prefix completes qualifier KEYS
 // (insert `key:`, keep typing); a `key:prefix` completes VALUES from the page-supplied candidate list
-// only (data-derived; scope = sessions on the current board), capped at 8. Everything else stays
+// only (data-derived), capped at 8. Everything else stays
 // hand-typable and submits verbatim.
 export function suggestAt(text, caret, keys = [], values = {}) {
   const s = String(text ?? '')

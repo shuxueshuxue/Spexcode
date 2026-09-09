@@ -398,7 +398,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   // `owner` names the declaration site so the repair points at the file that actually holds the selector.
   type AnchorSource = { relation: 'code' | 'related'; entries: readonly RelationEntry[]; drift: boolean; owner: string; repair: string }
   const nodeSource = (s: any, relation: 'code' | 'related', entries: readonly RelationEntry[]): AnchorSource =>
-    ({ relation, entries, drift: true, owner: `'${s.id}'`, repair: `the spec's ${relation}: entry` })
+    ({ relation, entries, drift: relation === 'code', owner: `'${s.id}'`, repair: `the spec's ${relation}: entry` })
   const readyWarned = new Set<string>()
   const anchorSteps: AnchorLintStep[] = []
   // One parse per candidate file per run, shared by every source that anchors it. Without it a file many
@@ -494,8 +494,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
             ? `update the spec in this commit, or retry with 'git commit --trailer "Spec-OK: ${id}" …'; a later empty ack cannot pre-author this candidate`
             : `update the spec in this commit, or clear this older debt with 'spex spec ack ${id} --reason "…"' before retrying the candidate`
       out.push({ level: 'error', rule: 'anchor-drift', spec: id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${id}' v${version} [${shas}]${parseNote} — the anchored contract's code moved: ${remedy}` })
-    } else
-      out.push({ level: 'warn', rule: 'related-drift', spec: id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${id}') was changed by ${hits.length} commit(s) since v${version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no acknowledgement)` })
+    }
   }
 
   // drift: a governed file has commits NOT yet reflected in its spec. Judged by true git ancestry —
@@ -512,20 +511,6 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
       if (cfg.scopedCodeMiss === 'ignore' && scopedPaths.has(d.file)) continue
       out.push({ level: 'warn', rule: 'drift', spec: s.id, file: d.file, msg: `${d.file} is ${d.behind} commit(s) ahead of spec '${s.id}' (v${s.version}) — may be stale` })
     }
-  }
-
-  // related drift: the SOFT tier ([[governed-related]]). A referenced file moved ahead of the node's
-  // version — a nudge that a dependency shifted. Same ancestry basis as govern drift, but WARN-only,
-  // never reaching the commit gate (driftGate reads govern). It is COMMON (shared substrate and
-  // faces change often without re-versioning every referrer), so per-file it is a wall; like
-  // too-many-owners it collapses to ONE summary line, with the per-file detail riding the board
-  // (relatedDriftFiles). It stays a soft edge, never a per-file interruption.
-  const rd = specs.flatMap((s) => s.relatedDriftFiles.map((d) => ({ id: s.id, behind: d.behind })))
-  if (rd.length) {
-    const byNode = new Map<string, number>()
-    for (const d of rd) byNode.set(d.id, (byNode.get(d.id) ?? 0) + 1)
-    const worst = [...byNode].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => `${id}(${n})`).join(', ')
-    out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no acknowledgement). Most: ${worst}` })
   }
 
   return { sourceFiles: governed.slice().sort(), findings: out }

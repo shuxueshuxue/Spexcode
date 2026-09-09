@@ -51,7 +51,7 @@ function label(tab, { specs, sessions, t }) {
   if (tab.page === 'spec') return tab.param ? (specs?.find((s) => s.id === tab.param)?.title || tab.param) : t('tabs.spec')
   if (tab.page === 'file') return tab.param?.split('/').pop() || t('tabs.graph')
   // Review details are route state inside one dynamic top-level tab. The tab keeps the stable board name;
-  // the URL still carries the selected scenario or issue for copy/back/refresh.
+  // the URL still carries the selected issue for copy/back/refresh.
   if (tab.page === 'issues') return t('tabs.issues')
   if (tab.page === 'sessions') {
     if (!tab.param || tab.param === 'new') return t('tabs.sessions')

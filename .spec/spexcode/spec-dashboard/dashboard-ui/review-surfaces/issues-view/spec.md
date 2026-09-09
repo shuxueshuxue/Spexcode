@@ -73,7 +73,7 @@ pooled Issues document tied to its own mounted route.
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The source is [[issues]]'s
   `mergedIssues` — every local thread, a node's scenario-keyed remark threads included
   ([[issue-remark-split]]). The rows are the backend's resident snapshot, requested one
-  25-row slice at a time; freshness is PUSH-first ([[remark-substrate]] write-visibility): the list
+  25-row slice at a time; freshness is PUSH-first (write-visibility): the list
   re-requests when the board's issue-freshness stamp moves — together with the source-session presence
   set, the one other board input its answer depends on — with the 15s cold lane as the fallback, equal
   revision repainting nothing, and the viewer's own write forcing the read. It keys that stamp and never
@@ -138,9 +138,9 @@ theatre is invented for a model that has none. An actually empty issue store say
   width the side metadata reflows ABOVE the body in the one column. A forge issue's comments render as
   the SAME reply thread a local issue gets — store never changes the thread's shape. The page is ONE
   addressed read, so its own address can tell it nothing about later writes: it re-reads on the same
-  board issue-freshness stamp the list follows ([[remark-substrate]]), which is how a second party's
-  remark reaches a reader already sitting on the thread. Only a new ADDRESS may wipe it to the loading
-  face; a stamp tick re-reads quietly behind the painted thread.
+  board issue-freshness stamp the list follows, which is how a second party's reply reaches a reader
+  already sitting on the thread. Only a new ADDRESS may wipe it to the loading face; a stamp tick re-reads
+  quietly behind the painted thread.
 - **A human writes from here — to the issue's OWN store.** The composer is the ONE shared thread-composer
   (the thread detail docks the same component, `Thread.jsx`): a quiet bordered container, a borderless
   writing surface floored at two lines that auto-grows through [[composer]], the action row always visible —
@@ -151,8 +151,8 @@ theatre is invented for a model that has none. An actually empty issue store say
   and **Promote** live in that action row (GitHub's grammar — lifecycle acts on the conversation), each
   through the ONE store-routed verb; sign/accept/reject are not product verbs. Replies post as `'human'`
   via `replyIssue` — a local reply git-commits, a forge reply posts a REAL comment — then the list
-  refetches. A reply that is a REMARK gets its resolve/retract verbs ([[remark-substrate]]); a
-  `▶m:ss · step` first line is a time anchor; attached blobs render through the one shared evidence
+  refetches. A reply renders as author · time · prose ([[reply-thread]]) — no per-reply verb, no state
+  badge; a `▶m:ss · step` first line is a time anchor; attached blobs render through the one shared evidence
   renderer. An `@session` in any composer is a passive [[mentions]] reference retained in the posted prose;
   an exact `@new` dispatches a fresh worker after the write is durable and flashes its creation outcome through
   [[transient-notices]].

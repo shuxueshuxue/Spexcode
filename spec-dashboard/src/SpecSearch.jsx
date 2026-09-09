@@ -12,12 +12,10 @@ import { specPath } from './mentions.jsx'
 // TWO PLANES — the things a workspace HOLDS. A node and a session are what a tab can be, so every row here
 // is somewhere the reader can go and stay; that is what makes this a jump-list rather than a report.
 //
-// The palette used to carry two more (issues, scenarios) plus two "all results" doors into the review
-// lists, and that was a search box quietly growing a second job. An issue and a scenario are findings ABOUT
-// a node — issues have a real list page built to filter and page them ([[issues-view]]), and
-// those pages are one ⌥digit away. Restating a page-1 slice of them under the jump-list gave the reader a
-// worse version of a surface that already exists, and cost two server round-trips on every keystroke to do
-// it. Deleting the planes deletes the round-trips with them.
+// Issues are deliberately NOT a plane: an issue is a finding ABOUT a node, and it has a real list page built
+// to filter and page it ([[issues-view]]) one ⌥digit away. A page-1 slice of it under the jump-list would be
+// a worse copy of that surface and a server round-trip on every keystroke; the palette ranks only what the
+// board already handed it.
 //
 // `boost` lifts ONE plane to the front — the SAME palette leads with whatever surface opened it. It is the
 // ONLY knob a caller turns: matcher, interleave, and keys are identical; only the lead order differs.

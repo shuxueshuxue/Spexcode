@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Prose from './Prose.js'
 import { BlobMedia } from './Evidence.jsx'
-import { useMentionAutocomplete, matchSlash, menuKeyDown, SlashMenu, TriggerButton, typeTrigger } from './mentions.jsx'
+import { useMentionAutocomplete, TriggerButton, typeTrigger } from './mentions.jsx'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
-import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
 import { SideValue } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
@@ -96,51 +95,22 @@ export function OriginatorLiveness({ originator, sessions = [], onOpenSession = 
   )
 }
 
-// Over a clip ([[event-detail]]) the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly
-// selected and the playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor
-// chip both seeks AND selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection.
-// Off a clip these are all absent and a reply renders exactly as before. `events` is an optional timeline's
-// step timeline: each anchor is resolved by STEP-NAME against it (E2, resolveAnchor) so its moment tracks a
-// re-measure, degrading to a readable-not-seekable chip when the step is gone. A reply that is a REMARK
-// ([[remark-substrate]] — it carries `rid`) shows its `resolved` bit: a resolved remark renders settled
-// (dimmed, ✓), an open one prominent.
-// The bit is also WRITABLE here at CLI parity ([[remark-substrate]] LAW L): when the home passes `threadId`
-// + `onRemarkChange`, an unresolved remark carries its one applicable verb — RESOLVE on an agent's remark
-// (the human's second-party judgment; never on the human's own, mirroring the server's self-resolve
-// rejection) or RETRACT on the human's own (author-only withdrawal) — POSTing the `<threadId>#<rid>` ref to
-// the same endpoints `spex resolve`/`spex retract` parallel. A resolved remark is settled and immutable
-// (monotonic — no un-resolve, no retract past a resolve), so it renders no verb.
-export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null, events = null, threadId = null, onRemarkChange = null }) {
+// Over a clip the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly selected and the
+// playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor chip both seeks AND
+// selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection. Off a clip these are
+// all absent and a reply renders as author · time · prose. `events` is an optional step timeline: each anchor
+// is resolved by STEP-NAME against it (E2, resolveAnchor) so its moment tracks a re-measure, degrading to a
+// readable-not-seekable chip when the step is gone.
+export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null, events = null }) {
   const t = useT()
-  const [acting, setActing] = useState(null)   // the ref in flight — one action at a time
-  const [actErr, setActErr] = useState(null)   // { ref, msg } — a refused action surfaces on its row, never swallows
-  const act = async (action, ref) => {
-    if (acting) return
-    setActing(ref); setActErr(null)
-    try {
-      const res = await postRemarkAction(action, ref)
-      if (res?.ok) await onRemarkChange?.()
-      else setActErr({ ref, msg: res?.error || `${action} failed` })
-    } finally { setActing(null) }
-  }
   return replies.map((r, i) => {
-    const isRemark = r.rid !== undefined
-    const remarkCls = isRemark ? (r.resolved ? ' remark resolved' : ' remark open') : ''
-    const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}${remarkCls}`
-    const ref = isRemark && threadId ? `${threadId}#${r.rid}` : null
+    const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}`
     return (
       <div className={cls} key={i}>
         <div className="fv-reply-meta">
           <span className="fv-reply-by">{r.by}</span>
           {r.at && <span className="fv-reply-at">{r.at}</span>}
-          {isRemark && (r.resolved
-            ? <span className="fv-remark-state resolved" data-tip={r.resolvedBy ? t('thread.resolvedBy', { by: r.resolvedBy }) : t('thread.resolved')}>✓ {t('thread.resolved')}</span>
-            : <span className="fv-remark-state open" data-tip={t('thread.openRemark')}>● {t('thread.openRemark')}</span>)}
-          {ref && onRemarkChange && !r.resolved && (r.by === 'human'
-            ? <button type="button" className="fv-remark-act retract" disabled={!!acting} data-tip={t('thread.retractTitle')} onClick={() => act('retract', ref)}>{t('thread.retract')}</button>
-            : <button type="button" className="fv-remark-act resolve" disabled={!!acting} data-tip={t('thread.resolveTitle')} onClick={() => act('resolve', ref)}>{t('thread.resolve')}</button>)}
         </div>
-        {actErr && actErr.ref === ref && <div className="fv-error">{actErr.msg}</div>}
         {r.body && <div className="fvd-body">
           <Prose className="doc-body"
             renderSpecRef={(id, token, provenance) => {
@@ -167,20 +137,6 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
   })
 }
 
-// the review-track `/` trigger ([[review-commands]]) — the session box's leading-`/` grammar, applied per
-// LINE: a `/token` from the start of the caret's line to the caret opens the command menu. Line-start (not
-// value-start) so a stamped `▶` anchor or a circled frame above never disarms the trigger — the natural
-// review flow is circle → type `/refuse` on the fresh line below the anchor. No matching command (the
-// when-gates already filtered the list) → no menu, exactly like the console.
-function slashAt(value, caret, commands) {
-  const lineStart = value.lastIndexOf('\n', caret - 1) + 1
-  const m = /^\/(\S*)$/.exec(value.slice(lineStart, caret))
-  if (!m) return null
-  const items = matchSlash(commands, m[1])
-  if (!items.length) return null
-  return { items, index: 0, start: lineStart, end: caret, query: m[1] }
-}
-
 // the ONE docked composer, shared by every home ([[issues-view]] / [[event-detail]]): a QUIET BORDERED
 // container holding a BORDERLESS writing surface over a PERSISTENT compact action row. The writing
 // surface is already usable at idle — floored at two lines, never a one-line sliver and never a
@@ -197,7 +153,7 @@ function slashAt(value, caret, commands) {
 // AND its captured frame at the body's head; a circle pushes a `draft` (prefilled anchored body + the
 // rect-burned frame link) — either way a mark is thereafter an ordinary — replyable, @-able — reply,
 // its frame indexed as the thread's evidence[].
-export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null, actionsEnd = null, commands = null }) {
+export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null, actionsEnd = null }) {
   const t = useT()
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -205,29 +161,6 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const taRef = useRef(null)
   const { launchers } = useLaunchers()
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
-  // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands`. Two command
-  // kinds, one menu:
-  // a BUILT-IN verb (`run`) fires its one host-bound runner after the typed token is removed; a PRESET
-  // (`prefill`) replaces the draft
-  // with its filled template, keeping a stamped `▶` anchor head (the anchor line + its own riding frame).
-  const [slash, setSlash] = useState(null)
-  const syncSlash = (el) => setSlash(el && commands?.length ? slashAt(el.value, el.selectionStart, commands) : null)
-  const acceptSlash = (item) => {
-    if (!item || !slash) return
-    const rest = body.slice(0, slash.start) + body.slice(slash.end)
-    setSlash(null)
-    if (item.run) { setBody(rest.trim() ? rest : ''); item.run(); return }
-    const ex = parseAnchor(rest)
-    let head = ''
-    if (ex) {
-      const frame = HEAD_FRAME_RE.exec(ex.rest)?.[0] ?? ''
-      head = `${ex.label}\n${frame}`
-      if (!head.endsWith('\n')) head += '\n'
-    }
-    setBody(head + item.prefill())
-    requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } })
-  }
-  const onSlashKey = (e) => menuKeyDown(e, slash, setSlash, acceptSlash)
   const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
 
   // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for
@@ -259,10 +192,10 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
     taRef.current?.focus()
   }
 
-  // the grammar's discoverability doors ([[mentions]] / [[review-commands]]) — the ONE shared insertion
-  // mechanism (`typeTrigger`), so this composer and the Issues compose page open the same menu the same
-  // way. No second menu, no dispatch: the button only types what the hand would.
-  const insertTrigger = (trigger) => typeTrigger(taRef.current, trigger, setBody, (el) => { ac.sync(el); syncSlash(el) })
+  // the grammar's discoverability doors ([[mentions]]) — the ONE shared insertion mechanism (`typeTrigger`),
+  // so this composer and the Issues compose page open the same menu the same way. No second menu, no
+  // dispatch: the button only types what the hand would.
+  const insertTrigger = (trigger) => typeTrigger(taRef.current, trigger, setBody, (el) => ac.sync(el))
 
   const send = async () => {
     const text = body.trim()
@@ -282,12 +215,10 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const editor = (
       <div className="fv-tawrap">
         <ComposerTextarea ref={taRef} className="fv-textarea" rows={1} value={body} placeholder={t('session.issuesReplyPlaceholder')}
-          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target); syncSlash(e.target) }}
-          onSelect={(e) => { ac.sync(e.target); syncSlash(e.target) }} onBlur={() => { ac.close(); setSlash(null) }}
-          onKeyDown={(e) => { if (composingKey(e)) return; if (onSlashKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
+          disabled={busy} onChange={(e) => { setBody(e.target.value); ac.sync(e.target) }}
+          onSelect={(e) => ac.sync(e.target)} onBlur={() => ac.close()}
+          onKeyDown={(e) => { if (composingKey(e)) return; if (ac.onKeyDown(e)) return; if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send() } }} />
         {ac.menuEl}
-        {slash && <SlashMenu menu={slash} up head={slash.query ? `/${slash.query}` : t('thread.reviewCommands')}
-          onPick={acceptSlash} onHover={(i) => setSlash((m) => (m ? { ...m, index: i } : m))} />}
       </div>
   )
   const footer = (
@@ -295,7 +226,6 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
       <div className="fv-actions">
         <TriggerButton label={t('thread.mentionActor')} disabled={busy} onClick={() => insertTrigger('@')}>@</TriggerButton>
         <TriggerButton label={t('thread.mentionNode')} disabled={busy} onClick={() => insertTrigger('[[')}>[[</TriggerButton>
-        {commands?.length > 0 && <TriggerButton label={t('thread.reviewCommands')} disabled={busy} onClick={() => insertTrigger('/')}>/</TriggerButton>}
         {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
         {err && <span className="fv-error">{err}</span>}
         <div className="fv-actions-end">

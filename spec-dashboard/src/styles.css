@@ -2114,22 +2114,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
 .fv-reply.sel { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 9%, transparent); }
-/* a remark ([[remark-substrate]]) carries its resolved bit in place: an OPEN remark is prominent (a concern its
-   thread still owes an answer — a live left-bar), a RESOLVED one is visually settled (dimmed, thin bar). */
-.fv-reply.remark.open { border-left-color: var(--orange); border-left-width: 3px; }
-.fv-reply.remark.resolved { opacity: .62; border-left-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
-.fv-remark-state { font-family: var(--ui-font); font-size: var(--type-caption); padding: 0 5px; border-radius: var(--radius); margin-left: auto; }
-.fv-remark-state.open { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); font-weight: var(--weight-semibold); }
-.fv-remark-state.resolved { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
-/* the remark's ONE applicable verb, in place ([[remark-substrate]] write parity): resolve = the human's
-   second-party judgment on an agent's open remark (green — it settles the loss); retract = withdraw one's
-   own (muted — an erasure, not a judgment). A resolved remark renders neither (monotonic). */
-.fv-remark-act { font-family: var(--ui-font); font-size: var(--type-caption); padding: 0 6px; border-radius: var(--radius); cursor: pointer; line-height: var(--leading-body); background: var(--paper); }
-.fv-remark-act.resolve { color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 40%, var(--line)); }
-.fv-remark-act.resolve:hover { background: var(--green); color: var(--paper); border-color: var(--green); }
-.fv-remark-act.retract { color: var(--muted); border: 1px solid var(--line); }
-.fv-remark-act.retract:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
-.fv-remark-act:disabled { opacity: .5; cursor: default; }
 .fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--ui-font); font-size: var(--type-meta); }
 .fv-reply-by { color: var(--blue); font-weight: var(--weight-semibold); }
 .fv-reply-at { color: var(--muted); }

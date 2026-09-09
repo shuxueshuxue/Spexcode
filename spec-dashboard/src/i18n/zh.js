@@ -340,9 +340,6 @@ export default {
   },
 
   detail: {
-    sideReading: '结果',
-    sideFiler: '提交者',
-    sideOk: '人工签核',
     sideStore: '存储',
     sideLabels: '标签',
     sideOriginator: '发起者',
@@ -357,14 +354,6 @@ export default {
     anchorTitle: '把这条评论锚定到当前帧',
     mentionActor: '插入 @ —— 提及会话',
     mentionNode: '插入 [[ —— 引用规格节点',
-    reviewCommands: '插入 / —— 评审命令',
-    resolved: '已解决',
-    resolvedBy: '由 {by} 解决',
-    openRemark: '未解决',
-    resolve: '解决',
-    resolveTitle: '解决此评注 —— 第二人的判定（单调：不可撤销解决）',
-    retract: '撤回',
-    retractTitle: '撤回你自己未解决的评注 —— 从线程中移除',
     originatorIssue: '打开发起此 issue 的会话：{by}',
   },
 

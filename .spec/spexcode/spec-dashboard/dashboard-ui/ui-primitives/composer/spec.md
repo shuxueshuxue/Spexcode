@@ -19,7 +19,7 @@ related:
 
 # composer
 
-Command Box, TimelineChat, session launch prompts, issue replies and remarks, a new issue's description,
+Command Box, TimelineChat, session launch prompts, issue replies, a new issue's description,
 and the prose send card are different product actions, but
 they should not each invent a textarea. They share one small editor shell: a quiet bordered surface, a borderless controlled
 textarea that grows from a useful floor to its home's cap, and a persistent action footer. The footer is

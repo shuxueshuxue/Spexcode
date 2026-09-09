@@ -479,7 +479,7 @@ function bundleFiles(dir: string): string[] {
 // CHILDREN are `surface: hook` nodes). The field filter keeps it safe: a node only gathers if it declares THIS
 // surface, so descending past a matched node never double-counts (children carry a different surface),
 // and the gather set is path-independent — regrouping a plugin never changes what materializes.
-function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent' | 'review'): ConfigPreset[] {
+function loadSurface(surface: 'command' | 'system' | 'hook' | 'skill' | 'agent'): ConfigPreset[] {
   const out: ConfigPreset[] = []
   const visit = (nodeDir: string, name: string) => {
     if (existsSync(join(nodeDir, 'spec.md'))) {
@@ -530,8 +530,3 @@ export function loadSkillConfig(): ConfigPreset[] { return loadSurface('skill') 
 // .claude/agents/<name>.md). Like a skill, the node's `desc` is the on-demand load-trigger and its `body` is the
 // agent's system prompt; additionally its `tools` field is the harness tool allowlist for the spawned agent.
 export function loadAgentConfig(): ConfigPreset[] { return loadSurface('agent') }
-// the review-track prose presets: plugin nodes with `surface: review` (the [[review]] shelf's leaves, e.g.
-// [[refuse]]) — remark templates whose `body` carries {node}/{scenario}/{expected} placeholders. Listed at
-// `/api/plugins?surface=review` and projected by [[guidance-catalog]]; no dashboard composer reads them today.
-// Prose only — a preset never adds a write mechanism; a remark sent from one is an ordinary remark.
-export function loadReviewConfig(): ConfigPreset[] { return loadSurface('review') }

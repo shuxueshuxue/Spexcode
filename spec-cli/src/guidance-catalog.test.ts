@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { buildGuidanceCatalog, GUIDANCE_CATALOG_SCHEMA, GUIDANCE_PAYLOAD_NAME, GUIDANCE_SCHEMA_VERSION } from './guidance-catalog.js'
-import { loadAgentConfig, loadConfig, loadHookConfig, loadReviewConfig, loadSkillConfig, loadSystemConfig } from '@spexcode/spec-core'
+import { loadAgentConfig, loadConfig, loadHookConfig, loadSkillConfig, loadSystemConfig } from '@spexcode/spec-core'
 import { repoRoot } from '@spexcode/spec-core'
 import { guideCatalogEntries } from './guide.js'
 import { helpCatalogEntries } from './help.js'
@@ -54,7 +54,7 @@ test('catalog covers each active plugin surface and registered help/guide page',
   const pluginRows = bundle.entries.filter((entry) => entry.kind === 'plugin')
   const loaders = [
     ['agent', loadAgentConfig], ['command', loadConfig], ['hook', loadHookConfig],
-    ['review', loadReviewConfig], ['skill', loadSkillConfig], ['system', loadSystemConfig],
+    ['skill', loadSkillConfig], ['system', loadSystemConfig],
   ] as const
   for (const [surface, load] of loaders) {
     const presets = load()

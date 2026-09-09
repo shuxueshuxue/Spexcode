@@ -34,11 +34,10 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   allowlist. Same artifact shape as `skill`, one definition per harness: the divergence is a single
   [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
   exactly as a harness with no skill primitive gets no `SKILL.md`.
-- `surface: review` — a **review-track prose preset**: a remark template the backend lists at
-  `/api/plugins?surface=review` ([[review]]). No dashboard composer offers the `/` menu now; the contract a
-  composer would honour is that picking one PREFILLS it with the node's body (`{node}` / `{scenario}` /
-  `{expected}` placeholders filled at insert time) and the human edits and sends it as an ORDINARY remark
-  on the (node, scenario) thread — the preset adds no write mechanism of its own.
+- `surface: review` — a **review-track prose preset** under the [[review]] shelf: a remark template whose
+  body carries `{node}` / `{scenario}` / `{expected}` placeholders. It is a frontmatter value only: no loader
+  gathers it, no route serves it, and no composer offers it — the shelf and its leaf ([[refuse]]) are
+  declared nodes that reach no runtime surface.
 
 The surface is a FIELD, not a path: a plugin carrying it is a real graph node and is discovered
 **recursively** under a plugin root — so a grouping plugin may itself be a plugin whose children carry a
@@ -54,8 +53,7 @@ In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursivel
 [[session-console]] new-session and live-terminal `/` palettes), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
 (materialized to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), `loadAgentConfig` gathers
-agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize), and
-`loadReviewConfig` gathers review (served at `/api/plugins?surface=review` for the review command menu's
-dropdown). Only
+agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize); `review`
+has no loader. Only
 **built/active** plugins gather — a `status: pending` node is declared intent, so it renders on the board but
 reaches no surface.

@@ -27,9 +27,9 @@ content and source provenance, so it can render guidance without reading this ch
 
 ## expanded spec
 
-`GuidanceCatalog` gathers every active plugin surface (`system`, `command`, `hook`, `skill`, `agent`, and `review`)
+`GuidanceCatalog` gathers every active plugin surface (`system`, `command`, `hook`, `skill`, and `agent`)
 through the existing field-driven loaders. A plugin that serves multiple surfaces has one index entry per surface.
-System, command, skill, agent, and review rows carry their loader's exact rendered prompt body and `spec.md`
+System, command, skill, and agent rows carry their loader's exact rendered prompt body and `spec.md`
 provenance. Hook rows are different by construction: `HookPromptCatalog` is the single authoring registry for the
 text a handler can actually emit. Its templates power the runtime renderer and the public catalog, so the hook page
 shows the real injected text with placeholders for event-derived values, never a behavioral `spec.md` summary. Every

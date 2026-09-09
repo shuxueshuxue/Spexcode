@@ -133,7 +133,7 @@ test('scoped miss keeps the advisory drift warn by DEFAULT; lint.scopedCodeMiss 
   assert.match(hit.out, /anchor-drift.*src\/calc\.ts#applyRate/)
 })
 
-test('related selector: a hit warns (soft, exit 0) naming the selector; a miss is silent', { skip }, () => {
+test('related selector: live selectors resolve but movement is inert', { skip }, () => {
   const fx = fixture()
   fx.node('watcher', 'related:\n  - src/calc.ts#applyRate')
   fx.commit('v1')
@@ -141,13 +141,25 @@ test('related selector: a hit warns (soft, exit 0) naming the selector; a miss i
   fx.commit('unrelated move')
   const miss = fx.lint()
   assert.equal(miss.code, 0)
-  assert.ok(!miss.out.includes('related-drift'), `a scoped related miss is SILENT: ${miss.out}`)
+  assert.ok(!miss.out.includes('drift:'), `related movement is inert: ${miss.out}`)
 
   writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('42', '2', '30')) // touches applyRate — hit
   fx.commit('move the watched unit')
   const hit = fx.lint()
   assert.equal(hit.code, 0, `related never blocks: ${hit.out}`)
-  assert.match(hit.out, /related-drift: related src\/calc\.ts#applyRate \('watcher'\)/)
+  assert.ok(!hit.out.includes('drift:' ), `related movement is context only: ${hit.out}`)
+})
+
+test('related-only file remains covered after movement', { skip }, () => {
+  const fx = fixture()
+  fx.node('watcher', 'related:\n  - src/calc.ts')
+  fx.commit('v1')
+  writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('9', '2'))
+  fx.commit('move related file')
+  const { code, out } = fx.lint()
+  assert.equal(code, 0)
+  assert.ok(!out.includes('uncovered'))
+  assert.ok(!out.includes('drift:'))
 })
 
 test('bare compatibility: whole-file code keeps ordinary drift, unaffected by scopedCodeMiss "ignore"', { skip }, () => {

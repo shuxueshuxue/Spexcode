@@ -2,7 +2,7 @@
 title: governed-related
 status: active
 hue: 200
-desc: Two relations on a node — GOVERN (the ONE source of truth; drives drift/eval/ack; ≤1 file, >1 errors) and RELATED (everything referenced; carries coverage AND a soft drift warn). Three signal tiers govern > related > uncovered. A file governed by more than maxOwners nodes warns "split it".
+desc: Two relations on a node — GOVERN (the ONE source of truth; drives drift/ack; ≤1 file, >1 errors) and RELATED (everything referenced; carries coverage and context). Three signal tiers govern > related(context) > uncovered. A file governed by more than maxOwners nodes warns "split it".
 related:
   - packages/spec-core/src/specs.ts
   - spec-cli/src/lint.ts
@@ -30,15 +30,7 @@ Three signal tiers, strongest to none — **govern > related > uncovered**:
   drives the HARD signals: drift that counts to the commit gate, the `Spec-OK` ack floor, and eval
   attribution. **Many nodes may still govern the same file** — a change fans drift to each, which is
   correct; ownership is many-to-one on the file side, bounded only by too-many-owners below.
-- **related** (`related:`) — every file referenced but not the single truth: the full-stack **face** (a
-  thin frontend over a CLI/backend engine — restyle it and the intent does not move), shared substrate,
-  and plain dependencies. It carries **coverage** (most files are reached here, not by govern) and a
-  **soft drift warn**: when a related file moves ahead of the node's version, lint WARNS — a nudge that a
-  dependency shifted, worth a glance — but it NEVER blocks a commit, needs no ack, and feeds no eval staleness.
-  This soft signal is why related is worth maintaining: it is a live-but-quiet dependency edge, not a
-  dead pointer. A related row may narrow its ear with a selector (`path#symbol`, [[code-anchor]]):
-  then only a commit moving that unit warns — misses are silent — and the never-block/never-ack/no-eval
-  nature is unchanged.
+- **related** (`related:`) — every file referenced but not the single truth. It carries **coverage** and is a context edge for reverse lookup, graph edges, and owner “also referenced by” output. Every path and selector must resolve; related selectors are otherwise inert and carry no temporal signal.
 
 Both relations may scope entries to named units ([[code-anchor]]): a `code:` file may carry any number
 of selectors (still ONE base file — one-govern counts distinct paths), and a selector-scoped governor

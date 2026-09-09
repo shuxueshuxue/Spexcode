@@ -135,9 +135,6 @@ worktree state to inspect and continue with the immutable candidate tree.
   ALWAYS advisory: unanchored drift never blocks a commit; the blocking tier is **anchor-drift** above.
   On a selector-scoped file's MISS this advisory stays by default; the committed
   `lint.scopedCodeMiss: "ignore"` silences only it ([[code-anchor]]).
-- **related-drift** (warn): the SOFT tier — a `related:` file moved ahead of the node; one summary line,
-  never the commit gate, never eval freshness. A selector-scoped related row warns per HIT (selector
-  named); its misses are silent.
 - **owners** (warn): one summary line counting files governed WHOLE-FILE by **> `lint.maxOwners`** nodes
   (default 3) — breadth's mirror on the file (too many owners, not too many children; below the cap is
   ordinary). A selector-scoped governor claims units, not the file, so it stays out of the count. Remedy

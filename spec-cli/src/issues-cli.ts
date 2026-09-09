@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { closeIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '@spexcode/spec-forge/drivers'
-import { currentSession, issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
+import { issuesEnabled } from './localIssues.js'
 import { summarizeDispatch, summarizeLoopIn } from './mentions.js'
 import { loadSpecsLite } from '@spexcode/spec-core'
 
-// @@@ issues-cli - the `spex issue` / `spex remark` CLI surface: argv parsing, console output, exit codes.
+// @@@ issues-cli - the `spex issue` CLI surface: argv parsing, console output, exit codes.
 // It lives ABOVE the eval layer, which is the whole point. These handlers used to sit in `issues.ts` and
 // `localIssues.ts` — modules the eval package imports — and a CLI surface is by definition the topmost layer,
 // so hosting one down there gave those files two altitudes at once. That is what held the spec/eval package
@@ -152,7 +152,7 @@ async function issueVerbs(args: string[]): Promise<number> {
   return 0
 }
 
-const VALUE_FLAGS = new Set(['--node', '--body', '--evidence', '--scenario', '--target-sha', '--store'])
+const VALUE_FLAGS = new Set(['--node', '--body', '--evidence', '--store'])
 // bare positionals, skipping flags + their values.
 function bare(args: string[]): string[] {
   const out: string[] = []
@@ -229,55 +229,3 @@ export async function runIssueWrite(args: string[]): Promise<number> {
 // the `issues.enabled` settings key.)
 export const ISSUE_WRITE_SUBS = new Set(['open', 'reply'])
 
-// ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
-// `spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--target-sha <sha>] [--evidence <hash>…]`
-// host = a local issue id, OR a <node> with --scenario <name>. Records the target commit (default: worktree HEAD).
-export async function runRemark(args: string[]): Promise<number> {
-  try {
-    const scenario = fl(args, 'scenario')
-    const positional = bare(args)[0]
-    const body = readBody(args)
-    if (!positional || !body) {
-      console.error('usage: spex remark add <issue-id | node --scenario name> --body -|<text> [--target-sha <sha>] [--evidence <hash>…]')
-      return 2
-    }
-    // THE FLAG DECIDES THE PARSE ([[cli-surface]] §1): `--scenario` present ⇒ the positional is a NODE id
-    // (the remark pins to that node's scenario track); absent ⇒ it is an ISSUE id. Never type-sniffed —
-    // a node id and an issue id are both bare slugs, so any "looks like" guess would misroute; the flag
-    // is the one unambiguous discriminator, and a wrong host fails loud downstream (unknown issue/node).
-    const host = scenario ? { node: positional, scenario } : { issue: positional }
-    const r = await (await import('./loop-in.js')).remarkWithLoopIn(host, body, { targetSha: fl(args, 'target-sha'), evidence: repeated(args, 'evidence') })
-    console.log(`remark ${r.ref}  (against ${r.targetSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
-    const dispatched = summarizeDispatch(r.outcomes)
-    if (dispatched) console.log(`  ${dispatched}`)
-    const s = summarizeLoopIn(r.loopIn)
-    if (s) console.log(`  ${s}`)
-    return 0
-  } catch (e) {
-    console.error(`spex remark add: ${e instanceof Error ? e.message : e}`)
-    return 1
-  }
-}
-
-// `spex remark resolve <remark-ref>` — flip resolved=true (agent-only, never the author, monotonic — see resolveRemark).
-export async function runResolve(args: string[]): Promise<number> {
-  const ref = bare(args)[0]
-  if (!ref) { console.error('usage: spex remark resolve <remark-ref>   (the <thread-id>#<rid> `spex remark add` printed)'); return 2 }
-  try {
-    const by = currentSession()
-    resolveRemark(ref, by)
-    console.log(`resolved remark ${ref} — by ${by}`)
-    return 0
-  } catch (e) { console.error(`spex remark resolve: ${e instanceof Error ? e.message : e}`); return 1 }
-}
-
-// `spex remark retract <remark-ref>` — the author withdraws their OWN remark, removing it (author-only — see retractRemark).
-export async function runRetract(args: string[]): Promise<number> {
-  const ref = bare(args)[0]
-  if (!ref) { console.error('usage: spex remark retract <remark-ref>'); return 2 }
-  try {
-    retractRemark(ref, currentSession())
-    console.log(`retracted remark ${ref}`)
-    return 0
-  } catch (e) { console.error(`spex remark retract: ${e instanceof Error ? e.message : e}`); return 1 }
-}

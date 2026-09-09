@@ -33,8 +33,8 @@ needs a repository nor enters the noun-first command map.
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
-after its noun, so an id can never occupy a verb slot and no id is a reserved word. Six noun drawers
-(`spec` · `session` · `peer` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
+after its noun, so an id can never occupy a verb slot and no id is a reserved word. Five noun drawers
+(`spec` · `session` · `peer` · `issue` · `evidence`), plus bare project verbs (`graph` ·
 `init` · `materialize` · `doctor` · `serve` · `dashboard` · `open` · `guidance` · `uninstall`) allowed only because
 their object stays inside THIS project (`open` selects one of its nodes/sessions/files; `dashboard`'s object is
 the HOST's project set) — there is no free cross-project object slot — plus the two help surfaces (`help` ·
@@ -147,7 +147,7 @@ so a stranded native transport cannot look like a successful command in scripts 
 
 **Signposts, one version only.** Every spelling v0.3.0 removed (the bare promoted verbs, the bare
 session subs, `yatsu`/`blob`/`issues`/`forge`/`tree`/`board`, top-level
-`search`/`owner`/`lint`/`ack`, `resolve`/`retract`, `session rawkey`, `session exit|reopen` (respelled
+`search`/`owner`/`lint`/`ack`, `session rawkey`, `session exit|reopen` (respelled
 `stop`/`resume`), `session capture|prompt` (folded into `show`), the retired `runtime` drawer, the hook verbs
 `session state|fail|idle|commit-gate`, positional `doctor contract|conflicts`, `review proof`) maps
 to a signpost: one stderr line naming the new spelling, exit non-zero, and the old verb NEVER

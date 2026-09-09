@@ -2,13 +2,12 @@
 title: loop-in
 status: active
 hue: 260
-desc: The originator loop-in's composing half — one composer per reply path (`issue reply`, `remark add`, and the HTTP route of each), above the store modules, so a reply's candidate chain — the thread's author — is built in exactly one place.
+desc: The originator loop-in's composing half — one composer for the reply path (`issue reply` and its HTTP route), above the store modules, so a reply's candidate chain — the thread's author — is built in exactly one place.
 code:
   - spec-cli/src/loop-in.ts
 related:
   - spec-cli/src/mentions.ts
   - spec-cli/src/issues.ts
-  - spec-cli/src/localIssues.ts
   - spec-cli/src/issues-cli.ts
   - spec-cli/src/index.ts
 ---
@@ -35,14 +34,14 @@ untouched: every thread's chain is its author alone; delivery reaches that link 
 is notification only and resolves nothing.
 
 Its altitude is the whole reason it exists as a module. Sitting above the store modules, it imports
-`issues.ts` and `localIssues.ts` statically, and nothing below it imports it back.
+`issues.ts` statically, and nothing below it imports it back.
 
-**One composer per path, and every entry point calls it.** A reply is reachable four ways — the CLI's
-`issue reply` and `remark add`, and the HTTP route for each. If each door composed its own chain, the same verb
-would report different candidates depending on how it was entered, and no gate in this repo would notice the
-drift. So the four call sites call the two functions here, and these are the only places a chain is built.
+**One composer, and every entry point calls it.** A reply is reachable two ways — the CLI's `issue reply`
+and its HTTP route. If each door composed its own chain, the same verb would report different candidates
+depending on how it was entered, and no gate in this repo would notice the drift. So both call sites call
+the one function here, and it is the only place a chain is built.
 
-Consequently the layers below return facts, not compositions: the local reply and the remark write hand back
-their thread, their author and their dispatch outcomes, and the loop-in is added here. That also makes the
+Consequently the layers below return facts, not compositions: the local reply hands back its thread, its
+author and its dispatch outcomes, and the loop-in is added here. That also makes the
 recursion the old code guarded against structurally impossible rather than comment-avoided — there is no
 loop-in-shaped field below for a lower caller to re-enter through.

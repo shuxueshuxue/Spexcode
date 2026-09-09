@@ -1,11 +1,10 @@
 import { notifyOriginator, type LoopIn } from './mentions.js'
 import { replyIssue, type Issue } from './issues.js'
-import { remarkOnHost } from './localIssues.js'
 
-// @@@ ONE composer per path - the loop-in is reachable from four call sites: the CLI's `issue reply` and
-// `remark add`, and the HTTP routes for each. If each composed its own chain, the same verb would report
-// different candidates depending on which door it came through, and no gate we have would notice the drift.
-// So the four sites call these two functions, and these two are the only places a chain is built.
+// @@@ ONE composer per path - the loop-in is reachable from two call sites: the CLI's `issue reply` and its
+// HTTP route. If each composed its own chain, the same verb would report different candidates depending on
+// which door it came through, and no gate we have would notice the drift. So both sites call this one
+// function, and it is the only place a chain is built.
 
 // The fallback chain is deliberately the thread author. Ledger readers used to derive extra candidates;
 // replies now use the same originator rule for every thread.
@@ -29,12 +28,3 @@ export async function replyIssueWithLoopIn(
   return { ...r, loopIn }
 }
 
-/** `remark add` on a host, with the same loop-in composed by the same code. */
-export async function remarkWithLoopIn(
-  host: { issue?: string; node?: string; scenario?: string },
-  body: string,
-  opts: { targetSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<Awaited<ReturnType<typeof remarkOnHost>> & { loopIn: LoopIn | null }> {
-  const r = await remarkOnHost(host, body, opts)
-  return { ...r, loopIn: await loopInFor(r.thread, r.author, body, r.thread.id) }
-}

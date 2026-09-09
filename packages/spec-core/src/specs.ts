@@ -530,7 +530,8 @@ export function loadSkillConfig(): ConfigPreset[] { return loadSurface('skill') 
 // .claude/agents/<name>.md). Like a skill, the node's `desc` is the on-demand load-trigger and its `body` is the
 // agent's system prompt; additionally its `tools` field is the harness tool allowlist for the spawned agent.
 export function loadAgentConfig(): ConfigPreset[] { return loadSurface('agent') }
-// the review-track prose presets ([[review-commands]]): offered in the eval detail's remark-composer `/`
-// dropdown; picking one PREFILLS the composer with the node's `body` ({node}/{scenario}/{expected}
-// placeholders filled at insert time). Display+prefill only — the send stays the ordinary remark write.
+// the review-track prose presets: plugin nodes with `surface: review` (the [[review]] shelf's leaves, e.g.
+// [[refuse]]) — remark templates whose `body` carries {node}/{scenario}/{expected} placeholders. Listed at
+// `/api/plugins?surface=review` and projected by [[guidance-catalog]]; no dashboard composer reads them today.
+// Prose only — a preset never adds a write mechanism; a remark sent from one is an ordinary remark.
 export function loadReviewConfig(): ConfigPreset[] { return loadSurface('review') }

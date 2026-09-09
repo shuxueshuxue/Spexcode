@@ -1,14 +1,16 @@
-// [[review-filters]] YATU: ONE filter engine, two state homes. Drives the canonical #/issues and #/evals
-// ListViews and the compact Spec Information panes in a single real-Chromium recording against the
-// PREBUILT dashboard dist, and compares what each face MATCHES field by field. Also walks the History
-// pane, which must expose no expand-all replacement for its one-at-a-time disclosure.
+// [[review-filters]] YATU: ONE filter engine, two state homes. Drives the canonical #/issues ListView and
+// the compact Spec Information panes in a single real-Chromium recording against the PREBUILT dashboard
+// dist, and compares what each face MATCHES field by field. Also walks the History pane, which must
+// expose no expand-all replacement for its one-at-a-time disclosure.
 import { pathToFileURL } from 'node:url'
 import { mkdirSync, renameSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const BASE = process.env.BASE || 'http://127.0.0.1:5183'
-const NODE = process.env.NODE_ID || 'eval-core'
+// the Spec Information half needs a node with MORE than four issues (the compact search row only renders
+// then), at least one of them closed, and a history of several versions.
+const NODE = process.env.NODE_ID || 'issues-view'
 const OUT = process.env.OUT || '/tmp/review-filters-one-engine'
 mkdirSync(OUT, { recursive: true })
 const { chromium } = await import(pathToFileURL(PW).href)
@@ -27,12 +29,11 @@ const context = await browser.newContext({
 })
 const page = await context.newPage()
 
-const api = { evals: null, issues: null }
+const api = { issues: null }
 page.on('response', async (response) => {
   const url = new URL(response.url())
-  const key = url.pathname.endsWith('/api/evals') ? 'evals' : url.pathname.endsWith('/api/issues') ? 'issues' : null
-  if (!key) return
-  try { api[key] = { query: url.searchParams.get('q'), view: url.searchParams.get('view'), body: await response.json() } } catch { /* error bodies aren't this probe's subject */ }
+  if (!url.pathname.endsWith('/api/issues')) return
+  try { api.issues = { query: url.searchParams.get('q'), view: url.searchParams.get('view'), body: await response.json() } } catch { /* error bodies aren't this probe's subject */ }
 })
 
 const hash = () => page.evaluate(() => decodeURIComponent(location.hash))
@@ -43,7 +44,7 @@ const settle = (ms = 900) => page.waitForTimeout(ms)
 const submitQuery = async (text) => {
   await page.locator('.rl-query input[role="combobox"]').fill(text)
   await page.keyboard.press('Enter')
-  const echoed = await until(() => api.issues?.query === text || api.evals?.query === text, 30_000)
+  const echoed = await until(() => api.issues?.query === text, 30_000)
   if (!echoed) console.log(`  (warn) no /api response echoed "${text}" within 30s`)
   await settle(500)
 }
@@ -70,7 +71,7 @@ const noHorizontalOverflow = () => page.evaluate(() => ({
   view: window.innerWidth,
 }))
 
-// ============ 1. the CANONICAL pages: token text is the whole state, Back replays it ============
+// ============ 1. the CANONICAL page: token text is the whole state, Back replays it ============
 step('canonical #/issues — query + section + facet + overflow, then Back')
 await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.rl-section')
@@ -131,31 +132,16 @@ await settle(300)
 check('Escape returns focus to the overflow trigger',
   await page.evaluate(() => document.activeElement?.classList.contains('rl-secondary-filters-trigger')))
 
-step('canonical #/evals — the SAME engine over eval fields')
-api.evals = null
-await page.goto(`${BASE}/#/evals`, { waitUntil: 'domcontentloaded' })
-await page.waitForSelector('.rl-section')
-if (!(await until(() => api.evals?.query === 'is:eval', 30_000))) throw new Error('cold #/evals never answered')
-const evalFacets = await facetNames()
-check('evals opens on its complete bound record', (await hash()) === '#/evals' && api.evals.body.total === api.evals.body.sourceTotal)
-check('the low-cardinality eval facets are direct on desktop', evalFacets.length >= 2, evalFacets.join(' | '))
-const node = api.evals.body.facets.node.options.find((option) => option.value === NODE) || api.evals.body.facets.node.options.find((option) => option.value)
-await submitQuery(`is:eval node:${node.value}`)
-const nodeScopedTotal = api.evals.body.total
-check('node: is a token-only dimension with no enumerating dropdown',
-  !(await facetNames()).some((label) => /node/i.test(label)), (await facetNames()).join(' | '))
-await submitQuery(`is:eval node:${node.value} verdict:unmeasured`)
-check('verdict:unmeasured selects declared-without-reading rows only',
-  api.evals.body.items.every((item) => item.filterKind === 'blind' || item.filterKind === 'unmeasured'),
-  [...new Set(api.evals.body.items.map((item) => item.filterKind))].join(','))
-await submitQuery(`is:eval node:${node.value} frobnicate:xyz`)
+step('a qualifier outside the page map is IMPOSSIBLE, never guessed')
+await submitQuery('is:issue frobnicate:xyz')
 check('an unknown qualifier stays verbatim and honestly matches nothing',
-  (await hash()).includes('frobnicate:xyz') && api.evals.body.total === 0)
-await page.screenshot({ path: join(OUT, '03-evals-unknown-qualifier.png') })
+  (await hash()).includes('frobnicate:xyz') && api.issues.body.total === 0)
+await page.screenshot({ path: join(OUT, '03-issues-unknown-qualifier.png') })
 
-// ============ 2. the EMBEDDED panes: same semantics, local state, no address ============
-step(`Spec Information on ${NODE} — the compact face of the same adapters`)
-await page.evaluate((id) => { sessionStorage.setItem('spex.focus.root', id); location.hash = '#/' }, NODE)
+// ============ 2. the EMBEDDED pane: same semantics, local state, no address ============
+step(`Spec Information on ${NODE} — the compact face of the same adapter`)
+// the graph is a routed view (#/graph); a bare #/ lands on the sessions console.
+await page.evaluate((id) => { sessionStorage.setItem('spex.focus.root', id); location.hash = '#/graph' }, NODE)
 await page.reload({ waitUntil: 'domcontentloaded' })
 await settle(1600)
 const nodeCard = page.locator('.react-flow__node').filter({ hasText: NODE }).first()
@@ -165,6 +151,7 @@ await page.keyboard.press('i')   // dblclick now opens the document; `i` is the 
 await page.waitForSelector('.ov-panel')
 const hashAtOpen = await hash()
 
+api.issues = null
 await page.locator('.ov-tab', { hasText: /issue/i }).click()
 await settle(1400)
 // wait for the pane's own fetch to settle — sampling the count immediately races the loading state.
@@ -172,6 +159,11 @@ const issuesCompact = await page.locator('.pane-issues .rf-compact').first()
   .waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false)
 check('the embedded Issues pane wears ONE shallow search row',
   issuesCompact && await page.locator('.pane-issues .rf-compact').count() === 1)
+await until(() => api.issues?.query != null, 30_000)
+const paneScopedQuery = api.issues?.query
+const paneScopedTotal = api.issues?.body?.total
+check('the pane scopes through the SAME token grammar the canonical page uses',
+  /^is:issue\b/.test(paneScopedQuery || '') && new RegExp(`node:${NODE}\\b`).test(paneScopedQuery || ''), paneScopedQuery)
 await page.locator('.rf-compact input').first().fill('zzzznomatch')
 await settle(1800)
 const emptyPane = await page.evaluate(() => ({
@@ -186,10 +178,7 @@ await page.locator('.rf-clear').first().click()
 await settle(900)
 
 step('the compact overflow is the shared accessible primitive — pointer and keyboard')
-await page.locator('.ov-tab', { hasText: /eval/i }).click()
-await settle(1600)
-check('the embedded Eval pane renders its compact search row', await page.locator('.rf-compact').count() >= 1)
-await page.locator('.rf-compact .rl-secondary-filters-trigger').first().click()
+await page.locator('.pane-issues .rf-compact .rl-secondary-filters-trigger').first().click()
 await settle(400)
 const paneGroups = await overflowGroups()
 check('the overflow is named RADIO groups, not one mixed set',
@@ -205,31 +194,31 @@ await page.keyboard.press('Home')
 const focusHome = await page.evaluate(() => document.activeElement?.textContent?.trim())
 check('open focuses a radio and Arrow/Home/End rove it', focusStart !== focusNext && focusEnd !== focusHome,
   `${focusStart} → ${focusNext} … End=${focusEnd} Home=${focusHome}`)
-await page.screenshot({ path: join(OUT, '05-pane-eval-overflow.png') })
+await page.screenshot({ path: join(OUT, '05-pane-issues-overflow.png') })
 await page.keyboard.press('Escape')
 await settle(300)
 check('Escape restores the compact trigger', await page.evaluate(() => document.activeElement?.classList.contains('rl-secondary-filters-trigger')))
 
 step('the embedded pick agrees with the canonical adapter, and survives a tab switch')
-await page.locator('.rf-compact .rl-secondary-filters-trigger').first().click()
+await page.locator('.pane-issues .rf-compact .rl-secondary-filters-trigger').first().click()
 await settle(400)
-await page.locator('.rl-secondary-filters-menu [role="menuitemradio"]').filter({ hasText: /fail|未通过/i }).first().click()
+await page.locator('.rl-secondary-filters-menu [role="menuitemradio"]').filter({ hasText: /closed|已关闭/i }).first().click()
 // the pane refetches on the pick — wait for the request it caused, not for the clock.
-await until(() => /verdict:fail/.test(api.evals?.query || ''), 30_000)
+await until(() => /state:closed/.test(api.issues?.query || ''), 30_000)
 await settle(400)
-const paneVerdictQuery = api.evals?.query
+const panePickQuery = api.issues?.query
 check('the embedded pick travels through the SAME token grammar the canonical page uses',
-  /verdict:fail/.test(paneVerdictQuery || '') && /node:/.test(paneVerdictQuery || ''), paneVerdictQuery)
+  /state:closed/.test(panePickQuery || '') && /node:/.test(panePickQuery || ''), panePickQuery)
 check('the embedded pick still leaves the address alone', (await hash()) === hashAtOpen)
 await page.locator('.ov-tab', { hasText: /spec|规格/i }).first().click()
 await settle(600)
-api.evals = null
-await page.locator('.ov-tab', { hasText: /eval/i }).click()
-const returned = await until(() => api.evals?.query != null, 30_000)
+api.issues = null
+await page.locator('.ov-tab', { hasText: /issue/i }).click()
+const returned = await until(() => api.issues?.query != null, 30_000)
 await settle(400)
 check('the embedded state survives a Spec Information tab switch',
-  returned && /verdict:fail/.test(api.evals?.query || ''), api.evals?.query)
-await page.screenshot({ path: join(OUT, '06-pane-eval-survives-tabswitch.png') })
+  returned && /state:closed/.test(api.issues?.query || ''), api.issues?.query)
+await page.screenshot({ path: join(OUT, '06-pane-issues-survives-tabswitch.png') })
 
 step('History discloses one row at a time — no expand-all control or replacement')
 await page.locator('.ov-tab', { hasText: /history|历史/i }).click()
@@ -271,45 +260,40 @@ await page.screenshot({ path: join(OUT, '07-history-one-at-a-time.png') })
 step('390px — the same compact interactions, second theme, no horizontal overflow')
 await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'dracula') })
 await page.setViewportSize({ width: 390, height: 780 })
-api.evals = null
-await page.goto(`${BASE}/#/evals`, { waitUntil: 'domcontentloaded' })
+api.issues = null
+await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
 await page.reload({ waitUntil: 'domcontentloaded' })   // the theme is applied before first paint, so re-enter
-if (!(await until(() => api.evals?.query === 'is:eval', 30_000))) throw new Error('390px #/evals never answered')
+if (!(await until(() => api.issues?.query != null, 30_000))) throw new Error('390px #/issues never answered')
 await settle(500)
 check('the phone theme applied', await page.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dracula')
 const phoneOverflow = await noHorizontalOverflow()
 check('the phone canonical list never widens the page', phoneOverflow.doc <= 390 && phoneOverflow.body <= 390, JSON.stringify(phoneOverflow))
+// [[issues-view]]: store stays DIRECTLY reachable at 390px; presence lives in the ONE secondary Filters menu.
+const phoneStoreFacet = page.locator('.rl-facet').filter({ hasText: /store|仓库|存储/i }).first()
+check('the store facet stays directly reachable at 390px', await phoneStoreFacet.isVisible(), (await facetNames()).join(' | '))
 await page.locator('.rl-secondary-filters-trigger').first().click()
 await settle(500)
 const phoneGroups = await overflowGroups()
-check('displaced facets are all reachable in the ONE secondary menu at 390px',
-  phoneGroups.length >= 3, phoneGroups.map((g) => g.label).join(' | '))
-await page.screenshot({ path: join(OUT, '08-phone-evals-overflow.png') })
+check('presence is reachable in the ONE secondary menu at 390px',
+  phoneGroups.length >= 1 && phoneGroups.some((group) => /session|会话/i.test(group.label || '')), phoneGroups.map((g) => g.label).join(' | '))
+await page.screenshot({ path: join(OUT, '08-phone-issues-overflow.png') })
 await page.keyboard.press('Escape')
 await settle(300)
-api.issues = null
-await page.goto(`${BASE}/#/issues`, { waitUntil: 'domcontentloaded' })
-if (!(await until(() => api.issues?.query != null, 30_000))) throw new Error('390px #/issues never answered')
-await settle(500)
-const phoneIssuesOverflow = await noHorizontalOverflow()
-check('the phone Issues list never widens the page either', phoneIssuesOverflow.doc <= 390 && phoneIssuesOverflow.body <= 390, JSON.stringify(phoneIssuesOverflow))
-await page.screenshot({ path: join(OUT, '09-phone-issues.png') })
 
 step('back to the first theme at desktop width, one last canonical comparison')
 await page.evaluate(() => { localStorage.setItem('spexcode.theme', 'minimal') })
 await page.setViewportSize({ width: 1440, height: 900 })
-const scopedQuery = `is:eval node:${node.value}`
-api.evals = null
-await page.goto(`${BASE}/#/evals?q=${encodeURIComponent(scopedQuery)}`, { waitUntil: 'domcontentloaded' })
+api.issues = null
+await page.goto(`${BASE}/#/issues?q=${encodeURIComponent(paneScopedQuery)}`, { waitUntil: 'domcontentloaded' })
 await page.reload({ waitUntil: 'domcontentloaded' })
 // wait for the response for THIS query, not for the clock.
-const scopedArrived = await until(() => api.evals?.query === scopedQuery, 30_000)
-check('the scoped canonical view actually loaded', scopedArrived, `last query ${api.evals?.query}`)
+const scopedArrived = await until(() => api.issues?.query === paneScopedQuery, 30_000)
+check('the scoped canonical view actually loaded', scopedArrived, `last query ${api.issues?.query}`)
 await settle(400)
 check('the first theme is back', await page.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'minimal')
 check('the canonical list reproduces the node-scoped population the pane filtered',
-  api.evals.body.total === nodeScopedTotal, `${api.evals.body.total} vs ${nodeScopedTotal}`)
-await page.screenshot({ path: join(OUT, '10-canonical-agrees-with-pane.png') })
+  api.issues.body.total === paneScopedTotal, `${api.issues.body.total} vs ${paneScopedTotal}`)
+await page.screenshot({ path: join(OUT, '09-canonical-agrees-with-pane.png') })
 
 console.log(`\n${pass} passed, ${fail} failed`)
 await context.close()

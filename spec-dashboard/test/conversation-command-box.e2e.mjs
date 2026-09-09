@@ -168,7 +168,6 @@ try {
   await menu.waitFor({ state: 'visible', timeout: 10_000 })
   const slashRows = await rowsOf()
   facts.steps.slash = { rows: slashRows.length, ui: slashRows.filter((row) => row.ui).map((row) => row.text.trim()), other: slashRows.filter((row) => !row.ui).length }
-  assert.ok(slashRows.some((row) => row.ui && row.text.includes('/eval')), `the board's /eval leads the palette: ${JSON.stringify(slashRows)}`)
   assert.ok(slashRows.some((row) => row.ui && row.text.includes('/stop')), 'the board /stop row is offered on a working session')
   assert.ok(slashRows.some((row) => !row.ui), 'harness/preset rows follow the board rows')
   assert.ok(slashRows.findIndex((row) => row.ui) < slashRows.findIndex((row) => !row.ui), 'board rows come first')
@@ -294,21 +293,6 @@ try {
   assert.equal((afterDrop.match(/\S*spexcode-uploads\/\S+/g) || []).length, 3, `three uploaded paths in the draft: ${afterDrop}`)
   await page.screenshot({ path: join(out, '6-drop-attached.png') })
   step('drop a file on the composer: ringed on hover, attached on release')
-
-  // ---- a bare board line RUNS here: `/eval` opens the session's Evals door instead of sending ---------
-  await input.fill('/eval')
-  await menu.waitFor({ state: 'visible', timeout: 10_000 })
-  await page.keyboard.press('Escape')
-  const hashBefore = await page.evaluate(() => location.hash)
-  const sentBefore = await fetch(`${api}/api/sessions/${source}/timeline`).then((response) => response.json()).then((timeline) => (timeline.events || []).filter((event) => event.kind === 'sent').length)
-  await input.press('Enter')
-  await page.waitForFunction((before) => location.hash !== before, hashBefore, { timeout: 10_000 })
-  const hashAfter = await page.evaluate(() => location.hash)
-  const sentAfter = await fetch(`${api}/api/sessions/${source}/timeline`).then((response) => response.json()).then((timeline) => (timeline.events || []).filter((event) => event.kind === 'sent').length)
-  assert.match(hashAfter, /evals/, `the board /eval navigated to the evals door: ${hashAfter}`)
-  assert.equal(sentAfter, sentBefore, 'a board line is never sent to the agent')
-  facts.steps.board = { hashBefore, hashAfter }
-  step('/eval typed as a bare line runs on the board, sends nothing')
 
   assert.deepEqual(pageErrors, [], `no page errors: ${pageErrors.join('\n')}`)
   const video = page.video()

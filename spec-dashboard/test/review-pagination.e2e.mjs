@@ -1,5 +1,5 @@
 // review-pagination.e2e.mjs — [[review-chrome]] product proof against a real dashboard/backend.
-// The ledger starts at first app entry: graph bootstrap and list response are measured together.
+// The ledger starts at first app entry: graph bootstrap and the Issues list response are measured together.
 import assert from 'node:assert/strict'
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -33,13 +33,18 @@ const finishRecording = async (run, video) => {
   writeFileSync(join(run.dir, `${run.name}.timeline.json`), `${JSON.stringify({ events: run.events }, null, 2)}\n`)
 }
 const apiPath = (response) => new URL(response.url()).pathname
-const waitApi = (page, domain, predicate = () => true) => page.waitForResponse((response) => {
+const isIssuesList = (url) => url.pathname.endsWith('/api/issues')
+const isIssueDetail = (url) => /\/api\/issues\/[^/]+$/.test(url.pathname)
+// the Issues page default and the one section pick this journey makes — the raw token texts the address
+// and the request both carry ([[review-query]]: the default is the bare address, anything else is ?q=<text>).
+const OPEN = 'is:issue state:open'
+const CLOSED = 'is:issue state:closed'
+// a wait pins the exact q+page the step expects, so a pane or dock request for the same endpoint cannot
+// satisfy a wait meant for the canonical list.
+const wants = (q, pageNumber) => (url) => url.searchParams.get('q') === q && url.searchParams.get('page') === String(pageNumber)
+const waitApi = (page, predicate = () => true) => page.waitForResponse((response) => {
   const url = new URL(response.url())
-  return url.pathname.endsWith(`/api/${domain}`) && predicate(url)
-}, { timeout: 45_000 })
-const waitEvalDetail = (page, predicate = () => true) => page.waitForResponse((response) => {
-  const url = new URL(response.url())
-  return url.pathname.endsWith('/api/evals/detail') && predicate(url)
+  return isIssuesList(url) && predicate(url)
 }, { timeout: 45_000 })
 
 async function measure(response, label) {
@@ -64,38 +69,9 @@ async function measure(response, label) {
   return { data, row }
 }
 
-async function measureDetail(response, label) {
-  const body = await response.text()
-  const data = JSON.parse(body)
-  const neighbors = [...(data.neighbors?.prev || []), ...(data.neighbors?.next || [])]
-  const row = {
-    label,
-    url: response.url(),
-    status: response.status(),
-    bytes: Buffer.byteLength(body),
-    selected: data.selected ? `${data.selected.node}/${data.selected.scenario}` : null,
-    history: data.history?.length ?? null,
-    otherScenarioRows: data.selected ? (data.history || []).filter((item) => item.scenario !== data.selected.scenario).length : 0,
-    neighbors: neighbors.length,
-    neighborKeys: [...new Set(neighbors.flatMap((item) => Object.keys(item)))].sort(),
-    total: data.neighbors?.total ?? null,
-    index: data.neighbors?.index ?? null,
-    order: data.neighbors?.order ?? null,
-    revision: data.revision ?? null,
-    evalRevision: data.evalRevision ?? null,
-  }
-  assert.equal(row.status, 200, `${label}: HTTP 200`)
-  assert.equal(row.otherScenarioRows, 0, `${label}: no other scenario history`)
-  assert.ok(row.neighbors <= 5, `${label}: bounded neighbors`)
-  assert.deepEqual(row.neighborKeys, row.neighbors ? ['node', 'scenario', 'state'] : [], `${label}: lightweight neighbors`)
-  assert.equal(row.order, 'default', `${label}: named stable order`)
-  metrics.network.push(row)
-  return { data, row }
-}
-
 function graphRows(graph) {
-  const rows = { evalItems: 0, scenarioItems: 0, issueItems: 0, openIssueItems: 0 }
-  const fields = { evals: 'evalItems', scenarios: 'scenarioItems', issues: 'issueItems', openIssues: 'openIssueItems' }
+  const rows = { issueItems: 0, openIssueItems: 0 }
+  const fields = { issues: 'issueItems', openIssues: 'openIssueItems' }
   const visit = (value) => {
     if (!value || typeof value !== 'object') return
     if (Array.isArray(value)) { value.forEach(visit); return }
@@ -116,9 +92,13 @@ async function readGraph(response) {
   return reading
 }
 
+// Hidden pool documents stay mounted ([[workspace-shell]]): the list keeps its DOM beside an open detail,
+// so every reading is scoped to what is actually shown.
+const shown = (page, selector) => page.locator(`${selector}:visible`)
+
 async function settleRows(page, count) {
-  await page.locator('.lp-page').waitFor({ state: 'visible', timeout: 45_000 })
-  await page.waitForFunction((expected) => document.querySelectorAll('.lp-row').length === expected, count)
+  await shown(page, '.lp-page').waitFor({ state: 'visible', timeout: 45_000 })
+  await page.waitForFunction((expected) => [...document.querySelectorAll('.lp-row')].filter((row) => row.getClientRects().length > 0).length === expected, count)
   await page.waitForTimeout(80)
 }
 
@@ -128,15 +108,31 @@ async function verifyPage(page, measured, label) {
   assert.equal(data.perPage, 25, `${label}: fixed perPage`)
   assert.ok(data.items.length <= 25, `${label}: response has at most one page`)
   assert.equal(Object.hasOwn(data, 'issues'), false, `${label}: no legacy full issues field`)
-  assert.equal(Object.hasOwn(data, 'evals'), false, `${label}: no legacy full evals field`)
   await settleRows(page, data.items.length)
-  assert.equal(await page.locator('.lp-row').count(), data.items.length, `${label}: DOM equals response slice`)
+  assert.equal(await shown(page, '.lp-row').count(), data.items.length, `${label}: DOM equals response slice`)
 }
 
-async function setHash(page, hash, domain, expectedPage) {
-  const waiting = waitApi(page, domain, (url) => url.searchParams.get('page') === String(expectedPage))
+async function setHash(page, hash, q, expectedPage, label = `issues-page-${expectedPage}`) {
+  const waiting = waitApi(page, wants(q, expectedPage))
   await page.evaluate((next) => { location.hash = next }, hash)
-  return measure(await waiting, `${domain}-page-${expectedPage}`)
+  return measure(await waiting, label)
+}
+
+// An Issue detail is one single-object read ([[paged-review]]): the row's href names the id its response carries.
+async function openDetail(page, rowLink, label) {
+  const href = await rowLink.getAttribute('href')
+  assert.ok(href?.startsWith('#/issues/'), `${label}: list row is a real detail anchor`)
+  const id = decodeURIComponent(href.slice('#/issues/'.length))
+  const waiting = page.waitForResponse((response) => isIssueDetail(new URL(response.url())), { timeout: 45_000 })
+  await rowLink.click()
+  const response = await waiting
+  const body = await response.text()
+  const data = JSON.parse(body)
+  metrics.network.push({ label, url: response.url(), status: response.status(), bytes: Buffer.byteLength(body), id: data.id })
+  assert.equal(response.status(), 200, `${label}: HTTP 200`)
+  assert.equal(data.id, id, `${label}: detail is the row's own object`)
+  await shown(page, '.ds-page').waitFor({ state: 'visible', timeout: 45_000 })
+  return { href, id, data }
 }
 
 let desktop
@@ -146,54 +142,25 @@ try {
   const graphOnlyPage = await graphOnly.newPage()
   const graphOnlyReviewRequests = []
   graphOnlyPage.on('request', (request) => {
-    const path = new URL(request.url()).pathname
-    if (path.endsWith('/api/issues') || path.endsWith('/api/evals')) graphOnlyReviewRequests.push(request.url())
+    if (isIssuesList(new URL(request.url()))) graphOnlyReviewRequests.push(request.url())
   })
   const graphOnlyResponse = graphOnlyPage.waitForResponse((response) => apiPath(response).endsWith('/api/graph'), { timeout: 45_000 })
-  await graphOnlyPage.goto(`${base}/#/`)
+  await graphOnlyPage.goto(`${base}/#/graph`)
   await graphOnlyResponse
   await graphOnlyPage.waitForTimeout(300)
-  assert.deepEqual(graphOnlyReviewRequests, [], 'opening Graph receives no Issues/Evals rows')
-  metrics.checks.graphOnlyReviewRequests = graphOnlyReviewRequests
+  assert.deepEqual(graphOnlyReviewRequests, [], 'opening Graph receives no Issues rows')
+  metrics.checks.graphOnlyReviewRequests = [...graphOnlyReviewRequests]
+  // [[paged-palette]]: the search palette ranks the board it was already handed and makes no review request.
+  await graphOnlyPage.evaluate(() => { location.hash = '#/sessions' })
+  await graphOnlyPage.locator('.si-pill.search').waitFor({ state: 'visible', timeout: 45_000 })
+  await graphOnlyPage.locator('.si-pill.search').click()
+  await graphOnlyPage.locator('.search-input').waitFor({ state: 'visible', timeout: 45_000 })
+  await graphOnlyPage.waitForTimeout(300)
+  assert.deepEqual(graphOnlyReviewRequests, [], 'the open Palette receives no Issues rows')
+  metrics.checks.paletteReviewRequests = [...graphOnlyReviewRequests]
   await graphOnly.close()
 
-  const paletteRecording = recording('bounded-review-planes', 'Search pill demand-loads bounded review planes')
-  const paletteContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: paletteRecording.raw, size: { width: 1440, height: 900 } } })
-  const palettePage = await paletteContext.newPage()
-  const paletteVideo = palettePage.video()
-  const paletteReviewRequests = []
-  palettePage.on('request', (request) => {
-    const path = new URL(request.url()).pathname
-    if (path.endsWith('/api/issues') || path.endsWith('/api/evals')) paletteReviewRequests.push(request.url())
-  })
-  await palettePage.goto(`${base}/#/sessions`)
-  await palettePage.locator('.si-pill.search').waitFor({ state: 'visible', timeout: 45_000 })
-  assert.deepEqual(paletteReviewRequests, [], 'closed Palette receives no review rows')
-  const paletteIssueResponse = palettePage.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/issues'), { timeout: 45_000 })
-  const paletteEvalResponse = palettePage.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/evals'), { timeout: 45_000 })
-  await palettePage.locator('.si-pill.search').click()
-  const paletteIssueData = await (await paletteIssueResponse).json()
-  const paletteEvalData = await (await paletteEvalResponse).json()
-  assert.equal(paletteIssueData.items.length, 25)
-  assert.equal(paletteEvalData.items.length, 25)
-  await palettePage.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
-  const paletteTexts = await palettePage.locator('.search-item').allTextContents()
-  assert.equal(paletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false)
-  assert.equal(await palettePage.locator('.search-review-link').count(), 2)
-  await palettePage.locator('.search-input').focus()
-  await palettePage.keyboard.press('Tab')
-  assert.equal(await palettePage.evaluate(() => document.activeElement?.getAttribute('href')), '#/issues?q=is%3Aissue')
-  await palettePage.keyboard.press('Tab')
-  assert.equal(await palettePage.evaluate(() => document.activeElement?.getAttribute('href')), '#/evals?q=is%3Aeval')
-  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; Tab reached both full-list anchors`)
-  await palettePage.screenshot({ path: join(out, 'bounded-palette.png'), fullPage: false })
-  await palettePage.keyboard.press('Enter')
-  await palettePage.waitForFunction(() => location.hash === '#/evals?q=is%3Aeval')
-  paletteRecording.mark('Enter routed to the canonical full Evals list')
-  await paletteContext.close()
-  await finishRecording(paletteRecording, paletteVideo)
-
-  const desktopRecording = recording('paged-review-desktop-yatu', 'request pagination, history, overflow, and bounded consumers')
+  const desktopRecording = recording('paged-review-desktop-yatu', 'request pagination, history, overflow, detail return, loading and failure')
   desktop = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: desktopRecording.raw, size: { width: 1440, height: 900 } } })
   const page = await desktop.newPage()
   const video = page.video()
@@ -201,304 +168,147 @@ try {
   desktop.on('request', (request) => requestUrls.push(request.url()))
 
   const graphWaiting = page.waitForResponse((response) => apiPath(response).endsWith('/api/graph'), { timeout: 45_000 })
-  await page.goto(`${base}/#/`)
+  await page.goto(`${base}/#/graph`)
   const graph = await readGraph(await graphWaiting)
-  const evalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1')
-  await page.locator('.rail-btn[href="#/evals"]').click()
-  const eval1 = await measure(await evalWaiting, 'evals-initial-page-1')
-  metrics.checks.initialLedgerBytes = graph.bytes + eval1.row.bytes
+  const open1Waiting = waitApi(page, wants(OPEN, 1))
+  await page.locator('.rail-btn[href="#/issues"]').click()
+  const open1 = await measure(await open1Waiting, 'issues-initial-page-1')
+  metrics.checks.initialLedgerBytes = graph.bytes + open1.row.bytes
   if (requireLeanGraph) {
     assert.deepEqual(
-      { evalItems: graph.evalItems, scenarioItems: graph.scenarioItems, issueItems: graph.issueItems, openIssueItems: graph.openIssueItems },
-      { evalItems: 0, scenarioItems: 0, issueItems: 0, openIssueItems: 0 },
-      'initial graph carries no reconstructable Issues/Evals row arrays',
+      { issueItems: graph.issueItems, openIssueItems: graph.openIssueItems },
+      { issueItems: 0, openIssueItems: 0 },
+      'initial graph carries no reconstructable Issues row arrays',
     )
   }
-  await verifyPage(page, eval1, 'Evals initial')
-  assert.equal(eval1.data.items.length, 25)
-  assert.ok(eval1.data.total > 25)
-  assert.equal(await page.evaluate(() => location.hash), '#/evals')
-  desktopRecording.mark(`initial ledger graph=${graph.bytes}B list=${eval1.row.bytes}B/25`)
+  await verifyPage(page, open1, 'Issues initial')
+  assert.equal(open1.data.items.length, 25)
+  assert.ok(open1.data.total > 25)
+  assert.equal(await page.evaluate(() => location.hash), '#/issues')
+  desktopRecording.mark(`initial ledger graph=${graph.bytes}B list=${open1.row.bytes}B/25`)
 
-  const navFlow = await page.locator('.rl-pagination').evaluate((nav) => ({
-    sameOwner: nav.closest('.page-scroll') === document.querySelector('.page-scroll'),
-    afterList: !!(document.querySelector('.rl-list').compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING),
+  const navFlow = await shown(page, '.rl-pagination').evaluate((nav) => ({
+    sameOwner: nav.closest('.page-scroll') === nav.closest('.viewhost, body').querySelector('.page-scroll'),
+    afterList: !!(nav.closest('.page-scroll').querySelector('.rl-list').compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING),
     position: getComputedStyle(nav).position,
   }))
   assert.deepEqual(navFlow, { sameOwner: true, afterList: true, position: 'static' })
 
   const historyBefore = await page.evaluate(() => history.length)
-  const eval2Waiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '2')
-  await page.locator('.rl-page-link[rel="next"]').click()
-  const eval2 = await measure(await eval2Waiting, 'evals-pagination-page-2')
-  await verifyPage(page, eval2, 'Evals page 2')
-  assert.equal(await page.evaluate(() => location.hash), '#/evals?page=2')
+  const open2Waiting = waitApi(page, wants(OPEN, 2))
+  await shown(page, '.rl-page-link[rel="next"]').click()
+  const open2 = await measure(await open2Waiting, 'issues-pagination-page-2')
+  await verifyPage(page, open2, 'Issues page 2')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?page=2')
   assert.equal(await page.evaluate(() => history.length), historyBefore + 1, 'pagination anchor PUSHes')
-  assert.match(eval2.row.url, /\?q=is%3Aeval&page=2$/, 'request serializes q before page')
+  assert.match(open2.row.url, /\?q=is%3Aissue\+state%3Aopen&page=2$/, 'request serializes q before page')
 
-  const evalExplicit1Waiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1')
-  await page.locator('.rl-page-link.number', { hasText: /^1$/ }).click()
-  const evalExplicit1 = await measure(await evalExplicit1Waiting, 'evals-pagination-explicit-page-1')
-  await verifyPage(page, evalExplicit1, 'Evals explicit page 1')
-  assert.equal(await page.evaluate(() => location.hash), '#/evals?page=1', 'pagination back to first mints page=1')
-  const reloadWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1')
+  const openExplicit1Waiting = waitApi(page, wants(OPEN, 1))
+  await shown(page, '.rl-page-link.number').filter({ hasText: /^1$/ }).click()
+  const openExplicit1 = await measure(await openExplicit1Waiting, 'issues-pagination-explicit-page-1')
+  await verifyPage(page, openExplicit1, 'Issues explicit page 1')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?page=1', 'pagination back to first mints page=1')
+  const reloadWaiting = waitApi(page, wants(OPEN, 1))
   await page.reload()
-  await measure(await reloadWaiting, 'evals-refresh-explicit-page-1')
-  assert.equal(await page.evaluate(() => location.hash), '#/evals?page=1', 'refresh preserves explicit page=1')
-  const backWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '2')
+  await measure(await reloadWaiting, 'issues-refresh-explicit-page-1')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?page=1', 'refresh preserves explicit page=1')
+  const backWaiting = waitApi(page, wants(OPEN, 2))
   await page.goBack()
-  await measure(await backWaiting, 'evals-back-page-2')
-  assert.equal(await page.evaluate(() => location.hash), '#/evals?page=2')
-  const forwardWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1')
+  await measure(await backWaiting, 'issues-back-page-2')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?page=2')
+  const forwardWaiting = waitApi(page, wants(OPEN, 1))
   await page.goForward()
-  await measure(await forwardWaiting, 'evals-forward-explicit-page-1')
-  assert.equal(await page.evaluate(() => location.hash), '#/evals?page=1')
+  await measure(await forwardWaiting, 'issues-forward-explicit-page-1')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?page=1')
 
-  await setHash(page, '#/evals?page=2', 'evals', 2)
-  const filterWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q')?.includes('verdict:fail') && url.searchParams.get('page') === '1')
-  await page.locator('.rl-section').first().click()
-  const filtered = await measure(await filterWaiting, 'evals-filter-reset')
-  await verifyPage(page, filtered, 'Evals filter reset')
-  assert.match(await page.evaluate(() => location.hash), /^#\/evals\?q=is%3Aeval%20verdict%3Afail$/)
-  assert.equal(new URL(filtered.row.url).searchParams.get('page'), '1', 'server receives repaired page 1 while address omits page')
+  await setHash(page, '#/issues?page=2', OPEN, 2)
+  const filterWaiting = waitApi(page, wants(CLOSED, 1))
+  await shown(page, '.rl-section').nth(1).click()
+  const closed1 = await measure(await filterWaiting, 'issues-filter-reset-closed-page-1')
+  await verifyPage(page, closed1, 'Issues closed page 1')
+  assert.ok(closed1.data.total > 25)
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed')
+  assert.equal(new URL(closed1.row.url).searchParams.get('page'), '1', 'server receives repaired page 1 while address omits page')
 
-  const lastNumber = eval1.data.pageCount
-  const last = await setHash(page, `#/evals?page=${lastNumber}`, 'evals', lastNumber)
-  await verifyPage(page, last, 'Evals last page')
+  const closed2Waiting = waitApi(page, wants(CLOSED, 2))
+  await shown(page, '.rl-page-link[rel="next"]').click()
+  const closed2 = await measure(await closed2Waiting, 'issues-closed-page-2')
+  await verifyPage(page, closed2, 'Issues closed page 2')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed&page=2')
+  assert.match(closed2.row.url, /\?q=is%3Aissue\+state%3Aclosed&page=2$/)
+  const closedExplicit1Waiting = waitApi(page, wants(CLOSED, 1))
+  await shown(page, '.rl-page-link.number').filter({ hasText: /^1$/ }).click()
+  const closedExplicit1 = await measure(await closedExplicit1Waiting, 'issues-closed-explicit-page-1')
+  await verifyPage(page, closedExplicit1, 'Issues closed explicit page 1')
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed&page=1')
+
+  await openDetail(page, shown(page, '.lp-row-link').first(), 'issue-detail-from-closed-page-1')
+  const closedBackWaiting = waitApi(page, wants(CLOSED, 1))
+  await page.goBack()
+  await closedBackWaiting
+  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed&page=1', 'detail Back replays the q+page=1 form')
+
+  const lastNumber = open1.data.pageCount
+  const last = await setHash(page, `#/issues?page=${lastNumber}`, OPEN, lastNumber, 'issues-last-page')
+  await verifyPage(page, last, 'Issues last page')
   assert.equal(last.data.next, null)
-  assert.equal(await page.locator('.rl-page-link.disabled').filter({ hasText: /Next/ }).count(), 1)
+  assert.equal(await shown(page, '.rl-page-link.disabled').filter({ hasText: /Next/ }).count(), 1)
 
-  for (const requested of [41, 999999]) {
-    const overflow = await setHash(page, `#/evals?page=${requested}`, 'evals', requested)
-    await verifyPage(page, overflow, `Evals overflow ${requested}`)
+  for (const requested of [lastNumber + 35, 999999]) {
+    const overflow = await setHash(page, `#/issues?page=${requested}`, OPEN, requested, `issues-overflow-page-${requested}`)
+    await verifyPage(page, overflow, `Issues overflow ${requested}`)
     assert.equal(overflow.data.items.length, 0)
     assert.equal(overflow.data.prev, requested - 1)
     assert.equal(overflow.data.next, requested + 1)
-    assert.equal(await page.locator('.rl-pagination [aria-current="page"]').count(), 0)
-    assert.match(await page.locator('.rl-page-link[rel="prev"]').getAttribute('href'), new RegExp(`page=${requested - 1}$`))
-    assert.match(await page.locator('.rl-page-link[rel="next"]').getAttribute('href'), new RegExp(`page=${requested + 1}$`))
+    assert.equal(await shown(page, '.rl-pagination').locator('[aria-current="page"]').count(), 0)
+    assert.match(await shown(page, '.rl-page-link[rel="prev"]').getAttribute('href'), new RegExp(`page=${requested - 1}$`))
+    assert.match(await shown(page, '.rl-page-link[rel="next"]').getAttribute('href'), new RegExp(`page=${requested + 1}$`))
   }
 
-  const detailSource = await setHash(page, '#/evals?page=2', 'evals', 2)
-  await verifyPage(page, detailSource, 'Evals detail source page 2')
-  const scrollport = page.locator('.page-scroll')
+  const detailSource = await setHash(page, '#/issues?page=2', OPEN, 2, 'issues-detail-source-page-2')
+  await verifyPage(page, detailSource, 'Issues detail source page 2')
+  const scrollport = shown(page, '.lp-page')
   await scrollport.hover()
   await page.mouse.wheel(0, 500)
   await page.waitForTimeout(100)
-  const visibleRow = await page.locator('.lp-row[href]').evaluateAll((rows) => {
-    const port = document.querySelector('.page-scroll').getBoundingClientRect()
+  const visibleRow = await shown(page, '.lp-row').evaluateAll((rows) => {
+    const port = rows[0].closest('.page-scroll').getBoundingClientRect()
     return rows.findIndex((row) => {
       const rect = row.getBoundingClientRect()
       return rect.top >= port.top + 80 && rect.bottom <= port.bottom - 80
     })
   })
   assert.ok(visibleRow >= 0, 'a real wheel leaves a fully visible detail row')
-  const row = page.locator('.lp-row[href]').nth(visibleRow)
-  const detailHref = await row.getAttribute('href')
-  assert.ok(detailHref?.startsWith('#/evals/'), 'list row is a real detail anchor')
+  const row = shown(page, '.lp-row').nth(visibleRow).locator('.lp-row-link')
 
-  const trunkDirect = await desktop.newPage()
-  const trunkDirectWaiting = waitEvalDetail(trunkDirect)
-  await trunkDirect.goto(`${base}/${detailHref}`)
-  const trunkDirectReading = await measureDetail(await trunkDirectWaiting, 'eval-detail-trunk-direct')
-  const trunkReloadWaiting = waitEvalDetail(trunkDirect)
-  await trunkDirect.reload()
-  const trunkReloadReading = await measureDetail(await trunkReloadWaiting, 'eval-detail-trunk-reload')
-  assert.equal(trunkReloadReading.row.revision, trunkDirectReading.row.revision, 'trunk direct/reload share revision')
-  const trunkQueueHrefs = await trunkDirect.locator('.ds-queue-row').evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')))
-  assert.ok(trunkQueueHrefs[0]?.startsWith('#/evals/'), 'trunk queue row is a real detail anchor')
-  assert.ok(trunkQueueHrefs.length >= 2, 'real detail supplies two queue targets for response-order fencing')
-  const scenarioFromHref = (href) => decodeURIComponent(href.split('?')[0].split('/').at(-1))
-  const [queueHrefA, queueHrefB] = trunkQueueHrefs
-  const [queueScenarioA, queueScenarioB] = [scenarioFromHref(queueHrefA), scenarioFromHref(queueHrefB)]
-  await trunkDirect.route('**/api/evals/detail?*', async (route) => {
-    const scenario = new URL(route.request().url()).searchParams.get('scenario')
-    await new Promise((resolveWait) => setTimeout(resolveWait, scenario === queueScenarioA ? 650 : 80))
-    await route.continue()
-  })
-  const queueAWaiting = waitEvalDetail(trunkDirect, (url) => url.searchParams.get('scenario') === queueScenarioA)
-  const queueARequest = trunkDirect.waitForRequest((request) => {
-    const url = new URL(request.url())
-    return url.pathname.endsWith('/api/evals/detail') && url.searchParams.get('scenario') === queueScenarioA
-  })
-  await trunkDirect.evaluate((hash) => { location.hash = hash }, queueHrefA)
-  await queueARequest
-  assert.equal(await trunkDirect.locator('.ds-title').count(), 0, 'new detail URL first paint never shows the old object')
-  await trunkDirect.locator('.fv-note').waitFor({ state: 'visible' })
-  const queueBWaiting = waitEvalDetail(trunkDirect, (url) => url.searchParams.get('scenario') === queueScenarioB)
-  await trunkDirect.evaluate((hash) => { location.hash = hash }, queueHrefB)
-  const queueBReading = await measureDetail(await queueBWaiting, 'eval-detail-queue-new-response')
-  assert.equal(queueBReading.data.selected.scenario, queueScenarioB)
-  await trunkDirect.waitForFunction((scenario) => document.querySelector('.ds-title')?.textContent?.includes(scenario), queueScenarioB)
-  const queueAReading = await measureDetail(await queueAWaiting, 'eval-detail-queue-old-response')
-  assert.equal(queueAReading.data.selected.scenario, queueScenarioA)
-  await trunkDirect.waitForTimeout(80)
-  assert.match(await trunkDirect.locator('.ds-title').innerText(), new RegExp(queueScenarioB.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    'late old response cannot replace the newest detail')
-  metrics.checks.detailResponseFence = { delayed: queueScenarioA, kept: queueScenarioB }
-  await trunkDirect.close()
-
-  const beforeDetail = await page.locator('.page-scroll').evaluate((element) => element.scrollTop)
-  metrics.checks.detailBack = {
-    before: beforeDetail,
-    storedBefore: await page.evaluate(() => sessionStorage.getItem(`spex.page-scroll:${location.pathname}${location.search}${location.hash}`)),
-  }
-  const listDetailWaiting = waitEvalDetail(page)
-  await row.click()
-  const listDetailReading = await measureDetail(await listDetailWaiting, 'eval-detail-trunk-list-click')
-  assert.equal(listDetailReading.row.revision, trunkDirectReading.row.revision, 'direct and list-click detail share revision')
-  await page.locator('.ds-page').waitFor({ state: 'visible', timeout: 45_000 })
-  metrics.checks.detailBack.storedAfterClick = await page.evaluate(() => sessionStorage.getItem('spex.page-scroll:/#/evals?page=2'))
+  const beforeDetail = await scrollport.evaluate((element) => element.scrollTop)
+  assert.ok(beforeDetail > 0, 'the wheel moved the review scrollport')
+  // the scroll position is keyed on the PANE's address ([[page-scroll]]), under the serving-scope prefix.
+  const storedFor = (address) => page.evaluate((suffix) => {
+    const keys = Object.keys(sessionStorage).filter((key) => key.startsWith('spex.page-scroll') && key.endsWith(`:${suffix}`))
+    return keys.length === 1 ? sessionStorage.getItem(keys[0]) : null
+  }, address)
+  metrics.checks.detailBack = { before: beforeDetail, storedBefore: await storedFor('#/issues?page=2') }
+  await openDetail(page, row, 'issue-detail-from-open-page-2')
+  metrics.checks.detailBack.storedAfterClick = await storedFor('#/issues?page=2')
   assert.equal(Number(metrics.checks.detailBack.storedAfterClick), beforeDetail, 'the real click snapshots the user scroll position')
-  const detailBackWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '2')
+  const detailBackWaiting = waitApi(page, wants(OPEN, 2))
   await page.goBack()
-  const restored = await measure(await detailBackWaiting, 'evals-detail-browser-back')
+  const restored = await measure(await detailBackWaiting, 'issues-detail-browser-back')
   await settleRows(page, restored.data.items.length)
-  const afterDetail = await page.locator('.page-scroll').evaluate((element) => element.scrollTop)
+  const afterDetail = await shown(page, '.lp-page').evaluate((element) => element.scrollTop)
   metrics.checks.detailBack.after = afterDetail
-  metrics.checks.detailBack.storedAfterBack = await page.evaluate(() => sessionStorage.getItem('spex.page-scroll:/#/evals?page=2'))
+  metrics.checks.detailBack.storedAfterBack = await storedFor('#/issues?page=2')
   assert.equal(afterDetail, beforeDetail, 'detail browser Back restores exact q+page+scroll')
   desktopRecording.mark(`detail back restored scrollTop=${afterDetail}`)
 
-  const issueOverflow = await setHash(page, '#/issues?page=2', 'issues', 2)
-  await verifyPage(page, issueOverflow, 'Issues open page 2')
-  const closedWaiting = waitApi(page, 'issues', (url) => url.searchParams.get('q')?.includes('state:closed') && url.searchParams.get('page') === '1')
-  await page.locator('.rl-section').nth(1).click()
-  const closed1 = await measure(await closedWaiting, 'issues-closed-reset-page-1')
-  await verifyPage(page, closed1, 'Issues closed page 1')
-  assert.ok(closed1.data.total > 25)
-  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed')
-  const closed2Waiting = waitApi(page, 'issues', (url) => url.searchParams.get('page') === '2')
-  await page.locator('.rl-page-link[rel="next"]').click()
-  const closed2 = await measure(await closed2Waiting, 'issues-closed-page-2')
-  await verifyPage(page, closed2, 'Issues closed page 2')
-  assert.match(await page.evaluate(() => location.hash), /^#\/issues\?q=is%3Aissue%20state%3Aclosed&page=2$/)
-  assert.match(closed2.row.url, /\?q=is%3Aissue(?:%20|\+)state%3Aclosed&page=2$/)
-  const closedExplicit1Waiting = waitApi(page, 'issues', (url) => url.searchParams.get('page') === '1')
-  await page.locator('.rl-page-link.number', { hasText: /^1$/ }).click()
-  await measure(await closedExplicit1Waiting, 'issues-closed-explicit-page-1')
-  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed&page=1')
-
-  const issueRow = page.locator('.lp-row[href]').first()
-  const issueHref = await issueRow.getAttribute('href')
-  assert.ok(issueHref?.startsWith('#/issues/'), 'Issue row is a real detail anchor')
-  const issueDetailWaiting = page.waitForResponse((response) => {
-    const path = new URL(response.url()).pathname
-    return path.includes('/api/issues/') && !path.endsWith('/reply') && !path.endsWith('/close') && !path.endsWith('/promote')
-  }, { timeout: 45_000 })
-  await issueRow.click()
-  const issueDetailResponse = await issueDetailWaiting
-  const issueDetailBody = await issueDetailResponse.text()
-  const issueDetailData = JSON.parse(issueDetailBody)
-  metrics.network.push({ label: 'issue-detail-single-object', url: issueDetailResponse.url(), status: issueDetailResponse.status(), bytes: Buffer.byteLength(issueDetailBody), id: issueDetailData.id })
-  assert.equal(issueDetailResponse.status(), 200)
-  assert.equal(issueDetailData.id, decodeURIComponent(issueHref.slice('#/issues/'.length)))
-  assert.equal(await page.locator('.ds-queue-row').count(), 0, 'Issue detail has no Eval queue')
-  const issueBackWaiting = waitApi(page, 'issues', (url) => url.searchParams.get('page') === '1')
-  await page.goBack()
-  await issueBackWaiting
-  assert.equal(await page.evaluate(() => location.hash), '#/issues?q=is%3Aissue%20state%3Aclosed&page=1')
-
-  const sessionsResponse = await fetch(`${base}/api/sessions`)
-  const sessionsBody = await sessionsResponse.json()
-  const sessions = Array.isArray(sessionsBody) ? sessionsBody : sessionsBody.sessions || []
-  const graphBody = await (await fetch(`${base}/api/graph`)).json()
-  const scopedId = graphBody.sessions.find((session) => (session.evalSummary?.value?.total || 0) > 0)?.id
-  const scoped = sessions.find((session) => session.id === scopedId)
-  if (scoped) {
-    const q = `is:eval scope:${scoped.id}`
-    const scopedWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q') === q && url.searchParams.get('page') === '1')
-    const requestMark = requestUrls.length
-    await page.evaluate((hash) => { location.hash = hash }, `#/evals?q=${encodeURIComponent(q).replace(/%20/g, '%20')}`)
-    const scopedPage = await measure(await scopedWaiting, 'evals-scoped-page-1')
-    await verifyPage(page, scopedPage, 'Scoped Evals page 1')
-    const scopedRequests = requestUrls.slice(requestMark).map((url) => new URL(url).pathname)
-    assert.ok(scopedRequests.some((path) => path.endsWith('/api/evals')))
-    assert.equal(scopedRequests.some((path) => /\/api\/sessions\/[^/]+\/evals$/.test(path)), false,
-      'scoped list does not receive its old full REST model')
-    const scopedRow = page.locator('.lp-row[href]').first()
-    const scopedHref = await scopedRow.getAttribute('href')
-    assert.ok(scopedHref?.includes(`scope%3A${scoped.id}`), 'scoped row detail anchor preserves scope')
-    const scopedDirect = await desktop.newPage()
-    const scopedDirectWaiting = waitEvalDetail(scopedDirect, (url) => url.searchParams.get('scope') === scoped.id)
-    await scopedDirect.goto(`${base}/${scopedHref}`)
-    const scopedDirectReading = await measureDetail(await scopedDirectWaiting, 'eval-detail-scoped-direct')
-    const scopedReloadWaiting = waitEvalDetail(scopedDirect, (url) => url.searchParams.get('scope') === scoped.id)
-    await scopedDirect.reload()
-    const scopedReloadReading = await measureDetail(await scopedReloadWaiting, 'eval-detail-scoped-reload')
-    assert.equal(scopedReloadReading.row.revision, scopedDirectReading.row.revision, 'scoped direct/reload share revision')
-    const projection = (await (await fetch(`${base}/api/graph`)).json()).sessions.find((session) => session.id === scoped.id)?.evalSummary
-    assert.ok(projection, 'scoped detail has a graph projection fence')
-    assert.equal(scopedDirectReading.data.evalRevision.epoch, projection.epoch)
-    assert.equal(scopedDirectReading.data.evalRevision.generation, projection.generation)
-    assert.equal(scopedDirectReading.data.evalRevision.content, projection.revision)
-    assert.deepEqual(scopedDirectReading.data.summary, projection.value, 'scoped detail summary equals graph projection')
-    const scopedQueueHref = await scopedDirect.locator('.ds-queue-row').first().getAttribute('href')
-    assert.ok(scopedQueueHref?.includes(`scope%3A${scoped.id}`), 'scoped queue anchor preserves scope')
-    await scopedDirect.close()
-  }
-
-  const forbiddenFullReads = requestUrls.filter((value) => {
-    const url = new URL(value)
-    return /\/api\/specs\/[^/]+\/evals$/.test(url.pathname)
-      || (/\/api\/sessions\/[^/]+\/evals$/.test(url.pathname) && url.searchParams.get('format') !== 'html')
-  })
-  assert.deepEqual(forbiddenFullReads, [], 'browser never requests a node timeline or full session model for detail')
-  metrics.checks.forbiddenFullReads = forbiddenFullReads
-
-  await page.evaluate(() => { location.hash = '#/sessions' })
-  await page.locator('.si-pill.search').waitFor({ state: 'visible', timeout: 45_000 })
-  const paletteIssueWaiting = waitApi(page, 'issues', (url) => url.searchParams.get('page') === '1')
-  const paletteEvalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1' && !url.searchParams.has('view'))
-  await page.locator('.si-pill.search').click()
-  const paletteIssues = await measure(await paletteIssueWaiting, 'palette-issues-page-1')
-  const paletteEvals = await measure(await paletteEvalWaiting, 'palette-evals-page-1')
-  assert.equal(paletteIssues.data.items.length, 25)
-  assert.equal(paletteEvals.data.items.length, 25)
-  assert.ok(paletteIssues.data.total > 25 && paletteEvals.data.total > 25)
-  await page.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
-  const desktopPaletteTexts = await page.locator('.search-item').allTextContents()
-  assert.equal(desktopPaletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false,
-    'pagination metadata never becomes a search result')
-  assert.deepEqual(await page.locator('.search-review-link').evaluateAll((links) => links.map((link) => link.getAttribute('href'))), [
-    '#/issues?q=is%3Aissue',
-    '#/evals?q=is%3Aeval',
-  ], 'bounded palette exposes canonical full-list anchors outside its entity results')
-  const desktopEvalTarget = paletteEvals.data.items[0].scenario
-  const desktopFilteredEvalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q') === `is:eval ${desktopEvalTarget}`)
-  await page.locator('.search-input').fill(desktopEvalTarget)
-  const desktopFilteredEvals = await measure(await desktopFilteredEvalWaiting, 'palette-evals-query')
-  await page.locator('.search-item:has(.k-scenario)').first().waitFor({ state: 'visible' })
-  const evalResultIndex = await page.locator('.search-item').evaluateAll((rows) => rows.findIndex((row) => row.querySelector('.k-scenario')))
-  assert.ok(evalResultIndex >= 0, 'Palette includes a real Eval result')
-  for (let index = 0; index < evalResultIndex; index++) await page.keyboard.press('ArrowDown')
-  const desktopSelectedEval = await page.locator('.search-item.on .search-title').innerText()
-  assert.ok(desktopFilteredEvals.data.items.some((item) => item.scenario === desktopSelectedEval), 'keyboard selects a returned Eval entity')
-  await page.keyboard.press('Enter')
-  await page.waitForFunction(() => location.hash.startsWith('#/evals'))
-
-  await page.evaluate(() => { sessionStorage.setItem('spex.focus.root', 'session-console'); location.hash = '#/' })
-  const focusedGraphWaiting = page.waitForResponse((response) => apiPath(response).endsWith('/api/graph'), { timeout: 45_000 })
-  await page.reload()
-  await focusedGraphWaiting
-  const focusedNode = page.locator('.react-flow__node').filter({ hasText: 'session-console' })
-  await focusedNode.waitFor({ state: 'visible', timeout: 45_000 })
-  await focusedNode.click()
-  await page.keyboard.press('i')   // dblclick now opens the document; `i` is the popup's door
-  const nodeTimelineWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('view') === 'timeline'
-    && url.searchParams.get('q')?.includes('node:session-console') && url.searchParams.get('page') === '1')
-  await page.locator('.ov-tab').filter({ hasText: /eval/i }).click()
-  const nodeTimeline = await measure(await nodeTimelineWaiting, 'nodeview-evals-timeline-page-1')
-  const nodeResults = nodeTimeline.data.items.filter((item) => item.filterKind === 'result')
-  assert.ok(nodeTimeline.data.items.length <= 25)
-  assert.equal(new Set(nodeResults.map((item) => `${item.node}\0${item.scenario}`)).size, nodeResults.length,
-    'node preview is one latest result per scenario, never the raw measurement timeline')
-  await page.waitForFunction((expected) => document.querySelectorAll('.pane-eval .eval-row').length === expected, nodeTimeline.data.items.length)
-  assert.match((await page.locator('.rf-summary').innerText()).toLowerCase(), new RegExp(`showing ${nodeTimeline.data.items.length} of ${nodeTimeline.data.total}`))
-  assert.equal(await page.locator('.pane-eval-list-door').getAttribute('href'), '#/evals?q=is%3Aeval%20node%3Asession-console')
-  assert.equal(await page.locator('.pane-eval .pane-view-all').count(), 0)
-  await page.screenshot({ path: join(out, 'bounded-consumers.png'), fullPage: false })
-  desktopRecording.mark(`Palette and NodeView bounded consumers: 25/${paletteEvals.data.total}, ${nodeTimeline.data.items.length}/${nodeTimeline.data.total}`)
+  // the whole-journey ledger: every list read the browser made is one q+page slice — no consumer bootstraps
+  // a full collection to slice or hide it ([[review-chrome]]).
+  const unpagedListReads = requestUrls.map((value) => new URL(value)).filter(isIssuesList)
+    .filter((url) => url.searchParams.get('q') == null || !/^[1-9]\d*$/.test(url.searchParams.get('page') || ''))
+    .map(String)
+  assert.deepEqual(unpagedListReads, [], 'browser never requests an unpaged Issues collection')
+  metrics.checks.unpagedListReads = unpagedListReads
 
   const slow = await desktop.newPage()
   await slow.route('**/api/issues?*', async (route) => {
@@ -518,7 +328,7 @@ try {
   await failed.close()
 
   await page.screenshot({ path: join(out, 'desktop-pagination.png'), fullPage: false })
-  desktopRecording.mark('desktop Issues/Evals history, overflow, scoped, loading, error complete')
+  desktopRecording.mark('desktop Issues history, filter reset, overflow, detail return, loading, error complete')
   await desktop.close()
   desktop = null
   await finishRecording(desktopRecording, video)
@@ -527,11 +337,11 @@ try {
   mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, recordVideo: { dir: mobileRecording.raw, size: { width: 390, height: 844 } } })
   const phone = await mobile.newPage()
   const phoneVideo = phone.video()
-  const phoneWaiting = waitApi(phone, 'evals', (url) => url.searchParams.get('page') === '2')
-  await phone.goto(`${base}/#/evals?page=2`)
-  const phonePage = await measure(await phoneWaiting, 'evals-mobile-page-2')
-  await verifyPage(phone, phonePage, 'Mobile Evals page 2')
-  const phoneLayout = await phone.locator('.rl-pagination').evaluate((nav) => {
+  const phoneWaiting = waitApi(phone, wants(OPEN, 2))
+  await phone.goto(`${base}/#/issues?page=2`)
+  const phonePage = await measure(await phoneWaiting, 'issues-mobile-page-2')
+  await verifyPage(phone, phonePage, 'Mobile Issues page 2')
+  const phoneLayout = await shown(phone, '.rl-pagination').evaluate((nav) => {
     const bounds = nav.getBoundingClientRect()
     const links = [...nav.querySelectorAll('.rl-page-link')].map((link) => {
       const box = link.getBoundingClientRect()
@@ -540,7 +350,7 @@ try {
     return {
       width: bounds.width,
       height: bounds.height,
-      sameOwner: nav.closest('.page-scroll') === document.querySelector('.page-scroll'),
+      sameOwner: nav.closest('.page-scroll') === nav.closest('.viewhost, body').querySelector('.page-scroll'),
       position: getComputedStyle(nav).position,
       links,
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -552,15 +362,15 @@ try {
   assert.equal(phoneLayout.position, 'static')
   assert.equal(phoneLayout.documentOverflow, 0)
   assert.ok(phoneLayout.links.every((link) => link.width >= 32 && link.height === 32))
-  const aria = await phone.locator('.rl-pagination').ariaSnapshot()
+  const aria = await shown(phone, '.rl-pagination').ariaSnapshot()
   assert.match(aria, /navigation "Pagination"/)
   assert.match(aria, /link "Previous Page"/)
   assert.match(aria, /link "Next Page"/)
-  const phoneNextWaiting = waitApi(phone, 'evals', (url) => url.searchParams.get('page') === '3')
-  await phone.locator('.rl-page-link[rel="next"]').focus()
+  const phoneNextWaiting = waitApi(phone, wants(OPEN, 3))
+  await shown(phone, '.rl-page-link[rel="next"]').focus()
   await phone.keyboard.press('Enter')
-  await measure(await phoneNextWaiting, 'evals-mobile-keyboard-page-3')
-  assert.equal(await phone.evaluate(() => location.hash), '#/evals?page=3')
+  await measure(await phoneNextWaiting, 'issues-mobile-keyboard-page-3')
+  assert.equal(await phone.evaluate(() => location.hash), '#/issues?page=3')
   await phone.screenshot({ path: join(out, 'mobile-pagination-390.png'), fullPage: false })
   metrics.checks.mobile = { ...phoneLayout, aria }
   mobileRecording.mark(`390px pagination ${phoneLayout.width}x${phoneLayout.height}, AX and keyboard complete`)

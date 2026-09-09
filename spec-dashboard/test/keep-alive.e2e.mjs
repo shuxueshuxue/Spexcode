@@ -71,7 +71,7 @@ await go(specB, '.viewhost.view-spec')
 await go(`#/file/${encode(withCode[0].code[0])}`, '.viewhost.view-file')
 await go(sessionHash, '.viewhost.view-sessions')
 await page.waitForTimeout(2000)
-await go('#/evals', '.viewhost.view-evals')
+await go('#/settings', '.viewhost.view-settings')
 await go('#/issues', '.viewhost.view-issues')
 
 const results = []
@@ -93,7 +93,7 @@ await go(sessionHash, '.viewhost.view-sessions')
 await stamp('.viewhost.view-sessions', 'session-1')
 await go(specA, '.viewhost.view-spec')
 await stamp('.viewhost.view-spec', 'spec-1')
-await go('#/evals', '.viewhost.view-evals')
+await go('#/settings', '.viewhost.view-settings')
 await go(sessionHash, '.viewhost.view-sessions')
 check(await marked('.viewhost.view-sessions', 'session-1'), 'the session console survives a round trip through two other tabs')
 await go(specA, '.viewhost.view-spec')
@@ -117,7 +117,7 @@ const switchMs = async (hash, ready) => {
   return Date.now() - started
 }
 const cold = []
-for (const [hash, ready] of [[sessionHash, '.viewhost.view-sessions'], [specA, '.viewhost.view-spec'], ['#/evals', '.viewhost.view-evals'], [sessionHash, '.viewhost.view-sessions']]) {
+for (const [hash, ready] of [[sessionHash, '.viewhost.view-sessions'], [specA, '.viewhost.view-spec'], ['#/settings', '.viewhost.view-settings'], [sessionHash, '.viewhost.view-sessions']]) {
   cold.push(await switchMs(hash, ready))
 }
 const worst = Math.max(...cold)
@@ -158,7 +158,7 @@ const idleWith = async (label, hashes) => {
   return { seconds, mounted }
 }
 
-const documents = [specA, specB, `#/file/${encode(withCode[0].code[0])}`, '#/evals', '#/issues', specA]
+const documents = [specA, specB, `#/file/${encode(withCode[0].code[0])}`, '#/settings', '#/issues', specA]
 const pool = await idleWith('documents only', documents)
 check(pool.seconds <= SCRIPT_BUDGET,
   `a warm pool is idle — ${pool.seconds.toFixed(4)}s over ${IDLE_MS / 1000}s with ${pool.mounted} panes mounted (budget ${SCRIPT_BUDGET}s)`)

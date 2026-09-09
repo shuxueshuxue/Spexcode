@@ -33,7 +33,8 @@ page.on('console', (message) => { if (message.type() === 'error' && !message.tex
 page.on('websocket', (socket) => sockets.push(socket.url()))
 const state = () => page.evaluate(() => ({
   hash: location.hash,
-  tabs: [...document.querySelectorAll('[role="tab"][data-tab-key]')].map((tab) => ({ key: tab.dataset.tabKey, selected: tab.getAttribute('aria-selected') === 'true' })),
+  // a hidden pooled document keeps its own strip mounted ([[workspace-shell]]); read the PAINTED tabs only
+  tabs: [...document.querySelectorAll('[role="tab"][data-tab-key]')].filter((tab) => tab.getClientRects().length > 0).map((tab) => ({ key: tab.dataset.tabKey, selected: tab.getAttribute('aria-selected') === 'true' })),
   sections: [...document.querySelectorAll('.ft-section-name')].map((node) => node.textContent.trim()),
   graphActions: document.querySelectorAll('.graph-selection-actions').length,
   specHosts: [...document.querySelectorAll('.viewhost.view-spec')].map((host) => {
@@ -77,19 +78,14 @@ try {
   ])
   assert.ok(file.specHosts.length >= 1, 'Spec host remains in the pool beside the file')
   assert.ok(file.specHosts.some((host) => host.id === spec.specHosts[0].id), 'Spec host identity survives opening a file')
-  const evals = await visit('#/evals', '.viewhost.view-evals')
-  assert.deepEqual(evals.tabs, [
-    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false }, { key: '#/evals', selected: true },
-  ])
   const issues = await visit('#/issues', '.viewhost.view-issues')
   assert.deepEqual(issues.tabs, [
-    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false },
-    { key: '#/evals', selected: false }, { key: '#/issues', selected: true },
+    { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false }, { key: '#/issues', selected: true },
   ])
   const settings = await visit('#/settings', '.viewhost.view-settings')
   assert.deepEqual(settings.tabs, [
     { key: '#/spec/root', selected: false }, { key: '#/file/src/app.js', selected: false },
-    { key: '#/evals', selected: false }, { key: '#/issues', selected: false }, { key: '#/settings', selected: true },
+    { key: '#/issues', selected: false }, { key: '#/settings', selected: true },
   ])
   const specAgain = await visit('#/spec/root', '.viewhost.view-spec .specview')
   assert.deepEqual(specAgain.tabs, settings.tabs.map((tab) => ({ ...tab, selected: tab.key === '#/spec/root' })))
@@ -101,7 +97,7 @@ try {
   assert.deepEqual(sockets, [], 'board-only route walk opens no terminal sockets')
   assert.equal(errors.length, 0, `browser errors: ${errors.join(' | ')}`)
   await page.screenshot({ path: join(out, 'selection-tab-audit.png'), fullPage: true })
-  console.log(JSON.stringify({ ok: true, base, sessions, spec, file, evals, issues, settings, specAgain, sessionsAgain, sockets, screenshot: join(out, 'selection-tab-audit.png') }))
+  console.log(JSON.stringify({ ok: true, base, sessions, spec, file, issues, settings, specAgain, sessionsAgain, sockets, screenshot: join(out, 'selection-tab-audit.png') }))
 } finally {
   await page.close(); await browser.close(); await ui.close()
 }

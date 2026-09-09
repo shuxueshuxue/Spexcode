@@ -27,15 +27,11 @@ await page.locator('.tabstrip').waitFor({ state: 'visible', timeout: 20000 })
 await page.locator('.si-content').waitFor({ state: 'visible', timeout: 20000 })
 
 // The band's order is DOM order over every control it holds, not just the icon buttons — a probe that only
-// sweeps `.document-action-button` is blind to any control that is not a button, which is exactly how the
-// Eval door once went missing without a single check turning red. The door itself now lives on the ambient
-// line ([[status-bar]]), so it is measured against the LINE's geometry and its absence from the band is
-// itself an assertion.
+// sweeps `.document-action-button` is blind to any control that is not a button, so the sweep is over every
+// `[data-action]` the slot holds.
 const bandProbe = () => page.evaluate(() => {
   const slot = document.querySelector('.tabstrip-actions')
   const controls = slot ? [...slot.querySelectorAll('[data-action]')] : []
-  const door = document.querySelector('.statusbar .si-eval-door') || null
-  const doorInBand = Boolean(slot?.querySelector('.si-eval-door'))
   const statusRect = document.querySelector('.statusbar')?.getBoundingClientRect().toJSON() || null
   const rect = (el) => (el ? el.getBoundingClientRect().toJSON() : null)
   return {
@@ -47,14 +43,6 @@ const bandProbe = () => page.evaluate(() => {
       label: button.getAttribute('aria-label'),
       disabled: button.disabled,
     })),
-    door: door ? {
-      tag: door.tagName,
-      href: door.getAttribute('href'),
-      label: door.getAttribute('aria-label'),
-      glance: Boolean(door.querySelector('.si-eval-stats, .si-eval-wait')),
-      rect: rect(door),
-    } : null,
-    doorInBand,
     statusRect,
     buttonHeights: [...document.querySelectorAll('.document-action-button')].map((el) => Math.round(el.getBoundingClientRect().height)),
     slotRect: rect(slot),
@@ -64,18 +52,7 @@ const sessionState = await bandProbe()
 check('session document has one shell action slot and no internal chrome', !sessionState.hasRetiredToolbar && sessionState.hasSlot, sessionState)
 check('merge and lifecycle actions stay out of the document slot', !sessionState.actions.some((item) => item.action === 'merge' || item.action === 'session-menu'), sessionState.actions)
 check('the slot carries no disabled merge witness', !sessionState.actions.some((item) => item.action === 'merge'), sessionState.actions)
-check('the Eval door is a real anchor on the scoped address, carrying its glance', Boolean(
-  sessionState.door && sessionState.door.tag === 'A'
-  && sessionState.door.href === `#/evals?q=${encodeURIComponent(`is:eval scope:${session}`)}`
-  && sessionState.door.glance), sessionState.door)
-check('the door left the action band entirely', sessionState.doorInBand === false, { doorInBand: sessionState.doorInBand })
-check('the door takes the ambient line row height rather than its own geometry',
-  Boolean(sessionState.door) && Math.round(sessionState.door.rect.height) <= Math.round(sessionState.statusRect?.height ?? 0),
-  { door: sessionState.door && Math.round(sessionState.door.rect.height), line: Math.round(sessionState.statusRect?.height ?? 0) })
 const pickerOpened = await page.locator('.document-action-button[data-action="resource-picker"]').click().then(() => true).catch(() => false)
-const withPicker = pickerOpened ? await bandProbe() : null
-check('opening the picker leaves the door on the line', !withPicker || withPicker.doorInBand === sessionState.doorInBand,
-  { before: sessionState.order, after: withPicker && withPicker.order })
 if (pickerOpened) await page.keyboard.press('Escape')
 await page.locator('.tab[data-tab-key^="#/sessions/"]').first().click({ button: 'right' })
 const sessionTabMenu = await page.locator('[role="menu"]').last().textContent().catch(() => '')
@@ -104,14 +81,12 @@ const specState = await page.evaluate(() => {
   const slot = [...document.querySelectorAll('.tabstrip-actions')].find(painted) || null
   return {
     actions: slot ? [...slot.querySelectorAll('[data-action]')].map((el) => el.dataset.action) : [],
-    door: [...document.querySelectorAll('.si-eval-door')].some(painted),
     trailing: Boolean(slot?.querySelector('.context-toggle')),
     hasRetiredToolbar: [...document.querySelectorAll('.si-tabbar, .si-toolbar, .si-tool')].some(painted),
   }
 })
 check('a spec document registers no actions and carries only its own trailing context control',
   specState.actions.length === 0 && specState.trailing && !specState.hasRetiredToolbar, specState)
-check('the session eval door does not follow the reader onto another document', specState.door === false, specState)
 await page.screenshot({ path: join(OUT, 'spec-document-no-actions.png'), fullPage: true })
 
 await context.close()

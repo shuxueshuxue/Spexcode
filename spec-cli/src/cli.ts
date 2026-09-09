@@ -1512,6 +1512,11 @@ if (cmd === 'serve') {
     }
     const { runPiHeadlessController } = await import('./pi-headless.js')
     await runPiHeadlessController(id, runtimeDir, piCmd, process.argv.slice(8))
+  } else if (sub === 'commit-context') {
+    const messageFile = process.argv[4]
+    if (!messageFile) { console.error('usage: spex internal commit-context <message-file> (Git hook plumbing; use git commit)'); process.exit(2) }
+    const { commitContext } = await import('./commit-context.js')
+    await commitContext(messageFile)
   } else if (sub === 'commit-surgery') {
     // the pre-commit footprint anchor ([[commit-surgery]]): unconditional materialize + staged-index repair
     // (strip our sentinel block from staged blobs, unstage HEAD-untracked generated artifacts). Called only

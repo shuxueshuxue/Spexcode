@@ -47,9 +47,13 @@ from a guess is worse than an absent one. No id → no trailer. The same invaria
 acting codex THREAD id, which is a harness identifier rather than a record key) instead of a defence against a
 contaminated environment.
 
-A missing id is the ORDINARY case — most repos on the box are nobody's session — so the hook no-ops cleanly
+A missing id is the ORDINARY case — most repos on the box are nobody's session — so identity stamping no-ops cleanly
 under `set -euo pipefail` rather than aborting the hook and the commit with it; the fail-loud stance is
 reserved for genuine errors past that point. The stamp lands via `git
 interpret-trailers`, never a raw append: git parses only the LAST paragraph as trailers, so an appended
 `Session:` paragraph would silently demote any trailer block the message already carries (e.g. `spex ack`'s
 `Spec-OK:`) to body prose; interpret-trailers joins the existing block instead.
+
+The same hook independently invokes [[commit-context]] to show staged spec context and derive `Spec:`.
+An existing Session trailer or an absent session id skips only identity stamping, never context. Merge
+commits still receive Session attribution while commit-context suppresses its own block and trailer.

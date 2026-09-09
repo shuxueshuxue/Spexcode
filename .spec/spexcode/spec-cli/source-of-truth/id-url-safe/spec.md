@@ -9,6 +9,7 @@ code:
   - packages/spec-core/src/specs.ts#reId
 related:
   - spec-dashboard/src/data.js
+  - spec-cli/src/commit-context.test.ts
 ---
 # id-url-safe
 
@@ -42,6 +43,10 @@ disambiguated whichever of them a caller names), so every id a surface prints is
 prints. Before this, a second id scheme keyed nodes to the bare leaf name and diverged on every collision:
 the canonical id read as "no such node" while the bare leaf silently hit whichever colliding node the walk
 met first.
+
+The mint counts normalized suffixes once across the node universe, then picks each node's shortest
+unique suffix. Work scales with the path suffixes supplied, without a pairwise node scan or history
+read. [[commit-context]] uses this same mint on the candidate tree within its commit-time budget.
 
 Because the mint guarantees it, every RESOLVE site is uniform and needs no special-casing:
 

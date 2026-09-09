@@ -162,7 +162,8 @@ The retired `spex session new --node <id>` flag follows the same tombstone rule:
 the caller that a session carries no spec node, so the task — and any `[[<id>]]` reference it needs — belongs
 in the prompt. It never launches a session. This is a removal signpost, and it replaces the flag with nothing.
 
-**The internal boundary.** Machine plumbing — `trunk`, `commit-surgery`, `refresh-footprint`,
+**The internal boundary.** Machine plumbing — `trunk`, `commit-surgery`, `commit-context` (the
+prepare-commit-msg context block and derived Spec trailer, [[commit-context]]), `refresh-footprint`,
 `session-state`/`session-fail`/`session-idle`/`session-hook-state` (the hook-only canonical
 lifecycle read — governed bit, status, proposal, tab-separated and never a note, so a Stop-gate shell never
 treats the runtime envelope as a second lifecycle database)/`commit-gate`, `hook-prompt`, `nudge`,

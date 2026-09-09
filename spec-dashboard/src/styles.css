@@ -16,7 +16,7 @@
   --blue:  #6c99bb;
   --green: #a8c373;
   --orange:#d5763f;
-  --red:   #d04255;   /* a true red, distinct from the orange ACTIVE-status hue — the loud "fresh fail" score */
+  --red:   #d04255;   /* a true red, distinct from the orange ACTIVE-status hue — the loud error/failure tone */
   --yellow:#e5b567;
   --magenta:#9e86c8; /* Minimal's purple */
   --cyan:  #73bbb2;
@@ -1152,7 +1152,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .ov-tab.on { color: var(--ink2); border-color: var(--blue); background: var(--paper); }
 .ov-tab-counts { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: baseline; }
 /* a caption state-count chip: the shared review-state icon + tally in one tone (issues open/closed,
-   eval fresh pass/fail — zero values simply don't render). */
+   pending edits — zero values simply don't render). */
 .ovc { display: inline-flex; align-items: center; gap: 2px; font-family: var(--ui-font); font-size: var(--type-caption); font-weight: var(--weight-semibold); line-height: var(--leading-relaxed); padding: 0 4px; border-radius: var(--radius); border: 1px solid transparent; background: color-mix(in srgb, currentColor 10%, transparent); }
 .ovc .review-state svg { width: 11px; height: 11px; }
 .ovc.st-open, .ovc.st-pass { color: var(--green); }
@@ -1329,17 +1329,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .score-badge.stalePass,
 .score-badge.staleFail { color: var(--muted); }                 /* the last verdict, greyed */
 .score-badge.empty     { color: var(--muted); opacity: .45; }   /* never measured — an empty ring */
-
-.scenario-count { flex: none; display: inline-flex; align-items: center; gap: 2px; font-family: var(--ui-font); font-size: var(--type-caption); font-weight: var(--weight-semibold); line-height: var(--leading-ui);
-  border: 1px solid currentColor; border-radius: var(--radius); padding: 0 3px; cursor: default; }
-.scenario-count.pass { color: var(--green); }
-.scenario-count.fail { color: var(--red); }
-.scenario-count.stalePass, .scenario-count.staleFail { color: var(--muted); }
-.scenario-count.empty { color: var(--muted); opacity: .7; }
-/* as a REAL anchor (the node-info stat bar → the node-filtered Evals list) the same pill gains link
-   affordance; on the tile it stays a passive span (the tile's click belongs to the board). */
-a.scenario-count { text-decoration: none; cursor: pointer; }
-a.scenario-count:hover { background: var(--wash-hover); }
 
 .tag-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .tag-chip { font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-relaxed); color: var(--ink2);
@@ -1881,8 +1870,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 
 /* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page
-   skeletons both #/evals and #/issues render ([[evals-view]] / [[issues-view]]). One implementation:
-   list rhythm, sticky head, anchor rows, detail grid, and the phone reflow live here once. ---- */
+   skeletons #/issues renders ([[issues-view]]). One implementation: list rhythm, sticky head, anchor rows,
+   detail grid, and the phone reflow live here once. ---- */
 /* The LIST page copies GitHub's measured ListView grammar: title/action, a 32px query, then one bordered
    container whose 48px metadata bar owns section tabs at left and invisible facets at right. */
 .lp-page { display: flex; flex-direction: column; background: var(--paper); }
@@ -2039,19 +2028,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .ds-val.link { cursor: pointer; color: var(--blue); }
 .ds-val.link:hover .ds-val-text { text-decoration: underline; }
 .ds-val.link:focus-visible { border-radius: var(--radius); }
-/* the Continue-reviewing queue rows ([[event-detail]] renders them in the side rail): real anchors
-   wearing the ONE shared verdict visual + scenario/node text, one line each, shrink-truncated — in two
-   positional groups (Previous / Up next, [[evals-view]]), each led by a quiet lowercase caption. */
-.ds-queue-group { align-self: stretch; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.ds-queue-group + .ds-queue-group { margin-top: 5px; }
-.ds-queue-group-label { font-size: var(--type-caption); color: var(--muted); }
-.ds-queue-row { display: flex; align-items: center; gap: 6px; max-width: 100%; font-size: var(--type-meta); color: var(--ink2); text-decoration: none; }
-.ds-queue-row:hover .ds-queue-scenario { text-decoration: underline; }
-.ds-queue-row .review-state { flex: 0 0 auto; display: inline-flex; }
-.ds-queue-scenario { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the node span carries the heavier shrink factor so a long node id collapses before the PRIMARY
-   scenario text does (the row's data-tip keeps the full pair readable). */
-.ds-queue-node { flex: 0 4 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 /* the honest not-found face — an address naming no object, with the one link back to its list. */
 .ds-missing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 .ds-missing-note { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control); }
@@ -2067,10 +2043,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .rl-content { width: calc(100% - 32px); padding-top: 16px; }
   .rl-titlebar { margin-bottom: 8px; }
   .rl-query { margin-bottom: 16px; }
-  /* The phone header WRAPS only when its own content needs a second line, and never clips: Issues still
-     measures one 49px row, while a split-count Evals header takes exactly two contained lines rather than
-     pushing the Filters trigger outside its own box. Growing downward is the honest trade — a count this
-     header was given is never hidden, and the list below simply starts lower. */
+  /* The phone header WRAPS only when its own content needs a second line, and never clips: Issues
+     measures one 49px row, and a header handed more than one line of counts takes exactly two contained
+     lines rather than pushing the Filters trigger outside its own box. Growing downward is the honest
+     trade — a count this header was given is never hidden, and the list below simply starts lower. */
   .lp-head { height: auto; min-height: 49px; padding: 0 7px; flex-wrap: wrap; align-content: center; row-gap: 2px; }
   .rl-sections { align-self: auto; }
   .rl-section { gap: 2px; padding: 0; align-self: auto; min-height: 44px; }
@@ -2138,8 +2114,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
 .fv-reply.sel { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 9%, transparent); }
-/* a remark ([[remark-substrate]]) carries its resolved bit in place: an OPEN remark is prominent (the loss the
-   eval scoreboard is still carrying — a live left-bar), a RESOLVED one is visually settled (dimmed, thin bar). */
+/* a remark ([[remark-substrate]]) carries its resolved bit in place: an OPEN remark is prominent (a concern its
+   thread still owes an answer — a live left-bar), a RESOLVED one is visually settled (dimmed, thin bar). */
 .fv-reply.remark.open { border-left-color: var(--orange); border-left-width: 3px; }
 .fv-reply.remark.resolved { opacity: .62; border-left-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
 .fv-remark-state { font-family: var(--ui-font); font-size: var(--type-caption); padding: 0 5px; border-radius: var(--radius); margin-left: auto; }
@@ -2206,7 +2182,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .fv-error { margin: 4px 0 8px; font-family: var(--ui-font); font-size: var(--type-meta); color: var(--red); }
 .fv-actions .fv-error { margin: 0; }
 /* the compose blocks — the docked reply composer and the New-thread form. The reply composer is ONE
-   shared shape on every home ([[issues-view]] / [[event-detail]]): a QUIET BORDERED container holding a
+   shared shape on every home that composes ([[issues-view]]'s thread among them): a QUIET BORDERED container holding a
    BORDERLESS writing surface floored at TWO lines (already usable at idle, no click-to-expand —
    fitTextarea auto-grows it above that floor, max-height caps it), over a PERSISTENT compact action row
    (contextual ⏱/lifecycle actions left, the icon-only Send pinned at the right edge). */
@@ -2840,12 +2816,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-sess-status { font-size: var(--type-control); color: var(--muted); }
 .m-sess-id8 { color: var(--muted); }
 
-/* the header's eval entry ([[session-eval]] on the phone): a REAL-anchor DOOR to the session-scoped Evals page. */
-.m-sess-evalbtn {
-  flex: none; margin-left: auto; padding: 6px 13px; font-size: var(--type-control); font-family: var(--ui-font);
-  color: var(--ink2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-full); cursor: pointer;
-  text-decoration: none;
-}
 /* the routed review pages inside the phone shell ([[mobile-ui]]): the same lp-/ds- chrome, one column. */
 .m-review { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
@@ -3189,19 +3159,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .m-new .m-senderr { padding: 0; }
 .m-new-go { height: 42px; }
 
-/* ---- evals feed ([[evals-feed]]) — structured ListView rows, media strictly lazy. ---- */
-.ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; text-decoration: none; }
-.ef-node:hover { text-decoration: underline; }
-/* the full-width list page has room — the node name breathes there (58px was the slim-column budget). */
-.lp-row .ef-node { max-width: 180px; }
-/* the human sign-off on a reviewed row: a settled approval mark, and the quiet
-   hover-revealed ok affordance on an un-ok'd one (a span, not a nested button — the row IS a button). */
-.ef-okd { flex: none; width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 42%, var(--line)); border-radius: 50%; }
-
-/* ---- the eval detail's evidence workspace ([[event-detail]]) — the human's measuring hand on an
-   already-captured clip, now the MAIN column of the Evals DETAIL page ([[review-chrome]]): the media
-   stage + review-track scrubber, then the remark thread (the page's activity), with the composer docked
-   sticky at the column's foot by the shell. ---- */
+/* ---- evidence media — the lazily loaded evidence image and its click-to-enlarge lightbox (Evidence.jsx's
+   BlobMedia, rendered inside rich-text evidence spans and the History pane). ---- */
 .an-thread { display: flex; flex-direction: column; padding: 4px 0 8px; }
 .an-thread .an-comments-head { padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
 .an-thread .fv-reply { margin-top: 10px; }
@@ -3215,7 +3174,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .an-expected { font-size: var(--type-control); color: var(--ink2); padding: 8px 0 0; }
 .an-comments-head { font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); color: var(--ink2); }
 /* the still gallery — every image entry stacked on the stage, each click-to-enlarge. Media keeps its
-   INTRINSIC geometry ([[event-detail]]): items align start so the flex column never stretches a small
+   INTRINSIC geometry: items align start so the flex column never stretches a small
    image to the column width — shrink-only via each element's own max-inline-size. */
 .an-gallery { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 0; }
 /* the player + stage shrink-wrap the clip they play — the clip renders at its intrinsic size (capped by
@@ -3234,7 +3193,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* the custom control bar — replaces native chrome so the scrubber can carry the review track. */
 .an-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--line); border-top: none; border-radius: 0 0 var(--radius) var(--radius); }
-/* play and the fullscreen door ([[event-detail]] — the only door once native chrome is suppressed) are one button */
+/* play and the fullscreen door (the only door once native chrome is suppressed) are one button */
 .an-play, .an-fs { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
 .an-play:hover, .an-fs:hover { background: var(--wash-hover); }
 /* fullscreen the whole player (stage + custom bar) so the review-track controls stay usable large; the stage
@@ -3298,26 +3257,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    the viewport. The position stays readable through the pips' and menu rows' aria-labels. */
 @media (max-width: 760px) {
   .an-ab-pos { display: none; }
-}
-
-/* ---- the session-scoped Evals list ([[session-eval]]): sticky return door + gates in PageScroll. ---- */
-.se-gates { position: sticky; top: 0; z-index: 4; flex: 0 0 40px; height: 40px; display: flex; align-items: center; align-content: center; gap: 8px; flex-wrap: wrap; padding: 4px 14px; box-sizing: border-box; border-bottom: 1px solid var(--line); background: var(--panel2); }
-.se-gates ~ .rl-content .rl-query { top: 40px; }
-.se-gates ~ .rl-content .lp-head { top: 84px; }
-.se-gate { font-family: var(--ui-font); font-size: var(--type-meta); border: 1px solid var(--line); border-radius: var(--radius); padding: 1px 7px; color: var(--muted); }
-.se-gate.ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
-.se-gate.bad { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
-/* The model-gated export is the strip's only trailing action. */
-.se-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; }
-.se-export { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border-radius: var(--radius); color: var(--blue); text-decoration: none; }
-.se-export:hover { color: color-mix(in srgb, var(--blue) 72%, var(--ink)); }
-/* The scoped list's one terminal return door: a left-edge back affordance and real 32px anchor. */
-.se-door { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink2); background: var(--paper); text-decoration: none; }
-.se-door:hover { color: var(--ink2); background: var(--wash-hover); }
-@media (max-width: 760px) {
-  .se-gates { flex-basis: 80px; height: 80px; }
-  .se-gates ~ .rl-content .rl-query { top: 80px; }
-  .se-gates ~ .rl-content .lp-head { top: 124px; }
 }
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */

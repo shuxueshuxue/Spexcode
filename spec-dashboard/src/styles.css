@@ -1299,8 +1299,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* pane: history — the full version log */
 /* the node popup's four reading panes share one frame; only their content differs */
-.pane-hist, .pane-issues, .pane-edit, .pane-eval { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
-.pane-hist.empty, .pane-issues.empty, .pane-edit.empty, .pane-eval.empty { color: var(--muted); font-size: var(--type-body); }
+.pane-hist, .pane-issues, .pane-edit { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
+.pane-hist.empty, .pane-issues.empty, .pane-edit.empty { color: var(--muted); font-size: var(--type-body); }
 
 /* the node popup is now reference-only: a single scrolling spec doc fills the body. */
 .pane-solo { flex: 1; min-width: 0; display: flex; }
@@ -1964,9 +1964,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rl-page-link.disabled { color: var(--muted); cursor: default; opacity: .65; }
 .pane-view-all { min-height: 32px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 4px 10px; color: var(--blue); font-family: var(--ui-font); font-size: var(--type-meta); text-decoration: none; }
 .pane-view-all:hover { text-decoration: underline; }
-.pane-eval-list-door { flex: 0 0 28px; width: 28px; height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); text-decoration: none; }
-.pane-eval-list-door:hover { color: var(--ink); border-color: var(--muted); }
-.pane-eval-list-door-row { position: sticky; top: -16px; z-index: 6; display: flex; justify-content: flex-end; margin: -8px 0 8px; background: var(--paper); }
 /* ONE row grammar for BOTH pages: desktop ~64px; the same markup grows and restacks on a phone. */
 .lp-row { position: relative; display: block; width: 100%; min-width: 0; min-height: 64px; box-sizing: border-box; text-align: left; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); cursor: pointer; }
 .lp-row-link { position: absolute; inset: 0; z-index: 0; color: inherit; text-decoration: none; }
@@ -2176,7 +2173,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .fv-reply-media { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
 /* the composer's staged evidence previews (derived from the draft's blob links). */
 .fv-frames { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-.fv-frames .an-image, .fv-frames .eval-video { height: 48px; width: auto; max-width: none; }
 /* ⏱ — stamp the current frame's anchor onto the comment (only over a clip). */
 .fv-anchor-btn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: var(--type-meta); color: var(--orange); background: var(--panel2);
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line)); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
@@ -2514,29 +2510,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-resource-menu-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-resource-menu-empty { display: block; padding: 7px; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control); }
 
-/* Eval is a navigation DOOR on the ambient line ([[status-bar]]): one real anchor carrying the canonical
-   scoped href and a compact glance over the session's lean eval model. It takes the LINE's geometry — the
-   `--line-status` row height, no box of its own — because an item on that strip is a readout, not a button
-   parked on a strip; the frame's `.sb-item` already owns the padding and the hide gesture around it.
-   ReviewState supplies every pass/fail/blind symbol and tone. */
-.si-eval-door {
-  flex: none; height: var(--line-status); display: inline-flex; align-items: center; justify-content: center;
-  gap: 4px; padding: 0; border: 0;
-  color: inherit; text-decoration: none; white-space: nowrap;
-  font-family: var(--ui-font); font-size: var(--type-meta);
-}
-.si-eval-door:hover { color: var(--cyan); }
-.si-eval-door:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
-.si-eval-door > svg { flex: none; color: var(--cyan); }
-.si-eval-stats { display: inline-flex; align-items: center; gap: 4px; }
-.si-eval-wait {
-  display: inline-flex; align-items: center; gap: 2px; color: var(--muted);
-  font-family: var(--ui-font); font-size: var(--type-caption); font-weight: var(--weight-semibold);
-}
-.si-eval-stats .ovc { gap: 2px; padding: 0; border: 0; background: transparent; }
-.si-eval-stats .ovc.st-empty { color: var(--muted); }
-.si-eval-phase { flex: 0 0 auto; color: var(--muted); }
-
 .si-actions { flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
 .si-files { position: relative; display: flex; align-items: center; padding: 0; }
 .si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: max-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -2565,7 +2538,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    drop the secondary tallies before the line starts clipping the workspace ledger beside it, and the door
    falls back to icon + blind mark. */
 @media (max-width: 720px) {
-  .si-eval-door .si-eval-stats .secondary { display: none; }
 }
 /* The TUI now owns the full remaining pane. Command Box suspends over it without changing xterm geometry. */
 /* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */
@@ -2616,7 +2588,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
-.si-eval-spinner, .si-attach-busy, .si-coldline-busy { animation: si-attach-spin .8s linear infinite; }
+.si-attach-busy, .si-coldline-busy { animation: si-attach-spin .8s linear infinite; }
 @keyframes si-attach-spin { to { transform: rotate(360deg); } }
 @keyframes si-attach-complete-out {
   0%, 78% { opacity: 1; transform: translateY(0); }
@@ -2739,7 +2711,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    diff lines in the reused desktop panes) WRAPS instead — the panes are for reading, not measuring. */
 .m-app .m-timeline, .m-app .m-children, .m-app .m-sesslist, .m-app .m-sessdetail,
 .m-app .m-pane-host .pane-doc, .m-app .m-pane-host .pane-hist, .m-app .m-pane-host .pane-issues,
-.m-app .m-pane-host .pane-eval, .m-app .m-pane-host .pane-edit { overflow-x: hidden; }
 .m-app pre, .m-app code, .m-app .diff-line, .m-app .hist-diff pre {
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%;
 }
@@ -3217,66 +3188,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .m-new .m-senderr { padding: 0; }
 .m-new-go { height: 42px; }
-
-/* the eval tab surfaces the WHOLE declared set in ONE list: readings ride the timeline, and an unmeasured
-   scenario leads it as a blind-spot row — the empty score ring is the only distinction, no fenced-off band
-   ([[eval-tab]]). */
-.eval-todo-note { color: var(--muted); font-size: var(--type-body); margin: 0 0 14px; }
-.eval-declared-row .eval-expected { padding-left: 23px; margin: 4px 0 0; }
-.eval-tracks { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); opacity: .85; }
-/* a DANGLING remark track (directive 5): the orphaned scenario's name struck-through/gone, its remarks below
-   — visible, still resolvable via their refs, ageing nothing. */
-.eval-dangling-badge { color: var(--orange); margin-right: 6px; }
-.eval-dangling-name { text-decoration: line-through; color: var(--muted); }
-.eval-dangling-tag { font-family: var(--ui-font); font-size: var(--type-caption); color: var(--orange); margin-left: 8px;
-  border: 1px dashed color-mix(in srgb, var(--orange) 45%, var(--line)); border-radius: var(--radius); padding: 0 5px; }
-.eval-dangling-remarks { padding-left: 23px; margin: 6px 0 0; }
-.eval-row { position: relative; border-bottom: 1px solid var(--line); padding: 10px 0; }
-.eval-row:last-child { border-bottom: 0; }
-.eval-head { display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 0 26px 0 0; text-align: left; background: none; border: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; }
-/* the row's outbound anchor — the eval's canonical routed detail — sits top-right, a SIBLING of the
-   expand toggle (never nested inside it); the head's right padding reserves its lane. */
-.eval-open { position: absolute; top: 10px; right: 2px; display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: var(--radius); color: var(--muted); }
-.eval-open:hover { color: var(--ink2); background: var(--wash-hover); }
-.eval-top { display: flex; align-items: center; gap: 8px; }
-.eval-caret { flex: none; color: var(--muted); font-size: var(--type-meta); }
-.eval-scenario { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* Shared review-state marks use one vocabulary and never depend on platform glyphs. */
-.eval-meta { display: flex; align-items: center; gap: 10px; font-size: var(--type-meta); color: var(--muted); }
-.eval-sha { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: var(--radius); }
-/* verdict badge: the loss the agent measured — green ✓ pass / orange ✗ fail / blue ≈ note (hover for the
-   how-far-off text) / muted legacy (a reading filed before verdicts existed). */
-.eval-verdict { flex: none; font-size: var(--type-caption); font-weight: var(--weight-semibold); border-radius: var(--radius); padding: 0 4px; line-height: var(--leading-relaxed); }
-.eval-verdict.pass { color: var(--green); border: 1px solid var(--green); }
-.eval-verdict.fail { color: var(--orange); border: 1px solid var(--orange); }
-.eval-verdict.note { color: var(--blue); border: 1px solid var(--blue); cursor: help; }
-.eval-verdict.legacy { color: var(--muted); border: 1px solid var(--line); }
-/* the eval evidence figure: the scenario's `expected` (and a note verdict's how-far-off line) over the
-   captured proof — a screenshot, a transcript, or — no capture — a muted note. The figure's own
-   left-indent/margin position all of them, so the inner blocks carry no padding of their own. */
-.eval-shot { margin: 8px 0 2px; padding-left: 19px; }
-.eval-shot img { display: block; max-width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); }
-/* the shared renderer's inline video — sized like an evidence image WHEREVER it plays (eval tab, eval
-   detail gallery, an issue/eval reply's thread). */
-.eval-video { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); }
-.eval-noimg { font-size: var(--type-meta); color: var(--muted); }
-.eval-expected, .eval-note { font-size: var(--type-control); color: var(--ink2); margin: 0 0 6px; }
-.eval-expected-label { color: var(--muted); font-weight: var(--weight-semibold); }
-.eval-transcript { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
-.eval-transcript.loading { color: var(--muted); }
-/* structured data ([[evidence-kind-taxonomy]]) — a JSON/metrics block: the transcript's monospace frame with
-   a labelled header and an accent border, so a machine export reads as validatable data, not scrolling text. */
-.eval-datawrap { border: 1px solid var(--line); border-left: 3px solid var(--magenta); border-radius: var(--radius); overflow: hidden; }
-.eval-datahead { font-family: var(--ui-font); font-size: var(--type-caption); letter-spacing: var(--tracking-normal); color: var(--muted); background: var(--panel); padding: 4px 10px; border-bottom: 1px solid var(--line); }
-.eval-data { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); padding: 8px 10px; margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
-.eval-data.loading { color: var(--muted); }
-/* folded structured data ([[event-detail]]): the header IS the toggle when a clip/still is the primary evidence */
-.eval-datafold > summary.eval-datahead { cursor: pointer; user-select: none; list-style: none; }
-.eval-datafold > summary.eval-datahead::-webkit-details-marker { display: none; }
-.eval-datafold > summary.eval-datahead::before { content: '▸ '; color: var(--muted); }
-.eval-datafold[open] > summary.eval-datahead::before { content: '▾ '; }
-.eval-datafold:not([open]) > summary.eval-datahead { border-bottom: none; }
 
 /* ---- evals feed ([[evals-feed]]) — structured ListView rows, media strictly lazy. ---- */
 .ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; text-decoration: none; }

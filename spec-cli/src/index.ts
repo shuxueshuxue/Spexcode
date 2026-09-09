@@ -571,8 +571,6 @@ app.post('/api/session-runtime/:id/state', async (c) => {
   if (body?.note !== undefined && body.note !== null && typeof body.note !== 'string') return c.json({ error: 'note must be a string or null' }, 400)
   if (body?.parentSessionId !== undefined && body.parentSessionId !== null && typeof body.parentSessionId !== 'string') return c.json({ error: 'parentSessionId must be a string or null' }, 400)
   try {
-    const sessionId = c.req.param('id')
-    const nextStatus = (body?.status as string | undefined) ?? application.readState(sessionId)?.status
     return c.json(application.transitionSession(c.req.param('id'), {
       status: body?.status as string | undefined,
       proposal: body?.proposal as string | null | undefined,

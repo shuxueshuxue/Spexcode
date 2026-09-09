@@ -52,6 +52,7 @@ test('the published entry has every required runtime export and no extra runtime
   const entry = await import('./index.js')
   assert.deepEqual(Object.keys(entry).sort(), [
     'LIMITS',
+    'MESSAGE_KINDS',
     'MIN_SQLITE_VERSION',
     'PROTOCOL_VERSION',
     'ProtocolError',
@@ -71,7 +72,7 @@ test('the published entry has every required runtime export and no extra runtime
   for (const name of [
     'SqlParam', 'MessageInput', 'Message', 'SessionAddress', 'ProtocolTransaction', 'SessionProtocol',
     'OpenOptions', 'ProtocolError', 'ProtocolErrorCode', 'ComponentMigration', 'applyComponentMigrations',
-    'PROTOCOL_VERSION', 'MIN_SQLITE_VERSION', 'LIMITS', 'canonicalPreimage', 'payloadHash', 'openProtocol',
+    'PROTOCOL_VERSION', 'MIN_SQLITE_VERSION', 'MESSAGE_KINDS', 'LIMITS', 'canonicalPreimage', 'payloadHash', 'openProtocol',
   ]) {
     assert.match(declarations, new RegExp(`\\b${name}\\b`), `${name} is absent from declarations`)
   }

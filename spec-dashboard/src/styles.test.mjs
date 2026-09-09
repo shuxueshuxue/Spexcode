@@ -466,15 +466,6 @@ test('desktop navigation rail stays compact without changing its icon grammar', 
   assert.match(css, /\.rail-btn\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px;[^}]*justify-content:\s*center;/s)
 })
 
-test('scoped Evals gates are an opaque sticky strip inside that scroll owner', () => {
-  assert.match(css, /\.se-gates\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 40px;[^}]*height:\s*40px;/s)
-  assert.match(css, /\.se-gates\s*\{[^}]*border-bottom:\s*1px solid var\(--line\);[^}]*background:\s*var\(--panel2\);/s)
-  assert.match(css, /\.lp-head\s*\{[^}]*z-index:\s*5;/s)
-  assert.match(css, /\.rl-menu\s*\{[^}]*z-index:\s*20;/s)
-  assert.match(css, /\.ui-tip\s*\{[^}]*z-index:\s*100;/s)
-  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.se-gates\s*\{[^}]*flex-basis:\s*80px;[^}]*height:\s*80px;/s)
-})
-
 // [[tooltip]]: the bubble grows OUT OF its anchor. The origin must follow the flip, or a bottom-placed tip
 // would expand away from the control it describes. Reduced motion keeps the fade and drops the growth.
 test('the tooltip pops from the arrow side and honours reduced motion', () => {

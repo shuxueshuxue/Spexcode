@@ -26,7 +26,7 @@ import { join } from 'node:path'
 
 const ROOTS = ['spec-cli/src', 'spec-forge/src', 'spec-dashboard/src', 'spec-cli/templates']
 const SPEC_ROOT = '.spec'
-const DEAD = /\b(yatsu|readings?|boards?|proofs?|blobs?|scan(?:s|ned|ning)?|reopen(?:s|ed|ing)?|rawkeys?|loss-signals?)\b/i
+const DEAD = /\b(yatsu|readings?|boards?|proofs?|blobs?|scan(?:s|ned|ning)?|reopen(?:s|ed|ing)?|rawkeys?|loss-signals?|codeSha)\b/i
 const OK = /dead-words-ok:\s*\S/
 
 const findings = []

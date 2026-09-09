@@ -29,7 +29,7 @@ English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexc
 |---|---|
 | **Computable spec–code drift** | Every spec pins the file it governs, down to the function. Whether code moved without its spec is computed from commits and line ranges, the same way on every machine: advisory for the file, blocking when an anchored function changes. |
 | **Session & worktree management** | Each task runs in its own worktree and branch; independent tasks run in parallel. Sessions form a hierarchy: a session can dispatch and supervise workers of its own, so a worker can have a supervisor and that supervisor another. Workers propose; you review once, at merge time. |
-| **Shareable URLs** | Spec nodes, sessions, evals, live terminals: every dashboard view has a stable address you can send to a colleague. Two people can watch the same session board. |
+| **Shareable URLs** | Spec nodes, sessions, live terminals: every dashboard view has a stable address you can send to a colleague. Two people can watch the same session board. |
 | **Modular layers** | Three separable layers: the spec↔code data asset (L0), the session substrate (L1), the dashboard (L2). Take what you need; L0 and L1 are building bricks for your own software factory. |
 | **Cross-harness support** | Claude Code, Codex, OpenCode, pi, each interactive or headless. One materialized workflow contract serves them all; adding a harness is a config entry. |
 
@@ -58,18 +58,12 @@ check catches.
 
 ## Software as heuristic learning
 
-Specs, commits, and evals compose into one optimization loop. The spec is the loss function: it
-states what you want, and it is the half a human signs off on. Commits are the optimizer. **eval**,
-the measurement subsystem, scores how far live behavior currently sits from the spec — an agent runs
-each scenario against the product's real surface, the way an end user would touch it, and files the
-result with evidence (a screenshot, a recording). The score's history lives in git like everything
-else, and a bug fix is expected to bracket: a failing eval that reproduces the bug, then a passing
-one on the same scenario.
+Specs and commits compose into one optimization loop. The spec is the loss function: it states what you want, and it is the half a human signs off on. Commits are the optimizer. Agents prove changes through the product's real surface, then hand the evidence to the reviewer as session files. Drift is the staleness signal; a bug fix is expected to show the real product working before review.
 
 <div align="center"><img src="docs/readme-loop.svg" alt="the spec/code optimization loop" width="560"></div>
 
 Nobody reads a neural net by staring at its weights, and between merge gates you don't stare at
-agent diffs either. Attention goes to the two ends — the spec and the evals; the diff gets read
+agent diffs either. Attention goes to the two ends — the spec and the product proof; the diff gets read
 once, at merge time.
 
 ## Quick start
@@ -96,7 +90,7 @@ config (`.claude/settings.json`, `.codex/hooks.json`), only SpexCode's entries a
 permissions, env and hooks stay — and `spex uninstall` takes back exactly those entries. A skill or
 agent name you already use is skipped and reported, never overwritten.
 
-When you want the live board (the graph, sessions, evals), start the runtime:
+When you want the live board (the graph and sessions), start the runtime:
 
 ```sh
 npm i -g @spexcode/spec-dashboard # install the optional UI package once
@@ -139,7 +133,7 @@ launches a worker session in its own worktree on branch `node/uploader-…`. The
 the governing spec before it changes code. It makes the change, rewrites the spec body to
 match, puts both in one commit, then files a merge proposal and stops:
 
-<img src="docs/readme-worker-flow.svg" alt="the eight-step worker loop: dispatch, read the spec, do the work, run evals, clear drift, propose a merge, human review, close">
+<img src="docs/readme-worker-flow.svg" alt="the eight-step worker loop: dispatch, read the spec, do the work, prove through the real product, hand over session files, clear drift, propose a merge, human review, close">
 
 ```sh
 spex session ls                  # the living table below
@@ -158,27 +152,20 @@ has to state the task. More: [working with agents](https://spexcode.net/working-
 
 ## The dashboard (L2)
 
-The spec tree, the sessions, and the evals each have a live page on the dashboard. Start `spex serve` and `spex dashboard`, then:
+The spec tree and sessions have live pages on the dashboard. Start `spex serve` and `spex dashboard`, then:
 
-<img src="docs/readme-graph.png" alt="the spec map: SpexCode's own repo on its own board — per-node version and eval chips, an agent avatar hovering on the node it is editing">
+<img src="docs/readme-graph.png" alt="the spec map: SpexCode's own repo on its own board — per-node version and drift state, an agent avatar hovering on the node it is editing">
 
-*Your whole repo as one map — SpexCode's own board shown. Each node carries its version and eval
+*Your whole repo as one map — SpexCode's own board shown. Each node carries its version and drift
 state, an agent's avatar hovers on the node it is editing right now, and the rail top-left is the
 live session console.*
 
-<img src="docs/readme-node.png" alt="a node opened on the board: the raw source callout, the expanded spec body, the governed file, a drift badge, and tabs for history, issues, eval">
+<img src="docs/readme-node.png" alt="a node opened on the board: the raw source callout, the expanded spec body, the governed file, a drift badge, and tabs for history and issues">
 
 *Click a node: the raw source on top, the expanded spec below it, the file it governs, its current
-drift state, and tabs for the version history git already kept, its issues, and its evals.*
+drift state, and tabs for the version history git already kept and its issues.*
 
-<img src="docs/readme-eval.png" alt="an eval reading under review: verdict banner, the scenario's expected result, the agent's note, recorded video evidence, and the review queue">
-
-*An eval reading under review: the verdict, the scenario's expected result, the agent's note and
-recorded video evidence. You can draw a region on the video to annotate it; the annotation is
-matched to its step automatically, and the timestamp and step are sent to the agent with your
-comment. The queue on the right leads to the next reading.*
-
-The whole workspace is served over HTTP, so every view (a spec node, a session, an eval reading, a
+The whole workspace is served over HTTP, so every view (a spec node, a session, a
 live terminal) is a stable URL you can hand to a colleague; you can sit on the same board together.
 The terminal pane is a real tmux session: copy the printed command and attach from your own
 terminal.

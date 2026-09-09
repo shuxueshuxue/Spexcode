@@ -51,7 +51,7 @@ adapter boundary; nothing downstream branches on store.
 merge that interleaves every store by creation time, **newest first** — the stores are the same
 abstraction, so a github issue, a gitlab issue, and a local thread sort as one list, never
 store-grouped blocks (that grouping is exactly the two-surfaces smell this node exists to kill). It
-**excludes eval-remark threads** (`isEvalConcern`, [[eval-issue-split]]): a scenario-scoped concern is a
+**excludes eval-remark threads** (`isEvalConcern`, [[issue-remark-split]]): a scenario-scoped concern is a
 remark, not an issue (I1), so it is filtered here ONCE and every issue surface this feeds — the drain, the
 board badge, the [[issues-view]] Issues page list — is free of it by construction; the complementary read
 `loadEvalRemarkTracks` keeps only those, feeding the eval scoreboard instead. Each

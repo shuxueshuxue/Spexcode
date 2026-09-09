@@ -26,7 +26,7 @@
 |---|---|
 | **可计算的 spec–code drift** | 每个 spec 锁定它管辖的文件,可以精确到函数。代码是否脱开 spec 单独动了,由 commit 和行区间算出来,在任何机器上结果一致:文件级是提醒,被锚定的函数被改动则直接阻断。 |
 | **session 与 worktree 管理** | 每个任务在自己的 worktree 和分支里跑,互不相干的任务并行。session 有层级结构:一个 session 可以派发并监管自己的 worker,worker 之上有主管,主管之上还可以有主管。worker 只提议,你只在合并时 review 一次。 |
-| **可分享的 URL** | spec 节点、session、eval、live 终端,dashboard 上每个视图都有稳定地址,发给同事就能看。两个人可以盯着同一块 session 看板。 |
+| **可分享的 URL** | spec 节点、session、live 终端,dashboard 上每个视图都有稳定地址,发给同事就能看。两个人可以盯着同一块 session 看板。 |
 | **模块化分层** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用,L0 和 L1 就是为你自己的软件工厂准备的积木。 |
 | **跨 harness 支持** | Claude Code、Codex、OpenCode、pi,交互式或 headless 都行。一份物化出来的工作流契约服务所有 harness,新增一个 harness 只是一条配置。 |
 
@@ -44,11 +44,11 @@ git 是唯一的数据库:节点的版本就是碰过它 `spec.md` 的那些 com
 
 ## 软件的 heuristic learning 视角
 
-spec、commit、eval 组成一个优化循环。spec 是损失函数:写下你要什么,也是由人签字的那一半。commit 是优化器。**eval** 是测量子系统,给当前真实行为离 spec 有多远打分:agent 在产品的真实表面上跑每个场景,像真实用户那样操作,连证据(截图、录屏)一起归档。分数的历史和其它一切一样存在 git 里。修 bug 要求成对:先归档一条复现 bug 的失败 eval,修好后在同一场景归档一条通过的。
+spec 和 commit 组成一个优化循环。spec 是损失函数:写下你要什么,也是由人签字的那一半。commit 是优化器。agent 通过产品的真实表面证明改动,再把证据作为 session 文件交给 reviewer。drift 是唯一的陈旧信号,修 bug 要在 review 前证明真实产品已经正常工作。
 
 <div align="center"><img src="readme-loop.zh.svg" alt="spec/code 优化循环" width="560"></div>
 
-没有人靠盯着权重读神经网络,在两次合并闸门之间,你也不用盯着 agent 的 diff。注意力放在 spec 和 eval 这两端,diff 只在合并时读一次。
+没有人靠盯着权重读神经网络,在两次合并闸门之间,你也不用盯着 agent 的 diff。注意力放在 spec 和产品证明这两端,diff 只在合并时读一次。
 
 ## 快速开始
 
@@ -62,7 +62,7 @@ spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-head
 
 引入到这里就完成了。示例列出了全部内建 harness,不用的删掉就行,`--harness` 必填,接受任意一个 id 或逗号分隔的子集。只想要 spec 这份资产、不想往任何 agent 里写东西,就用 `--harness none`:只引入 L0,不往任何 agent 的配置里写一个字节。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不替换属于你的文件——harness 把钩子读在你自己的配置文件里时(`.claude/settings.json`、`.codex/hooks.json`),只有 SpexCode 自己的条目会被合进去,`spex uninstall` 时再原样摘走;和你已有的 skill/agent 同名时会跳过并报出来,不会覆盖。它只做三件事。它创建根节点 `.spec/project/spec.md` 和一份初始的 `.spec/spexcode.json`,安装 git 钩子,再把工作流规则**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):改动代码之前先读管辖它的 spec,spec 和代码在同一个 commit 里提交,只提出合并提议、不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流。
 
-需要看板(图谱、session、eval)时,再启动运行时:
+需要看板(图谱、session)时,再启动运行时:
 
 ```sh
 npm i -g @spexcode/spec-dashboard # 单独安装可选 UI 包（只需一次）
@@ -90,7 +90,7 @@ spex session new "[[uploader]] 失败的分块要带退避地重传"
 
 会在独立 worktree、分支 `node/uploader-…` 上启动一个 worker 会话。prompt 里第一个 `[[uploader]]` 提及决定分支名和看板归属;worker 会先找到并读完管辖那段代码的 spec,然后才开始修改。它完成修改,把 spec 正文改写到与代码一致,把两者放进同一个 commit,然后提出合并提议并停止:
 
-<img src="readme-worker-flow.zh.svg" alt="worker 的八步循环:派发、读 spec、干活、跑 eval、消解 drift、提议合并、由人审核、关闭">
+<img src="readme-worker-flow.zh.svg" alt="worker 的八步循环:派发、读 spec、干活、通过真实产品验证并交接 session 文件、消解 drift、提议合并、由人审核、关闭">
 
 ```sh
 spex session ls                  # 下面这张列表
@@ -106,21 +106,17 @@ spex session close uploader      # 删除该会话的 worktree、分支和记录
 
 ## dashboard(L2)
 
-前面讲的 spec 树、session、eval,在 dashboard 上都有对应的实时页面。启动 `spex serve` 和 `spex dashboard`,然后:
+前面讲的 spec 树、session,在 dashboard 上都有对应的实时页面。启动 `spex serve` 和 `spex dashboard`,然后:
 
-<img src="readme-graph.png" alt="spec 地图:SpexCode 自己的仓库在自己的看板上,每个节点带版本与 eval 徽标,正在被编辑的节点上悬浮着 agent 头像">
+<img src="readme-graph.png" alt="spec 地图:SpexCode 自己的仓库在自己的看板上,每个节点带版本与 drift 状态,正在被编辑的节点上悬浮着 agent 头像">
 
-*整个仓库一张地图,图中是 SpexCode 自己的看板。每个节点带着它的版本号和 eval 状态,正在被编辑的节点上悬浮着那个 agent 的头像,左上角是活的 session 栏。*
+*整个仓库一张地图,图中是 SpexCode 自己的看板。每个节点带着它的版本号和 drift 状态,正在被编辑的节点上悬浮着那个 agent 的头像,左上角是活的 session 栏。*
 
-<img src="readme-node.png" alt="在看板上打开一个节点:raw source 高亮块、expanded spec 正文、管辖的文件、drift 徽标,以及 history、issues、eval 各 tab">
+<img src="readme-node.png" alt="在看板上打开一个节点:raw source 高亮块、expanded spec 正文、管辖的文件、drift 徽标,以及 history、issues 各 tab">
 
-*点开一个节点:上面是 raw source,下面是 expanded spec,还有它管辖的文件、当前的 drift 状态,以及 git 本来就记着的版本历史、issue、eval 各自的 tab。*
+*点开一个节点:上面是 raw source,下面是 expanded spec,还有它管辖的文件、当前的 drift 状态,以及 git 本来就记着的版本历史和 issue 各自的 tab。*
 
-<img src="readme-eval.png" alt="一条正在审阅的 eval:判定横幅、场景的期望结果、agent 的说明、录屏证据,以及右侧的待审队列">
-
-*一条正在审阅的 eval:判定、场景的期望结果、agent 的说明和录屏证据。可以直接在视频上划选区域做标注,系统会自动匹配到对应的 step,并把时间戳、step 等信息随你的批注一起发送给 agent。右侧是接着往下审的队列。*
-
-整个工作台走 HTTP,所以每个视图,不论 spec 节点、session、eval 还是 live 终端,都是稳定 URL,发给同事就能一起坐在同一块看板前。终端面板是真 tmux 会话,复制它打印的命令,就能从你自己的终端 attach 上去。
+整个工作台走 HTTP,所以每个视图,不论 spec 节点、session 还是 live 终端,都是稳定 URL,发给同事就能一起坐在同一块看板前。终端面板是真 tmux 会话,复制它打印的命令,就能从你自己的终端 attach 上去。
 
 ## 参与贡献
 

@@ -97,8 +97,10 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
   // counts and open identity only, enough for tile/stat/tree glances without reconstructing the list.
   const isOpen = (i: { status: string }) => i.status === 'open'
   // `issuesStamp` above is that ONE board-level freshness stamp, over EVERY thread — noded or nodeless,
-  // both stores, BOTH remark hosts. It is folded from the whole store and NOT from the split `merged`: a
-  // Every remark stays on its issue thread. The per-node fold below stays [[graph-lean]]-slim (no reply payloads).
+  // both stores. It and `merged` come from the SAME whole-store walk (the adapter's boardThreads), so every
+  // thread write — a remark included, since every remark stays on its issue thread — moves a board byte and
+  // [[graph-delta]] never suppresses it as a no-change broadcast. The per-node fold below stays
+  // [[graph-lean]]-slim (no reply payloads).
   const issuesByNode: Record<string, any[]> = {}
   for (const issue of merged)
     for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)

@@ -923,6 +923,7 @@ app.post('/api/sessions/reparent', async (c) => {
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
 app.post('/api/sessions/:id/stop', async (c) => {
+  const sessionId = c.req.param('id')
   const ok = await stopSession(sessionId)
   return c.json(ok ? { ok: true } : { ok: false, error: `no stop transition was committed for session ${sessionId}` }, ok ? 200 : 404)
 })
@@ -931,6 +932,7 @@ app.post('/api/sessions/:id/interrupt', async (c) => {
   return c.json(result, result.ok ? 200 : 502)
 })
 app.post('/api/sessions/:id/close', async (c) => {
+  const sessionId = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
   const ok = await closeSession(sessionId, body?.source)
   // The close route owns its write's visible boundary: filesystem watchers can be unavailable, so cache

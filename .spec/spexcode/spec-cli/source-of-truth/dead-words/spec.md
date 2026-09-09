@@ -19,7 +19,7 @@ guarded regresses: the next error message, route, or file casually reintroduces 
 one-word-one-meaning economy erodes. So the retired words are **dead on product surfaces** — command
 names, route/protocol strings, agent- and user-facing labels, file names, node dir names — while
 **prose stays legal** (spec bodies, docs, code comments, archived sidecars may narrate history under
-its historical names). CI enforces this permanently.
+its historical names). CI enforces this permanently. The retired measurement vocabulary remains in compatibility code and archived dashboard styling that still serves live protocol shapes, so `eval`, `scenario`, and `verdict` are not scanner-dead words; `codeSha` is blocked because it has no live product use.
 
 ## expanded spec
 

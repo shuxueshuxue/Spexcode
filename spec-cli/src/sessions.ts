@@ -19,7 +19,7 @@ import { acquireFreshSessionApplicationForCreate, configuredSessionApplication, 
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
-import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, SessionRecordUnusable, setRecordTransitionNotifier, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
+import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, SessionRecordUnusable, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
 import { shQuote } from './sh.js'
 import {
   composeSessionPrompt, launchScript, launchShellCommand, nodeFromPrompt, slugify, titleFromPrompt,

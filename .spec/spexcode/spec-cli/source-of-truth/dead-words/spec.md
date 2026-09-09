@@ -2,7 +2,7 @@
 title: dead-words
 status: active
 hue: 15
-desc: The vocabulary backstop — a CI grep gate keeping the v0.3.0 renames' retired words (yatsu · reading · board · proof · blob · scan · reopen · rawkey · loss-signal) off every product surface; prose stays exempt.
+desc: The vocabulary backstop — a CI grep gate keeping retired command, route, label, file, and node words (yatsu · reading · board · proof · blob · scan · reopen · rawkey · loss-signal · codeSha) off product surfaces; prose stays exempt.
 code:
   - scripts/dead-words.mjs#main
   - scripts/dead-words.mjs#selfCheck
@@ -19,7 +19,7 @@ guarded regresses: the next error message, route, or file casually reintroduces 
 one-word-one-meaning economy erodes. So the retired words are **dead on product surfaces** — command
 names, route/protocol strings, agent- and user-facing labels, file names, node dir names — while
 **prose stays legal** (spec bodies, docs, code comments, archived sidecars may narrate history under
-its historical names). CI enforces this permanently.
+its historical names). CI enforces this permanently. The retired measurement vocabulary remains in compatibility code and archived dashboard styling that still serves live protocol shapes, so `eval`, `scenario`, and `verdict` are not scanner-dead words; `codeSha` is blocked because it has no live product use.
 
 ## expanded spec
 

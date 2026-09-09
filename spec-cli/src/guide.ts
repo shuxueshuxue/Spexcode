@@ -182,7 +182,7 @@ The host-wide gateway has one separate per-user setting, \`gateway.icon\` in
 
 ── PROFILE (set by the agent's harness at startup — NOT a repository setting) ──
   SPEX_PROFILE controls which CLI surface an agent can see for this process. The built-in \`full\` (default)
-  keeps the complete surface; \`repo\` exposes repository work only (spec, eval, graph, guide, init,
+  keeps the complete surface; \`repo\` exposes repository work only (spec, graph, guide, init,
   materialize, doctor, issue, help) and leaves session/dashboard work to the harness. A JSON file may instead
   name \`commands\` and optional core-plugin \`hooks\`; omitted hooks mean all hooks. Invalid values fail loudly.
   This is a launch-time harness property: do not commit it to \`spexcode.json\`, \`spexcode.local.json\`, or any
@@ -257,7 +257,7 @@ host-specific tuning may override this top-level section in .spec/spexcode.local
   uploads.cleanupIntervalMs stale-staging reaper cadence. Default ${UPLOAD_DEFAULTS.cleanupIntervalMs}.
   uploads.minFreeBytes      bytes retained on the backend filesystem while reserving a new attachment.
                             Default ${UPLOAD_DEFAULTS.minFreeBytes}.
-  uploads.evidenceMaxBytes  retained POST-body ceiling for eval evidence. Default ${UPLOAD_DEFAULTS.evidenceMaxBytes}.
+  uploads.evidenceMaxBytes  retained POST-body ceiling for session evidence. Default ${UPLOAD_DEFAULTS.evidenceMaxBytes}.
 All fields are positive integers except retryLimit, retryDelayMs, and minFreeBytes, which may be zero.
 The seed template is the one default source; omit a field to use it. The backend reads the merged files for
 each transfer and cleanup pass. The dashboard receives chunk, concurrency, timeout, and retry policy from
@@ -379,10 +379,7 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
   lint.scopedCodeMiss      "warn" (default) | "ignore" — the file-level drift ADVISORY on a selector-
                            scoped code: file whose window commits hit no selector (a miss). "ignore"
                            silences ONLY that advisory; it never touches hit blocks (anchor-drift),
-                           bare-path drift, integrity, Spec-OK acks, related semantics, or eval
-                           freshness. A project policy → committed .spec/spexcode.json.
-  lint.scenarioTags        the closed vocabulary an eval scenario's tags: must draw from (default
-                           ["frontend-e2e","backend-api","cli","desktop","mobile"]); extend to mint a tag.
+                           bare-path drift, integrity, Spec-OK acks, related semantics, or freshness. A project policy → committed .spec/spexcode.json.
 Example — govern your own source dir:
   { "lint": { "governedRoots": ["src"] } }
 Example — declare project-specific exclusions (nothing is guessed from these names):
@@ -416,11 +413,11 @@ Example — tune opt-in health diagnosis without changing the lint gate:
 const FOOTPRINT = `spex guide footprint — what SpexCode plants in a repo, and who sees it (one fixed behavior per kind)
 
 SpexCode claims software engineering's HEAD (the recording of intent) and TAIL (the storage of
-measurement) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
+product evidence) and leaves the MIDDLE — construction — to the harness/agent/test framework; freshness
 stitches the two ends into a closed loop. Materialize is the base operation of harness ADAPTATION:
 one pass renders the spec tree into whatever artifacts the selected harness auto-discovers, so that
 is how SpexCode reaches an agent — never a launch-time flag. The footprint follows: the head+tail
-(.spec, .spec/spexcode.json, evals) is the ASSET and lives in git like source; everything else is derived
+(.spec, .spec/spexcode.json) is the ASSET and lives in git like source; everything else is derived
 wiring or a machine fact. Materialized artifacts carry no facts, so they are NEVER tracked — there is exactly one residence
 behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 

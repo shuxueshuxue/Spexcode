@@ -10,7 +10,6 @@ related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
   - packages/spec-core/src/git.ts
-  - spec-cli/test/cockpit-eval-readout.mjs
 ---
 
 # manager-cockpit

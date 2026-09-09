@@ -418,8 +418,8 @@ export function closeLocalIssue(id: string): { status: 'landed'; already: boolea
 // a CLI surface down here had to recognise the format without being able to import the module that composes it;
 // [[issues-cli]] removed that constraint, so the format is one pair now. `node` is matched non-greedily because
 // it can never contain ' · ' while a scenario name may.
-const evalConcernKey = (node: string, scenario: string): string => `eval: ${node} · ${scenario}`
-const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
+const evalConcernKey = (node: string, scenario: string): string => `remark: ${node} · ${scenario}`
+const EVAL_CONCERN_RE = /^remark: (.+?) · (.+)$/
 export const parseEvalConcern = (concern: string): { node: string; scenario: string } | null => {
   const m = EVAL_CONCERN_RE.exec(concern)
   return m ? { node: m[1].trim(), scenario: m[2].trim() } : null
@@ -442,7 +442,7 @@ function findOrCreateEvalThread(node: string, scenario: string, author: string):
     const p: Issue = {
       id: uniqueId(concern), store: 'local', concern, by: author, status: 'open',
       nodes: [node], created: new Date().toISOString(),
-      body: `Remarks on the \`${scenario}\` eval of [[${node}]].`, replies: [], evidence: [], labels: [],
+      body: `Remarks on the \`${scenario}\` remark for [[${node}]].`, replies: [], evidence: [], labels: [],
     }
     writeStoreFile(p, `issue: ${concern}`)
     return p

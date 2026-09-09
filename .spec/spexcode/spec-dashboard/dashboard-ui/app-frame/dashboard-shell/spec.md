@@ -46,8 +46,8 @@ boundary**: every page gets the same pane and the same loading fallback, and war
 session board — declare warmth to stay mounted and display-toggle across switches), `data.js` (the shared polled board
 data every view reads), and `styles.css` (the global stylesheet).
 
-The route registry resolves every product page into the shared workspace host. Evals and Issues are resident
-workspace tabs: cold links, list navigation, and detail navigation all render through the same Shell and
+The route registry resolves every product page into the shared workspace host. Issues is a resident
+workspace tab: cold links, list navigation, and detail navigation all render through the same Shell and
 TabStrip, so the Spec/Session/File working set remains visible while a finding is focused. Issues omits the
 activity rail by its page-owned dock policy but retains the shared tab strip. There is no second review chrome
 tree or cold-only route path that can hide the working set; mobile reflows the same route family through its
@@ -79,16 +79,16 @@ afterwards; the entry's
 face pick extends the same way (a scoped 401 raises the shared credential gate instead of the error panel,
 and the root address with no board but a live `/projects` surface boots the hub face instead of the
 classic dashboard). Route params that belong to a feature
-(`#/graph/<node>`, `#/issues/<id>`, `#/evals/<node>/<scenario>`) pass through this shell unchanged; the destination feature
-owns their meaning. The shell holds no app-resident Issues/Evals row collection beside the board: both
-faces mount the same routed review pages, and those pages request only their current server slice through
+(`#/graph/<node>`, `#/issues/<id>`) pass through this shell unchanged; the destination feature
+owns their meaning. The shell holds no app-resident Issues row collection beside the board: desktop and
+phone mount the same routed review pages, and those pages request only their current server slice through
 [[paged-review]]. The board itself stays [[graph-lean]] summary data, never a back door that preloads either
 review list. The shell applies an incoming routed selection before it echoes a page's local selection
 back into the hash, so an external door to `#/graph/<node>`, `#/sessions/<id>`, or another detail route is never overwritten by
 the previously-selected tab during the page switch. Likewise, feature-level shared widgets may add compact
 global style vocabulary here when the rule is genuinely reused across shell surfaces. **Each face is its own lazy chunk**, and
-the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with
-the annotator) the same way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
+the desktop root lazy-loads its heavy leaves (the session console with xterm, the issues pages) the same
+way — so the phone face ([[mobile-ui]]) never downloads the graph or terminal
 libraries, and the first graph paint doesn't wait on them either; once the viewport is known to be desktop,
 the workspace face is prefetched in parallel with the first board request so a cold review URL does not
 turn the board's legitimate build time into a second serial full-frame spinner. Mobile and the sealed public
@@ -100,7 +100,7 @@ a deploy under a live tab costs one automatic reload, never a blanked app; a fai
 after that reload surfaces as the normal error instead of a reload loop. The board **focus survives a reload or a mobile↔desktop breakpoint remount within its tab**
 (session-scoped, so a fresh tab still opens on the root; project-scoped too, since a node id names a node in
 one project only). A feature node lists whichever of these it touches under
-`related:`, so editing the shell or the stylesheet attributes its drift and eval staleness here rather than to every
+`related:`, so editing the shell or the stylesheet attributes its drift here rather than to every
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.
 
@@ -152,7 +152,7 @@ and bounded overlays keep their own non-document contracts.
 small semantic scale in `styles.css`: caption/meta, control, body, subtitle, title, heading, and display
 roles, plus shared leading and weight roles. A component chooses the role its text performs; it never
 invents a nearby pixel value to make one label fit. The scale keeps ordinary UI text readable, reserves
-the smallest role for genuinely secondary metadata, and gives the graph, sessions, evals, issues,
+the smallest role for genuinely secondary metadata, and gives the graph, sessions, issues,
 settings, overlays, and phone face the same hierarchy. Compactness comes from layout and spacing rather
 than shrinking copy below the scale. Responsive display copy may own a fluid scale token, but the formula
 still lives with the shared tokens rather than at its callsite. Letter spacing is neutral across the app;
@@ -206,8 +206,7 @@ confidence and be answered 304 — the lane certifying a board nobody holds. A s
 depends on the bytes on this machine, so that state cannot survive one exchange. It also retires the
 key-outlives-its-paint hazard (issue #70) STRUCTURALLY rather than by discipline: there is no stored key to
 go stale, only a function of the display, so no latch can be forgotten and no seal misplaced. What it names
-is the board this client has ACCEPTED from the server, which is what a transfer decision is about; the
-session-eval generation guard is a rendering policy layered above that and deliberately not part of it.
+is the board this client has ACCEPTED from the server, which is what a transfer decision is about.
 
 **Every applied frame is checked, and the check is the same computation as the key.** After applying a
 patch the shell fingerprints what it now holds and compares it to the tag the frame was named with. Equal
@@ -252,12 +251,8 @@ response is dropped, never painted. Without that guard a just-closed session res
 reload paints the row gone, then a stale in-flight snapshot lands late and flickers it back. The guard makes
 a removal stick the moment its own reload lands.
 
-That same envelope sequences session eval summaries (session proof): within one backend epoch, a session
-projection is accepted only when its generation is at least the last one displayed; an authoritative full
-snapshot may rebase the epoch, while a chained delta may not regress it. Stream `ping` proves transport
-liveness only. An error or dead-man breach marks resident summaries last-known without clearing their values;
-only the next authoritative `graph-full` certifies them current again. This is client state over the existing
-graph subscription, not a summary-specific EventSource, WebSocket, REST poll, or timer.
+Stream `ping` proves transport liveness only; an error or dead-man breach is client state over the
+existing graph subscription, not a second EventSource, WebSocket, REST poll, or timer.
 
 **The browser tab's title has one writer per face.** The workspace face names its own place — the shell is
 the address reader, so it writes `place · project`; App stays silent there. App writes the plain project

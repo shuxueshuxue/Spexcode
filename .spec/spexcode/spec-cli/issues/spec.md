@@ -32,7 +32,7 @@ authored in its store, never git-derived (a node *defines*, an issue *does* — 
 contract holds here unchanged). `evidence[]` is a list of content-addressed evidence hashes — the typed
 target video evidence points at when a video finding routes to the responsible node's concern. A reply
 may itself be a **remark** ([[remark-substrate]]) — the same `{by, at, body}` shape plus a mutable
-`resolved` bit and the reading it was authored against — but that is one reply carrying extra state, not a
+`resolved` bit and the targetSha it was authored against — but that is one reply carrying extra state, not a
 second thread type; a plain reply is unchanged.
 
 **Two stores, one translation rule.** The **local** store is the local issue store ([[local-issues]] owns its whole
@@ -51,18 +51,15 @@ adapter boundary; nothing downstream branches on store.
 merge that interleaves every store by creation time, **newest first** — the stores are the same
 abstraction, so a github issue, a gitlab issue, and a local thread sort as one list, never
 store-grouped blocks (that grouping is exactly the two-surfaces smell this node exists to kill). It
-**excludes eval-remark threads** (`isEvalConcern`, [[issue-remark-split]]): a scenario-scoped concern is a
-remark, not an issue (I1), so it is filtered here ONCE and every issue surface this feeds — the drain, the
-board badge, the [[issues-view]] Issues page list — is free of it by construction; the complementary read
-`loadEvalRemarkTracks` keeps only those, feeding the eval scoreboard instead. Each
+carries a node's scenario-keyed remark threads ([[issue-remark-split]]) like any other local thread: nothing
+is filtered here, so the drain, the board badge and the [[issues-view]] Issues page list all show them. Each
 caller supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
 resident cache: instant view, background reconcile) for `GET /api/issues` and the board fold, the CLI
 (`spex issue ls [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
 to local-only** (one stderr note) when the forge is unreachable — local reading never hostages on a
 network. The **single-thread detail is the same read, narrowed** (`findIssue`): `spex issue show <id>` and
-`GET /api/issues/:id` both find the id inside the merged, eval-remark-free set — never a second lookup
-path, so an eval-remark thread is invisible to `show` exactly as it is to the list — with the same
-per-surface freshness (live pull on the CLI, resident slice on the server; a local id skips the forge
+`GET /api/issues/:id` both find the id inside the same merged set — never a second lookup path — with the
+same per-surface freshness (live pull on the CLI, resident slice on the server; a local id skips the forge
 slice entirely). The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
 per-node surface — tile badge, node-info Issues tab, and the [[issues-view]] page — reads the
 same mixed set with no second path; the board also carries ONE top-level freshness stamp over the whole
@@ -89,8 +86,8 @@ annotation's frame blob) that accrue onto the thread's typed `evidence[]`, dedup
   reply or issue body has persisted, returning a visible creation outcome without rolling back the write. The same
   reply may loop in the thread's **originator** as a courtesy if their session is online (the implicit loop-in
   — [[mentions]] owns the mechanism, silent when offline, never a spawn); the originator is a local
-thread's author, or an eval-comment thread's reading-filer, and a forge issue's github-login author resolves
-to nobody, so a forge reply loops in no one. Freshness after a forge write
+thread's author, and a forge issue's github-login author resolves to nobody, so a forge reply loops in no
+one. Freshness after a forge write
 stays caller-owned: the server forces its resident slice's read-back before answering (the comment shown
 is the read-back, never a local echo); the CLI's next read is a live pull anyway.
 The explicit local→forge migration verb is **promotion** —

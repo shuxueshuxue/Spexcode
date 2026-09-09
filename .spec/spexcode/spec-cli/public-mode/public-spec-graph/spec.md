@@ -36,7 +36,7 @@ related:
 
 The public graph is a **static read-only projection** of one Git repository's `.spec` tree. It is a
 different surface from `spex serve --public`: it must never start or proxy a backend, expose sessions,
-issues, evals, terminals, settings, or any write route.
+issues, terminals, settings, or any write route.
 
 A visitor reads it through the **same workspace shell the live dashboard uses** — the rail, the explorer,
 the tab strip, the document — landing on `#/spec`, the address a live project opens on. There is no second
@@ -51,12 +51,12 @@ answer, and without inventing an entry that exists only here.
 repository identity, exact Git `revision`, a relocatable `sourceRoot: "."`, and deterministic node rows.
 The index retains graph-reading fields (`id`, `parent`, `path`, title/status metadata, governance paths),
 while `--content-dir <path>` writes one `spexcode.public-spec-document/v1` JSON document per node with its
-rendered spec body/parts. Runtime sessions, overlays, issue/eval summaries, and write affordances never
+rendered spec body/parts. Runtime sessions, overlays, issue summaries, and write affordances never
 enter either payload. The same command without `--out` writes identical index bytes to stdout.
 
 `npm run build:public` builds the dashboard with `VITE_PUBLIC_GRAPH_ONLY=1` and copies that snapshot plus
 the per-node documents under `specs/` beside the static assets. The published client reads the small index
-first and fetches only the selected document, never opens `/api/graph`, SSE, session, issue, eval, settings,
+first and fetches only the selected document, never opens `/api/graph`, SSE, session, issue, settings,
 or terminal transports, and normalizes every hash outside `PUBLIC_PAGES` back to `#/spec`.
 
 **Which source a reader reads is a property of the BUILD, never of the call site.** A body, a node's

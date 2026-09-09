@@ -208,7 +208,7 @@ It is read-only; existing lifecycle mutations consult the adapter-owned shared-r
 
 Issue routes follow the same thin-port rule: `GET /api/issues` returns the merged issue list plus the
 writable stores (`local` and configured forge drivers), `GET /api/issues/:id` is the single-thread detail
-(the same `findIssue` read behind `spex issue show`; unknown or eval-remark ids 404), and `POST /api/issues`
+(the same `findIssue` read behind `spex issue show`; unknown ids 404), and `POST /api/issues`
 opens a new issue in the
 chosen store. Local writes hit the git-native local store; forge writes call the driver and force a resident
 read-back before the dashboard reloads. Evidence bytes ride `/api/evidence` (`POST` = content-addressed put,

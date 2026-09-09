@@ -11,10 +11,9 @@ related:
 # remark-substrate
 
 A **remark** is the universal interaction primitive that lets a human or agent pin a *resolvable*
-concern to something they are reading — a running issue, or a scenario's latest measurement. It is the
-CLI-first substrate the whole eval/issue/remark refactor stands on: today remarking is a dashboard-only
-gesture, so the law that "the dashboard is a thin wrapper over the CLI" is false for it; this node makes it
-true — the whole author → resolve → retract loop holds under pure self-launch.
+concern to something they are reading — a running issue, or a node's scenario-keyed thread. It is the
+CLI-first substrate the remark track stands on: the whole author → resolve → retract loop holds under pure
+self-launch, so the law that "the dashboard is a thin wrapper over the CLI" holds for it too.
 
 ## What a remark is
 
@@ -25,18 +24,16 @@ remark may attach to an issue **or** a scenario, remark-ness can't be positional
 carries. The bit is the marker.
 
 - **Host.** A remark attaches to a *host*: a local issue, or a scenario keyed by `(node, scenario)`. The
-  scenario track is not a new store — it reuses the existing lazy eval thread (one local issue thread per
-  pair, keyed by its `eval: <node> · <scenario>` concern); every remark on it — the first included — is a
-  reply, never the thread body, so the resolved bit lives in one place. That one-thread-per-pair guarantee is
-  **atomic**: find-or-create runs inside the store lock, so a concurrent burst of first-remarks on a fresh
-  pair (normal, with parallel workers) can't mint two threads — a duplicate would be invisible to the concern
-  key and never fire its teeth (R4).
-- **Pinned to a reading.** A remark records the **targetSha it was authored against** (the worktree HEAD by
-  default; overridable). Later milestones hang the freshness teeth on this — a remark ages its scenario until
-  a fresh reading *after* a resolve clears it — so it must remember which reading it judged.
+  scenario track is not a new store — it is one local issue thread per pair, created lazily and keyed by its
+  `eval: <node> · <scenario>` concern; every remark on it — the first included — is a reply, never the thread
+  body, so the resolved bit lives in one place. That one-thread-per-pair guarantee is **atomic**:
+  find-or-create runs inside the store lock, so a concurrent burst of first-remarks on a fresh pair (normal,
+  with parallel workers) can't mint two threads — a duplicate would be invisible to the concern key (R4).
+- **Pinned to a commit.** A remark records the **targetSha it was authored against** (the worktree HEAD by
+  default; overridable), so a reader knows which state of the tree it judged; nothing computes freshness
+  from it ([[remark-teeth]]).
 - **Trunk-scoped.** Remarks are not code-bound, so they live in the trunk issue store, always visible, never
-  branch-scoped. A human can remark an un-merged worktree eval without merging — it is overlaid onto the
-  reading at read time.
+  branch-scoped. A human can remark against an un-merged worktree's HEAD without merging.
 
 ## The three verbs
 
@@ -86,27 +83,25 @@ deliberately **no third track**:
 Invalidation alone is not visibility: [[graph-delta]] broadcasts only when board bytes move, so the board
 carries one top-level freshness stamp (open/thread/reply counts + the latest activity instant) that
 **every** thread write moves — a reply, a remark, a resolve, a retract, a close, on a noded or nodeless
-thread alike. That stamp folds the **whole store, both remark hosts**, not the issue population the
-surfaces read: the issue read deliberately splits eval-remark tracks out ([[issue-remark-split]]), which is a
-question about *which page renders a thread*, while the stamp answers *whether anything was written at
-all*. Deriving one from the other is the mistake that reaches furthest — a carrier folded over the issue
-half alone moved no byte for a scenario-hosted remark, the no-change suppression correctly swallowed the
-broadcast, and an open reading went not late but permanently blind. So the board takes ONE store read that
-hands back both: the split population for the surfaces, the stamp over everything for freshness.
+thread alike. That stamp folds the **whole store, both remark hosts** — the same population the issue
+surfaces read ([[issue-remark-split]]) — and answers *whether anything was written at all*. A carrier folded
+over less than the whole store is the mistake that reaches furthest: one that skipped scenario-hosted threads
+moved no byte for a remark there, the no-change suppression correctly swallowed the broadcast, and an open
+viewer went not late but permanently blind. So the board takes ONE store read that hands back both: the
+threads for the surfaces, the stamp over everything for freshness.
 
 And a stamp nobody reads is not visibility either — the client leg is half the loop. **Every open review
-surface derives its refresh from that stamp**: the paged issue list, the open issue thread, and the open
-reading whose remark track rides its detail response. A surface keyed on something that merely *churns*
+surface derives its refresh from that stamp**: the paged issue list and the open issue thread. A surface
+keyed on something that merely *churns*
 when the board moves — a per-frame array identity — is not fresh, it is lucky, and it goes silent the day
 that churn is optimized away; a surface keyed on nothing at all (a single addressed read is told nothing by
 its own address) never surfaces an external write while it stays open. A list additionally keys the one
 other input its answer depends on, the source-session presence join ([[live-session-filter]]), so equal key
 means equal answer and a quiet board costs no request. Refreshing is not re-entering: only a new ADDRESS
-may wipe a surface to its loading face, while a stamp tick re-reads quietly behind painted content. The
-deliberately boardless cold Evals entry ([[light-entry]]) is the honest exception — it has no board, so it
-has no push, and it does not grow a stream to pretend otherwise. Measured end to end through a real
+may wipe a surface to its loading face, while a stamp tick re-reads quietly behind painted content.
+Measured end to end through a real
 browser on a prebuilt dashboard: a remark landing through POST /api/remarks on either host shows in an
 already-open viewer within one debounce + rebuild + read, never the fallback lane.
 
-Out of scope here (later milestones): the freshness/staleness computation that reads the resolved bit,
-the server-side overlay join, and any dashboard UI — this node builds only the substrate they stand on.
+Out of scope here: what a remark is worth once written ([[remark-teeth]]) and how the dashboard renders it
+([[reply-thread]]) — this node builds only the substrate they stand on.

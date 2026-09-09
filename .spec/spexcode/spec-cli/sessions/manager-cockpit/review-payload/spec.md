@@ -36,8 +36,9 @@ there.
 
 Its dependency direction is the contract. It imports from [[sessions-core]] (`findWorktree`, `deriveLabel`,
 `digest`, and the three delivery verbs `sendText` / `resumeSession` / `drainSession`); nothing in
-`sessions.ts` imports back. That one-way edge is what lets the eval package call the payload without a
-cycle, and it is why the module can be read as a leaf rather than as another region of the session core.
+`sessions.ts` imports back. That one-way edge is what lets the cockpit, the HTTP routes and the declaration
+verbs call the payload without a cycle, and it is why the module can be read as a leaf rather than as
+another region of the session core.
 
 **The bundle.** `reviewPayload(id)` composes ONE answer for a session: ahead-count, non-runtime dirty
 files, the fork-anchored diff, the session gates (`conflictsWithMain`, `lint`), and the standing proposal.

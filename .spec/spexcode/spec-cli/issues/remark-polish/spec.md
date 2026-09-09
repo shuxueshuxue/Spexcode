@@ -11,53 +11,33 @@ related:
 ---
 # remark-polish
 
-M4 is the closing milestone of the eval/issue/remark refactor: the substrate ([[remark-substrate]]), the
-teeth ([[remark-teeth]]), and the split + one detail component ([[issue-remark-split]] / the thread detail) are
-built; this node polishes three edges the invariant set (E2, the R3 dispatch clause, directive 5) left
-sharp. The three strands are independent and share no new record type or schema growth — each is one
-computation reused on every surface, CLI-first.
+Three edges of the remark track were polished after the substrate ([[remark-substrate]]) landed. Each is
+described here as the code carries it now; none adds a record type or schema.
 
-## Strand 1 — an anchor's canonical form is its step-name (E2)
+## Strand 1 — an anchor's canonical form is its step-name
 
-An anchored remark's first line is `▶m:ss · <step>` (the thread detail). The **step-name is canonical**; the
-`m:ss` is *derived from the current clip at render time*, never trusted frozen. The reason is re-measure: a
-fresh reading produces a new video where the same step sits at a *different* time, so a frozen `m:ss` would
-seek to the wrong moment. The renderer resolves the anchor by **step-name against the CURRENT reading's
-step timeline** — seek to that step's live `tMs`, and re-derive the shown `m:ss` to match — so the anchor
-lands correctly on *every* reading of the scenario, A and B alike.
+A reply whose first line reads `▶m:ss · <step>` is time-anchored. `Thread.jsx` parses it (`parseAnchor`)
+and resolves it through one helper, `resolveAnchor(anchor, events)`: given a step timeline, the anchor
+seeks to the named step's live position and re-derives the shown `m:ss` to match, degrading to
+readable-not-seekable (⚠) when the step is absent; given no timeline, the frozen `m:ss` is all there is.
+No thread home passes a timeline any more — the issue detail mounts `Replies` without `events` — so every
+anchor takes the no-timeline branch and the chip shows the frozen `m:ss`. The composer still stamps both
+the `m:ss` and the step, so a timeline-bearing home would resolve by step again without a format change.
 
-When the named step is **absent** from the current reading's timeline (a step that reading never had), the
-frozen `m:ss` is the only clue and it may be wrong, so the anchor degrades to **readable-not-seekable**: it
-still shows (the label is legible), but it is not a seek link and it is marked degraded (⚠). Never silently
-wrong. With no timeline at all, or a step-less `▶m:ss`, the frozen `m:ss` is all there is and seeks as
-before. The composer keeps stamping **both** — the `m:ss` for the raw reader, the step for the machine — so
-authoring is unchanged; only the *reader* re-resolves. This lives in one pure helper (`resolveAnchor`) the
-review-track markers and the thread chips both call, so the scrubber and the reply list agree.
+## Strand 2 — a notification fallback chain, never a resolve
 
-## Strand 2 — a notification fallback chain, never a resolve (R3 dispatch clause)
+Authoring a remark should reach someone who can act on it. The implicit loop-in ([[mentions]],
+[[loop-in]]) copies a reply down a candidate chain, delivered to the first online link; for every thread —
+issue-hosted or scenario-hosted — that chain is the thread's author alone (`loop-in.ts`). It is
+notification only: it resolves nothing (R3: resolve is a deliberate second-party call — `spex remark
+resolve`, or the dashboard's resolve — never from dispatch/delivery), never spawns a worker, and stays
+silent when the author is offline.
 
-Authoring a remark should **reach an agent who can act on it**. The implicit loop-in ([[mentions]]) already
-notifies a thread's originator when online; M4 makes it a **fallback chain**: for an eval-remark the
-candidates are, in order, the **reading's filer** session — resolved from the trunk sidecar first, then from
-each **live session's worktree**, because an in-flight reading (filed on an unmerged branch) is invisible to
-the trunk and reviewing in-flight work is exactly when the loop-in matters most (the filer sits online
-awaiting review) — then the **node's governing session**, then **nobody** (the remark still surfaces on the
-board through the teeth). Delivery walks the chain and stops at the first ONLINE link; an offline/absent
-link — a broken worktree sidecar included — falls through to the next, never failing the remark write. This is **notification only** — it
-**resolves nothing** (R3: resolve is a deliberate second-party call — `spex remark resolve`, or the dashboard's resolve — never from
-dispatch/delivery), never spawns a worker, and stays silent when the chain runs dry. It is one
-small extension of the existing loop-in seam (`notifyOriginator` takes the chain; `mentions.ts` owns it), not
-a new subsystem — a plain issue thread's chain is still just its author, so nothing else changes.
+## Strand 3 — a scenario thread with nothing behind its scenario
 
-## Strand 3 — a dangling remark track surfaces at node level (directive 5)
-
-A remark whose scenario was **renamed or deleted** keys a `(node, scenario)` that no reading joins — it
-loads ([[remark-teeth]]'s dangling clause) but, until now, appeared *nowhere*. M4 surfaces it: the node's
-eval timeline (`evaltab.ts`) emits a synthetic **dangling** row per orphaned track — the scenario name struck
-through / marked gone, its remarks listed and **resolvable/retractable via their normal refs**
-(`spex remark resolve` / `spex remark retract`). A track is dangling only when its scenario is BOTH gone from `measurement contract`
-AND has no reading; a still-declared-but-unmeasured scenario is a blind spot, not an orphan. The dangling row
-is kept **separate** from `readings` so it never flows into `latestPerScenario` / the board scoreboard: it
-**ages nothing** (there is no reading for the teeth to stale), it is only made *visible*. `measurement lint`
-notes orphaned tracks (one `eval-dangling` line per node plus a count in the summary), so the gap is legible
-from the CLI with no server running.
+A remark on `<node> --scenario <name>` lands on the thread keyed `eval: <node> · <name>`
+([[remark-substrate]] R4). No reading, declaration or timeline stands behind that name now, so there is no
+dangling state to detect: the thread is an ordinary open local issue thread bound to its node, listed by
+`spex issue ls` and the Issues page, counted in the node's open issues, and its remarks resolve and retract
+through their normal `<thread-id>#<rid>` refs. The one place the key is read is the propose-close nudge,
+which skips these containers because they outlive every session by design ([[local-issues]]).

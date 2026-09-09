@@ -25,14 +25,10 @@ the second pane is an independently held document.
 The dock exists only for `#/spec/<id>`. Other route kinds have no context projection, so they render no dock
 and no empty placeholder.
 
-**There are two sections, and the count is the contract**: *"它要么就是 Scenarios，要么就是 Issues"*. A node's
-context is what has been ASKED of it and what has been MEASURED on it — the two things that are true of this
-node and nothing else.
+**The sections are the contract**: the ruling *"它要么就是 Scenarios，要么就是 Issues"* fixed a node's context
+as what has been ASKED of it and what has been MEASURED on it, and nothing else. Nothing is measured on a
+node now, so the dock carries one section.
 
-- **SCENARIOS** joins the current node's declared scenario names with the latest result rows from the shared
-  eval review projection. The join uses `scenarioStates` and the existing score badge vocabulary. Each row
-  is a real `#/evals/<node>/<scenario>` anchor. An unmeasured declaration remains visible with the missing
-  score state; a latest reading supplies pass, fail, or stale state.
 - **ISSUES** lists the node's open issues through the SAME paged review request the Issues board serves
   ([[paged-review]]) with the node qualifier applied — the panel and the list it would link to are literally
   one query text, so neither can develop its own idea of what "open" or "this node's" means. Each row is a
@@ -48,7 +44,7 @@ has open, and mixing it in made the dock answer a third question nobody had aske
 reason to keep shipping the field on every node forever. The `bodyMentions` parser stays — its real job is
 [[spec-lint]]'s mention rule, which has to resolve a `[[name]]` whether or not anything draws the edge.
 
-**Every row is a detail door on the workspace's tab semantics.** A plain click reads the scenario or issue
+**Every row is a detail door on the workspace's tab semantics.** A plain click reads the issue
 in the focused tab; ctrl/⌘ opens it as its own tab ([[tab-strip]]). No row opens a second-level panel
 inside the dock: everything listed here has a real detail address, and a document with an address belongs in
 the strip rather than nested inside a sidebar.
@@ -59,7 +55,7 @@ document reads at **575px**. 383px is under a readable measure, and it is taken 
 already the scarce one. Context is a question the reader ASKS about the node they are reading — it is not
 the reading — so it does not spend the reading's width until it is asked for.
 
-That measurement is also why the two sections are a PANE and not an inline strip inside the prose. The
+That measurement is also why the section is a PANE and not an inline strip inside the prose. The
 alternative considered was a paper-divider block appended to the document's own column, borrowing the review
 lists' row rhythm; it looks lighter and is not, because it spends the prose column PERMANENTLY instead of on
 demand — the same 383px problem with no toggle. A pane that is closed costs nothing, and when it is opened
@@ -88,5 +84,5 @@ dock is readable in every combination; a glyph that pictures the wrong side is n
 
 The component receives `{page, param}` from `Shell`; it never reads the global address. Its API context and
 state context remain separate by using the existing board/workspace hooks rather than introducing a mixed
-context. A failed eval projection is shown as an explicit panel error; it is not silently rendered as an
-empty scenario list.
+context. A failed issues request is shown as an explicit panel error; it is not silently rendered as an
+empty list.

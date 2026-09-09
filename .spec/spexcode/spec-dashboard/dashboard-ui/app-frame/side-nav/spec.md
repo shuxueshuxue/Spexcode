@@ -19,7 +19,7 @@ related:
 ## Anti-regression boundary
 
 The live top-level rail is governed by `RAIL_PAGES` and contains every resident board in this order: `spec`,
-`sessions`, `evals`, `issues`, and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs`
+`sessions`, `issues`, and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs`
 checks this contract directly so a later lane cannot silently restore the graph as a live rail destination or
 drop a resident board from top-level navigation.
 
@@ -33,12 +33,12 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
 
 ## expanded spec
 
-- **One light, one route.** The compact 40px rail contains anchors for `spec`, `sessions`, `evals`, `issues`,
+- **One light, one route.** The compact 40px rail contains anchors for `spec`, `sessions`, `issues`,
   and `settings`. A route anchor carries its canonical hash and uses `aria-current="page"` for the current
   route; at most one anchor is lit. Graph addresses remain directly addressable but do not light a rail
   entry. Spec node and governed-file addresses project their light onto the resident Spec anchor, so the
   top-level destination remains selected while the reader is inside the Spec workspace. `empty` also has no
-  light. Detail routes (`evals/<node>/<scenario>`, `issues/<id>`) light their page anchor. The rail never
+  light. Detail routes (`issues/<id>`) light their page anchor. The rail never
   lights for dock mode.
 - **Click is navigation plus band opening.** A plain click remains an ordinary same-document route
   navigation (modified clicks keep browser behavior). The sessions anchor also opens the shared left band
@@ -52,7 +52,7 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   projection through the shell's derivation. Review and settings boards keep the rail — the top-level board
   switch is present on every desktop route — and mount no workspace dock, so their content takes the whole
   remaining width; review detail addresses remain on that surface and never acquire the dock. Because review addresses are not
-  tabs, the rail remembers the last evals/issues address and returns to it when the matching rail entry is
+  tabs, the rail remembers the last issues address and returns to it when the matching rail entry is
   pressed after leaving the surface.
 - **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted mirrored panel
   button: `panel-left` while open and `panel-right` while closed, with `aria-pressed` reporting the same
@@ -75,9 +75,9 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   The former top project chip is absent: its mark, visible name, catalog menu, offline rules, guest login
   door, and `/projects` management entry moved together to the status row, so project switching has one
   persistent owner rather than two entrances with different geometry.
-- **Route peers.** The URL is hash state (`#/sessions`, `#/spec`, `#/evals`, `#/issues`, `#/settings`, plus
+- **Route peers.** The URL is hash state (`#/sessions`, `#/spec`, `#/issues`, `#/settings`, plus
   document/detail tails). Page switches push history; list-to-detail and filter changes push; automatic route
-  echoes replace. Bare evals/issues/settings boards are navigation destinations, not documents, so ordinary
+  echoes replace. Bare issues/settings boards are navigation destinations, not documents, so ordinary
   anchor navigation never creates or focuses a strip tab. Their resident workspace tabs are the exception:
   when already held, a board/detail route focuses the same page tab and keeps the page icon declared by
   [[view-registry]]. Legacy review addresses normalize at the route layer.

@@ -16,10 +16,10 @@ related:
 
 ## raw source
 
-Two pages hold a discussion: an issue's detail ([[issues-view]], both stores) and an eval's detail
-(the thread detail, the (node,scenario) remark thread). They render the SAME component — `Thread.jsx` — and
-both nodes' bodies say so out loud: the eval detail's spec calls it *the SAME shared `Thread.jsx` the issue
-detail uses*, and points at the issue page for the composer's shape. So the file was **described by two
+Two pages held a discussion — an issue's detail ([[issues-view]], both stores) and a scenario's
+(node,scenario) remark thread — and both rendered the SAME component, `Thread.jsx`, while both nodes'
+bodies said so out loud: the second one's spec called it *the SAME shared `Thread.jsx` the issue detail
+uses*, and pointed at the issue page for the composer's shape. So the file was **described by two
 nodes and governed by neither**: nothing tracked its drift, no version answered for it, and a change to the
 thread had to be argued twice or silently in one place. That is the gap this node closes — one component,
 one governing home, and the two pages reference it instead of re-describing it.
@@ -27,8 +27,8 @@ one governing home, and the two pages reference it instead of re-describing it.
 ## expanded spec
 
 - **ONE thread surface, every home.** The reply list and its composer are one component set, not a per-page
-  copy: an issue thread (local or forge — store never changes the thread's shape) and an eval's remark
-  thread render the same replies, the same composer, the same marks. A home supplies DATA and handlers (what
+  copy: an issue thread, local or forge — store never changes the thread's shape — renders the same
+  replies, the same composer, the same marks in every home. A home supplies DATA and handlers (what
   to post through, whose node leads the mention list, whether a clip can be seeked); it never supplies a
   variant of the thread.
 - **A reply's marks live IN the reply.** A reply may carry a time anchor (`▶m:ss · step`), evidence blobs,

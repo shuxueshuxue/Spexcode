@@ -8,45 +8,30 @@ desc: One issue store, one merged read: a scenario-keyed remark thread (concern 
 
 ## raw source
 
-An eval-remark thread and a taste issue were living in ONE list and reading as the same kind of thing —
-both "issues" on the board badge, both in the drain, both in the Issues page's list. But a **scenario-scoped
-concern is a remark, not an issue** (I1): it ages a scenario's loss and clears only by the teeth
-([[remark-teeth]]); it must never be a drainable issue, or the loss signal could be bypassed by resolving it
-as an issue. So the two must **split**, read-time, over the one file store — and the word "forum", which
-still named the local store everywhere in the code, had to go with them: the local store is just where a
-**local Issue** lives, not a second concept.
+A scenario-keyed remark thread and a taste issue lived in ONE list and read as the same kind of thing —
+both "issues" on the board badge, both in the drain, both in the Issues page's list — while the word
+"forum" still named the local store everywhere in the code. The store had to be named as what it is: the
+local store of [[issues]], not a second concept. And a scenario-keyed thread had to be tellable apart by
+its concern, so that any read which needs to treat it differently can, without a second store.
 
 ## expanded spec
 
-Three moves, one milestone — a read-time split. This node killed "forum" from every code identifier; the
-on-disk store dir itself was renamed next, in the follow-on [[issues-store-rename]] (`.spec/.forum` →
-`.spec/.issues`, with a one-shot self-migration so no deployment breaks) — so the substrate now carries the
-issues name top to bottom, and the old data-dir name is no longer residue but retired.
+- **"forum" is gone from the substrate.** The local issue store's code speaks the issues model: its
+  data-level identifiers are `postLocalIssue` / `replyLocalIssue` (the programmatic write entrypoints),
+  `localStoreDir` / `LOCAL_STORE_REL` (the venue), `withStoreLock` / `commitStore` / `writeStoreFile` (the
+  write mechanism). The dashboard route is `#/issues`, the side-nav entry reads **Issues**, and the
+  user-facing prose says "issues page". The on-disk directory followed in [[issues-store-rename]]
+  (`.spec/.issues`, with a one-shot self-migration). [[local-issues]] still OWNS the local store's whole
+  mechanism.
 
-- **Kill "forum" at the substrate.** The local issue store's code no longer speaks "forum": its data-level
-  identifiers are the issues model — `postLocalIssue` / `replyLocalIssue` (the programmatic write
-  entrypoints), `localStoreDir` / `LOCAL_STORE_REL` (the venue), `withStoreLock` / `commitStore` /
-  `writeStoreFile` (the write mechanism). The dashboard route is `#/issues` (not `#/forum`), the side-nav
-  entry reads **Issues**, and the user-facing prose says "issues page", never "Forum". [[local-issues]] still
-  OWNS the local store's whole mechanism; it is simply named as what it is — the local store of [[issues]].
+- **One concern key tells a scenario thread apart.** A scenario-keyed thread's tell is its concern,
+  `eval: <node> · <scenario>`, composed and parsed by one pair (`evalConcernKey` / `parseEvalConcern` in
+  `localIssues.ts`). The thread is created lazily by the first `spex remark add <node> --scenario <name>`,
+  bound to that node, and holds its remarks as replies ([[remark-substrate]] R4).
 
-- **Read-time split by concern key.** An eval-remark thread's tell is its concern, `eval: <node> ·
-  <scenario>` (`isEvalConcern`). Two complementary reads run over the ONE store: `mergedIssues` (the read
-  every ISSUE surface consumes) **excludes** eval concerns, and `loadEvalRemarkTracks` (the read the EVAL
-  surfaces consume) **keeps only** them. Splitting at the source — inside `mergedIssues` — frees every issue
-  surface at once, by construction: the [[issues-view]] Issues page list, the [[dashboard-issues]] board issue
-  badge, and the `spex issues` drain all stop counting eval remarks as issues, with no per-surface filter.
-  The eval-remark tracks instead ride the EVAL side (the measurement view): the the measurement feed rows and the the thread detail pane,
-  through the M2 server overlay.
-
-- **One overlay feeds both eval homes.** The (node, scenario)↔thread join is lifted server-side onto the
-  reading itself: `evalTimeline` attaches the eval thread as `EvalEntry.thread`, so it is present on **every**
-  eval home — the issues-page feed folds it in through the board, the session tab through the proof model.
-  the thread detail therefore reads its remark track from `entry.thread`, never from a resident issues list
-  (which no longer holds eval threads anyway) — the counterpart to splitting them out.
-
-Together these reach **U1**: ONE `EventDetail` component (the thread detail), store-agnostic, reused in every
-home — the issues eval tab AND the session eval tab (whose "no resident issues list" degradation is gone, since
-the composer authors remarks through the CLI-parity `/api/remarks` and needs no list). **U2** holds
-throughout: scenario and issue stay DISTINCT peer types on DISTINCT surfaces (Evals | Issues) — the split is
-exactly what keeps them from collapsing into one super-type.
+- **One merged read carries both.** `mergedIssues` (`issues.ts`) interleaves every local thread with the
+  forge slice, scenario-keyed threads included: the Issues page, the board badge, `spex issue ls` and
+  `spex issue show` all see them as issue threads, and `GET /api/issues/:id` finds one by id like any
+  other. The propose-close nudge (`closeoutNudge`) is the one read that uses the key, skipping those
+  containers because they outlive every session by design. There is no second read that keeps the two
+  apart, and no surface other than the Issues pages renders a scenario thread ([[remark-teeth]]).

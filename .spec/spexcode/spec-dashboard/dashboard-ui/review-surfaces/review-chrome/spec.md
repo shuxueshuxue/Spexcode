@@ -37,12 +37,12 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   glyph-for-glyph including the trailing space; recognized qualifiers color, unknown ones stay plain and
   run to the honest filtered zero. An emptied submit refills the default — visibly too, even though the
   bare address does not change.
-  High-cardinality dimensions (author/filer/node/scope) get NO enumerating dropdown: hand-typed or picked
+  High-cardinality dimensions (author/node/label) get NO enumerating dropdown: hand-typed or picked
   from the input's inline combobox+listbox autocomplete, whose candidates are bounded — values present in
-  the data, `scope:` only sessions on the current board — a key pick completes in place, a value pick
-  completes the token and executes; unknown or historical values still submit verbatim. `scope:<id>` is
-  the worktree data source and `session:present|missing` the source-session presence — two axes, never
-  conflated, and a detail address carries only the scope token. The initial/reset page-1 view omits
+  the data — a key pick completes in place, a value pick
+  completes the token and executes; unknown or historical values still submit verbatim.
+  `session:present|missing` is the source-session presence, and a detail address carries no list
+  filter at all. The initial/reset page-1 view omits
   `page`; any non-default query starts `?q=<raw text>`, and pagination appends `&page=<n>` after `q`
   (or starts `?page=<n>` for the default query), INCLUDING `page=1` when a pagination anchor returned
   there. Back restores text, the exact page-address form, results, and the list scroll position level by
@@ -51,7 +51,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   ONE bordered list. Its 48px header has counted section tabs left, invisible facet buttons right, and,
   whenever at least one REAL low-frequency/width-displaced facet has usable options (or an active value
   needs its off-switch), ONE semantic secondary **Filters** trigger — the
-  low-cardinality set only (state, verdict, freshness, evidence, store, source-session presence); this
+  low-cardinality set only (state, store, source-session presence); this
   menu never houses commands or non-filter actions. The trigger is the same visual family as a facet
   button: the icon system's filter/funnel glyph, localized Filters text, and chevron-down — never a kebab,
   ellipsis, or "More actions" affordance. A stable badge counts ACTIVE filter GROUPS currently housed in

@@ -9,8 +9,8 @@ working in this repo. Each plugin is a skill-shaped node — its folder *is* the
 co-located scripts) — carrying a `surface: command|system|…` field that names where it plugs in, per
 [[plugin-system]]'s [[surface]] field-driven routing. Discovery is recursive, so a plugin may sit under a
 grouping shelf: the auxiliary `surface: system` prompt contracts live under [[prompts]], the `surface:
-command` presets under [[commands]], the `surface: skill` plugins under [[skills]], the `surface: review`
-remark presets under [[review]], while [[core]] — the dev-flow contract subsystem whose children are the
+command` presets under [[commands]], the `surface: skill` plugins under [[skills]], while [[core]] — the
+dev-flow contract subsystem whose children are the
 `surface: hook` gates — sits as a flat child beside them.
 
 `/api/plugins` and the launcher's system gather read from here, not from [[plugin-system]] (which holds the
@@ -23,7 +23,7 @@ plugins have one body and one helper set — there is no separately authored ado
 
 ## shelf invariant
 
-Grouping shelves (`[[commands]]`, `[[skills]]`, `[[review]]`, and `[[prompts]]`) are presentation parents, not
+Grouping shelves (`[[commands]]`, `[[skills]]`, and `[[prompts]]`) are presentation parents, not
 surfaces. Discovery is recursive and field-driven, so moving a resident under a shelf changes neither its
 identity nor the surfaces gathered from its frontmatter. Each shelf therefore states only its surface-specific
 purpose; it must not copy this routing invariant.

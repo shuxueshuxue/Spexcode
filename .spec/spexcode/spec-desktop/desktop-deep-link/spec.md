@@ -43,7 +43,7 @@ validates its instance against `GET /host`, and matches the current project's ma
 catalog. It resolves an exact node id first, then a session selector, then an existing file within that project;
 prints the resulting HTTP(S) `/p/<projectId>/` URL; and hands it to `xdg-open`, `open`, or Windows `start` unless
 `--print-only` was given. An ambiguous selector, missing/outside path, absent gateway, or project the gateway
-does not know fails loudly. Issues, remarks and hook output can therefore carry a link a human clicks.
+does not know fails loudly. Issues and hook output can therefore carry a link a human clicks.
 
 An unknown project id or a malformed address is a loud navigation to `/projects?notice=<reason>`, where
 [[projects-hub]] consumes the generic one-shot notice parameter through its existing transient-notice surface

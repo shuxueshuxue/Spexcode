@@ -77,17 +77,15 @@ export function sessionSurfaceHash(hash) {
 }
 
 // the LEGACY structured review params ([[review-query]]): an old '#/issues' address carrying
-// state/concluded/store/author/node/filer/verdict/freshness/kind/live/ok/session params replays as the
+// state/concluded/store/author/node/filer/freshness/kind/live/ok params replays as the
 // FULL visible token text (the page default with each param surgically applied) — a DETAIL address keeps
-// only its worktree scope, never list filters. Returns the canonical hash, or null when the address is
+// no list filters. Returns the canonical hash, or null when the address is
 // already canonical (bare, or ?q= only).
 export function legacyReviewHash(hash) {
   const { page, param, query } = parseRoute(hash)
   if (page !== 'issues') return null
   if (!hasLegacyParams(query)) return null
-  if (param != null) {
-    return routeHash(page, param, query.session ? { q: `scope:${query.session}` } : null)
-  }
+  if (param != null) return routeHash(page, param, null)
   const text = legacyQueryText(ISSUE_QUERY_DEFAULT, query)
   return routeHash(page, null, sameQuery(text, ISSUE_QUERY_DEFAULT) ? null : { q: text })
 }

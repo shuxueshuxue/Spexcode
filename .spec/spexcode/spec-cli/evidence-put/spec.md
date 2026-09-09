@@ -20,5 +20,5 @@ blob.
 
 The cache lives in `.git/spexcode/evidence` under the repository's git common directory, so linked worktrees
 share one store. Existing blobs remain at that path and keep the same hash. The hash can be attached to an
-issue or remark and rendered by a body link such as `![frame](/api/evidence/<hash>)`; the HTTP route and the
+issue and rendered by a body link such as `![frame](/api/evidence/<hash>)`; the HTTP route and the
 dashboard upload use this same store.

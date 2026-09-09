@@ -53,7 +53,7 @@ The graph is built **once per change, not once per poll — and only as much of 
   in place on every commit; it is folded while any session record exists, because with none no row derives from
   the store and the store's own birth — the first canonical access inside a build initializes it — is not an
   input that moved during that build); each non-archived governed worktree's HEAD and `.spec` tree; and the
-  whole issue/remark-store stamp. That list IS this cache's answer to "is this a board input?", and a
+  whole issue-store stamp. That list IS this cache's answer to "is this a board input?", and a
   producer's domain is DERIVED from what it says moved rather than assigned by whoever signalled. An equal
   revision returns the cached board and starts no assembly, whoever asked. A moved session record or database
   revision takes the `sessions` splice; a moved graph/config/worktree/issue revision takes the `full` producer,

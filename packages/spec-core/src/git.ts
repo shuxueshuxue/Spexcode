@@ -1307,7 +1307,7 @@ function decodeIdentityRawRecord(value: unknown, hash: string, location: EventCa
 // tab roots its readings at the session's branch). A single-slot cache thrashes between those roots:
 // each eval-tab request evicts the board's entry and vice versa, so every request re-runs a full-history
 // `git log` and re-parses it on the event loop — which is what starves every other request (the board,
-// remark posts) under load. So the cache is a small LRU keyed by interpretation identity + HEAD, holding
+// issue posts) under load. So the cache is a small LRU keyed by interpretation identity + HEAD, holding
 // the in-flight PROMISE so concurrent requests for one immutable view share a single build.
 const indexCache = new Map<string, Promise<HistoryIndex>>()
 const indexRoots = new Map<string, string>()

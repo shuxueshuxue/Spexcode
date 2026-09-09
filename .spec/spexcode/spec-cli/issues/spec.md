@@ -2,7 +2,7 @@
 title: issues
 status: active
 hue: 30
-desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local-store threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board, a node's scenario-keyed remark threads included.
+desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local-store threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board.
 code:
   - spec-cli/src/issues.ts
 related:
@@ -31,9 +31,8 @@ suggestion, an annotation, a question) is what its prose says.
 authored in its store, never git-derived (a node *defines*, an issue *does* — [[spec-forge]]'s two-plane
 contract holds here unchanged). `evidence[]` is a list of content-addressed evidence hashes — the typed
 target video evidence points at when a video finding routes to the responsible node's concern. A reply
-may itself be a **remark** ([[remark-substrate]]) — the same `{by, at, body}` shape plus a mutable
-`resolved` bit and the targetSha it was authored against — but that is one reply carrying extra state, not a
-second thread type; a plain reply is unchanged.
+is `{by, at, body}` — author, instant, prose — and nothing more: there is one reply shape, no per-reply
+state bit and no per-reply lifecycle; what a reply is, its prose says.
 
 **Two stores, one translation rule.** The **local** store is the local issue store ([[local-issues]] owns its whole
 mechanism — venue, file format, lock, trunk commit); a local issue thread *is* a local Issue, its `store` implied
@@ -50,9 +49,9 @@ adapter boundary; nothing downstream branches on store.
 **One read, differently freshened — and ONE time line.** `mergedIssues(forgeState, nodeIds)` is a pure
 merge that interleaves every store by creation time, **newest first** — the stores are the same
 abstraction, so a github issue, a gitlab issue, and a local thread sort as one list, never
-store-grouped blocks (that grouping is exactly the two-surfaces smell this node exists to kill). It
-carries a node's scenario-keyed remark threads ([[issue-remark-split]]) like any other local thread: nothing
-is filtered here, so the drain, the board badge and the [[issues-view]] Issues page list all show them. Each
+store-grouped blocks (that grouping is exactly the two-surfaces smell this node exists to kill). Nothing
+is filtered here: every local thread, noded or nodeless, is in the merged set, so the drain, the board badge
+and the [[issues-view]] Issues page list all show the same threads. Each
 caller supplies the forge slice at the freshness its surface warrants — the server ([[dashboard-issues]]'s
 resident cache: instant view, background reconcile) for `GET /api/issues` and the board fold, the CLI
 (`spex issue ls [--node] [--store] [--all] [--json]`) via a live driver pull that **degrades loudly
@@ -64,8 +63,9 @@ slice entirely). The board fold attaches each node's merged issues (`issues` / o
 per-node surface — tile badge, node-info Issues tab, and the [[issues-view]] page — reads the
 same mixed set with no second path; the board also carries ONE top-level freshness stamp over the whole
 merged set (open/thread/reply counts + latest activity), so any thread write — reply, close, on a noded
-or nodeless thread — moves board bytes and reaches a delta-subscribed viewer
-([[remark-substrate]] write-visibility) while the per-node fold stays [[graph-lean]]-slim.
+or nodeless thread — moves board bytes and reaches a delta-subscribed viewer (write-visibility: the
+writer's own post-write refetch never races a stale cache, because the write route nudges the board
+atomically with its store persist — [[graph-stream]]) while the per-node fold stays [[graph-lean]]-slim.
 
 **Writes stay where they're owned — and store-routed verbs stay one port, on BOTH surfaces.** Creation is
 ONE verb over every store (`createIssue` — `spex issue open [--store <store>]` and `POST /api/issues` are

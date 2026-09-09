@@ -344,7 +344,7 @@ test('Issue detail is one addressed object and never reconstructs from graph or 
 })
 
 test('an open review surface follows the board issue-freshness stamp, never board-frame churn', () => {
-  // [[remark-substrate]] write-visibility, the CLIENT leg. The server moves ONE board stamp on every thread
+  // [[issues]] write-visibility, the CLIENT leg. The server moves ONE board stamp on every thread
   // write; a surface that watches something else is only accidentally fresh. Measured regression: the issue
   // DETAIL watched nothing at all and an externally-written remark never appeared (>30s, twice the cold
   // lane), while the list survived on the sessions ARRAY's per-frame identity — a key that reads as

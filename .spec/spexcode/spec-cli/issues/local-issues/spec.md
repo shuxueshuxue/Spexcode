@@ -59,10 +59,11 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   doesn't branch on it, the drain is judgment — so it would be a label bought with a second creation verb
   and a filter. The local issue store is the git-native **discussion/annotation layer over the graph**.
 - **One file per thread.** The file is a one-line `concern` plus a prose body plus appended replies —
-  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A stored reply may carry **remark**
-  state ([[remark-substrate]]) — a resolvable bit + the targetSha it judges — appended to its sentinel as a
-  ` :: <k=v>` tail; a plain reply has no tail and parses unchanged. `reply` is the store's only way a post
-  enters a thread, and it writes plain replies only — no verb stamps that tail. Its frontmatter carries `by`
+  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. That sentinel is the reply's whole
+  header — a reply is author, instant and prose, nothing else. A sentinel carrying a trailing ` :: <attrs>`
+  tail (a shape older toolchains wrote) still parses as that same plain reply: the tail is ignored on read
+  and dropped by the file's next rewrite, so no deployment's store needs a migration and no record ever
+  fails to load. `reply` is the store's only way a post enters a thread. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
   `evidence:` (content-addressed evidence hashes — the typed reference a cross-node finding carries, per
   [[issues]] / video evidence). The sentinel is **unforgeable**: user body text is
@@ -137,8 +138,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   second, **data-driven** nudge fires when the session proposes **close** — appended to the
   `done --propose close` declaration beside [[state]]'s resource-cleanup reminder, the same insertion point
   and the same semantics. `closeoutNudge(sessionId)` lists the **still-open local threads that session
-  touched** (authored or replied — eval `eval: <node> · <scenario>` remark containers excluded, they outlive
-  every session by design), asking for each: close it now if its work is finished, or reply why it should
+  touched** (authored or replied), asking for each: close it now if its work is finished, or reply why it should
   stay open past this session. Empty set, feature OFF, or no session identity → it prints **nothing**, so a
   declaration never carries a vacuous reminder — the line is earned by data, never boilerplate. And it is a
   **nudge, never a gate**: some issues rightly outlive their session (a taste concern awaiting the drain),

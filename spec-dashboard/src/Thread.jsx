@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import Prose from './Prose.js'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete, TriggerButton, typeTrigger } from './mentions.jsx'
@@ -6,7 +6,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { STATUS_COLOR, liveSession } from './session.js'
 import { SideValue } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
-import { Icon, IconButton } from './icons.jsx'
+import { IconButton } from './icons.jsx'
 import { useLaunchers } from './launch.js'
 import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
@@ -19,56 +19,20 @@ import { newTabAnchor } from './tabs.js'
 // concern while the writing surface stays one component — an @-reference stays in the authored prose,
 // because every send lands on the same store-routed write path.
 //
-// A reply is TIME-ANCHORED by a prose convention (same philosophy as `Spec:`/`[[node]]`): a body whose
-// first line reads `▶m:ss · <step>` IS anchored to that video moment. The renderer linkifies it (click =
-// seek the clip); the composer over a clip grows a ⏱ affordance that stamps the current frame, and a
-// circled frame — or any attached blob, a clip included — rides the body as a
-// `![…](/api/evidence/<hash>)` link — the SAME hash the send derives as the thread's typed
-// `evidence[]`, so the body is the one raw-readable source. Each linked blob renders through the ONE
-// shared evidence renderer ([[event-detail]]'s Evidence.jsx, kind sniffed from the served Content-Type):
-// a video PLAYS in the thread, an image shows, a pruned blob is the honest sentinel. The reply stays
-// plain `{ by, at, body }`; no schema grows.
+// A reply's marks live IN its prose (same philosophy as `Spec:`/`[[node]]`): a body whose first line
+// reads `▶m:ss · <step>` carries a time anchor, shown as a static chip (no home supplies a clip to seek);
+// any attached blob rides the body as a `![…](/api/evidence/<hash>)` link — the SAME hash the send
+// derives as the thread's typed `evidence[]`, so the body is the one raw-readable source. Each linked
+// blob renders through the ONE shared evidence renderer ([[event-detail]]'s Evidence.jsx, kind sniffed
+// from the served Content-Type): a video PLAYS in the thread, an image shows, a pruned blob is the honest
+// sentinel. The reply stays plain `{ by, at, body }`; no schema grows.
 
-const ANCHOR_RE = /^▶\s*(\d+):([0-5]?\d)(?:\s*·\s*([^\n]*))?/
-// READ regexes accept the archived `/api/yatsu/blob/…` shape beside the live `/api/evidence/…` one:
+// The READ regex accepts the archived `/api/yatsu/blob/…` shape beside the live `/api/evidence/…` one:
 // committed thread bodies are immutable archives, and an archive keeps its archive name — extraction
 // yields the bare hash, so rendering/fetching always goes through the live route. Writes emit only the new shape.
-const HEAD_FRAME_RE = /^!\[frame\]\(\/api\/(?:evidence|yatsu\/blob)\/[0-9a-f]{64}\)\n?/   // the anchor's OWN frame, riding right under its line
 const BLOB_URL = /\/api\/(?:evidence|yatsu\/blob)\/([0-9a-f]{64})/g
-export const mmss = (tMs) => { const s = Math.floor(tMs / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
-// the first line of a body, parsed as an anchor: { tMs, step, label, rest } or null. `rest` is the body
-// with the anchor line stripped, so the moment renders as a chip and the prose renders below it.
-export function parseAnchor(body) {
-  const src = body || ''
-  const firstLine = src.split('\n', 1)[0]
-  const m = ANCHOR_RE.exec(firstLine)
-  if (!m) return null
-  const tMs = (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) * 1000
-  return { tMs, step: m[3]?.trim() || null, label: firstLine.trim(), rest: src.slice(firstLine.length).replace(/^\n/, '') }
-}
-// build the anchor line for a moment (+ optional step) — the shape parseAnchor recognises.
-export const anchorLine = (tMs, step) => `▶${mmss(tMs)}${step ? ` · ${step}` : ''}`
 // the blob hashes a body references (its frame links) — the send derives the thread's `evidence[]` from here.
 export const bodyEvidence = (body) => [...(body || '').matchAll(BLOB_URL)].map((m) => m[1])
-
-// E2 — the STEP-NAME is the anchor's canonical form; the m:ss is DERIVED from the CURRENT clip at render
-// time, never trusted frozen. Resolve a parsed anchor against the viewed reading's step timeline (`events`,
-// the {at, step} sidecar): if its step is in THIS reading's timeline, the moment is that step's live position, so
-// the anchor seeks to the right frame even after a re-measure moved the step (the label's m:ss re-derives to
-// match). If the step is gone from a PRESENT timeline, the frozen m:ss would seek to the wrong moment, so the
-// anchor degrades to readable-not-seekable (shown, never silently wrong). With no timeline (or a step-less
-// `▶m:ss`), the frozen m:ss is all there is — seek to it as before. Returns { tMs, step, label, seekable,
-// degraded } or null.
-export function resolveAnchor(anchor, events) {
-  if (!anchor) return null
-  if (anchor.step && events?.length) {
-    const hit = events.find((e) => e.step === anchor.step)
-    if (hit) return { tMs: hit.at, step: anchor.step, label: anchorLine(hit.at, anchor.step), seekable: true, degraded: false }
-    // the step named at author time is absent from this reading's timeline — readable, not seekable.
-    return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: false, degraded: true }
-  }
-  return { tMs: anchor.tMs, step: anchor.step, label: anchor.label, seekable: true, degraded: false }
-}
 
 // The thread's ORIGINATOR liveness ([[mentions]] loop-in) — WHO filed this issue, and whether their session
 // is still ALIVE. This is a thin join of the originator id against the live board sessions the page already
@@ -95,18 +59,12 @@ export function OriginatorLiveness({ originator, sessions = [], onOpenSession = 
   )
 }
 
-// Over a clip the reply list is the review track: `selIdx`/`activeIdx` mark the explicitly selected and the
-// playhead-inside comments (in sync with the scrubber's markers), and clicking an anchor chip both seeks AND
-// selects (`onSelect(i, tMs)`) so keyboard jumps and marker clicks share one selection. Off a clip these are
-// all absent and a reply renders as author · time · prose. `events` is an optional step timeline: each anchor
-// is resolved by STEP-NAME against it (E2, resolveAnchor) so its moment tracks a re-measure, degrading to a
-// readable-not-seekable chip when the step is gone.
-export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSelect = null, events = null }) {
-  const t = useT()
+// The reply list: every reply renders as author · time · prose, whatever store it came from. A time anchor
+// in the prose renders as a static chip — its label as written — never hidden.
+export function Replies({ replies }) {
   return replies.map((r, i) => {
-    const cls = `fv-reply${selIdx === i ? ' sel' : ''}${activeIdx === i ? ' active' : ''}`
     return (
-      <div className={cls} key={i}>
+      <div className="fv-reply" key={i}>
         <div className="fv-reply-meta">
           <span className="fv-reply-by">{r.by}</span>
           {r.at && <span className="fv-reply-at">{r.at}</span>}
@@ -117,17 +75,7 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
               const href = routeHash('spec', id)
               return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>
             }}
-            renderTimeAnchor={(meta, token, provenance) => {
-              const resolved = resolveAnchor({ tMs: meta.tMs, step: meta.step, label: meta.label }, events)
-              const jump = resolved?.seekable && onSeek
-                ? () => (onSelect ? onSelect(i, resolved.tMs) : onSeek(resolved.tMs))
-                : null
-              const label = resolved?.label || meta.label
-              return jump
-                ? <button type="button" className="fv-anchor" {...provenance} onClick={jump} data-tip="seek the clip to this moment">{label}</button>
-                : <span className={`fv-anchor static${resolved?.degraded ? ' degraded' : ''}`} {...provenance}
-                  data-tip={resolved?.degraded ? t('thread.anchorDegraded') : undefined}>{label}{resolved?.degraded ? ' ⚠' : ''}</span>
-            }}
+            renderTimeAnchor={(meta, token, provenance) => <span className="fv-anchor" {...provenance}>{meta.label}</span>}
             renderEvidence={(meta, token, provenance) => <span className="fv-reply-media" data-evidence-hash={meta.hash} {...provenance}><BlobMedia hash={meta.hash} alt={meta.alt || 'evidence'} /></span>}>
             {r.body}
           </Prose>
@@ -142,18 +90,16 @@ export function Replies({ replies, onSeek, selIdx = null, activeIdx = null, onSe
 // surface is already usable at idle — floored at two lines, never a one-line sliver and never a
 // click-to-expand — and auto-grows with the draft ABOVE that floor (the shared fitTextarea, floored by
 // CSS min-height, capped by CSS max-height so it never eats the pane). The action row is always visible
-// and carries only real acts: the contextual ⏱ anchor stamp (where a clip supplies one), any
+// and carries only real acts: any
 // host-supplied lifecycle action (Close issue / Promote via `actionsEnd`), and the icon-only Send pinned
 // at the right edge; a failed send surfaces its error in the same row, never out of view.
 // Posts through the caller's `onSend(text, evidence)` as 'human'. @session is a passive reference; @new
 // opens the shared launcher chooser. The textarea carries the SAME `[[node]]`/`@` autocomplete as the
 // console ([[mentions]], one shared menu, never a fork); the composer is docked at the detail's bottom,
-// so its menu opens UPWARD, as an overlay above the container. The thread's own node leads the `[[` list. Over a clip the home passes
-// `anchorNow()` (async → { tMs, step, frame }) → a ⏱ button stamps the current moment's `▶m:ss · step`
-// AND its captured frame at the body's head; a circle pushes a `draft` (prefilled anchored body + the
-// rect-burned frame link) — either way a mark is thereafter an ordinary — replyable, @-able — reply,
-// its frame indexed as the thread's evidence[].
-export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, anchorNow = null, draft = null, actionsEnd = null }) {
+// so its menu opens UPWARD, as an overlay above the container. The thread's own node leads the `[[` list.
+// A blob link typed or pasted into the body is thereafter an ordinary — replyable, @-able — reply's mark,
+// its hash indexed as the thread's evidence[].
+export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = null, onDone, actionsEnd = null }) {
   const t = useT()
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
@@ -161,36 +107,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const taRef = useRef(null)
   const { launchers } = useLaunchers()
   const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
-  const frames = bodyEvidence(body)         // the frame links currently in the draft (preview + the send's evidence[])
-
-  // a circle prefills this composer: replace the draft with its anchored body + frame link, then focus for
-  // edit. A NULL draft CLEARS — the host nulls it when the working state resets (a selection change, an A/B
-  // flip), and preserving the old text past that reset is exactly the cross-surface draft leak; a freshly
-  // mounted composer may also briefly see the host's stale draft before the host's own reset effect runs,
-  // so the clear (not an early return) is what makes the reset stick.
-  useEffect(() => {
-    if (!draft) { setBody(''); return }
-    setBody(draft.body || '')
-    taRef.current?.focus()
-  }, [draft?.seq])
-
-  // ⏱ — stamp (or re-stamp) the current moment as this comment's anchor: the `▶m:ss · step` line PLUS the
-  // frame image itself ([[event-detail]]: an anchored mark carries its moment's frame), keeping the prose
-  // below. A frame link riding at the HEAD of the prose (right under the anchor line) is the anchor's OWN
-  // frame — a re-stamp replaces it along with the line, so an anchor and its frame never disagree; frames
-  // the author placed deeper in the prose are theirs, untouched. A capture miss (frame: null) degrades to
-  // the text-only line, never a blocked stamp.
-  const stampAnchor = async () => {
-    const a = await anchorNow?.()
-    if (!a) return
-    const head = anchorLine(a.tMs, a.step) + (a.frame ? `\n![frame](/api/evidence/${a.frame})` : '')
-    setBody((b) => {
-      const ex = parseAnchor(b)
-      const rest = (ex ? ex.rest : b).replace(HEAD_FRAME_RE, '')
-      return rest ? `${head}\n${rest}` : `${head}\n`
-    })
-    taRef.current?.focus()
-  }
+  const frames = bodyEvidence(body)         // the blob links currently in the body (preview + the send's evidence[])
 
   // the grammar's discoverability doors ([[mentions]]) — the ONE shared insertion mechanism (`typeTrigger`),
   // so this composer and the Issues compose page open the same menu the same way. No second menu, no
@@ -226,7 +143,6 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
       <div className="fv-actions">
         <TriggerButton label={t('thread.mentionActor')} disabled={busy} onClick={() => insertTrigger('@')}>@</TriggerButton>
         <TriggerButton label={t('thread.mentionNode')} disabled={busy} onClick={() => insertTrigger('[[')}>[[</TriggerButton>
-        {anchorNow && <button type="button" className="fv-anchor-btn" data-tip={t('thread.anchorTitle')} onMouseDown={(e) => e.preventDefault()} onClick={stampAnchor}><Icon name="clock" size={11} /> {t('thread.anchorNow')}</button>}
         {err && <span className="fv-error">{err}</span>}
         <div className="fv-actions-end">
           {actionsEnd}

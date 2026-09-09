@@ -31,9 +31,10 @@ grammar it wears a reserved qualified token, so reading a draft tells you which 
   it. This is the Obsidian-style convention spec bodies already use, promoted to a first-class,
   resolvable, autocompletable reference.
 - **`@session` is a passive session reference and handle.** It names one retained board session, including an
-  offline one. Autocomplete inserts the stable full id rather than a display label. The receiving agent may
-  inspect it, run `/distill <id>`, or deliberately send it a message with `spex session send <id>`. Mentioning
-  it never reads its transcript, appends to its log, wakes its harness, creates a worker, or changes state.
+  offline one but never a closed one. Autocomplete inserts the stable full id rather than a display label. The
+  receiving agent may inspect it, run `/distill <id>`, or deliberately send it a message with
+  `spex session send <id>`. Mentioning it never reads its transcript, appends to its log, wakes its harness,
+  creates a worker, or changes state.
   **`@new` is the one explicit worker action in the grammar:** after its containing write is durable, it creates
   a fresh worker through the same bounded session-create owner as every other creation request. `@new:<launcher>`
   selects that one worker's named launcher; an unknown name is reported in the dispatch outcome while the
@@ -80,8 +81,14 @@ grammar it wears a reserved qualified token, so reading a draft tells you which 
   [[dispatch]]. It is not caused by an ordinary `@session` token, is never a spawn, and stays silent when its
   fallback chain is offline. The originator belongs to the thread: its author; a forge login resolves to
   nobody.
-- **The `@` list is reference-ranked, not liveness-gated.** Retained sessions rank by exact/prefix id or
-  headline, then recency, with the synthetic `@new` and `@parent` rows available as the two action doorways.
-  Offline rows remain available because investigation and `/distill` commonly need a completed session, and
-  because a supervisor may legitimately be a session that has already stopped. Multiple `@session`
-  references are ordinary prose and have no side effect; each exact `@new` token is one explicit spawn request.
+- **The `@` list is reference-ranked, not liveness-gated — but it is retention-gated.** Retained sessions rank
+  by exact/prefix id or headline, then recency, with the synthetic `@new` and `@parent` rows available as the
+  two action doorways. Offline rows remain available because investigation and `/distill` commonly need a
+  completed session, and because a supervisor may legitimately be a session that has already stopped. A
+  closed (archived, [[archive]]) session is off the working board and is never a row — not as a referent and
+  not behind `@parent:` — even on a surface that also holds the archive overlay's rows beside the board (the
+  session console does; those rows carry no live status and would otherwise masquerade as an `idle` session).
+  The one shared matcher enforces this, so no host has to pre-filter what it hands the grammar. A closed
+  session stays nameable by hand: the create boundary resolves a typed `@parent:` selector against archived
+  records too, and `/distill <id>` takes the id directly. Multiple `@session` references are ordinary prose
+  and have no side effect; each exact `@new` token is one explicit spawn request.

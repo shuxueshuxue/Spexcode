@@ -58,13 +58,17 @@ export function matchSpecs(specs, query, focusId) {
   return scored.slice(0, 8).map((x) => x.s)
 }
 
-// The session twin of matchSpecs: rank retained board sessions for a partial `@query`. A row reads as the
-// same derived title every other surface shows; matching also searches the retained raw/name/prompt/note
-// candidates so a pane-title change or rename does not strand a session under text the human already saw.
-// `sub` is a hint (its node or status). Exact/prefix on id-or-candidate leads, then most-recent (`created`
-// desc) within a band. Returns up to 8 `{id, label, sub}`. The two synthetic rows after the exact hits are
-// the grammar's ACTION doors — `new` (create a worker) and `parent` (name that worker's supervisor); each
-// re-opens this same menu behind its own `:` qualifier rather than being a pick of its own.
+// The session twin of matchSpecs: rank retained board sessions for a partial `@query`. Retained means still
+// on the WORKING board — offline rows stay (a stopped session is a legitimate referent and supervisor), but a
+// closed (archived) record is skipped even when a host hands over the archive overlay's rows beside the board
+// (the session console does): those rows are off the board, carry no live status, and would masquerade as an
+// `idle` session. A row reads as the same derived title every other surface shows; matching also searches
+// the retained raw/name/prompt/note candidates so a pane-title change or rename does not strand a session
+// under text the human already saw. `sub` is a hint (its node or status). Exact/prefix on id-or-candidate
+// leads, then most-recent (`created` desc) within a band. Returns up to 8 `{id, label, sub}`. The two
+// synthetic rows after the exact hits are the grammar's ACTION doors — `new` (create a worker) and `parent`
+// (name that worker's supervisor); each re-opens this same menu behind its own `:` qualifier rather than
+// being a pick of its own.
 export function matchSessions(sessions, query, doors = true) {
   const q = query.toLowerCase()
   const handle = (s) => sessionHeadline(s) || (s.id || '').slice(0, 8)
@@ -73,6 +77,7 @@ export function matchSessions(sessions, query, doors = true) {
     .map((value) => value.toLowerCase())
   const scored = []
   for (const s of sessions || []) {
+    if (s?.archived) continue
     const id = (s.id || '').toLowerCase()
     const names = candidates(s)
     let score

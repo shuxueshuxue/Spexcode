@@ -28,3 +28,9 @@ test('the browser sends the directive as ordinary prompt text — the create bou
   assert.match(launch, /body: JSON\.stringify\(\{ prompt, \.\.\.\(launcher \? \{ launcher \} : \{\}\) \}\)/)
   assert.doesNotMatch(launch, /@parent/)
 })
+
+test('the `@` board is the working board — a closed (archived) record is never a row, plainly or behind `@parent:`', () => {
+  // the session console hands the grammar its archive overlay rows beside the board; those carry no live
+  // status and rendered as a fake `idle` session. The ONE shared matcher skips them, so every host is covered.
+  assert.match(mentions, /for \(const s of sessions \|\| \[\]\) \{\n\s*if \(s\?\.archived\) continue\n/)
+})

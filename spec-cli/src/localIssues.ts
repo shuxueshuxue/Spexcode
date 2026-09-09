@@ -79,14 +79,11 @@ const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(
 // ── file format ──────────────────────────────────────────────────────────────────────────────────────
 // frontmatter (concern/by/status/nodes/evidence/created) + a prose body, then any replies — each
 // preceded by a `<!-- reply: <by> @ <iso> -->` sentinel: invisible in rendered markdown, unambiguous to
-// parse. Only the store writes these files, so a fixed shape is safe.
-//
-// A REMARK ([[remark-substrate]]) is a reply carrying extra state, appended to the SAME sentinel as a
-// ` :: <space-joined k=v attrs>` tail (a plain reply has no tail → parses unchanged, backward compatible):
-//   rid=<id>            stable per-remark id — its presence marks the reply a remark
-//   sha=<targetSha> the reading the remark was authored against
-//   resolved=<by>@<at>  present only once resolved (absent ⟹ resolved:false)
-const REPLY_RE = /^<!-- reply: (.+?) @ (.+?)(?: :: (.+))? -->$/
+// parse. Only the store writes these files, so a fixed shape is safe. The sentinel is the reply's WHOLE
+// header — author and instant. A sentinel carrying a trailing ` :: <attrs>` tail (a shape older
+// toolchains wrote) still parses as that same plain reply: the tail is ignored on read and, because
+// serialize writes bare sentinels only, dropped by the next rewrite of the file.
+const REPLY_RE = /^<!-- reply: (.+?) @ (.+?)(?: :: .+)? -->$/
 
 function parse(id: string, text: string): Issue {
   const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
@@ -100,7 +97,7 @@ function parse(id: string, text: string): Issue {
   let cur: Reply | null = null
   for (const line of (m ? m[2] : text).replace(/^\n+/, '').split('\n')) {
     const rm = line.match(REPLY_RE)
-    if (rm) { cur = { by: rm[1], at: rm[2], body: '', ...parseRemarkAttrs(rm[3]) }; replies.push(cur); continue }
+    if (rm) { cur = { by: rm[1], at: rm[2], body: '' }; replies.push(cur); continue }
     if (cur) cur.body += (cur.body ? '\n' : '') + line
     else body.push(line)
   }
@@ -127,26 +124,6 @@ function parse(id: string, text: string): Issue {
 const safeBody = (t: string): string => t.trim().replace(/<!-- reply:/g, '<!--​reply:')
 const safeScalar = (t: string): string => t.replace(/[\r\n]+/g, ' ').trim()
 
-// the ` :: k=v k=v` remark tail on a reply sentinel ↔ the reply's remark fields. `undefined` attrs (a plain
-// reply) → no remark fields; `rid` present → the reply IS a remark ([[remark-substrate]]). Values are
-// space-free (ids, a targetSha, a session id, an ISO instant), so a space-split is unambiguous.
-function parseRemarkAttrs(attrs: string | undefined): Partial<Reply> {
-  if (!attrs) return {}
-  const kv = new Map<string, string>()
-  for (const tok of attrs.trim().split(/\s+/)) { const i = tok.indexOf('='); if (i > 0) kv.set(tok.slice(0, i), tok.slice(i + 1)) }
-  if (!kv.has('rid')) return {}
-  const out: Partial<Reply> = { rid: kv.get('rid'), targetSha: kv.get('sha') ?? '', resolved: false }
-  const r = kv.get('resolved')
-  if (r) { const at = r.indexOf('@'); out.resolved = true; out.resolvedBy = r.slice(0, at); out.resolvedAt = r.slice(at + 1) }
-  return out
-}
-function serializeRemarkAttrs(r: Reply): string {
-  if (r.rid === undefined) return ''
-  const parts = [`rid=${r.rid}`, `sha=${r.targetSha ?? ''}`]
-  if (r.resolved) parts.push(`resolved=${r.resolvedBy ?? ''}@${r.resolvedAt ?? ''}`)
-  return ` :: ${parts.join(' ')}`
-}
-
 function serialize(p: Issue): string {
   const fm = [
     `concern: ${safeScalar(p.concern)}`,
@@ -157,7 +134,7 @@ function serialize(p: Issue): string {
     `created: ${p.created}`,
   ].filter(Boolean)
   let out = `---\n${fm.join('\n')}\n---\n\n${safeBody(p.body)}\n`
-  for (const r of p.replies) out += `\n<!-- reply: ${safeScalar(r.by)} @ ${safeScalar(r.at)}${serializeRemarkAttrs(r)} -->\n${safeBody(r.body)}\n`
+  for (const r of p.replies) out += `\n<!-- reply: ${safeScalar(r.by)} @ ${safeScalar(r.at)} -->\n${safeBody(r.body)}\n`
   return out
 }
 
@@ -399,17 +376,6 @@ export function closeLocalIssue(id: string): { status: 'landed'; already: boolea
   return { status: 'landed', already: !changed }
 }
 
-// ── scenario-keyed threads ([[remark-substrate]]) — the concern-key PARSER only ───────────────────────
-// The store can hold scenario threads keyed by a `remark: <node> · <scenario>` concern (the remark overlay's
-// containers). No write path mints one, but the closeout nudge must still recognise them ([[local-issues]]:
-// they outlive every session by design). `node` is matched non-greedily because it can never contain ' · '
-// while a scenario name may.
-const EVAL_CONCERN_RE = /^remark: (.+?) · (.+)$/
-export const parseEvalConcern = (concern: string): { node: string; scenario: string } | null => {
-  const m = EVAL_CONCERN_RE.exec(concern)
-  return m ? { node: m[1].trim(), scenario: m[2].trim() } : null
-}
-
 // the post-merge nudge TEXT ([[local-issues]]) — produced HERE so the toggle and the wording live in one
 // place; the post-merge git hook is a thin caller that just echoes this. Returns '' when the feature is OFF,
 // so the hook prints nothing.
@@ -456,16 +422,14 @@ export function nudge(node: string): string {
 // @@@ close-time issue closeout ([[local-issues]] / [[state]]) — the DATA half of the propose-close nudge:
 // appended to the `done --propose close` declaration BESIDE the resource-cleanup reminder (cli.ts, same
 // insertion point, same semantics — a nudge, never a gate). Data-driven so it earns its line: it lists the
-// still-open local threads THIS session touched (authored or replied; eval `eval: <node> · <scenario>`
-// containers excluded — they host remarks and outlive every session by design) and prints NOTHING when the
+// still-open local threads THIS session touched (authored or replied) and prints NOTHING when the
 // session owes nothing, when the feature is OFF, or when there is no session identity. Some issues rightly
 // outlive their session (a taste concern waiting for the drain), so the ask is close OR say why it stays
 // open — never a forced close.
 export function closeoutNudge(sessionId: string | null | undefined): string {
   if (!sessionId || sessionId === 'unknown' || !issuesEnabled()) return ''
   const mine = loadLocalIssues().filter((t) =>
-    t.status === 'open' && !parseEvalConcern(t.concern) &&
-    (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
+    t.status === 'open' && (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
   if (!mine.length) return ''
   return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, close it now if its work is finished (\`spex issue close <id>\`), or reply why it should stay open past this session (\`spex issue reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
 }

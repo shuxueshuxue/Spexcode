@@ -4,15 +4,12 @@ import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } fro
 import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, replyLocalIssue } from './localIssues.js'
 import { dispatchNewMentions, parseMentions, type DispatchOutcome } from './mentions.js'
 import { envSessionId } from '@spexcode/spec-core'
+// A Reply is a plain thread post — author, instant, prose — the ONE shape a local thread's replies and a
+// forge issue's comments both take, so nothing downstream renders two kinds of discussion.
 export type Reply = {
   by: string
   at: string
   body: string
-  rid?: string
-  targetSha?: string
-  resolved?: boolean
-  resolvedAt?: string
-  resolvedBy?: string
 }
 
 export type Issue = {
@@ -30,18 +27,11 @@ export type Issue = {
   url?: string
 }
 
-// A Reply is a plain thread post `{by, at, body}` — OR, when it carries the fields below, a REMARK
-// ([[remark-substrate]]): a reply that pins a RESOLVABLE concern to its host (an issue or a scenario). A
-// remark is not a new record type: it is a reply with the mutable `resolved` bit, a stable `rid` (so it is
-// addressable across retracts), and the `targetSha` it was authored against (the reading it judges). A
-// plain reply omits them all and parses/serializes unchanged (backward compatible). `isRemark` = rid set.
 export type IssueLabel = ForgeLabel
 
 export type ForgeState = { issues: ForgeIssue[]; prs: ForgePR[] }
 export type ForgeSlice = { host: string; state: ForgeState }
 export type IssueStore = { id: string; label: string; kind: 'local' | 'forge'; writable: true }
-
-export const isRemark = (r: Reply): boolean => r.rid !== undefined
 
 export function issueStores(): IssueStore[] {
   return [
@@ -116,7 +106,7 @@ export function threadStamp(threads: Issue[]): string {
     threads.filter((i) => i.status === 'open').length,
     threads.length,
     threads.reduce((n, i) => n + i.replies.length, 0),
-    threads.flatMap((i) => [i.created, ...i.replies.flatMap((r) => [r.at, r.resolvedAt ?? ''])]).reduce((a, b) => (b > a ? b : a), ''),
+    threads.flatMap((i) => [i.created, ...i.replies.map((r) => r.at)]).reduce((a, b) => (b > a ? b : a), ''),
   ].join(':')
 }
 

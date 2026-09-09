@@ -8,7 +8,7 @@ desc: The forum kill finished at the bottom data layer. The local issue store's 
 
 ## raw source
 
-M3 ([[issue-remark-split]]) killed the word "forum" from every code identifier, but deliberately left the
+The forum→issues code rename killed the word "forum" from every code identifier, but deliberately left the
 **data directory** named `.spec/.forum` — a rename touches every deployment's on-disk store, so it was
 parked as residue. The directive was to refactor the substrate all the way down, and the directory name is
 the bottom-most name there is. So it goes too: the store now lives at `.spec/.issues`, and the local store is
@@ -25,7 +25,7 @@ run on each box — it has to ride the store's own first touch.
 **One mechanism, no per-deployment branch.** [[local-issues]] owns the store's whole seam, so the migration
 lives there too and every deployment migrates itself the same way — there is no host-specific if/else and no
 operator checklist. The trigger is the store's **first touch** after the toolchain updates: any read (the
-board, `spex issues`) or any write (an open/reply/remark) reaches the store through [[local-issues]], and
+board, `spex issues`) or any write (an open/reply/close) reaches the store through [[local-issues]], and
 that is where the legacy directory is noticed and moved, before the touch proceeds. A fresh repo that never
 had `.spec/.forum` skips it entirely; a deployment that already migrated skips it on the fast path with no
 work.
@@ -47,5 +47,5 @@ never a silent union. Loud has one shape on every surface: a read (`spex issue l
 (`open`/`reply`) alike fail as the CLI's clean one-line `spex issue: <message>` plus a non-zero exit — the
 message carries both directory names and the repair; a raw stack trace is internals, never the error surface.
 
-This retires [[issue-remark-split]]'s "deliberate residue": the forum kill is now complete at every layer, and
+This retires the code rename's "deliberate residue": the forum kill is now complete at every layer, and
 the migration mechanism — not the old name — is the standing contract.

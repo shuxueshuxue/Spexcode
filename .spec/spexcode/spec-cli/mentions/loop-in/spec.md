@@ -18,8 +18,8 @@ related:
 
 The loop-in's MECHANISM was never misplaced. `notifyOriginator`, `summarize` and `LoopIn` live in
 `mentions.ts`, genuine substrate, and they stayed there. What stood at the wrong height was a single INPUT:
-deciding WHICH candidates to try. For an eval-remark thread that means asking the eval package who filed the
-reading under judgement — and the resolution sat in `localIssues.ts`, a module the eval package imports, so it
+deciding WHICH candidates to try. For one thread kind that meant asking the eval package who filed the
+record under judgement — and the resolution sat in `localIssues.ts`, a module the eval package imports, so it
 could only reach eval through a deferred dynamic import whose own comment explained why it had to be wrong.
 
 A correct mechanism with one mis-layered input is the hardest shape to find, because everything you read is

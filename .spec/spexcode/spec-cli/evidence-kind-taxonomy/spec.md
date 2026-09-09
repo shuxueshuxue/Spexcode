@@ -18,4 +18,4 @@ binary. The content-addressed hash never changes with this classification.
 
 The CLI and dashboard use the same `sniffBlobMime` result. A body link such as
 `![frame](/api/evidence/<hash>)` therefore renders through the shared evidence component without adding a
-kind field to the issue or remark record. A missing blob remains an explicit 404 rather than an empty render.
+kind field to the issue record. A missing blob remains an explicit 404 rather than an empty render.

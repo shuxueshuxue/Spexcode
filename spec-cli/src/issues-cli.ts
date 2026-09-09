@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { closeIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
+import { closeIssue, findIssue, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { issuesEnabled } from './localIssues.js'
 import { summarizeDispatch, summarizeLoopIn } from './mentions.js'
@@ -40,7 +40,7 @@ async function liveForgeSlice(verb: string): Promise<ForgeSlice | null> {
 
 // the single-issue read behind `spex issue show` AND `GET /api/issues/:id` — find the thread in the SAME
 // merged read every issue surface consumes (local threads + the forge slice on one time line; never a
-// second lookup path). A remark is a reply on its issue thread, so `show` renders it in place. A local id
+// second lookup path). Every reply renders in place as author · instant · prose. A local id
 // needs no forge slice; a forge id (`<host>#<n>`) reads from the caller-supplied slice (live pull on the
 // CLI, resident cache on the server).
 
@@ -52,7 +52,7 @@ function renderIssue(t: Issue): string {
   if (t.evidence.length) L.push(`  evidence: ${t.evidence.join(', ')}`)
   L.push('', t.body)
   for (const r of t.replies) {
-    L.push('', `── ${isRemark(r) ? `remark ${t.id}#${r.rid}${r.resolved ? ` (resolved by ${r.resolvedBy})` : ' (unresolved)'}` : 'reply'}: ${r.by} @ ${r.at} ──`)
+    L.push('', `── reply: ${r.by} @ ${r.at} ──`)
     L.push(r.body)
   }
   return L.join('\n')

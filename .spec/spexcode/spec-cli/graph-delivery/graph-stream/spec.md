@@ -105,9 +105,9 @@ launcher rotates) is never governed source, so its thousands of writes are ignor
 pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. And (0)
 the exported explicit nudge (`notifyBoardChanged`) for
 a server-side mutation that must show regardless of watcher health — a successful session create, `/rename`, and
-a successful `/close` pass 'sessions', while the issue/remark write routes pass 'full' **atomically with their
+a successful `/close` pass 'sessions', while the issue write routes pass 'full' **atomically with their
 store persist**
-([[remark-substrate]] write-visibility: the writer's own post-write refetch must never race an asynchronous
+([[issues]] write-visibility: the writer's own post-write refetch must never race an asynchronous
 fs event into the stale cache; the issue store dir is deliberately not a watched leaf — one mechanism per
 surface). A confirmed close must not wait for a disabled store watcher or the patrol. All
 funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED fs-event burst width

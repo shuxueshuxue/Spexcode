@@ -49,15 +49,15 @@ itself from whatever was opened next. Both now take `{ param, query }` like ever
 review entry hands them the same props the shell does.
 
 **`surface` is the shell boundary, and `workspace` is the only surface.** It owns Explorer, tab strip, document
-pool, and dock, and hosts the evals/issues board and detail layout inside that same shared working set;
+pool, and dock, and hosts the issues board and detail layout inside that same shared working set;
 Issues omits the activity rail while retaining the shared strip. Settings is a resident workspace tab. The
 registry is the single source for view ownership and document/residency policy; the root mounts the shared
 workspace host for these routes both on a cold URL and after in-app navigation. A review view cannot acquire a
 second surface's chrome because no standalone review host exists.
 
 **`document(page, param)` marks what [[tab-strip]] may hold**, and the strip asks the registry rather than
-keeping its own list. Spec, Evals, Issues, and Settings are resident top-level tabs; parameterized Spec,
-Evals, and Issues detail routes canonicalize their tab identity to the resident address while preserving
+keeping its own list. Spec, Issues, and Settings are resident top-level tabs; parameterized Spec and
+Issues detail routes canonicalize their tab identity to the resident address while preserving
 detail URL state. The user-facing
 distinction between object documents and bare board destinations is owned by [[tab-strip]]/[[workspace-shell]];
 this node supplies the machine predicate, storage normalization, and the optional `icon` identity used by

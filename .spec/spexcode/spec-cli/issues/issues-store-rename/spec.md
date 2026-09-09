@@ -2,7 +2,7 @@
 title: issues-store-rename
 status: active
 hue: 45
-desc: M4 of the eval/issue/remark refactor — finish the forum kill at the bottom data layer. The local issue store's on-disk directory becomes .spec/.issues (was .spec/.forum), with a one-shot self-migration so every existing deployment renames itself on first touch and no thread is lost.
+desc: The forum kill finished at the bottom data layer. The local issue store's on-disk directory becomes .spec/.issues (was .spec/.forum), with a one-shot self-migration so every existing deployment renames itself on first touch and no thread is lost.
 ---
 # issues-store-rename
 

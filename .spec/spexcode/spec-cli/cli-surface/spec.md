@@ -183,8 +183,8 @@ has a move:
 2. `spex help <command>` / `spex <command> --help` — ONE drawer/command's usage. The `--help`
    interception still fires BEFORE any verb runs ([[guide]]'s safety contract: probing `session new`
    or `session watch` with `--help` must never start the verb). **A noun-verb probe answers about the
-   VERB on EVERY drawer, not only on `session`** — `measurement filing --help` is a page about filing an eval,
-   never the whole measurement drawer handed back to someone who already named their verb. Which verbs
+   VERB on EVERY drawer, not only on `session`** — `issue open --help` is a page about opening an issue,
+   never the whole issue drawer handed back to someone who already named their verb. Which verbs
    have a page is not an authoring decision per drawer: **a page exists for every verb the drawer's own
    usage block names and whose behaviour the drawer describes**, because the page is a PROJECTION of the
    drawer — that verb's usage lines plus the drawer prose that discusses it — so the drawer stays the ONE

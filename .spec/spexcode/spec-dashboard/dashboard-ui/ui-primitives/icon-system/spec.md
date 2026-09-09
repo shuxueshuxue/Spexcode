@@ -47,11 +47,10 @@ the accessible name impossible to forget.
 - **Identity marks are a data adapter, not scattered glyphs.** [[project-identity]] renders the named
   [[icon-presets]] registry because the same data must serialize into browser favicons. That one renderer
   is the deliberate sibling to the chrome glyph vocabulary; pages still never hand-write SVG variants.
-- **Review state never falls back to text glyphs.** [[review-chrome]]'s ONE data mapping composes this
-  registry's Primer issue pair with solid-ring circle-check/circle-x for current verdicts, dashed-ring
-  circle-check/circle-x for stale verdicts, and circle-minus/circle-dashed for empty/missing. Fresh and
-  stale therefore never reuse one shape with only colour or tooltip carrying the semantic difference.
-  The same mapping feeds eval list, detail status, and every A/B selector, plus issue list/detail. ListView
+- **Review state never falls back to text glyphs.** [[review-chrome]]'s ONE data mapping draws this
+  registry's Primer issue pair (issue-opened / issue-closed) for open and concluded issues; open and closed
+  never reuse one shape with only colour or tooltip carrying the semantic difference. The same mapping
+  feeds issue list/detail, the node popup's issues pane and the context dock. ListView
   state marks share a normalized 16-grid outer ring and optical stroke with the Primer pair, then
   [[review-chrome]] places them in one fixed box — domain/state changes never shift a row. ListView
   query/facet chrome also takes search, chevron-down, the secondary Filters trigger's filter/funnel,
@@ -66,7 +65,7 @@ the accessible name impossible to forget.
 - **Components never hand-write an `<svg>`.** The side rail ([[side-nav]]),
   the session console's New/search pills, attach/busy glyphs, and compact type/merge/relaunch toolbar tools, the
   lock badge, the annotator's play/pause/fullscreen and A/B `‹›` walkers (the thread detail), the modal
-  close `×`, the issues New plus, the eval export `↗`→download, and the thread's `⏱` anchor stamp all
+  close `×`, the issues New plus, and the thread's `⏱` anchor stamp all
   draw from here — the former unicode glyphs are now real stroke SVGs with kept tooltips. The Issues
   drain's complete lifecycle also draws from here as the official filled `issue-opened` / `issue-closed`
   pair rather than mixing one Octicon with CSS-made dots.

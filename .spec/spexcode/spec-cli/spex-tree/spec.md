@@ -2,7 +2,7 @@
 title: spex graph (tree render)
 status: active
 hue: 200
-desc: The CLI's human-readable graph view — the assembled board as an indented, status-coloured terminal tree with drift/stale-eval/open-issues badges.
+desc: The CLI's human-readable graph view — the assembled board as an indented, status-coloured terminal tree with drift and open-issues badges.
 code:
   - spec-cli/src/tree.ts#renderTree
   - spec-cli/src/tree.ts#treeJson
@@ -11,11 +11,11 @@ code:
 
 The graph is the product's core mental object, and until now only the dashboard rendered it — a
 pure-CLI user had `spex graph --json`'s raw payload and no way to *see* the tree. Bare `spex graph` closes that gap:
-the SAME assembled board the dashboard's tidy-tree draws (merged tree + overlay + eval fold, via
+the SAME assembled board the dashboard's tidy-tree draws (merged tree + overlay + issue fold, via
 `buildBoard()` — no new read path, so CLI and dashboard can never disagree about the graph), printed
 as an indented terminal tree, one node per line: id, derived status, title, and the attention
-badges the dashboard puts on a node — drifted-file count, stale-eval count (declared scenarios
-whose latest reading has aged), and open-issue count. A ghost node (being added by a worktree)
+badges the dashboard puts on a node — drifted-file count and open-issue count. A ghost node (being
+added by a worktree)
 says so.
 
 Scope and shape follow the dashboard's own drill-down: `--node <id>` renders one subtree (an

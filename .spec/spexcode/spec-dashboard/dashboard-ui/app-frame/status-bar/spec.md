@@ -87,8 +87,7 @@ complete and stationary on every desktop route while remaining immediately adjac
 opened, its catalog menu is anchored to that button's own slot, opening upward from the button's top edge,
 sharing its left edge, and shrinking to the viewport when the window is narrow.
 On the right, one shell-owned BOARD LEDGER, grouped by destination: the spec nodes by state — the four
-state counts and nothing beside them; all five eval scenario states (fresh pass/fail, stale
-pass/fail, unmeasured); the deduped open-issue total; and live sessions grouped by the configured
+state counts and nothing beside them; the deduped open-issue total; and live sessions grouped by the configured
 `sessions.launchers` names. Each launcher group leads with the harness mark from the shared icon vocabulary
 and renders a compact `running/needs-you/other` slash tally using the existing green/yellow/muted status
 tokens. Only launchers with at least one session render. Records whose launcher is null, hidden, or no longer
@@ -118,11 +117,11 @@ because the left group is the identity strip; the region law that assigns them a
 
 The ledger never stands down and no view registers a substitute. On graph addresses its category buttons
 gain [[graph-stats]]'s focus-walk: repeated clicks cycle the counted node ring and wrap. Off the graph,
-issue/eval categories open their boards and node categories enter the graph on a matching node. Thus every
+issue categories open their board and node categories enter the graph on a matching node. Thus every
 number remains a door without creating a second owner or tying ownership to a mounted view's lifetime.
 
 At every viewport the right group uses the available inline space without a hard viewport fraction or clipping
-overflow. Existing board, eval, and issue ledgers remain complete and actionable. The launcher tally rests as
+overflow. Existing board and issue ledgers remain complete and actionable. The launcher tally rests as
 one aggregate badge at every desktop width; on devices with a precise hovering pointer, hovering that tally
 replaces the aggregate with the complete launcher groups in normal flow while temporarily hiding the other
 right-side status readouts; no item is painted over another, and leaving restores both the aggregate and the
@@ -142,7 +141,7 @@ even while all last-good digits remain rendered and actionable. A successful tra
 marker without replacing the numbers with invented zeroes.
 
 **Restraint is the resting state.** A tally is muted text plus the board's own status marks; it spends a
-`kind` colour only where the number is asking for something — a failing eval, a session waiting on a human.
+`kind` colour only where the number is asking for something — a session waiting on a human.
 A count that is merely large stays quiet. Per-chip items would give the user finer hiding, and the registry
 already supports it; that is an unclaimed improvement, not a hidden limitation.
 

@@ -37,10 +37,9 @@ pressed state.
   [[address-routing]] vocabulary. Picking a **session** opens (or switches to) that session's
   tab. Picking a **spec node** opens its `#/spec/<id>` document; the graph remains the legacy focused-tree
   address. Picking an **issue** routes to
-  the Issues page's own detail address (`#/issues/<issue-id>`). Picking a **scenario** routes to the Evals
-  page's own detail address (`#/evals/<node>/<scenario>`). The palette no longer collapses every non-session
-  match back to the graph: issues and scenarios are first-class review objects, and their search hits land
-  on their review surfaces.
+  the Issues page's own detail address (`#/issues/<issue-id>`). The palette no longer collapses every
+  non-session match back to the graph: an issue is a first-class review object, and its search hit lands
+  on its review surface.
 
 **A modal owns the keys** — [[keyboard-nav]]'s standing contract, now realized over the sessions page too. While the palette is open it floats above the sessions page and owns every key; the session interface yields entirely (its own key router stands down) until the palette closes. That this reuse stayed clean — only a lead-order knob plus a shared select branch, no copied palette — is the whole point: a coupling that had forced a second palette would be a smell to fix at the shared component, never to route around.
 

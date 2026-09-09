@@ -38,17 +38,14 @@ and the server paging surface that needs canonical review addresses.
   state that keeps the token verbatim and honestly shows nothing — lives in the ONE [[review-filters]]
   engine, reached through its token→state bridge; no second predicate exists here.
 - **Default view = bare address.** queryParam compares token-normalized text against the page default
-  (Issues `is:issue state:open`, Evals `is:eval`) — equal or empty means the bare page
-  address, anything else exactly `?q=<raw text>`. The evidence default is `all` with no hidden
-  data-dependent fallback. Evals deliberately defaults to the honest whole scenario population:
-  Fail/Pass/Unmeasured are non-exhaustive `verdict:` quick filters (`unmeasured` means declared without a
-  reading), while `state:current|reviewed` remains the visible human-review lifecycle token and secondary
-  builder. Blind, unscored, and unknown verdicts therefore remain reachable when no verdict token is active.
+  (Issues `is:issue state:open`) — equal or empty means the bare page address, anything else exactly
+  `?q=<raw text>`. The evidence default is `all` with no hidden data-dependent fallback.
 - **A surface that wants "this object's rows" asks for a TEXT, never a second filter path.** The named
-  builders — `scopedEvalQuery(session)`, `nodeEvalQuery(node)`, `nodeIssueQuery(node)` — are each the page
-  default with one qualifier applied through the same surgery above, so a door and the list it leads to are
-  literally one query. That is what keeps an aggregate affordance honest: an eval score badge, a session
-  door and [[context-dock]]'s two panels cannot develop private ideas of what "open" or "this node's" means,
+  builders — `nodeIssueQuery(node)`, with `scopedEvalQuery` / `nodeEvalQuery` still exported beside it
+  and called by nothing — are each the page default with one qualifier applied through the same surgery
+  above, so a door and the list it leads to are literally one query. That is what keeps an aggregate
+  affordance honest: the node popup's issues pane and [[context-dock]]'s issues panel cannot develop
+  private ideas of what "open" or "this node's" means,
   because none of them owns a predicate. Adding a builder is adding one line here, and it is the only place
   a canonical filtered address is minted.
 - **Legacy params replay as the full visible state.** An old structured list address rebuilds the

@@ -3,7 +3,7 @@ title: refuse
 status: active
 hue: 10
 surface: review
-desc: dispute the viewed reading's verdict — prefills a structured objection; the sent remark stays OPEN on the (node, scenario) thread, and remark-teeth's aging pressure IS the refuse semantic (no new write mechanism)
+desc: prefills a structured objection to a scenario's verdict; the sent remark stays OPEN on the (node, scenario) thread. No reading stands behind a scenario now and nothing ages a thread for an open remark, so the objection is prose on the thread and no more (no new write mechanism)
 ---
 I refuse this reading's verdict on **{scenario}** ({node}).
 

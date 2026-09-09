@@ -63,12 +63,12 @@ a second copy of an accepted prompt in this textarea protects nothing while cost
 every send. The box always publishes a success notice; disappearing is never the only success signal. A close, session switch, or the next send owns clearing the in-flight state; the session list
 never mirrors it. Enter sends only when it is not
 committing an IME composition; Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used
-by Issues and Evals.
+by Issues.
 
 Its grammar is the old control plane, kept in one place: `[[node]]` resolves at send to the node id plus its
 live `spec.md` pointer; `@session` and `@new` use [[mentions]]; `/` lists available board commands first,
 then command presets, then harness commands. Board rows execute locally from the same registry as toolbar
-twins; authoring rows insert text. `/stop`, `/close`, and `/eval` retain their dashboard meaning. `/merge`
+twins; authoring rows insert text. `/stop` and `/close` retain their dashboard meaning. `/merge`
 is the [[merge]] plugin preset: the box sends its resolved workflow to the agent, and the agent performs the
 landing with the same on-demand skill available to self-launched sessions. It has no toolbar twin.
 There is no `/type`: direct TUI input is already the default. File paste, drop, and pick reuse [[file-attach]],

@@ -71,8 +71,8 @@ pooled Issues document tied to its own mounted route.
   the list/detail/compose surface takes the whole remaining width. This is separate from the detail page's
   metadata rail, which remains inside `DetailShell` beside the issue body and reflows above it on a phone.
 - **One merged list, store-tagged — RESIDENT, never cold-fetched.** The source is [[issues]]'s
-  `mergedIssues` — which excludes eval-remark threads ([[issue-remark-split]]: a scenario-scoped concern is
-  a remark and lives on the Evals pages). The rows are the backend's resident snapshot, requested one
+  `mergedIssues` — every local thread, a node's scenario-keyed remark threads included
+  ([[issue-remark-split]]). The rows are the backend's resident snapshot, requested one
   25-row slice at a time; freshness is PUSH-first ([[remark-substrate]] write-visibility): the list
   re-requests when the board's issue-freshness stamp moves — together with the source-session presence
   set, the one other board input its answer depends on — with the 15s cold lane as the fallback, equal

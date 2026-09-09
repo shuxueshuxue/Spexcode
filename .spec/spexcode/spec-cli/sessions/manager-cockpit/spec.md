@@ -41,15 +41,13 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   [[source-of-truth]]'s `git.ts`): per-file status + added/deleted line counts. A two-dot `base..HEAD` diff
   would show the base's post-fork commits as phantom edits, so the fork point is the only honest base.
 - **gates** — `conflictsWithMain` (a dry-run merge computed in the object store via `git merge-tree
-  --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
-  [[spec-lint]] module's error / warning counts); and `evals`, the measured-loss READOUT. conflict/ahead/dirty are session-specific; the lint gate
+  --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict") and `lint` (the
+  [[spec-lint]] module's error / warning counts). conflict/ahead/dirty are session-specific; the lint gate
   reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
   (an unchanged tree skips the re-lint on repeated manager reviews / exports).
 
-  This location-wide verdict belongs to explicit manager review and the self-contained session export. The
-  interactive paged Eval list carries no manager gate strip and does not synchronously run this gate: a
-  whole-repository lint is not a property of one selected page. Within
-  the manager/export consumers, the memo only covers the case where nothing moved. When the fingerprint moves —
+  This location-wide verdict belongs to explicit manager review; a whole-repository lint is not a property of
+  any one page. Within the manager review, the memo only covers the case where nothing moved. When the fingerprint moves —
   a trunk commit, one dirty edit — the verdict is
   recomputed, and a second verdict IN THE SAME PROCESS costs what MOVED, because the anchor engine reuses the
   hunks whose IMAGE IDENTITY it has already read under a pinned diff interpretation ([[code-anchor]] owns that
@@ -61,7 +59,7 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   first touch is UNCHANGED. What the reuse removes is paying it AGAIN on every later fingerprint move: 38
   children with 22 such queries, argv byte-identical to the previous run, down to 15 with none; a commit that
   moves ONE anchored path, 42 with 22 down to 21 with one. So a warm backend's manager re-verdicts no longer cost
-  the corpus. The cold gate remains real when a caller asks for it; the paged Eval list no longer asks.
+  the corpus. The cold gate remains real when a caller asks for it.
 
   The reusable hunk facts are durable across processes in [[source-of-truth]]'s existing on-disk event ledger,
   keyed by the SAME ordered image identity and pinned range-semantics schema [[code-anchor]] uses in process.
@@ -75,21 +73,10 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   nothing — the counts are exactly what `spex spec lint` reports for that tree with its dirty files included, a
   moved fingerprint always recomputes instead of serving last-known, and a rejected run is never cached.
   There is deliberately
-  NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's eval scenarios, measured
-  through the real product (session proof shows that evidence) — not by a language-specific automated
-  checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct
-  for any governed project, TS or Python or otherwise, rather than a `tsc` that only ever spoke TypeScript.
-  The `evals` entry is that same principle turned outward: since soundness is proven by MEASUREMENT, the
-  cockpit hands the manager the measurement beside the git facts — session proof's four mutually exclusive
-  scenario categories, `{freshPass, freshFail, needReview, blind}`. It REPORTS and grades nothing: no
-  threshold, no ok/not-ok, no block, and no unknown-coverage or measured/total aggregate riding along (that
-  decomposition belongs to the toolbar that already renders it). It reads the session-eval projection that
-  ALREADY exists — a cache read, never a build, because `buildSessionEvals` calls this very payload and a
-  build here would recurse — so the readout costs the review nothing. Its `phase` is part of the fact: only
-  `ready` carries numbers; an absent, loading, updating, or failed projection reports that phase and carries
-  NO numbers, because "nothing measured" and "not measured yet" are different facts and four zeros would
-  read as the clean one. Last-known is never dressed up as current, and this readout adds no row to the
-  session gates strip.
+  NO build/typecheck/test gate here: whether a change is SOUND is proven through the real product and
+  handed to the reviewer as session files — not by a language-specific automated checker baked into the
+  cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct for any governed
+  project, TS or Python or otherwise, rather than a `tsc` that only ever spoke TypeScript.
 - **proposal** — the session's standing proposal kind + note, read from its global record.
 
 `mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` and run by `spex session merge <id>`.
@@ -107,28 +94,14 @@ from "blank pane" — empty pane → 200, unknown id → 404, offline → 409, c
 (`GET …/prompt`) returns a session's originating ask (404 if none). Paths resolve from the CLI package's OWN
 location, never a hardcoded layout, so the cockpit works wherever the package lives. Every cockpit verb only
 READS or DISPATCHES — none mutates main directly. The cockpit's stake in the shared `cli.ts`/`index.ts` hubs is just the thin
-`review`/`merge`/`capture`/`prompt` routes; the eval reframe's churn there — its rewritten verb line and
-its eval-blob comment — is that feature's, not the cockpit's drift.
+`review`/`merge`/`capture`/`prompt` routes; a sibling verb's churn there is that feature's, not the
+cockpit's drift.
 
 ## where the answer is assembled
 
-The cockpit's review is composed in `cockpit.ts`, a module that sits ABOVE both the session layer and the eval
-layer and may import either. That is the point: a value made of both halves has no honest home inside either
-one. `sessions.ts` cannot hold it, because the eval package imports `sessions.ts` — reaching back from there is
-a cycle, and it used to be paid for with a deferred dynamic import whose own comment explained why it had to be
-wrong. `reviews.ts` cannot hold it either: that file is [[paged-review]]'s Issues/Evals paging server, and
-parking a session-cockpit concern beneath a node about paging would make that node's body false. It imports the
-eval package for its own reasons — the same direction, a different reason, and "already imports it" is not a
-claim to ownership.
-
-The eval readout therefore has **exactly one producer**, and every entry point calls it. The cockpit review is
-reachable two ways: the HTTP route, and the client's local answer when no backend resolves and none was named.
-If each composed its own gates, the same verb would return different SHAPES depending on whether a backend
-happened to be running — reintroducing precisely the asymmetry the remote-client role split removed — and a
-later drift between the two readouts would be caught by no gate that exists. One composition is what makes
-that failure unavailable rather than merely unlikely.
-
-The session-side payload consequently returns the session gates only. It never needed to carry the eval
-readout: the eval package's own consumer reads lint, conflict, ahead and dirty, and never that field. Removing
-it makes the recursion the old comment guarded against structurally impossible — the eval model builder calls
-the session payload, and there is no longer an eval-shaped field for that call to re-enter through.
+`cockpit.ts` is the cockpit's own module, and its review is [[review-payload]]'s bundle returned as-is:
+`cockpitReview(id)` calls `reviewPayload(id)` and adds nothing. The cockpit review is reachable two ways —
+the HTTP route, and the client's local answer when no backend resolves and none was named — and both call
+that one function, so the same verb returns the same SHAPE whether or not a backend happens to be running;
+a drift between two compositions is unavailable rather than merely unlikely. The session-side payload
+carries the session gates only: conflict, lint, ahead and dirty.

@@ -55,8 +55,7 @@ message — or the same one after a success — is a new fact and says itself ag
 the TTL and AWAITS it (`refreshForgeNow`), so the next read carries the real read-back; the forced cycle is
 a FULL re-list, never the incremental window — a since-read can lag a just-posted write, advancing the
 watermark past it. Read-only throughout — the resident module never writes the forge (writes are the
-[[port]] driver's) and never touches a node's git-derived status. Sibling folds ride the same pattern
-(the the measurement view eval timeline); this node owns only the issues slice.
+[[port]] driver's) and never touches a node's git-derived status. This node owns only the issues slice.
 
 **Frontend — one glance badge; rows stay on demand.** When a node carries open issues, its
 first row gains one badge — the **count**, hue distinct from the status dot and drift-badge (the three
@@ -74,6 +73,6 @@ response's full-set totals, and exposes a canonical View all anchor whenever mor
 reconstructs the node list from graph counts or treats the current page as exhaustive.
 
 Out of scope (future siblings): surfacing open **PRs** the same way; any live push of forge deltas
-([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: the `frontend-e2e` eval scenario
-`open-count-badge-on-tile` screenshots the rendered board — the ◆N badge on a tile with open issues, no
-on-node popover — and files image-evidenced readings.
+([[forge-cache]]'s deferred source layer). Frontend behaviour is **measured by looking**: a screenshot of the
+rendered board — the ◆N badge on a tile with open issues, no on-node popover — is the proof, handed to the
+reviewer as session files.

@@ -3,7 +3,7 @@ title: dashboard-ui
 status: merged
 session: sess-design
 hue: 265
-desc: Web over TUI/GUI — real terminal feel via xterm, rich media for eval evidence.
+desc: Web over TUI/GUI — real terminal feel via xterm, rich media for thread evidence.
 ---
 # dashboard-ui
 

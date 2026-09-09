@@ -33,7 +33,7 @@ opinion afterwards; it is a failing state with a name.
 A workspace state is a point in the product of five axes. [[workspace-shell]] owns the first four,
 [[session-console]] the fifth.
 
-- **R — route kind** ∈ {graph, evals, issues, settings, empty, spec, file, session}. What the address
+- **R — route kind** ∈ {graph, issues, settings, empty, spec, file, session}. What the address
   names; [[view-registry]] maps it to what renders. `graph` is a live rail destination and deep-link address.
   Bare review/settings boards are full-width, while object detail routes remain document states with a dock.
 - **D — left dock** ∈ {closed, explorer, sessions}. Open/closed and the projection are one axis, because
@@ -86,7 +86,7 @@ says the dock is ONE band, so a mode row stacked above its header is a breach th
     B(state) = rail + dock + 1(tabstrip) + 1(statusbar) + context
 
     rail    = 0  iff  R = issues (the full-width review board); otherwise 1
-    dock    = 1  iff  D ≠ closed  and  R is not a bare evals/issues/settings board
+    dock    = 1  iff  D ≠ closed  and  R is not a bare issues/settings board
     context = 1  iff  R = spec    and  C = open
 
 The tab strip and status bar are unconditional: one place the open documents are named ([[tab-strip]]) and
@@ -96,7 +96,7 @@ review reading is full-width; every other route keeps one persistent way to chan
 it stays on every route, so the working set is always in reach ([[tab-strip]]). The dock and the context
 dock are the only other conditional bands, and the dock's condition has **two** factors because the sidebar is a
 property of the focused tab and not a window-wide setting ([[dock-modes]]): the reader's own open/closed
-choice, and whether the focused tab has a natural sidebar at all. Only bare evals, issues and settings boards
+choice, and whether the focused tab has a natural sidebar at all. Only bare issues and settings boards
 lack that sidebar; object details retain it. The rule is ISOLATION, not suppression: a bare board never
 inherits the dock the previous tab was showing, which keeps the sidebar a fact about what is held.
 Split adds a **column**, never a band. U picks what fills the content area, never how much chrome frames it.

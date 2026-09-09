@@ -71,8 +71,8 @@ the attachment size. Incomplete transfer metadata and `.part` bytes stay under t
 staging directory, survive a backend hot replacement, and expire under the resolved transfer policy. That
 one policy is `uploads` in the existing `.spec/spexcode.json` / `.spec/spexcode.local.json` merge: the shipped template
 is its sole default source (including the default 2 GiB single-file ceiling), and it names every operational
-number — cap, chunk, concurrency, timeout, retry limit/delay, TTL/reaper, free-space reserve, and the older
-eval-evidence ceiling. The backend reads it for creation, streaming, status, and cleanup; the dashboard
+number — cap, chunk, concurrency, timeout, retry limit/delay, TTL/reaper, free-space reserve, and the
+evidence ceiling. The backend reads it for creation, streaming, status, and cleanup; the dashboard
 uses the returned client fields. A cap, capacity, malformed offset, missing transfer, or failed write is a
 named refusal; there is no silent downgrade to a buffered upload or a partially-visible file.
 
@@ -107,6 +107,4 @@ name, which left the Conversation wearing a paperclip it could not use. The uplo
 `/tmp` sink are the backend's ([[api-endpoint]], [[sessions]]) — a thin route over a small upload module,
 the same shape [[session-rename]] uses to span the UI and the server for one feature. This node's slices of
 those shared files are just the attach-control styling in `styles.css` and the `/api/uploads` route in
-`index.ts`; the eval tab's `.eval-*` classes and its eval-blob endpoint, reworked when the eval engine was
-reframed to serve a verdict over transcript-or-image evidence, are the former measurement layer's churn, not file-attach's
-drift.
+`index.ts`; anything else in those files is another feature's churn, not file-attach's drift.

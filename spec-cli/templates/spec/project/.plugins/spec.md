@@ -19,8 +19,7 @@ intent, not yet an active plugin, so it renders on the board but is neither offe
 materialized into the agent's contract.
 
 Which plugins `spex init` ships is the init-preset rule. `seed: false` excludes a plugin subtree; shared
-plugins have one body and one helper set — there is no separately authored adopter variant. Dogfood eval
-scenarios/readings remain with the implementation and git history they measure.
+plugins have one body and one helper set — there is no separately authored adopter variant.
 
 ## shelf invariant
 

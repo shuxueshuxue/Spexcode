@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, and `files` the agent-to-human path handoff.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec` prints the spec.md file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, `files` the agent-to-human path handoff, and `web` the local-web-service handoff.
 code:
   - spec-cli/src/guide.ts
 related:
@@ -34,49 +34,18 @@ the agent from one verb, picked by an optional topic:
   valid, required with no default). A registry-derived docs assertion (`docs-quickstart.test.ts`)
   holds this page and both READMEs' Quick start to exactly that set, so the example can neither
   regress to one privileged harness nor silently drift from the registry.
-- **`spec` / `eval` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
-  artifacts — spec.md (frontmatter, body, the rules lint enforces) and measurement contract (the scenario schema, how
-  loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
-  it. Compact always-on prompts point here for their operational detail: `eval` carries a bug fix's same-scenario
-  A/B sequence (old-commit failing reading, verified-tree commit, then passing reading anchored to that commit),
-  while `spec` carries comment altitude and the shared-checkout mid-merge recovery rule. The eval page is
-  **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
-  steps on the evidence's own axis, emitted by the run that produced it, never eyeballed off the artefact.
-  A step name is a **short human label** for its moment, never a metadata channel — the run's identity,
-  verdict, and extent all have canonical homes (the scenario's `test:` field, the reading's verdict, the
-  evidence itself), and the manual says so, because the one free-text field that rides with the evidence
-  is exactly where an emitter author is tempted to smuggle provenance (a real adopter baked
-  `runner start: <file> :: <case title>` into every step and turned the dashboard's step ruler into noise).
-  The concept is tool-neutral (Playwright is one emitter); `--timeline` is axis-tagged (a video's `time`,
-  a transcript's `line`, a still sequence's `frame`, a data export's `index` — legacy `tMs` maps read as
-  `time`), and a filing's axis must match an attached evidence entry's kind.
-
-  It is prescriptive about the READING as well as the evidence, and for the same reason: the ways a
-  measurement lies are not obvious from the schema, so the manual is where they get named. Two are stated
-  because both fail silently and both were reached by measuring rather than reasoning. A universal `expected`
-  is vacuously true over an empty set, so the reading reports its population as `N of N` rather than a bare
-  verdict — and the denominator is counted off a surface that can disagree with the numerator, because a ratio
-  whose halves share one source only asserts that what was selected was selected. And a browser reading goes
-  through the rendered box, never computed style: an ancestor CSS `transform` leaves computed style at the
-  authored size while the screen shows the scaled one, so a plausible-looking geometric reading passes while
-  measuring something that is not on screen. That second rule is also the honest reason a geometric claim
-  ships with its `--image` — a rect can be computed wrong where legibility is human-judgeable.
-
-  Neither rule is enforced anywhere, and the manual says so instead of implying a gate. The escalation these
-  two sit inside is real: a precondition sentence depends on the author remembering it, a printed denominator
-  depends on a reader noticing it, and only a refusal at filing time depends on nobody — but refusing needs a
-  population the schema does not carry, so this page prescribes and does not pretend to bind. The escalation's
-  own terminus is stated too, because it is cheaper than every rung above it: a claim restated over something
-  the product cannot make empty has no population to report, arrange, or get wrong. "Every active node's name
-  is readable" needs activity someone must arrange; "the rendered size never falls below the authored size" is
-  a property of the viewport, true of a one-node graph. The ladder's goal was never a rule that gets
-  remembered — it is a rule that cannot be broken.
+- **`spec` → the agent-facing FILE-FORMAT manual.** The whole detail of the one authored artifact —
+  spec.md: frontmatter, body, the rules lint enforces — so an agent looks the format up on demand instead
+  of reverse-engineering it. Compact always-on prompts point here for their operational detail: the page
+  carries comment altitude, the lifecycle rule (one node per commit, lint at 0 errors before merge, product
+  evidence to the reviewer through `spex session files add`), and the shared-checkout mid-merge recovery
+  rule.
   The always-on system prompt is the **clue** that the format exists; this manual carries the detail. An
   unknown topic fails loud, naming **every** registered topic and never a silent setup dump — and that list
-  is DERIVED from the topic registry rather than re-typed beside it. A hand-kept enumeration of the topics is
-  the same wrong-population defect the reading rules above describe, one layer down, and it had already
-  happened: `files` and `web` were registered as real pages while the unknown-topic error still named four.
-  Nothing about the shorter list looked wrong, because an enumeration cannot report what it is missing.
+  is DERIVED from the topic registry rather than re-typed beside it. A hand-kept enumeration of the topics
+  is a wrong-population defect one layer down, and it had already happened: `files` and `web` were
+  registered as real pages while the unknown-topic error still named four. Nothing about the shorter list
+  looked wrong, because an enumeration cannot report what it is missing.
 - **`settings` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
   through this same primitive rather than a new mechanism: `spex guide settings` prints every `.spec/spexcode.json`
   / `.spec/spexcode.local.json` field (launchers, dashboard icon, upload transfer policy, deterministic lint policy,

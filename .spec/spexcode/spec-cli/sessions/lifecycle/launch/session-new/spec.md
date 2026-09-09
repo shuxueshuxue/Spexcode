@@ -140,7 +140,7 @@ delivery does not depend on the session-store watcher; any candidate worktree re
 asynchronous full convergence.
 
 Target resolution on this write path reads the live filesystem-only spec projection. It needs only a node id
-and `spec.md` path; it must not build history, drift, graph, or eval projections before publication. The
+and `spec.md` path; it must not build history, drift, or graph projections before publication. The
 session's raw first `[[id]]` mention remains its only scope source, and prompt preset expansion remains the one
 shared launch/dispatch seam.
 

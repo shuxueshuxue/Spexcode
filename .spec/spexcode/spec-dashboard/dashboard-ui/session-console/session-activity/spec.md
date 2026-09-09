@@ -122,7 +122,7 @@ The selected console sidebar row is also the terminal pane's **sole visible iden
 the shared visible session title (`sessionHeadline`/`title`); lifecycle, liveness, and readiness notes are secondary glyph/tooltip
 data and never replace that title. The stable session handle remains available only for matching and tooltip detail. The toolbar deliberately carries neither
 `sessionHeadline` nor lifecycle/liveness text:
-repeating the selected row spent vertical space, competed with Eval/actions, and leaked arbitrarily long prompt or
+repeating the selected row spent vertical space, competed with the action slot, and leaked arbitrarily long prompt or
 HTML-derived text into tooltips and accessible names. Removing that duplicate is not a second naming rule; it leaves the
 shared row face as the one place the console identifies the selected session.
 
@@ -133,6 +133,6 @@ terminal-lane guard; double-clicking it clears the saved override and restores t
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop
 the status word for the `.sess-glyph` mark), and the Row-1 title ellipsis; classes other
-surfaces add there — like the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
-reframe, or the console list's own compact-face overrides ([[session-console]]) — are those features' churn,
+surfaces add there — like the console list's own compact-face overrides ([[session-console]]) — are
+those features' churn,
 not session-activity's drift.

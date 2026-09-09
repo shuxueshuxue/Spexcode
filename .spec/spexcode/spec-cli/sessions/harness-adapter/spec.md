@@ -49,8 +49,9 @@ did not choose.
 
 An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with every
 mechanical proof green while a real session silently dropped every stop-gate rejection and hung `active` forever.
-A new or reworked adapter with a resident or controller-backed runtime merges only with per-behavior eval readings,
-each measured through a REAL dispatched session of that harness. The eight lifecycle behaviors, the replacement rows
+A new or reworked adapter with a resident or controller-backed runtime merges only with per-behavior proof,
+each measured through a REAL dispatched session of that harness and handed to the reviewer as session files.
+The eight lifecycle behaviors, the replacement rows
 for adapters whose runtime shape removes a premise, and the prompt-delivery combination campaign are
 [[live-matrix]]'s contract; each harness node's `measurement contract` declares its scenarios and this node files the aggregate.
 

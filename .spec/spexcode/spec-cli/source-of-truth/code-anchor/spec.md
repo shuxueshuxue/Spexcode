@@ -2,7 +2,7 @@
 title: code-anchor
 status: active
 hue: 15
-desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
+desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors must resolve and are otherwise inert. Anchors are optional — an unanchored node never blocks.
 code:
   - packages/spec-core/src/anchors.ts#extractCachedBlob
   - packages/spec-core/src/anchors.ts#runAnchorQueries
@@ -67,17 +67,7 @@ of the too-many-owners bound ([[governed-related]]) though `spex spec owner` sti
 scoped. A scoped file's **miss** keeps the ordinary advisory drift warn by default; the
 committed `lint.scopedCodeMiss: "ignore"` (`spex guide settings`) silences only that advisory — never
 hit blocks, bare `code:` drift, integrity, acks, related semantics, or eval freshness. A `related:` row
-may carry selectors too: a hit is a soft warn naming the selector, a miss is silent; related stays
-never-block, never-ack, no eval freshness.
-
-This vocabulary is READ by a second consumer with its own window: an eval scenario's `code:` axis
-(the former measurement core), which narrows a reading's staleness to the units it actually measures. The parse,
-extractor registry, resolution and hunk∩range engine are shared verbatim — there is no second anchor
-syntax — but the two windows are deliberately different, because they answer to different subjects. Spec
-drift asks about a NODE and so subtracts `Spec-OK` acks; eval freshness asks about a READING, which an ack
-never vindicates, so it takes the plain ancestry window. A selector verdict this side is never a block
-either: eval's whole lint layer is advisory, and a dead or ambiguous selector there stales its reading
-rather than stopping a commit.
+may carry selectors too: they must resolve and are otherwise inert.
 
 Extraction of a live tree is memoized by its immutable Git blob id plus the extractor's complete memo key. A
 working-tree edit therefore creates one new parse result, while repeated lint or freshness reads for unchanged

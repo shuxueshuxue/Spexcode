@@ -17,14 +17,11 @@ can be, so every row is somewhere the reader can go and stay — which is what m
 than a report. Node prose comes from the lite corpus, session identity from the live board; both are already
 in the props the shell hands down, so opening the palette costs no request at all.
 
-It used to carry two more planes — Issues and scenarios — fetched live from page 1 of `/api/issues` and
-`/api/evals` on every debounced keystroke, plus a command row of **all Issues · N** / **all Evals · N**
-anchors into the review lists. That was a search box quietly growing a second job. An issue and a scenario
-are findings ABOUT a node, and they already have list pages built to filter, page and sort them
-([[issues-view]] / the measurement view) — each one ⌥digit away, each strictly better at the job than fifteen
-interleaved rows and a total. Restating a page-1 slice under the jump-list gave the reader a worse copy of a
-surface that already existed, and paid two server round-trips per keystroke to do it. Removing the planes
-removes the round-trips, the "all results" anchors, and the second ranking rule with them.
+Issues are deliberately not a plane. An issue is a finding ABOUT a node, and it already has a list page built
+to filter, page and sort it ([[issues-view]]) — one ⌥digit away, strictly better at the job than fifteen
+interleaved rows and a total. A page-1 slice of it under the jump-list would be a worse copy of a surface that
+already exists, and would pay a server round-trip per keystroke to do it; so the palette makes no review
+request and carries no "all results" anchor.
 
 **One ranking rule now, because both planes are local.** Each plane is ranked on its own by the shared
 lexical ranker and the two are then interleaved — a node, a session, a node, a session. Not one ranking over

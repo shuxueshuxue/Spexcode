@@ -24,7 +24,7 @@ const stop = async (child) => { if (!child || child.exitCode != null) return; ch
 
 rmSync(out, { recursive: true, force: true }); mkdirSync(out, { recursive: true })
 const fixture = mkdtempSync(join(tmpdir(), 'spex-rail-tab-')); const project = join(fixture, 'project'); const home = join(fixture, 'home')
-mkdirSync(project, { recursive: true }); mkdirSync(home, { recursive: true })
+mkdirSync(join(project, '.spec'), { recursive: true }); mkdirSync(home, { recursive: true })
 writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({ harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' } }))
 execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project }); execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project }); execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project }); execFileSync('git', ['add', '.'], { cwd: project }); execFileSync('git', ['-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'seed'], { cwd: project })
 const apiPort = await freePort(); const uiPort = await freePort(); const api = `http://127.0.0.1:${apiPort}`; const base = `http://127.0.0.1:${uiPort}`
@@ -44,16 +44,16 @@ try {
   await page.goto(`${base}/#/sessions/${first}`, { waitUntil: 'domcontentloaded' }); await page.locator('.side-rail').waitFor(); await page.locator(`[data-sid="${first}"]`).waitFor()
   await page.locator(`[data-sid="${second}"]`).click(); await page.waitForFunction((id) => location.hash.includes(`/sessions/${id}`), second)
   const held = await page.locator('[role="tab"]').count()
-  await page.goto(`${base}/#/evals`, { waitUntil: 'domcontentloaded' }); await page.locator('.side-rail').waitFor(); await page.locator('.side-rail a[href="#/sessions"]').click()
+  await page.goto(`${base}/#/issues`, { waitUntil: 'domcontentloaded' }); await page.locator('.side-rail').waitFor(); await page.locator('.side-rail a[href="#/sessions"]').click()
   await page.waitForFunction((id) => location.hash.includes(`/sessions/${id}`), second)
   const focused = await page.evaluate(() => ({ hash: location.hash, activeRail: document.querySelectorAll('.side-rail a.rail-btn.on').length, sessionsCurrent: document.querySelector('.side-rail a[href="#/sessions"]')?.getAttribute('aria-current'), graphRail: document.querySelector('.side-rail a[href="#/graph"]')?.getAttribute('href') || null, tabs: document.querySelectorAll('[role="tab"]').length }))
   assert.equal(focused.activeRail, 1); assert.equal(focused.sessionsCurrent, 'page'); assert.equal(focused.graphRail, null); assert.ok(focused.tabs >= held)
   await page.close()
   const cold = await browser.newPage({ viewport: { width: 1280, height: 800 } })
   await cold.addInitScript(() => localStorage.setItem('spexcode.tabs.root', '[]'))
-  await cold.goto(`${base}/#/evals`, { waitUntil: 'domcontentloaded' }); await cold.locator('.side-rail a[href="#/sessions"]').click(); await cold.waitForFunction(() => location.hash === '#/sessions'); await cold.locator('.side-rail a[href="#/sessions"][aria-current="page"]').waitFor()
-  const empty = await cold.evaluate(() => ({ hash: location.hash, tabs: document.querySelectorAll('[role="tab"]').length, activeRail: document.querySelectorAll('.side-rail a.rail-btn.on').length }))
-  assert.deepEqual(empty, { hash: '#/sessions', tabs: 0, activeRail: 1 })
+  await cold.goto(`${base}/#/issues`, { waitUntil: 'domcontentloaded' }); await cold.locator('.side-rail a[href="#/sessions"]').click(); await cold.waitForFunction(() => location.hash === '#/sessions'); await cold.locator('.side-rail a[href="#/sessions"][aria-current="page"]').waitFor()
+  const empty = await cold.evaluate(() => ({ hash: location.hash, tabs: [...document.querySelectorAll('[role="tab"][data-tab-key]')].filter((tab) => tab.getClientRects().length > 0).map((tab) => tab.dataset.tabKey), activeRail: document.querySelectorAll('.side-rail a.rail-btn.on').length }))
+  assert.deepEqual(empty, { hash: '#/sessions', tabs: ['#/issues'], activeRail: 1 }) // the cold-visited Issues document stays held; the rail switch adds no tab of its own
   await cold.screenshot({ path: join(out, 'rail-tab-grammar-final.png'), fullPage: true })
   console.log(JSON.stringify({ ok: true, first, second, held, focused, empty, screenshot: join(out, 'rail-tab-grammar-final.png') }))
 } finally { await stop(backend); if (ui) await ui.close(); if (browser) await browser.close(); rmSync(fixture, { recursive: true, force: true }) }

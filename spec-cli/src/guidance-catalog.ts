@@ -6,7 +6,6 @@ import {
   loadAgentConfig,
   loadConfig,
   loadHookConfig,
-  loadReviewConfig,
   loadSkillConfig,
   loadSystemConfig,
   type ConfigPreset,
@@ -19,7 +18,7 @@ export const GUIDANCE_SCHEMA_VERSION = 1 as const
 export const GUIDANCE_CATALOG_SCHEMA = 'spexcode.guidance-catalog/v1' as const
 export const GUIDANCE_PAYLOAD_NAME = 'guidance-catalog.json' as const
 export type GuidanceKind = 'plugin' | 'help' | 'guide'
-export type GuidanceSurface = 'system' | 'command' | 'hook' | 'skill' | 'agent' | 'review'
+export type GuidanceSurface = 'system' | 'command' | 'hook' | 'skill' | 'agent'
 export type GuidanceContentRole = 'prompt' | 'help' | 'guide' | 'signal'
 
 export type GuidanceSource = Readonly<{
@@ -75,7 +74,6 @@ const SURFACES: readonly [GuidanceSurface, () => ConfigPreset[]][] = [
   ['agent', loadAgentConfig],
   ['command', loadConfig],
   ['hook', loadHookConfig],
-  ['review', loadReviewConfig],
   ['skill', loadSkillConfig],
   ['system', loadSystemConfig],
 ]

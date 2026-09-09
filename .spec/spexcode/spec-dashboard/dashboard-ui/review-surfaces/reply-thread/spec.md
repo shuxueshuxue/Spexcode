@@ -2,7 +2,7 @@
 title: reply-thread
 status: active
 hue: 250
-desc: The ONE thread surface every discussion home renders — the reply list, its docked composer, and the marks a reply can carry (time anchor, evidence, remark verbs) — so a local thread and a forge thread are the same component, never two dialects.
+desc: The ONE thread surface every discussion home renders — the reply list, its docked composer, and the marks a reply can carry (time anchor, evidence) — so a local thread and a forge thread are the same component, never two dialects.
 code:
   - spec-dashboard/src/Thread.jsx
 related:
@@ -31,17 +31,19 @@ one governing home, and the two pages reference it instead of re-describing it.
   replies, the same composer, the same marks in every home. A home supplies DATA and handlers (what
   to post through, whose node leads the mention list, whether a clip can be seeked); it never supplies a
   variant of the thread.
-- **A reply's marks live IN the reply.** A reply may carry a time anchor (`▶m:ss · step`), evidence blobs,
-  and — when it is a remark ([[remark-substrate]]) — its resolve/retract verb with its resolved bit. Those
-  are rendered from the reply's own text by the one shared [[prose-renderer]] — node references, time anchors
-  and evidence are its semantic tokens, and this node supplies only what each token DOES in a thread (navigate,
-  seek, show) — so every home that shows a thread shows them; a home that
-  cannot act on one (no clip to seek) renders it inert rather than hiding it.
+- **A reply's marks live IN the reply.** A reply is `{ by, at, body }` and may carry a time anchor
+  (`▶m:ss · step`) and evidence blobs. Those are rendered from the reply's own text by the one shared
+  [[prose-renderer]] — node references, time anchors and evidence are its semantic tokens, and this node
+  supplies only what each token DOES in a thread (navigate, seek, show) — so every home that shows a thread
+  shows them; a home that cannot act on one (no clip to seek) renders it inert rather than hiding it. A reply
+  row carries no per-reply verb and no state badge: the thread's lifecycle acts (close, promote) ride the
+  composer's action row, never a reply.
 - **The writing surface is not this node's to invent.** The composer's shell — the quiet bordered container,
   the auto-growing borderless textarea, the persistent action row, the IME Enter boundary — is [[composer]];
   the `@`/`[[` doors and their menu are [[mentions]]. This node owns what a THREAD needs from them: which
   actions ride the row, what a send posts through, and that the menu opens where the composer sits (upward
-  from a docked composer, downward on a page). It adds no second editor and no second menu.
+  from a docked composer, downward on a page). It adds no second editor and no second menu — the composer
+  has no `/` palette; `/` is the session console's grammar ([[command-box]]), not a thread's.
 - **Identity is shown, never inferred twice.** A reply's author renders through the one liveness-aware
   originator chip where the home can join it against the board, and as a plain labelled value where it
   cannot (a forge login resolves to no session). The chip's behaviour is the shared side-rail primitive's

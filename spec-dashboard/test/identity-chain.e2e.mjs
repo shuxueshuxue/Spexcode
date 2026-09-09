@@ -358,11 +358,10 @@ try {
 
   step('side nav route contract')
   assert.equal(await page.locator('.side-rail .proj-chip').count(), 0, 'the rail has no project identity duplicate')
-  assert.equal(await page.locator('.side-rail a.rail-btn').count(), 5)
+  assert.equal(await page.locator('.side-rail a.rail-btn').count(), 4)
   assert.equal(await page.getByRole('button', { name: 'Projects', exact: true }).count(), 0)
   const routes = [
     { name: /^Sessions/, hash: '#/sessions' },
-    { name: /^Evals/, hash: '#/evals' },
     { name: /^Issues/, hash: '#/issues' },
     { name: /^Settings/, hash: '#/settings' },
     { name: /^Spec Node Graph/, hash: '#/graph' },

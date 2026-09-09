@@ -8,7 +8,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
-import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig, runtimeRoot } from '@spexcode/spec-core'
+import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, runtimeRoot } from '@spexcode/spec-core'
 import { issuesEnabled } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, mergedIssues, promote } from './issues.js'
 import { replyIssueWithLoopIn } from './loop-in.js'
@@ -304,10 +304,8 @@ app.get('/api/settings', async (c) => c.json({
 // the `surface: command` plugin-root nodes (built/active only) for new-session and live-inbox `/` dropdowns — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
-// `?surface=review` lists the review-track presets instead (plugin nodes with `surface: review`, the same
-// set [[guidance-catalog]] projects; no dashboard surface reads it). The exposed surfaces stay this
-// explicit whitelist, never a passthrough.
-app.get('/api/plugins', (c) => c.json(c.req.query('surface') === 'review' ? loadReviewConfig() : loadConfig()))
+// The route serves this one surface — never a `?surface=` passthrough into the other loaders.
+app.get('/api/plugins', (c) => c.json(loadConfig()))
 // Read-only, deterministic projection over the authoritative plugin/help/guide surfaces. The response carries
 // exact rendered guidance plus provenance so decoupled consumers need no checkout or shared source directory.
 app.get('/api/guidance', (c) => c.json(buildGuidanceCatalog().toJSON()))

@@ -53,10 +53,10 @@ const fresh = async (hash) => {
 }
 
 try {
-  // Scene A — the focus history, not the positional neighbour. Issues sits beside Evals in the strip;
+  // Scene A — the focus history, not the positional neighbour. Issues sits beside Settings in the strip;
   // #/spec is where the reader actually came from.
   await fresh('#/spec')
-  await go('#/evals'); await go('#/issues'); await go('#/spec'); await go('#/evals')
+  await go('#/settings'); await go('#/issues'); await go('#/spec'); await go('#/settings')
   const sceneAStrip = await strip()
   const sceneA = await closeActive()
   await page.screenshot({ path: join(out, 'scene-a.png'), fullPage: true })
@@ -80,7 +80,7 @@ try {
   const report = { sceneA: { strip: sceneAStrip, landed: sceneA }, sceneB: { before: sceneBStrip, landed: sceneB, after: sceneBAfter }, browserErrors: errors }
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
-  assert.equal(sceneA, '#/spec', 'Scene A must land on the tab the reader was on before Evals, not the positional neighbour')
+  assert.equal(sceneA, '#/spec', 'Scene A must land on the tab the reader was on before Settings, not the positional neighbour')
   assert.equal(sceneB, `#/spec/${encodeURIComponent(node.id)}`, 'Scene B must land on the most recently focused surviving tab across kinds')
   assert.deepEqual(sceneBAfter, sceneBStrip.filter((key) => key !== '#/file/package.json'), 'only the closed tab leaves the strip')
   assert.ok(errors.length === 0, `browser errors: ${errors.join(' | ')}`)

@@ -337,66 +337,6 @@ check('the same row survives ~780px without overlap or spill', !rowGeom780.overl
 await v.setViewportSize({ width: 1440, height: 900 })
 check('the doors posted nothing — they only type', (await v.evaluate(() => document.querySelectorAll('.fv-reply').length)) === replyCountBefore)
 
-// the SAME reply composer in its OTHER home ([[event-detail]]): the refactored doors and the shared shape
-// must be identical on the eval detail, or "one composer, every home" is a claim without a reading.
-await v.goto(`${BASE}/#/evals`)
-try {
-  await waitListSettled(v, '#/evals')
-} catch (error) {
-  const state = await v.evaluate(() => ({
-    hash: location.hash,
-    rootChildren: document.getElementById('root')?.children.length,
-    head: [...document.querySelectorAll('.lp-head')].map((el) => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height, visible: el.offsetParent !== null } }),
-    rows: [...document.querySelectorAll('.lp-row a[href]')].slice(0, 4).map((el) => { const r = el.getBoundingClientRect(); return { href: el.getAttribute('href'), width: r.width, height: r.height, visible: el.offsetParent !== null } }),
-    body: document.body.innerText.slice(0, 200),
-  }))
-  console.log(`EVALS_SETTLE_TIMEOUT ${JSON.stringify({ state, pageErrors: vErrors, api: vResponses.slice(-20), pendingApi: vRequests.filter((url) => !vResponses.some((response) => response.url === url)).slice(-20) })}`)
-  throw error
-}
-await liveLocator(v, '.lp-row a[href^="#/evals/"]').click()
-try {
-  await v.waitForFunction(() => [...document.querySelectorAll('.ds-page')].some((el) => {
-    const r = el.getBoundingClientRect()
-    return r.width > 0 && r.height > 0 && el.offsetParent !== null
-  }), null, { timeout: 30000 })
-} catch (error) {
-  const state = await v.evaluate(() => ({
-    hash: location.hash,
-    rootChildren: document.getElementById('root')?.children.length,
-    pages: [...document.querySelectorAll('.ds-page')].map((el) => { const r = el.getBoundingClientRect(); return { width: r.width, height: r.height, visible: el.offsetParent !== null } }),
-    body: document.body.innerText.slice(0, 240),
-  }))
-  console.log(`EVAL_DETAIL_TIMEOUT ${JSON.stringify({ state, pageErrors: vErrors, api: vResponses.slice(-20), pendingApi: vRequests.filter((url) => !vResponses.some((response) => response.url === url)).slice(-20) })}`)
-  throw error
-}
-await settle(v, 900)
-const evalComposer = await v.evaluate(() => {
-  const box = window.__spexLive('.ds-compose .fv-compose')
-  const ta = window.__spexLive('.ds-compose .fv-textarea')
-  if (!box || !ta) return null
-  return {
-    boxBorder: getComputedStyle(box).borderStyle, taBorder: getComputedStyle(ta).borderStyle,
-    idleH: Math.round(ta.getBoundingClientRect().height),
-    doors: [...document.querySelectorAll('.ds-compose .fv-trigger-btn')].map((b) => ({ text: b.textContent, label: b.getAttribute('aria-label') })),
-    send: !!window.__spexLive('.ds-compose .fv-send'),
-    sendDisabled: window.__spexLive('.ds-compose .fv-send')?.disabled,
-  }
-})
-check('the eval detail docks the SAME composer shape (bordered box, borderless idle floor, live action row)', evalComposer && evalComposer.boxBorder === 'solid' && evalComposer.taBorder === 'none' && evalComposer.idleH >= 40 && evalComposer.send && evalComposer.sendDisabled === true, JSON.stringify(evalComposer))
-check('its `@`/`[[` doors are the same localized pair', evalComposer.doors.length >= 2 && evalComposer.doors[0].text === '@' && evalComposer.doors[1].text === '[[' && evalComposer.doors.every((d) => d.label), JSON.stringify(evalComposer.doors))
-await liveLocator(v, '.ds-compose .fv-textarea').fill('gamma delta')
-await v.evaluate(() => { const el = window.__spexLive('.ds-compose .fv-textarea'); el.focus(); el.setSelectionRange(6, 6) })
-await liveLocator(v, '.ds-compose .fv-trigger-btn').click()
-await settle(v, 400)
-const evalInsert = await v.evaluate(() => {
-  const el = window.__spexLive('.ds-compose .fv-textarea')
-  return { value: el.value, caret: el.selectionStart, focused: document.activeElement === el, menu: !!window.__spexLive('.ds-compose .mention-menu') }
-})
-check('the door types at the caret here too, through the one shared mechanism', evalInsert.value === 'gamma @delta' && evalInsert.caret === 7 && evalInsert.focused && evalInsert.menu, JSON.stringify(evalInsert))
-await v.keyboard.press('Escape')
-await v.screenshot({ path: join(OUT, 'eval-detail-composer.png') })
-await liveLocator(v, '.ds-compose .fv-textarea').fill('')
-
 // — 3. composer-mention-autocomplete: one shared module, three homes —
 await v.goto(`${BASE}/#/issues/${encodeURIComponent(LOCAL)}`)
 await v.waitForSelector('.fv-compose .fv-textarea')

@@ -33,7 +33,7 @@ the Issues detail + compose preview, the thread, the session timeline) plus its 
 ## raw source
 
 Agent- and human-authored prose shows up on five surfaces: a spec node's body, an issue's detail body,
-every thread reply (plain replies and remarks alike), the Issues compose preview, and the session
+every thread reply, the Issues compose preview, and the session
 timeline's messages. It is ONE kind of content, and it is currently produced by THREE different
 mechanisms:
 
@@ -62,8 +62,8 @@ made this node necessary.
 ## expanded spec
 
 - **ONE module renders every prose surface.** The node-body view ([[node-popup]]), the Issues detail body
-  and its compose preview ([[issues-view]]), every thread reply
-  (issue threads and the thread detail's remarks), and the session timeline ([[message-stream]]) all call
+  and its compose preview ([[issues-view]]), every thread reply ([[reply-thread]]), and the session
+  timeline ([[message-stream]]) all call
   the same renderer. It carries no page branch and no "rich" vs "plain" dialect: a surface may pass DATA
   (a resolver, handlers, which source it wants rendered) and must name which KIND of prose it holds (the
   line-break contract below), but it never selects a language. Two dialects of one content type is the

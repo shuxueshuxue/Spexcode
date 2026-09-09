@@ -269,16 +269,14 @@ export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onW
       }
     >
       {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
-      {/* a reply that is a REMARK gets its resolve/retract verb here too ([[remark-substrate]] — a remark
-          can host on an issue, not only a scenario); the shared Thread UI enforces nothing itself. */}
-      <Replies replies={replies} threadId={local ? th.id : null} onRemarkChange={() => onWrite?.('')} />
+      <Replies replies={replies} />
     </DetailShell>
   )
 }
 
-// The OPEN thread follows the board's issue freshness stamp ([[remark-substrate]] write-visibility): every
-// thread write — a reply, a remark, a resolve, a retract, a close — moves that one stamp, so an EXTERNAL
-// write reaches an already-open reader on the push instead of waiting for a reload. A detail is a single
+// The OPEN thread follows the board's issue freshness stamp ([[issues-view]] write-visibility): every thread
+// write — a reply, a close, a promote — moves that one stamp, so an EXTERNAL write reaches an already-open
+// reader on the push instead of waiting for a reload. A detail is a single
 // addressed read, so the stamp is the ONLY thing that can tell it its thread may have moved.
 // Only a new ADDRESS may wipe to the loading face — a stamp tick re-reads quietly behind the painted
 // thread, the same rule the paged list follows.

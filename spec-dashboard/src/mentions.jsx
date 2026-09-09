@@ -129,8 +129,7 @@ export function highlight(text, q) {
 
 // filter a `/` command list by the typed prefix: startsWith beats a mid-string include; server order is
 // preserved within a score band (stable sort). Empty query (just `/`) lists everything. ONE matcher for
-// every `/` palette — the ❯ inbox's command menu, the New box's preset palette, the eval detail's review
-// menu ([[review-commands]]) — so the palettes rank identically.
+// every `/` palette — the ❯ inbox's command menu and the New box's preset palette — so they rank identically.
 export function matchSlash(cmds, query) {
   const q = query.toLowerCase()
   const scored = []
@@ -173,16 +172,14 @@ export function slashLineAt(value, commands) {
 // dropdown descriptions read as sentences — capitalise the first letter (idempotent; CC's already are).
 const capDesc = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 
-// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[board]`
-// flags one of OUR commands (close/merge/eval — or the eval detail's /ok): it runs HERE, not in the
-// agent (see sessionCommands.js / reviewCommands.js). `[preset]` is a SpexCode agent-prompt preset;
-// `[review]` tags a review-track preset.
-const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]', preset: '[preset]', review: '[review]' }
+// the row's trailing source tag, mirroring CC: `(user)` / `(project)` / `[skill]` / `built-in`. `[ui]`
+// flags one of OUR commands (close/merge): it runs HERE, not in the agent (see sessionCommands.js).
+// `[preset]` is a SpexCode agent-prompt preset.
+const SRC_TAG = { user: '(user)', project: '(project)', skill: '[skill]', 'built-in': 'built-in', ui: '[ui]', preset: '[preset]' }
 
-// ONE render for every `/` dropdown — Command Box's menu (`up`), the New
-// box's preset palette (downward), and the eval composer's review menu (`up`). Rows: /name · description ·
-// source tag; a board/review command carries its identity hue (`sc-<color>`), CC commands their source tag,
-// presets their kind. `head` is the dim title label.
+// ONE render for every `/` dropdown — Command Box's menu (`up`) and the New box's preset palette
+// (downward). Rows: /name · description · source tag; a board command carries its identity hue
+// (`sc-<color>`), CC commands their source tag, presets their kind. `head` is the dim title label.
 export function SlashMenu({ menu, up, head, onPick, onHover }) {
   const t = useT()
   return (

@@ -679,26 +679,10 @@ export async function postIssuePromote(id) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/promote`, { method: 'POST' })
   return res.json()
 }
-// resolve/retract a remark by its `<thread-id>#<rid>` ref ([[remark-substrate]]) — the ref rides the BODY
-// (a '#' in a URL is a fragment). Identity is server-derived ('human'): resolve is the human's second-party
-// judgment on an agent's remark, retract withdraws the human's OWN unresolved one — the buttons only mirror
-// who-may; the server enforces it.
-export async function postRemarkAction(action, ref) {
-  const res = await apiFetch(`/api/remarks/${action}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ref }),
-  })
-  return res.json()
-}
 export async function postIssueThread({ concern, body, evidence, store }) {
   const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ concern, body, store, ...(evidence?.length ? { evidence } : {}) }),
   })
-  return res.json()
-}
-// stash a captured video frame (PNG bytes) in the content-addressed blob store; returns { hash } — what an
-// anchored annotation references (image link in its body, and the typed evidence[] on its thread).
-export async function putFrameBlob(blob) {
-  const res = await apiFetch('/api/evidence', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob })
   return res.json()
 }

@@ -28,18 +28,17 @@ full-page overflow owner.
 
 ## expanded spec
 
-`PageScroll` is the one overflow owner for Evals and Issues lists/details, Settings, and the global
-Projects page. The shell owns its available viewport; the primitive owns the top/bottom track inset,
-desktop end inset, stable gutter, vertical overscroll containment, and horizontal clipping. Content owns
-its width and padding. Sticky children such as a route-leading status strip, the review list header,
-detail side rail, and composer pin
-inside this scrollport, so their geometry follows the same viewport instead of the browser document or a
-page-local scroller. Route-specific leading content also stays inside it: the scoped Evals terminal/gates
-strip is its first child and pins at the scrollport's shared 10px top inset without shifting the scrollbar
-track. It is opaque through shared palette tokens, has a stable per-viewport height, and establishes the
-following content position in normal flow before it sticks, so neither desktop nor a two-line 390px strip
-covers the first row. Popovers and tooltips remain above it; neighboring sticky list headers and detail
-rails keep their own containment. A route with no leading status contributes no empty sticky geometry.
+`PageScroll` is the one overflow owner for the Issues list and detail, Settings, and the global Projects
+page. The shell — a workspace view host on the desktop, the phone's review plane, the Projects page
+itself — owns its available viewport; the primitive owns the top/bottom track inset measured from that
+shell's edges, desktop end inset, stable gutter, vertical overscroll containment, and horizontal clipping.
+Content owns its width and padding. Sticky children — the list's query row and its section/facet header,
+the detail side rail, and the composer — pin inside this scrollport, so their geometry follows the same
+viewport instead of the browser document or a page-local scroller: the query row pins at the scrollport's
+top inset and the header at its own offset below that pinned row, the same offsets at 1440 and 390. A
+list may place a leading child ahead of its content; it is then the scrollport's first child and pins at
+the shared top inset without shifting the scrollbar track. A route with none contributes no empty sticky
+geometry: the Issues list's first child is its content column.
 
 Scroll position is remembered by the full canonical address — **the address of the PANE the page is
 mounted in**, which is the window's address only when the page is the window ([[workspace-shell]]: the
@@ -54,12 +53,13 @@ keeps observing until the content can represent that position. Pointer, wheel, t
 ends automatic restoration immediately so user intent wins.
 List to detail is still an ordinary PUSH and browser Back still owns navigation; the primitive only
 restores the nested scrollTop belonging to the returned address. Different query states keep different
-positions, and so do different PROJECTS — an address is only an address inside one project, so the saved
+positions (the bare Issues list and its `state:closed` query each come back to their own), and so do
+different PROJECTS — an address is only an address inside one project, so the saved
 positions are keyed under the project's scope ([[dashboard-shell]]) rather than an origin-wide one. A new
 address starts at the top, and a hidden warm page keeps its own native state.
 
 The Graph canvas and Session console do not consume this primitive: the graph camera is not document
 scroll, the session list is a bounded pane, and xterm/tmux owns terminal scrollback. Popup, side-rail,
 composer, and mobile timeline scrollers remain local where their contracts require them. At phone width
-the same review pages and direct Settings route consume the same primitive above the tab bar, with equal
+the same Issues pages and the direct Settings route consume the same primitive above the tab bar, with equal
 top/bottom track insets, no horizontal page overflow, and the detail rail returned to ordinary document flow.

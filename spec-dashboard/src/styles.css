@@ -394,8 +394,6 @@ body {
    a dock-local glyph, so open/closed says one thing everywhere it is said. */
 .ctx-issue-state { flex: 0 0 auto; }
 .ctx-row code, .ctx-state { flex: 0 0 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--type-caption); }
-.ctx-score { flex: 0 0 16px; text-align: center; font-weight: var(--weight-semibold); }
-.ctx-score.pass { color: var(--green); }.ctx-score.fail { color: var(--red); }.ctx-score.stalePass, .ctx-score.staleFail, .ctx-score.empty, .ctx-score.missing { color: var(--muted); }
 .ctx-empty { padding: 8px 10px 12px; color: var(--muted); font-size: var(--type-meta); }
 .ctx-error { color: var(--red); }
 
@@ -1155,9 +1153,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    pending edits — zero values simply don't render). */
 .ovc { display: inline-flex; align-items: center; gap: 2px; font-family: var(--ui-font); font-size: var(--type-caption); font-weight: var(--weight-semibold); line-height: var(--leading-relaxed); padding: 0 4px; border-radius: var(--radius); border: 1px solid transparent; background: color-mix(in srgb, currentColor 10%, transparent); }
 .ovc .review-state svg { width: 11px; height: 11px; }
-.ovc.st-open, .ovc.st-pass { color: var(--green); }
+.ovc.st-open { color: var(--green); }
 .ovc.st-closed { color: var(--magenta); }
-.ovc.st-fail { color: var(--red); }
 .ovc.st-edit { color: var(--blue); }
 .ov-hint { margin-left: auto; font-size: var(--type-meta); color: var(--muted); }
 /* the panel is a fixed-size pop-out; each pane scrolls its OWN content (doc/hist below).
@@ -1319,16 +1316,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .drift-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-semibold); color: var(--yellow); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 0 3px; line-height: var(--leading-ui); }
 
 .issue-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-semibold); color: var(--magenta); border: 1px solid var(--magenta); border-radius: var(--radius); padding: 0 3px; line-height: var(--leading-ui); cursor: default; }
-
-.score-badge {
-  flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
-  width: 14px; height: 14px; line-height: var(--leading-none); cursor: default;
-}
-.score-badge.pass      { color: var(--green); }
-.score-badge.fail      { color: var(--red); }
-.score-badge.stalePass,
-.score-badge.staleFail { color: var(--muted); }                 /* the last verdict, greyed */
-.score-badge.empty     { color: var(--muted); opacity: .45; }   /* never measured — an empty ring */
 
 .tag-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .tag-chip { font-family: var(--ui-font); font-size: var(--type-caption); line-height: var(--leading-relaxed); color: var(--ink2);
@@ -2114,22 +2101,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* the review track ([[annotator]]): the playhead-inside comment glows green, the selected one orange — in sync with the scrubber markers. */
 .fv-reply.active { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 7%, transparent); }
 .fv-reply.sel { border-left-color: var(--orange); background: color-mix(in srgb, var(--orange) 9%, transparent); }
-/* a remark ([[remark-substrate]]) carries its resolved bit in place: an OPEN remark is prominent (a concern its
-   thread still owes an answer — a live left-bar), a RESOLVED one is visually settled (dimmed, thin bar). */
-.fv-reply.remark.open { border-left-color: var(--orange); border-left-width: 3px; }
-.fv-reply.remark.resolved { opacity: .62; border-left-color: color-mix(in srgb, var(--green) 45%, var(--line)); }
-.fv-remark-state { font-family: var(--ui-font); font-size: var(--type-caption); padding: 0 5px; border-radius: var(--radius); margin-left: auto; }
-.fv-remark-state.open { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); font-weight: var(--weight-semibold); }
-.fv-remark-state.resolved { color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
-/* the remark's ONE applicable verb, in place ([[remark-substrate]] write parity): resolve = the human's
-   second-party judgment on an agent's open remark (green — it settles the loss); retract = withdraw one's
-   own (muted — an erasure, not a judgment). A resolved remark renders neither (monotonic). */
-.fv-remark-act { font-family: var(--ui-font); font-size: var(--type-caption); padding: 0 6px; border-radius: var(--radius); cursor: pointer; line-height: var(--leading-body); background: var(--paper); }
-.fv-remark-act.resolve { color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 40%, var(--line)); }
-.fv-remark-act.resolve:hover { background: var(--green); color: var(--paper); border-color: var(--green); }
-.fv-remark-act.retract { color: var(--muted); border: 1px solid var(--line); }
-.fv-remark-act.retract:hover { background: var(--orange); color: var(--paper); border-color: var(--orange); }
-.fv-remark-act:disabled { opacity: .5; cursor: default; }
 .fv-reply-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; font-family: var(--ui-font); font-size: var(--type-meta); }
 .fv-reply-by { color: var(--blue); font-weight: var(--weight-semibold); }
 .fv-reply-at { color: var(--muted); }
@@ -3161,103 +3132,13 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* ---- evidence media — the lazily loaded evidence image and its click-to-enlarge lightbox (Evidence.jsx's
    BlobMedia, rendered inside rich-text evidence spans and the History pane). ---- */
-.an-thread { display: flex; flex-direction: column; padding: 4px 0 8px; }
-.an-thread .an-comments-head { padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
-.an-thread .fv-reply { margin-top: 10px; }
 .an-image { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel2); cursor: zoom-in; }
 /* click-to-enlarge overlay for evidence images — click anywhere / Esc closes */
 .lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .82); cursor: zoom-out; }
 .lightbox img { max-width: 96vw; max-height: 96vh; object-fit: contain; border-radius: var(--radius); box-shadow: var(--shadow); }
-.an-prior-note { color: var(--muted); }
-.an-node { font-size: var(--type-meta); color: var(--muted); text-decoration: none; }
-.an-node:hover { text-decoration: underline; }
-.an-expected { font-size: var(--type-control); color: var(--ink2); padding: 8px 0 0; }
-.an-comments-head { font-size: var(--type-caption); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); color: var(--ink2); }
-/* the still gallery — every image entry stacked on the stage, each click-to-enlarge. Media keeps its
-   INTRINSIC geometry: items align start so the flex column never stretches a small
-   image to the column width — shrink-only via each element's own max-inline-size. */
-.an-gallery { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 12px 0 0; }
-/* the player + stage shrink-wrap the clip they play — the clip renders at its intrinsic size (capped by
-   the column) and the chrome follows it, never the clip stretched to fill the chrome. The player keeps a
-   small usability FLOOR so the control bar under a tiny clip never crushes the scrubber to a sliver —
-   the floor widens only the bar; the stage (fit-content) keeps the clip at native size. */
-.an-player { inline-size: fit-content; min-inline-size: min(360px, 100%); max-inline-size: 100%; }
-.an-stage { position: relative; inline-size: fit-content; max-inline-size: 100%; margin: 12px 0 0; cursor: crosshair; }
-.an-video { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; background: #000; border: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
-.an-rect { position: absolute; border: 2px solid var(--orange); border-radius: var(--radius); background: color-mix(in srgb, var(--orange) 12%, transparent); pointer-events: none; }
-.an-rect.live { border-style: dashed; }
-/* the paused-state play hint over the frame — a cue, never in the way. */
-.an-bigplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 54px; height: 54px; border-radius: 50%;
-  background: rgba(8,12,18,.5); border: 1px solid rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center;
-  font-size: var(--type-icon-lg); color: #fff; pointer-events: none; backdrop-filter: blur(3px); }
-
-/* the custom control bar — replaces native chrome so the scrubber can carry the review track. */
-.an-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--line); border-top: none; border-radius: 0 0 var(--radius) var(--radius); }
-/* play and the fullscreen door (the only door once native chrome is suppressed) are one button */
-.an-play, .an-fs { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
-.an-play:hover, .an-fs:hover { background: var(--wash-hover); }
-/* fullscreen the whole player (stage + custom bar) so the review-track controls stay usable large; the stage
-   shrink-wraps the video so circle-rect percentages still map to the frame. */
-.an-player:fullscreen { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
-.an-player:fullscreen .an-stage { margin: 0; max-width: 100vw; max-height: calc(100vh - 38px); }
-.an-player:fullscreen .an-video { width: auto; max-width: 100vw; max-height: calc(100vh - 38px); border: none; border-radius: 0; }
-.an-player:fullscreen .an-bar { width: min(100vw, 1100px); border-radius: 0; }
-.an-player:-webkit-full-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
-.an-player:-webkit-full-screen .an-stage { margin: 0; max-width: 100vw; max-height: calc(100vh - 38px); }
-.an-player:-webkit-full-screen .an-video { width: auto; max-width: 100vw; max-height: calc(100vh - 38px); border: none; border-radius: 0; }
-.an-player:-webkit-full-screen .an-bar { width: min(100vw, 1100px); border-radius: 0; }
-.an-time { flex: 0 0 auto; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); font-variant-numeric: tabular-nums; }
-.an-curstep { flex: 0 1 auto; min-width: 0; font-size: var(--type-meta); color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line)); border-radius: var(--radius); padding: 1px 7px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the review-track scrubber: play fill + draggable knob + step bands + one marker per anchored comment. */
-.an-seek { flex: 1 1 auto; position: relative; height: 18px; display: flex; align-items: center; cursor: pointer; }
-.an-seek-trk { position: absolute; left: 0; right: 0; height: 5px; background: var(--line); border-radius: var(--radius); }
-.an-seek-play { position: absolute; left: 0; height: 5px; background: var(--blue); border-radius: var(--radius); transition: width .12s linear; }
-.an-knob { position: absolute; width: 12px; height: 12px; background: var(--ink); border: 2px solid var(--paper); border-radius: 50%; transform: translateX(-50%); box-shadow: 0 1px 4px rgba(0,0,0,.4); transition: left .12s linear; }
-.an-band { position: absolute; top: 2px; width: 2px; height: 14px; background: color-mix(in srgb, var(--green) 45%, transparent); transform: translateX(-50%); pointer-events: none; }
-/* a comment marker — click to seek + select; the selected one grows orange, the playhead-active one green. */
-.an-mk { position: absolute; top: -1px; width: 10px; height: 20px; padding: 0; transform: translateX(-50%); background: none; border: none; cursor: pointer; }
-.an-mk::after { content: ''; display: block; margin: 0 auto; width: 3px; height: 20px; border-radius: 2px; background: var(--orange); box-shadow: 0 0 0 1px var(--paper); transition: transform .12s, background .12s; }
-.an-mk:hover::after { transform: scaleX(1.8); }
-.an-mk.active::after { background: var(--green); }
-.an-mk.on::after { transform: scaleX(2); background: var(--orange); box-shadow: 0 0 0 1px var(--paper), 0 0 8px color-mix(in srgb, var(--orange) 60%, transparent); }
-.an-seek-hov { position: absolute; bottom: 22px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-family: var(--ui-font); font-size: var(--type-meta); padding: 1px 6px; border-radius: var(--radius); pointer-events: none; white-space: nowrap; }
-.an-ruler { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; }
-.an-step { font: inherit; font-size: var(--type-meta); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px 8px; cursor: pointer; }
-.an-step.on { border-color: var(--green); color: var(--ink); }
-.an-hint { color: var(--muted); font-size: var(--type-meta); padding: 8px 0 0; }
-.an-flash { font-size: var(--type-control); color: var(--green); padding: 4px 0 0; }
-
-/* the header verdict of the CURRENTLY-VIEWED reading (flips with the A/B strip) */
-.an-verdict-badge { font-weight: var(--weight-semibold); }
-
-/* the human sign-off in the header band: settled mark / the deliberate approval button —
-   offered only while the viewed reading IS the scenario's latest. */
-.an-okd { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--green); white-space: nowrap; }
-
-/* ---- the A/B history strip ([[reproduce-before-fix]]): a scenario's fail→pass lifecycle as verdict pips,
-   oldest→newest left-to-right, with ‹ › to walk it. BOUNDED to one line at a stable height: at most
-   AB_WINDOW recent pips + the ONE overflow menu; nothing here ever wraps. ---- */
-.an-ab { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; margin-left: auto; }
-.an-ab-nav { display: inline-flex; align-items: center; justify-content: center; line-height: var(--leading-none); color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px 6px; cursor: pointer; }
-.an-ab-nav:disabled { opacity: .35; cursor: default; }
-.an-ab-track { display: flex; flex-wrap: nowrap; gap: 3px; align-items: center; }
-.an-ab-pip { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; color: var(--muted); }
-.an-ab-pip.on { box-shadow: var(--focus-ring); border-color: var(--blue); }
-.an-ab-pos { font-size: var(--type-meta); color: var(--muted); margin-left: 2px; white-space: nowrap; }
-/* the strip's overflow door — every reading not holding a pip, one accessible menu (shared popover
-   mechanics + the shared .rl-menu skin). */
-.an-ab-more { position: relative; flex: none; }
-.an-ab-morebtn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink2); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
-.an-ab-morebtn:hover { color: var(--ink); background: var(--wash-hover); }
-.an-ab-menu { max-height: min(300px, 60vh); }
-.an-ab-menuitem { grid-template-columns: 16px auto minmax(0, 1fr); }
-.an-ab-menupos { font-variant-numeric: tabular-nums; }
-.an-ab-menudate { color: var(--muted); font-size: var(--type-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* phone width: the visible position label yields — the widest state ("295 / 302") pushed the strip past
-   the viewport. The position stays readable through the pips' and menu rows' aria-labels. */
-@media (max-width: 760px) {
-  .an-ab-pos { display: none; }
-}
+/* the fullscreen door on a played clip (BlobMedia's video) — the one control the suppressed native chrome leaves */
+.an-fs { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 26px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
+.an-fs:hover { background: var(--wash-hover); }
 /* boot fail-loud ([[dashboard-shell]]): the pre-first-board window shows an error + retry instead of an
    eternal spinner when the backend is unreachable; once a board has landed this surface never returns. */
 .loading { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; flex: 1; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-body); }

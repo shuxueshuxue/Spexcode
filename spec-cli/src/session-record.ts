@@ -12,7 +12,6 @@ import { sessionHost, probeTimedOut, TMUX_PROBE_TIMEOUT_MS } from './session-hos
 
 type Lifecycle = SessionLifecycle
 type Proposal = SessionProposal
-let scheduleWatchNotifications: (target: SessRec) => void = () => {}
 let withSessionTransition: <T>(id: string, body: () => Promise<T>) => Promise<T> = (_id, body) => body()
 
 export type SessRec = {
@@ -262,7 +261,6 @@ export function assertLegacyJsonWritesAllowed(): void {
 
 export function writeRecord(rec: SessRec): void {
   assertLegacyJsonWritesAllowed()
-  const application = configuredSessionApplication()
   // The JSON file is runtime/worktree metadata after cutover, not a lifecycle store. Once the canonical row
   // exists, omit the four old lifecycle keys entirely; retaining them would leave a second apparent fact for
   // readers and tempt a future path to trust the wrong writer. New records still need the legacy shape until
@@ -563,5 +561,4 @@ export async function restoreQuarantinedRecord(id: string): Promise<CorruptRecor
   }))
 }
 
-export function setRecordTransitionNotifier(fn: (target: SessRec) => void): void { scheduleWatchNotifications = fn }
 export function setRecordTransitionWrapper(fn: <T>(id: string, body: () => Promise<T>) => Promise<T>): void { withSessionTransition = fn }

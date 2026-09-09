@@ -240,9 +240,9 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // root: after a host restart the bound generation is a corpse, and resume rebuilds one to load the same
     // on-disk rollout. It prints only shell assignments for the exact proven endpoint.
     'if [ "$1" = "--resume" ]; then',
-    `  eval "$( ${SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" ${shQuote(server)} )" || exit 1`,
+    `  eval "$( ${SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" ${shQuote(server)} )" || exit 1`, // dead-words-ok: bash builtin, not the retired vocabulary
     'else',
-  `  eval "$( ${SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`,
+  `  eval "$( ${SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`, // dead-words-ok: bash builtin, not the retired vocabulary
     'fi',
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new

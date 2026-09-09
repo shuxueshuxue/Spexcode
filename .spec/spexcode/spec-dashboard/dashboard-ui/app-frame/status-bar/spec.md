@@ -128,9 +128,7 @@ right-side status readouts; no item is painted over another, and leaving restore
 hidden readouts. The default therefore spends one compact unit of the line, while the detail remains one
 pointer movement away and no slash digit is mixed into a neighboring readout.
 Density comes from one occurrence of each fact and compact
-glyph/count pairs, not truncating the ledger. Fresh and stale score states use different icon geometry from the shared
-icon system: solid outer rings are current; dashed outer rings are stale; the inner check/cross preserves
-the last verdict.
+glyph/count pairs, not truncating the ledger.
 
 Last-good tallies remain useful during a backend outage, but they are not current truth. While the shared
 transport is offline, every numeric workspace tally visibly carries a compact `~` stale marker (with the

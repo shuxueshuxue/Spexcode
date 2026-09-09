@@ -59,10 +59,10 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   doesn't branch on it, the drain is judgment — so it would be a label bought with a second creation verb
   and a filter. The local issue store is the git-native **discussion/annotation layer over the graph**.
 - **One file per thread.** The file is a one-line `concern` plus a prose body plus appended replies —
-  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A reply may carry **remark** state
-  ([[remark-substrate]]) — a resolvable bit + the targetSha it judges — appended to its sentinel as a
-  ` :: <k=v>` tail; a plain reply has no tail and parses unchanged, and the remark write verbs
-  (`remark`/`resolve`/`retract`) are thin siblings of `reply` over this same committed store. Its frontmatter carries `by`
+  each reply preceded by a `<!-- reply: <by> @ <at> -->` sentinel line. A stored reply may carry **remark**
+  state ([[remark-substrate]]) — a resolvable bit + the targetSha it judges — appended to its sentinel as a
+  ` :: <k=v>` tail; a plain reply has no tail and parses unchanged. `reply` is the store's only way a post
+  enters a thread, and it writes plain replies only — no verb stamps that tail. Its frontmatter carries `by`
   (author session), `status`, optional `nodes:` (the product nodes it concerns, linked `[[…]]`), optional
   `evidence:` (content-addressed evidence hashes — the typed reference a cross-node finding carries, per
   [[issues]] / video evidence). The sentinel is **unforgeable**: user body text is
@@ -98,7 +98,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
 - **A disposable store for tests — one override, plain files, no commit, no git at all.** `SPEXCODE_ISSUES_DIR=<abs>`
   points **both** reads and writes at an isolated directory of plain `.md` files: no `git add/commit`, so it can
   **never** touch any shared main, and the primary-checkout predicate is moot (nothing is committed). This is the
-  e2e/sandbox seam — a test rig sets it once and exercises the whole open/reply/remark surface against a temp dir
+  e2e/sandbox seam — a test rig sets it once and exercises the whole open/reply surface against a temp dir
   it throws away, mirroring how [[evidence-put]]'s evidence cache and `SPEXCODE_HOME` keep test artifacts off the repo.
   (Refuse-when-non-primary is the minimum honest fix that stops the dirtying today; the fuller ambition — a
   *worktree-independent* commit that lands the write on trunk from ANY checkout without a working-tree touch, e.g.

@@ -15,7 +15,7 @@
 // renames any legacy `.spec/.forum` to `.spec/.issues` on the first store touch after a toolchain update.
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join, dirname, resolve as resolvePath } from 'node:path'
-import { git, headSha, repoRoot } from '@spexcode/spec-core'
+import { git, repoRoot } from '@spexcode/spec-core'
 import { mainCheckout, envSessionId, readConfig } from '@spexcode/spec-core'
 import { dispatchNewMentions, parseMentions, type DispatchOutcome } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
@@ -268,8 +268,8 @@ function writeStoreFile(p: Issue, message: string): boolean {
 // stored state (a duplicate close — the store IS the requested state), `git commit` would exit 1
 // 'nothing to commit', so we detect the no-op after `add` (the staged path equals HEAD → status is silent)
 // and skip the commit. Returns whether the store actually changed, so a caller can say 'already <state>'.
-// MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its callers
-// (commitStore, findOrCreateEvalThread) own the lock, so it never acquires one itself (mkdir is not re-entrant).
+// MUST run while holding withStoreLock — it is the write half of a locked read-modify-write; its caller
+// (commitStore) owns the lock, so it never acquires one itself (mkdir is not re-entrant).
 function writeStoreBytes(p: Issue, message: string): boolean {
   const override = overrideStoreDir()
   if (override) {                                          // disposable store: a plain file, never a commit, never a shared main
@@ -345,23 +345,13 @@ export function openIssue(concern: string, opts: { nodes?: string[]; body?: stri
   })).issue
 }
 
-// mint a per-thread-unique remark id (retry on the rare collision within one thread). Short + readable so a
-// `<thread-id>#<rid>` ref is typeable; stable, so a resolve/retract never lands on the wrong remark.
-function mintRid(existing: Set<string>): string {
-  let rid: string
-  do { rid = 'r' + Math.random().toString(36).slice(2, 6) } while (existing.has(rid))
-  return rid
-}
-
-// a REMARK ([[remark-substrate]]) rides the SAME committed reply write, just stamping the remark fields: a
-// fresh unresolved bit + a minted stable rid + the targetSha it was authored against. Absent `remark` this is
-// an ordinary reply, unchanged. Returns the thread; the new reply is its last, so a caller reads back its rid.
-export function reply(id: string, body: string, author?: string, evidence?: string[], remark?: { targetSha: string }): Issue {
+// append one plain reply `{by, at, body}` to a thread — the ONE committed reply write. Returns the thread;
+// the new reply is its last.
+export function reply(id: string, body: string, author?: string, evidence?: string[]): Issue {
   const by = author || currentSession()
-  return commitStore(remark ? `remark(${id}): by ${by}` : `issue(${id}): reply by ${by}`, () => {
+  return commitStore(`issue(${id}): reply by ${by}`, () => {
     const p = loadOne(id)   // fresh read under the lock → no lost-update when replies race
     const post: Reply = { by, at: new Date().toISOString(), body: body.trim() }
-    if (remark) { post.rid = mintRid(new Set(p.replies.map((r) => r.rid).filter((x): x is string => !!x))); post.targetSha = remark.targetSha; post.resolved = false }
     p.replies.push(post)
     // an anchored annotation carries its frame blob: the reply's evidence hashes accrue onto the THREAD's
     // typed evidence[] (deduped), so the thread stays the one place a video finding's blobs are indexed.
@@ -374,8 +364,8 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 // The store is git-native data, so a human's write goes through the SAME open/reply the CLI uses (committed
 // straight to the trunk). @session remains text in that committed discussion; only @new dispatches after it.
 // Originator courtesy is composed above this store because it needs eval-aware candidate resolution.
-export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
-  const thread = reply(id, body, author, evidence, remark)
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[]): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
+  const thread = reply(id, body, author, evidence)
   return {
     thread,
     outcomes: await dispatchNewMentions(body, { threadId: id, node: thread.nodes[0] || null, author, status: thread.status }),
@@ -409,115 +399,15 @@ export function closeLocalIssue(id: string): { status: 'landed'; already: boolea
   return { status: 'landed', already: !changed }
 }
 
-// ── remarks ([[remark-substrate]]) ──────────────────────────────────────────────────────────────────
-// A remark is a reply carrying a resolvable bit, attached to a HOST: a local issue, or a scenario keyed by
-// (node, scenario). The scenario track is NOT a new store — it is the annotator's lazy eval thread, keyed by
-// its `eval: <node> · <scenario>` concern; a remark reuses it, creating it on first remark as a stub
-// container (every remark is a reply, never the thread body, so the resolved bit always lives in one place).
-// @@@ the eval-concern format, once - composer and parser side by side. The parser existed in two copies while
-// a CLI surface down here had to recognise the format without being able to import the module that composes it;
-// [[issues-cli]] removed that constraint, so the format is one pair now. `node` is matched non-greedily because
-// it can never contain ' · ' while a scenario name may.
-const evalConcernKey = (node: string, scenario: string): string => `remark: ${node} · ${scenario}`
+// ── scenario-keyed threads ([[remark-substrate]]) — the concern-key PARSER only ───────────────────────
+// The store can hold scenario threads keyed by a `remark: <node> · <scenario>` concern (the remark overlay's
+// containers). No write path mints one, but the closeout nudge must still recognise them ([[local-issues]]:
+// they outlive every session by design). `node` is matched non-greedily because it can never contain ' · '
+// while a scenario name may.
 const EVAL_CONCERN_RE = /^remark: (.+?) · (.+)$/
 export const parseEvalConcern = (concern: string): { node: string; scenario: string } | null => {
   const m = EVAL_CONCERN_RE.exec(concern)
   return m ? { node: m[1].trim(), scenario: m[2].trim() } : null
-}
-
-// find-or-create the ONE scenario thread for (node, scenario), keyed by its eval concern, ATOMICALLY under
-// the store lock. R4 says a scenario's remark track lives ONCE — but a concurrent first-remark burst is a
-// normal dogfood situation (SpexCode runs parallel workers), and if the not-found read sat OUTSIDE the lock
-// two racers could both read "absent" and both create, minting a second thread whose remarks are invisible
-// to the concern key (a silent teeth blind spot). Holding one lock across both the find AND the create closes
-// that window: a racer either sees the thread the first created, or is the first. The stub is a pure
-// container (its body carries a [[wiki-link]], never an @-reference), so it needs no async notification — a
-// synchronous create suffices, and staying sync is exactly what lets it share the lock hold.
-function findOrCreateEvalThread(node: string, scenario: string, author: string): Issue {
-  ensureStoreMigrated()   // migrate before the lock (ensure takes it itself; never nest a store-lock hold)
-  const concern = evalConcernKey(node, scenario)
-  return withStoreLock(() => {
-    const existing = loadLocalIssues().find((t) => t.store === 'local' && t.concern === concern)
-    if (existing) return existing
-    const p: Issue = {
-      id: uniqueId(concern), store: 'local', concern, by: author, status: 'open',
-      nodes: [node], created: new Date().toISOString(),
-      body: `Remarks on the \`${scenario}\` remark for [[${node}]].`, replies: [], evidence: [], labels: [],
-    }
-    writeStoreFile(p, `issue: ${concern}`)
-    return p
-  })
-}
-
-function resolveRemarkHost(host: { issue?: string; node?: string; scenario?: string }, author: string): string {
-  if (host.scenario) {
-    const node = host.node
-    if (!node) throw new Error('a scenario remark needs a node plus --scenario <name>')
-    return findOrCreateEvalThread(node, host.scenario, author).id
-  }
-  if (!host.issue) throw new Error('a remark needs a host: an issue id, or a node with --scenario <name>')
-  return loadOne(host.issue).id   // throws loudly if the issue doesn't exist
-}
-
-// author a remark on a host — the ONE write both the CLI (`spex remark add`) and the server call. Stamps the
-// targetSha it was authored against (the worktree HEAD by default — R2). Returns the `<thread-id>#<rid>` ref.
-export async function remarkOnHost(
-  host: { issue?: string; node?: string; scenario?: string },
-  body: string,
-  opts: { targetSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<{ ref: string; rid: string; targetSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
-  const author = opts.author || currentSession()
-  const targetSha = opts.targetSha || headSha(repoRoot())
-  const id = resolveRemarkHost(host, author)
-  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetSha: targetSha })
-  const rid = thread.replies[thread.replies.length - 1].rid!
-  return { ref: `${id}#${rid}`, rid, targetSha, thread, author, outcomes }
-}
-
-// a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.
-function parseRemarkRef(ref: string): { id: string; rid: string } {
-  const i = ref.lastIndexOf('#')
-  if (i <= 0 || i === ref.length - 1) throw new Error(`bad remark ref '${ref}' — expected <thread-id>#<rid> (the id \`spex remark add\` printed)`)
-  return { id: ref.slice(0, i), rid: ref.slice(i + 1) }
-}
-
-// resolve a remark (R3): a DELIBERATE call by a SECOND PARTY — never the author (no self-resolve: an
-// identity comparison, so the dashboard's `human` cannot resolve a human-authored remark either), and
-// MONOTONIC (no un-resolve — a regression is a NEW remark). The resolver's identity is derived by the
-// SURFACE ([[remark-substrate]] LAW L): a governed session id from the CLI, the `human` sentinel from the
-// dashboard — both are real second parties, so the same rule runs on both. `by` is the resolving party.
-export function resolveRemark(ref: string, by: string): { thread: Issue; rid: string } {
-  const { id, rid } = parseRemarkRef(ref)
-  const { issue: thread } = commitStore(`remark(${id}#${rid}): resolved by ${by}`, () => {
-    const p = loadOne(id)
-    const r = p.replies.find((x) => x.rid === rid)
-    if (!r) throw new Error(`no remark '${ref}' in that thread`)
-    if (!by || by === 'unknown') throw new Error(`resolve needs a real identity (got '${by || 'none'}'): run it under a governed session, or from the dashboard (its actor is 'human')`)
-    if (r.resolved) throw new Error(`remark '${ref}' is already resolved — monotonic: a regression is a NEW remark, never an un-resolve`)
-    if (r.by === by) throw new Error(`refusing to self-resolve '${ref}': the author (${by}) may not resolve their own remark — resolve is a second party's deliberate judgment`)
-    r.resolved = true; r.resolvedBy = by; r.resolvedAt = new Date().toISOString()
-    return p
-  })
-  return { thread, rid }
-}
-
-// retract a remark (R3): the AUTHOR withdraws their OWN remark, removing it — but ONLY while it is
-// unresolved. Only the author may retract; and once a SECOND party has deliberately resolved it, the remark
-// (and that recorded judgment) is part of the record — retract may not erase it. This makes R3's
-// monotonicity two-sided: resolve can't be undone, and retract can't back-door an un-resolve by deleting the
-// resolved remark. A regression after a resolve is a NEW remark, never a retract-and-reraise.
-export function retractRemark(ref: string, by: string): { thread: Issue; rid: string } {
-  const { id, rid } = parseRemarkRef(ref)
-  const { issue: thread } = commitStore(`remark(${id}#${rid}): retracted by ${by}`, () => {
-    const p = loadOne(id)
-    const idx = p.replies.findIndex((x) => x.rid === rid)
-    if (idx < 0) throw new Error(`no remark '${ref}' in that thread`)
-    if (p.replies[idx].by !== by) throw new Error(`only the author (${p.replies[idx].by}) may retract '${ref}' — you are '${by}'`)
-    if (p.replies[idx].resolved) throw new Error(`refusing to retract '${ref}': it was resolved by ${p.replies[idx].resolvedBy} — a resolved remark is part of the record (monotonic), retract only withdraws an UNRESOLVED remark; a regression is a NEW remark`)
-    p.replies.splice(idx, 1)
-    return p
-  })
-  return { thread, rid }
 }
 
 // the post-merge nudge TEXT ([[local-issues]]) — produced HERE so the toggle and the wording live in one

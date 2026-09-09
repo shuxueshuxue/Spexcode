@@ -63,8 +63,8 @@ same per-surface freshness (live pull on the CLI, resident slice on the server; 
 slice entirely). The board fold attaches each node's merged issues (`issues` / open subset `openIssues`), so every
 per-node surface — tile badge, node-info Issues tab, and the [[issues-view]] page — reads the
 same mixed set with no second path; the board also carries ONE top-level freshness stamp over the whole
-merged set (open/thread/reply counts + latest activity), so any thread write — reply, remark, resolve,
-retract, close, on a noded or nodeless thread — moves board bytes and reaches a delta-subscribed viewer
+merged set (open/thread/reply counts + latest activity), so any thread write — reply, close, on a noded
+or nodeless thread — moves board bytes and reaches a delta-subscribed viewer
 ([[remark-substrate]] write-visibility) while the per-node fold stays [[graph-lean]]-slim.
 
 **Writes stay where they're owned — and store-routed verbs stay one port, on BOTH surfaces.** Creation is

@@ -2,7 +2,7 @@
 title: issues-cli
 status: active
 hue: 30
-desc: The `spex issue` / `spex remark` CLI surface, at its own altitude — argv parsing, console output and exit codes for the issue and remark verbs, above the store modules whose verbs it renders.
+desc: The `spex issue` CLI surface, at its own altitude — argv parsing, console output and exit codes for the issue verbs, above the store modules whose verbs it renders.
 code:
   - spec-cli/src/issues-cli.ts
 related:
@@ -25,7 +25,7 @@ each moved a LEAF of the ring while the ring was held by a module hosting severa
 
 ## expanded spec
 
-issues-cli owns the `spex issue` and `spex remark` verb surfaces: flag parsing, the flag-decides-the-parse
+issues-cli owns the `spex issue` verb surface: flag parsing, the flag-decides-the-parse
 discriminators, human-readable output, and exit codes. It owns no store state and no issue semantics — it
 calls the read/write verbs that `issues.ts` and `localIssues.ts` export, and it renders what they return.
 The split is by ALTITUDE, not by domain: the issue domain still belongs to [[issues]] and the local store to
@@ -37,7 +37,7 @@ because a handler down there had to reach a module that imported it back, and it
 
 This module is deliberately NOT merged into `cli.ts`. That file is the thin dispatch hub ([[cli-surface]]),
 whose roughly eighty lazy import sites keep a single invocation from loading every verb's implementation;
-folding 265 lines of verb bodies in would trade one two-altitude module for another and cost the startup
+folding the verb bodies in would trade one two-altitude module for another and cost the startup
 property that discipline exists to buy. The hub reaches this module the same way it reaches every other verb:
 one lazy line.
 

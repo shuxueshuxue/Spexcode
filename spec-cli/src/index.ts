@@ -9,9 +9,9 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig, runtimeRoot } from '@spexcode/spec-core'
-import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
+import { issuesEnabled } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, mergedIssues, promote } from './issues.js'
-import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
+import { replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '@spexcode/spec-forge/resident'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { dispatchNewMentions, summarizeDispatch, summarizeLoopIn } from './mentions.js'
@@ -329,6 +329,12 @@ app.get('/api/issues/:id', (c) => {
 // The server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
 // reload that follows shows the comment. Honor the on/off switch: 403 when the feature is OFF; an unknown
 // local thread → 404; a failed forge write → 502 with the driver's own message (fail loud, never queued).
+//
+// Every issue write route below ends its success path with notifyBoardChanged('full') — the board cache is
+// invalidated ATOMICALLY with persistence, before the response, so the writer's own post-write refetch can
+// never race an async fs event into the stale cache. This explicit nudge is the ONE in-process mechanism
+// (the store dir is deliberately NOT in the watch set); a cross-process write (a CLI `spex issue reply`)
+// reaches the board through its trunk commit via the existing refs watcher instead.
 app.post('/api/issues/:id/reply', async (c) => {
   if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
   const body = await c.req.json().catch(() => ({}))
@@ -345,7 +351,7 @@ app.post('/api/issues/:id/reply', async (c) => {
       : null
     const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
-    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
+    notifyBoardChanged('full')   // atomic with persistence — see the write-visibility note above the reply route
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: [summarizeDispatch(r.outcomes), summarizeLoopIn(r.loopIn)].filter(Boolean).join('  |  ') })
   } catch (e) {
     const msg = String((e as Error).message || e)
@@ -360,7 +366,7 @@ app.post('/api/issues/:id/close', async (c) => {
   try {
     const r = await closeIssue(id)
     if (r.store !== 'local') await refreshForgeNow()
-    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
+    notifyBoardChanged('full')   // atomic with persistence — see the write-visibility note above the reply route
     return c.json({ ok: true, ...r })
   } catch (e) {
     const msg = String((e as Error).message || e)
@@ -380,7 +386,7 @@ app.post('/api/issues', async (c) => {
   try {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
     if (r.store !== 'local') await refreshForgeNow()
-    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
+    notifyBoardChanged('full')   // atomic with persistence — see the write-visibility note above the reply route
     return c.json({ ok: true, id: r.id, store: r.store, url: r.url, outcomes: summarizeDispatch(r.outcomes) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, store === 'local' ? 500 : 502)
@@ -398,7 +404,7 @@ app.post('/api/issues/:id/promote', async (c) => {
   try {
     const r = await promote(id, { author: 'human' })
     await refreshForgeNow()
-    notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
+    notifyBoardChanged('full')   // atomic with persistence — see the write-visibility note above the reply route
     return c.json({ ok: true, ...r })
   } catch (e) {
     const msg = String((e as Error).message || e)
@@ -406,56 +412,6 @@ app.post('/api/issues/:id/promote', async (c) => {
   }
 })
 
-// the REMARK write surface ([[remark-substrate]]) — server PARITY with the CLI: the dashboard can author /
-// resolve / retract a remark through the SAME functions `spex remark|resolve|retract` call, adding no
-// capability. A ref (`<thread-id>#<rid>`) rides the request BODY, not the path (a '#' in a URL is a
-// fragment). Identity is derived SERVER-SIDE — this is the dashboard's human surface, so the actor is
-// `'human'`, the SAME sentinel /api/issues stamps; it is NEVER read from the request body. That keeps R3's
-// teeth structural (identity is not spoofable over the wire) and identical on both surfaces: resolve is any
-// SECOND party's deliberate judgment — the human resolves an agent's remark here exactly as an agent
-// resolves through the CLI, and self-resolve stays rejected by the same identity comparison ('human' can
-// never resolve a human-authored remark) — and retract binds to the author (only the human's own remarks).
-// Who-may-resolve/retract cannot depend on transport.
-//
-// Every issue/remark write route below ends its success path with notifyBoardChanged('full') — the board
-// cache is invalidated ATOMICALLY with persistence ([[remark-substrate]] write-visibility), before the
-// response, so the writer's own post-write refetch can never race an async fs event into the stale cache.
-// This explicit nudge is the ONE in-process mechanism (the store dir is deliberately NOT in the watch set);
-// a cross-process write (a CLI `spex remark add`) reaches the board through its trunk commit via the
-// existing refs watcher instead.
-app.post('/api/remarks', async (c) => {
-  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
-  const body = await c.req.json().catch(() => ({}))
-  const text = typeof body?.body === 'string' ? body.body : ''
-  if (!text.trim()) return c.json({ error: 'empty remark' }, 400)
-  const evidence = Array.isArray(body?.evidence) ? (body.evidence as unknown[]).filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)) : []
-  const host = typeof body?.scenario === 'string' && body.scenario
-    ? { node: typeof body?.node === 'string' ? body.node : undefined, scenario: body.scenario as string }
-    : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
-  const targetSha = typeof body?.targetSha === 'string' ? body.targetSha : undefined
-  try {
-    const r = await remarkWithLoopIn(host, text, { targetSha, author: 'human', evidence })
-    notifyBoardChanged('full')
-    return c.json({ ok: true, ref: r.ref, rid: r.rid, targetSha: r.targetSha, outcomes: [summarizeDispatch(r.outcomes), summarizeLoopIn(r.loopIn)].filter(Boolean).join('  |  ') }, 201)
-  } catch (e) {
-    return c.json({ error: String((e as Error).message || e) }, 400)
-  }
-})
-app.post('/api/remarks/:action{resolve|retract}', async (c) => {
-  if (!issuesEnabled()) return c.json({ error: 'issues workflow is off' }, 403)
-  const body = await c.req.json().catch(() => ({}))
-  const ref = typeof body?.ref === 'string' ? body.ref : ''
-  if (!ref) return c.json({ error: 'missing remark ref' }, 400)
-  const by = 'human'   // server-derived identity — never the request body (see /api/remarks above)
-  try {
-    if (c.req.param('action') === 'resolve') resolveRemark(ref, by)
-    else retractRemark(ref, by)
-    notifyBoardChanged('full')
-    return c.json({ ok: true, ref })
-  } catch (e) {
-    return c.json({ error: String((e as Error).message || e) }, 400)
-  }
-})
 // the harness slice of the dashboard input's `/` dropdown — computed by the launcher's HARNESS adapter the same way that harness
 // computes its own `/` menu ([[harness-adapter]]). The client passes `?harness=<id>` for the ACTIVE session,
 // so a codex tab gets CODEX's menu, not the default's; unknown/absent → default. Insert-only on the client.

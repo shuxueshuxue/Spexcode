@@ -320,8 +320,6 @@ const SIGNPOSTS: Record<string, string> = {
   rename: 'spex session rename',
   prompt: 'spex session show <SEL>',
   rawkey: 'spex session send <SEL> --keys "<keys>"',
-  resolve: 'spex remark resolve <ref>',
-  retract: 'spex remark retract <ref>',
 }
 const SESSION_SIGNPOSTS: Record<string, string> = {
   rawkey: 'spex session send <SEL> --keys "<keys>"',
@@ -791,22 +789,6 @@ if (cmd === 'serve') {
   } else {
     const { runIssues } = await import('./issues-cli.js')
     await flushExit(await runIssues(process.argv.slice(3)))
-  }
-} else if (cmd === 'remark') {
-  const sub = process.argv[3]
-  const m = sub === 'add' || sub === 'resolve' || sub === 'retract' ? await import('./issues-cli.js') : null
-  if (sub === undefined) {
-    console.log((await import('./help.js')).commandHelp('remark'))
-  } else if (sub === 'add') {
-    await flushExit(await m!.runRemark(process.argv.slice(4)))
-  } else if (sub === 'resolve') {
-    await flushExit(await m!.runResolve(process.argv.slice(4)))
-  } else if (sub === 'retract') {
-    await flushExit(await m!.runRetract(process.argv.slice(4)))
-  } else {
-    console.error(`spex remark: unknown verb '${sub}' — add | resolve | retract  (spex help remark)`)
-    if (!sub.startsWith('--')) console.error('  (the old bare `spex remark <host> --body …` write is now `spex remark add <host> --body …`)')
-    process.exit(2)
   }
 } else if (cmd === 'materialize') {
   const { materialize } = await import('./materialize.js')

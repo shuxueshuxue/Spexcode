@@ -75,7 +75,7 @@ gateway accepts --password <pw> (or SPEXCODE_PASSWORD); its self-signed certific
 
 const JSON_NOTE = `One-shot payload reads (graph · spec search · session ls/show/review · issue ls/show/links) take --json.`
 
-const MENTION_NOTE = `Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg included.
+const MENTION_NOTE = `Mentions: @session · [[node]] work in ANY prompt or issue body — text passed as a CLI arg included.
 [[node]] names a topic; @session names a retained session for the receiving agent to inspect, contact with
 \`spex session send\`, or inherit with \`/distill\`. Mentions are references only: they never send or spawn.`
 
@@ -466,19 +466,7 @@ links — the read-only forge trace: which open forge issues/PRs serve which spe
 The issues workflow's on/off switch is the \`issues.enabled\` key in .spec/spexcode.json (no CLI toggle
 verb — edit the JSON; \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
-    see: 'spex remark (pin a resolvable concern to an issue) · spex evidence put (stash evidence bytes)',
-  },
-  remark: {
-    line: 'remark <verb>         resolvable pins on a host: add · resolve · retract',
-    body: `Usage: spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--target-sha <sha>] [--evidence <hash>…]
-       spex remark resolve <ref>          (the <thread-id>#<rid> that \`spex remark add\` printed)
-       spex remark retract <ref>
-
-The resolvable interaction primitive: \`add\` pins a concern to a HOST — a local issue, or a scenario
-(\`--scenario\` present ⇒ the positional is a node; otherwise it is an issue id — the flag decides,
-never type-sniffing). A SECOND agent \`resolve\`s it (never the author); the AUTHOR \`retract\`s their
-own. The whole loop is CLI-first; the dashboard adds no capability.`,
-    see: 'spex issue (the thread hosts) · spex evidence put (attach evidence bytes)',
+    see: 'spex evidence put (stash evidence bytes)',
   },
   evidence: {
     line: 'evidence put|get      content-addressed bytes: put stashes & prints the hash, get reads back',
@@ -486,7 +474,7 @@ own. The whole loop is CLI-first; the dashboard adds no capability.`,
        spex evidence get <hash> [-o <file>]
 
 put writes bytes into the shared content-addressed evidence cache and prints the hash — transport
-only. Use the hash with --evidence on issues/remarks; re-putting the same content
+only. Use the hash with --evidence on issues; re-putting the same content
 restores pruned or cloned-away evidence.
 
 get is the symmetric read: hash in, bytes out. Local cache first (no backend needed — the evidence
@@ -657,7 +645,7 @@ export function overviewHelp(): string {
   const visible = (name: string) => profileAllowsCommand(profile, name)
   const projectLines = ['graph', 'init', 'materialize', 'doctor', 'uninstall', 'serve', 'dashboard', 'open', 'guidance']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
-  const nounLines = ['spec', 'session', 'peer', 'issue', 'remark', 'evidence', 'flat']
+  const nounLines = ['spec', 'session', 'peer', 'issue', 'evidence', 'flat']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   const manualLines = ['guide'].filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   return `spex — SpexCode CLI (spec↔code graph${full ? ' + worktree session state machine' : ''})

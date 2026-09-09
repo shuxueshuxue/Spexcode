@@ -1,17 +1,12 @@
-// The ONE token-query engine ([[review-query]]) — pure JS, no React/DOM. Both review ListViews, the
-// route layer's legacy replay, and any consumer minting canonical eval/issue addresses import from HERE:
+// The ONE token-query engine ([[review-query]]) — pure JS, no React/DOM. The Issues ListView, the
+// route layer's legacy replay, and any consumer minting a canonical issue address import from HERE:
 // the visible query TEXT is the single source of truth, and every tab/menu/autocomplete is only a
 // BUILDER that rewrites tokens in it (GitHub-measured semantics).
 
 export const ISSUE_QUERY_DEFAULT = 'is:issue state:open'
-export const EVAL_QUERY_DEFAULT = 'is:eval'
-// the session doors' scoped-list address: the default view, scoped — the text shows exactly that.
-export const scopedEvalQuery = (sessionId) => setToken(EVAL_QUERY_DEFAULT, 'scope', sessionId)
-// the aggregate score/count doors' address ([[eval-score-badge]]): the default view, node-filtered.
-export const nodeEvalQuery = (nodeId) => setToken(EVAL_QUERY_DEFAULT, 'node', nodeId)
-// a node's OPEN issues ([[context-dock]]): the issue list's default view, node-filtered. Same shape and
-// same reason as the eval twin — a surface that wants "this node's issues" asks for a text, never for a
-// second filter path, so the panel and the list it links to are literally the same query.
+// a node's OPEN issues ([[context-dock]]): the issue list's default view, node-filtered. A surface that
+// wants "this node's issues" asks for a text, never for a second filter path, so the panel and the list
+// it links to are literally the same query.
 export const nodeIssueQuery = (nodeId) => setToken(ISSUE_QUERY_DEFAULT, 'node', nodeId)
 
 const KEY_RE = /^([A-Za-z][A-Za-z0-9-]*):(.*)$/s

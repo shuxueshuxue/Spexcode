@@ -39,9 +39,10 @@ async function liveForgeSlice(verb: string): Promise<ForgeSlice | null> {
 }
 
 // the single-issue read behind `spex issue show` AND `GET /api/issues/:id` — find the thread in the SAME
-// merged, eval-remark-free read every issue surface consumes (never a second lookup path: an eval-remark
-// thread is not an issue, so `show` can't see one either). A local id needs no forge slice; a forge id
-// (`<host>#<n>`) reads from the caller-supplied slice (live pull on the CLI, resident cache on the server).
+// merged read every issue surface consumes (local threads + the forge slice on one time line; never a
+// second lookup path). A remark is a reply on its issue thread, so `show` renders it in place. A local id
+// needs no forge slice; a forge id (`<host>#<n>`) reads from the caller-supplied slice (live pull on the
+// CLI, resident cache on the server).
 
 function renderIssue(t: Issue): string {
   const L: string[] = []

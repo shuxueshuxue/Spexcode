@@ -36,7 +36,7 @@ mkdirSync(OUT, { recursive: true })
 // ===================================================================================================
 
 // R — route kind. `graph` is a LEGACY ADDRESS: reachable by typing it, never offered by the rail.
-const ROUTES = ['graph', 'evals', 'issues', 'settings', 'empty', 'spec', 'file', 'session']
+const ROUTES = ['graph', 'issues', 'settings', 'empty', 'spec', 'file', 'session']
 const DOCKS = ['closed', 'explorer', 'sessions']
 const CONTEXTS = ['closed', 'open']
 const SPLITS = ['none', 'open']
@@ -47,7 +47,7 @@ const SURFACES = ['conversation', 'terminal', 'diff', 'resource']
 // none and the main area takes the full width, rather than inheriting whatever the last tab was showing.
 // `graph` is still in R: the address is still reachable and still measurable, it is simply no longer a
 // rail destination ([[node-graph]]) — a retired entrance does not shrink the state space.
-const SIDEBARLESS_ROUTES = new Set(['evals', 'issues', 'settings'])
+const SIDEBARLESS_ROUTES = new Set(['issues', 'settings'])
 
 const dockBand = (state) => (state.D !== 'closed' && !SIDEBARLESS_ROUTES.has(state.R) ? 1 : 0)
 const contextBand = (state) => (state.R === 'spec' && state.C === 'open' ? 1 : 0)
@@ -232,7 +232,6 @@ const SESSION_ID = session.id
 const encodeParam = (param) => String(param).split('/').map(encodeURIComponent).join('/')
 const hashFor = (R) => ({
   graph: '#/graph',
-  evals: '#/evals',
   issues: '#/issues',
   settings: '#/settings',
   empty: '#/empty',
@@ -243,7 +242,7 @@ const hashFor = (R) => ({
 
 // what proves the routed view actually mounted, so a measurement never samples a Suspense fallback.
 const READY = {
-  graph: '.viewhost.view-graph', evals: '.viewhost.view-evals', issues: '.viewhost.view-issues',
+  graph: '.viewhost.view-graph', issues: '.viewhost.view-issues',
   settings: '.viewhost.view-settings', empty: '.viewhost.view-empty', spec: '.viewhost.view-spec',
   file: '.viewhost.view-file', session: '.viewhost.view-sessions .si-session-wrap',
 }
@@ -298,9 +297,9 @@ const stripRows = () => document.querySelectorAll('.tab').length
   ? new Set([...document.querySelectorAll('.tab')].map((t) => Math.round(t.getBoundingClientRect().top))).size
   : 0
 
-// Boot at #/empty, then navigate. A FIRST load at a bare #/evals or #/issues renders the cold review
-// fast-path — a different, dockless shell — so entering those addresses from a booted workspace is the
-// only way to measure the real chrome. The same boot-then-navigate also keeps every state's measurement
+// Boot at #/empty, then navigate. A FIRST load at a bare #/issues renders the cold review fast-path — a
+// different, dockless shell — so entering that address from a booted workspace is the only way to
+// measure the real chrome. The same boot-then-navigate also keeps every state's measurement
 // on the mounted-document pool's steady state ([[workspace-shell]]): a hidden document is display:none,
 // which the classifier skips outright, so a warm pool can never smuggle a band into the count.
 const enter = async (state) => {

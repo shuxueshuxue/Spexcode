@@ -641,13 +641,6 @@ export async function loadPlugins() {
   return res.json()
 }
 
-// the review-track prose presets (plugin nodes with `surface: review`, [[review-commands]]) — the eval
-// detail's remark-composer `/` palette; picking one prefills the composer, never a new write path.
-export async function loadReviewPlugins() {
-  const res = await apiFetch('/api/plugins?surface=review')
-  return res.json()
-}
-
 // the resolved runtime settings the backend serves at /api/settings: `{ layout, launchers: [{ name, harness }],
 // tmuxSocket, default: '<name>' }` (never the host `cmd`) — `default` is the configured `defaultLauncher` so the
 // New-Session dropdown pre-selects the SAME launcher a bare `spex session new` uses ([[launcher-select]]). Built-in
@@ -700,17 +693,6 @@ export async function postIssueThread({ concern, body, evidence, store }) {
   const res = await apiFetch('/api/issues', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ concern, body, store, ...(evidence?.length ? { evidence } : {}) }),
-  })
-  return res.json()
-}
-// author a REMARK on a node's concern thread ([[remark-substrate]]) — the
-// CLI-parity write the shared composer uses (L: no dashboard-only path). The server find-or-creates
-// the one thread for the pair and appends the remark; identity is server-derived ('human'), never sent.
-// Returns { ok, ref, rid, targetSha, outcomes }.
-export async function postRemark({ node, scenario, issue, body, targetSha, evidence }) {
-  const res = await apiFetch('/api/remarks', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ node, scenario, issue, body, ...(targetSha ? { targetSha } : {}), ...(evidence?.length ? { evidence } : {}) }),
   })
   return res.json()
 }

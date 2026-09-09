@@ -1,7 +1,7 @@
 ---
 concern: second wave: eval residue in review/remark product code (dashboard reviewQuery/reviewFilters/data.js, band-budget e2e, graph.ts word-hole)
 by: 4391b0f4-d754-43ab-b511-54ff11dfc328
-status: open
+status: landed
 nodes: eval-core
 created: 2026-09-09T09:10:39.992Z
 ---

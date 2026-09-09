@@ -2,13 +2,13 @@
 title: surface
 status: active
 hue: 260
-desc: A plugin node's surface is a frontmatter FIELD — one or more of system|command|hook|skill|agent|review (comma-listed when several) — not its location; discovered recursively under a plugin root.
+desc: A plugin node's surface is a frontmatter FIELD — one or more of system|command|hook|skill|agent (comma-listed when several) — not its location; discovered recursively under a plugin root.
 code:
 ---
 # surface
 
 A plugin node's **surface** — where it plugs in — is a `surface` **frontmatter field** naming one or MORE
-of six values (comma-separated when several: the node plugs into EVERY surface it lists, one body serving
+of five values (comma-separated when several: the node plugs into EVERY surface it lists, one body serving
 each — e.g. a plugin that is both an on-demand skill and a new-session command preset):
 
 - `surface: command` — a **command** prompt preset, offered in the `/` dropdown wherever a human composes
@@ -34,10 +34,6 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   allowlist. Same artifact shape as `skill`, one definition per harness: the divergence is a single
   [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
   exactly as a harness with no skill primitive gets no `SKILL.md`.
-- `surface: review` — a **review-track prose preset** under the [[review]] shelf: a remark template whose
-  body carries `{node}` / `{scenario}` / `{expected}` placeholders. It is a frontmatter value only: no loader
-  gathers it, no route serves it, and no composer offers it — the shelf and its leaf ([[refuse]]) are
-  declared nodes that reach no runtime surface.
 
 The surface is a FIELD, not a path: a plugin carrying it is a real graph node and is discovered
 **recursively** under a plugin root — so a grouping plugin may itself be a plugin whose children carry a
@@ -53,7 +49,6 @@ In [[source-of-truth]]'s `specs.ts`, `loadSurface(s)` walks each root recursivel
 [[session-console]] new-session and live-terminal `/` palettes), `loadSystemConfig` gathers system ([[sessions]]'s launcher), and
 `loadHookConfig` gathers hook (compiled into the dispatch manifest), `loadSkillConfig` gathers skill
 (materialized to a per-harness `SKILL.md` by [[harness-delivery]]'s materialize), `loadAgentConfig` gathers
-agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize); `review`
-has no loader. Only
+agent (materialized to a per-harness `<name>.md` sub-agent definition by that same materialize). Only
 **built/active** plugins gather — a `status: pending` node is declared intent, so it renders on the board but
 reaches no surface.

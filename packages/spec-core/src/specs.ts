@@ -404,7 +404,7 @@ export type ConfigPreset = { name: string; title: string; desc: string; kind: st
 // literal. `plugin-system` remains the separate root for this project's system spec.
 export const PLUGIN_INSTANCE_ROOT = '.plugins'
 // field-driven surface - a plugin is a spec node at ANY depth under a plugin root that carries a
-// `surface: system|command|hook|skill|agent|review` frontmatter field naming where it plugs in. There are no
+// `surface: system|command|hook|skill|agent` frontmatter field naming where it plugs in. There are no
 // `command/`/`system/`/`hook/`/`skill/`/`agent/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
 // the spec graph skipped them — path != graph); the surface is a FIELD on the node, so the plugin is a real
 // graph child (a grouping parent like `.plugins/prompts` is itself a spec node, never a bare dir). BOTH plugin roots participate: `.plugins` (the instance — DIY dev-flow plugins) and

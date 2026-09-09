@@ -69,7 +69,8 @@ and changed anchored source, not the repository's commit history.
 
 No hook is added. Dogfood installs the canonical template with `npm run hooks`; adopters receive it through
 `spex materialize` (also during `spex init`). The template resolves the committing checkout's CLI first,
-then a project-local install, PATH, and the shared checkout launcher. An unavailable CLI, unknown verb,
-or any failing invocation is silently skipped and never blocks the commit. The hook prints captured
-stderr only after a successful invocation, keeping an older sibling checkout quiet while shared hooks
-are ahead of its CLI. Identity stamping works even without that CLI.
+then a project-local install, PATH, and the shared checkout launcher. An unavailable CLI is silent and
+never blocks the commit. When a CLI resolves but the verb is unknown or the invocation fails, the hook
+prints one advisory line with the first captured output line and still proceeds; this keeps failures
+visible without turning context into a gate. Successful output is printed once. Identity stamping works
+even without a resolving CLI.

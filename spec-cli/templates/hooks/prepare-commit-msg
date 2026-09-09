@@ -34,7 +34,8 @@ git interpret-trailers --in-place --trailer "Session: $SPEXCODE_SESSION_ID" "$ms
 fi
 
 # @@@ commit context - shared hooks can run ahead of a sibling checkout's CLI. Capture first, print
-# only on success: an unavailable CLI, unknown verb, or failed invocation is silently advisory.
+# successful context verbatim, and report one advisory line for a resolved CLI that fails. An unresolved
+# CLI stays silent so an uninstalled adopter or sibling checkout does not acquire commit noise.
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 spex_kind=
@@ -58,5 +59,9 @@ spex_cli() {
 
 if context=$(spex_cli internal commit-context "$msg_file" 2>&1); then
   [ -z "$context" ] || printf '%s\n' "$context" >&2
+elif [ -n "$spex_kind" ]; then
+  first_line=${context%%$'\n'*}
+  [ -n "$first_line" ] || first_line='unknown error'
+  printf '• SpexCode: commit context unavailable (%s) — advisory, commit proceeds\n' "$first_line" >&2
 fi
 exit 0

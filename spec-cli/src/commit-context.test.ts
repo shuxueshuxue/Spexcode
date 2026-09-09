@@ -149,13 +149,13 @@ test('merge commits get Session but no context or derived Spec', (t) => {
   assert.match(message(), /^Session: commit-context-test$/m)
 })
 
-test('unknown verb or failed CLI is silent and Session still stamps under set -e', (t) => {
+test('a resolved but older or failed CLI reports one advisory and Session still stamps under set -e', (t) => {
   const { root, put, git, message } = fixture(t)
   put('node_modules/.bin/spex', '#!/bin/sh\necho "unknown verb" >&2\nexit 2\n')
   put('f.ts', source.replace('return 1', 'return 10'))
   git('add', 'f.ts')
   const r = git('commit', '-qm', 'old CLI')
-  assert.equal(r.stderr, '')
+  assert.match(r.stderr, /^• SpexCode: commit context unavailable \(unknown verb\) — advisory, commit proceeds\n$/)
   assert.match(message(), /^Session: commit-context-test$/m)
   assert.doesNotMatch(message(), /^Spec:/m)
   assert.ok(readFileSync(join(root, '.git/hooks/prepare-commit-msg'), 'utf8').includes('set -euo pipefail'))

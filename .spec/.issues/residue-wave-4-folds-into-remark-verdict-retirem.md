@@ -1,7 +1,7 @@
 ---
 concern: residue wave 4 (folds into remark/verdict retirement): score/verdict CSS, e2e #/evals drivers, .plugins/review loadReviewPlugins mention
 by: 4391b0f4-d754-43ab-b511-54ff11dfc328
-status: open
+status: landed
 nodes: eval-core
 created: 2026-09-09T10:54:22.671Z
 ---

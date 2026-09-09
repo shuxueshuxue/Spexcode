@@ -78,11 +78,8 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
            the declaration's range. Runtime-created/assigned callables, imported aliases, and generated
            names are outside this declaration extractor and therefore resolve as dead anchors.
   related: files this node REFERENCES but does not own — a YAML list, same path forms. Carries coverage
-           (never drift, never measurement freshness, nothing to ack); it is the many-to-many net that claims the files
-           govern doesn't. Every listed path must exist (lint integrity error otherwise). A related row
-           may also pin \`path#symbol\`: the node then hears about a commit ONLY when it moves that
-           unit — a hit is a soft \`related-drift\` warn naming the selector, a miss is SILENT (a scoped
-           related file's ordinary file-level nudge is off). Still never blocks, no ack, no measurement freshness.
+           only; every path and selector must resolve. Related selectors are context edges and produce no drift
+           finding.
   surface  plugin-system/.plugins nodes only: one or MORE of system (folded into every agent's prompt) |
            command (a /command) | skill (an on-demand SKILL.md the harness loads when a task matches the
            node's desc) | agent (a spawnable sub-agent definition; its \`tools:\` list is the spawned
@@ -139,9 +136,6 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       mechanics changed and the contract still holds.
   anchor     (warn)   an anchor pins a type/interface — types reshape with every refactor; anchor the
                       behaviour-bearing unit instead.
-  related-drift (warn) a related: file moved ahead of the node — a soft nudge, one summary line, never
-                      blocks. A selector-scoped related row instead warns per HIT (selector named);
-                      its file-level misses are silent.
   owners     (warn)   a file governed WHOLE-FILE by > maxOwners nodes (default 3) does too much — SPLIT
                       it so each governor owns its own module (or merge the nodes, or give it one
                       foundation owner). Selector-scoped governors don't count toward the bound.

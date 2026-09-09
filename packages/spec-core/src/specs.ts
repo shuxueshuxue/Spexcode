@@ -330,16 +330,6 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       if (d.behind > 0) driftFiles.push(d)
     }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
-    // related drift is the SOFT tier ([[governed-related]]): same ancestry basis, but it stays OUT of
-    // `drift` — it never feeds status, the commit gate, or eval freshness. It surfaces only as a lint warn nudge.
-    // A SCOPED related entry is excluded here: its file-level movement is silent by design — only a
-    // selector HIT warns, and that verdict needs the anchor engine, so lint derives it, not the loader.
-    const relatedDriftFiles = []
-    for (const e of relatedEntries) {
-      if (e.selectors.length) continue
-      const d = didx ? { file: e.path, behind: driftFor(didx, S, e.path, r.id) } : { file: e.path, behind: 0 }
-      if (d.behind > 0) relatedDriftFiles.push(d)
-    }
     const fmStatus = str(r.fm.status, '') || null
     loaded.push({
       id: r.id,
@@ -364,7 +354,6 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       lastEdited: h[0]?.date || null,
       drift,
       driftFiles,
-      relatedDriftFiles,
       // the latest version's spec.md patch is NOT precomputed here (it cost 2 git show forks per node on
       // cold load); the history tab fetches it lazily via specDiffAt. See [[work-pane]].
       body: r.body.trim(),

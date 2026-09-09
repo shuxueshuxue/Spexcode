@@ -420,8 +420,7 @@ governs >1 DISTINCT file) · living (a "## vN" changelog heading) · id-format (
 id char outside the whitelist — ascii [a-z0-9-] or a non-ascii unicode letter/number, CJK ok — or a
 leaf id reused) · mention (a [[id]] naming no node). Warns: coverage · drift
 (UNANCHORED drift — always advisory, never blocks; on a scoped file's MISS, \`lint.scopedCodeMiss:
-"ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
-per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·
+"ignore"\` may silence it) · anchor (anchoring a type) · owners (whole-file governors only; scoped don't count) ·
 confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the prepared reference hook; bypass SPEXCODE_SKIP_LINT=1);
 --json writes the
 versioned machine report to stdout (source candidates + structured findings); its exit code still blocks

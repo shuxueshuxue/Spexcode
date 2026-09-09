@@ -304,8 +304,9 @@ app.get('/api/settings', async (c) => c.json({
 // the `surface: command` plugin-root nodes (built/active only) for new-session and live-inbox `/` dropdowns — each with
 // its prompt `body` ({{targets}} placeholder), `kind`, and folder `dir` + co-located `files`. surface is a
 // frontmatter field, not a dir (specs.ts loadSurface); `surface: system` siblings are gathered elsewhere.
-// `?surface=review` lists the review-track presets instead ([[review-commands]] — the eval detail's
-// remark-composer `/` dropdown); the exposed surfaces stay this explicit whitelist, never a passthrough.
+// `?surface=review` lists the review-track presets instead (plugin nodes with `surface: review`, the same
+// set [[guidance-catalog]] projects; no dashboard surface reads it). The exposed surfaces stay this
+// explicit whitelist, never a passthrough.
 app.get('/api/plugins', (c) => c.json(c.req.query('surface') === 'review' ? loadReviewConfig() : loadConfig()))
 // Read-only, deterministic projection over the authoritative plugin/help/guide surfaces. The response carries
 // exact rendered guidance plus provenance so decoupled consumers need no checkout or shared source directory.
@@ -317,7 +318,7 @@ app.get('/api/guidance', (c) => c.json(buildGuidanceCatalog().toJSON()))
 app.get('/api/issues', etag(), async (c) => c.json(await issuesReview(c.req.query('q'), c.req.query('page'))))
 // the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
 // resident forge slice (instant view, background reconcile — the list route's freshness contract). A local
-// id, or a forge id (`<host>#<n>`); unknown → 404 (eval-remark threads are not issues, so they 404 here too).
+// id, or a forge id (`<host>#<n>`); unknown → 404.
 app.get('/api/issues/:id', (c) => {
   const t = findIssue(c.req.param('id'), { host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id))
   return t ? c.json(t) : c.json({ error: `no issue '${c.req.param('id')}'` }, 404)

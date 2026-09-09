@@ -12,8 +12,8 @@ related:
 # forge-cache
 
 Keeping the [[links]] view fresh — incrementally, or live for a dashboard — is **not a product choice**.
-(The node is named for what it IS — the forge-side cache; the bare word *freshness* belongs to the eval
-axis — a reading's staleness against code — and means only that everywhere else in the tree.)
+(The node is named for what it IS — the forge-side cache; the bare word *freshness* means a governed
+file's drift against its spec everywhere else in the tree, and only that.)
 `resolveLinks(issues, prs, nodeIds)` is already a **pure function**, so the problem is the classic one of
 **incremental view maintenance**: keep `output = f(state)` current as `state` changes, instead of paying
 for a cold full pull on every look. This node owns that deterministic core; it sits beside [[links]] and,

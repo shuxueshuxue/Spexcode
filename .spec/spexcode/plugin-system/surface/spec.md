@@ -34,10 +34,11 @@ each — e.g. a plugin that is both an on-demand skill and a new-session command
   allowlist. Same artifact shape as `skill`, one definition per harness: the divergence is a single
   [[harness-adapter]] `agentDir` line, and a harness with NO agent primitive (e.g. Codex today) gets none —
   exactly as a harness with no skill primitive gets no `SKILL.md`.
-- `surface: review` — a **review-track prose preset** (the review command menu): offered in the eval detail's
-  remark-composer `/` dropdown; picking one PREFILLS the composer with the node's body (`{node}` /
-  `{scenario}` / `{expected}` placeholders filled at insert time), and the human edits and sends it as an
-  ORDINARY remark on the (node, scenario) thread — the preset adds no write mechanism of its own.
+- `surface: review` — a **review-track prose preset**: a remark template the backend lists at
+  `/api/plugins?surface=review` ([[review]]). No dashboard composer offers the `/` menu now; the contract a
+  composer would honour is that picking one PREFILLS it with the node's body (`{node}` / `{scenario}` /
+  `{expected}` placeholders filled at insert time) and the human edits and sends it as an ORDINARY remark
+  on the (node, scenario) thread — the preset adds no write mechanism of its own.
 
 The surface is a FIELD, not a path: a plugin carrying it is a real graph node and is discovered
 **recursively** under a plugin root — so a grouping plugin may itself be a plugin whose children carry a

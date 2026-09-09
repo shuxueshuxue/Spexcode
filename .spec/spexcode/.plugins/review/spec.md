@@ -7,10 +7,12 @@ desc: Grouping shelf for the `surface: review` prose presets — remark template
 ---
 # review
 
-The **review-track** prose presets live here: leaf plugins whose body is a remark template the human
-fires from the eval detail's remark composer by typing `/<name>` (the review command menu). Picking one
-prefills the composer — the human edits and sends, and the result is an ordinary remark on the
-(node, scenario) thread; a preset adds prose, never a write mechanism.
+The **review-track** prose presets live here: leaf plugins whose body is a remark template. The backend
+lists them at `/api/plugins?surface=review`; the dashboard's `loadReviewPlugins` helper exists for that
+route and nothing calls it, so no composer offers a `/<name>` menu now. Were one to, picking a preset would
+prefill the composer and the result would be an ordinary remark on the (node, scenario) thread; a preset
+adds prose, never a write mechanism.
 
 This node is a **shelf, not a surface**. Its routing and relocation invariant is owned once by
-[[.plugins]]'s shelf invariant. First resident: [[refuse]], the human's dispute of a viewed reading's verdict.
+[[.plugins]]'s shelf invariant. First resident: [[refuse]], a structured objection to a scenario's verdict —
+a subject with no reading behind it now.

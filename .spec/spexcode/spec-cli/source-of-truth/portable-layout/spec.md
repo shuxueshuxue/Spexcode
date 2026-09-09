@@ -54,7 +54,7 @@ materialize` delivers into; default = every native harness). Layout resolution d
 the same committed-config-with-a-`.spec/spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
 The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
 budgets, and [[file-attach]]'s one `uploads` policy: attachment limit, chunk size, batch concurrency, request
-timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and eval-evidence ceiling.
+timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and evidence ceiling.
 It carries adjacent project policy through the same committed-config seam; feature modules own their own strict
 runtime validation because layout only transports that adjacent policy.
 `packages/spec-core/templates/spexcode.json` is the one shipped seed and numeric-default source: `readUploadPolicy()`

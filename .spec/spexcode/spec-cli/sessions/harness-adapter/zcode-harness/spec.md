@@ -38,7 +38,7 @@ Worktree isolation transfers cleanly, with no registration step to install. A V4
 
 Because both systems name sessions, correspondence is declared rather than inferred. The top-level z-code launch
 inherits its SpexCode `SPEXCODE_SESSION_ID`; a configured tool/hook executing for a native child additionally has
-that child's `ZCODE_SESSION_ID`. When that child needs a SpexCode eval glance, it posts the explicit
+that child's `ZCODE_SESSION_ID`. When that child needs to name its SpexCode session, it posts the explicit
 `{ childSessionId }` pair to the owning SpexCode session's `zcode-child-sessions` route. The persistent relation
 is exact, unique per live child id, and omitted if the tool cannot establish it; neither timestamps nor paths
 reconstruct it later. SpexCode keeps node claim, worktree, atomic landing, and the spec-before-code gate — z-code

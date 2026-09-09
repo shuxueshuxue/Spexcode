@@ -74,4 +74,4 @@ stop-gate wire shape) is test-covered; the live layer is measured as a behavior 
 dispatched opencode workers — stop-gate rejection re-injected and acted on, PreToolUse hook blocks
 aborting tool calls in-process, ask-note, exactly-once deliver both idle and mid-turn, resume
 continuity + steerability on both routes, dual-signal liveness across kill/relaunch, commit-gate
-rejection, and zero close residue — each row filed as an eval reading on this node.
+rejection, and zero close residue.

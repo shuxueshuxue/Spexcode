@@ -27,8 +27,7 @@ code touched?)`:
 
 **Tier 1 — one judge per touched node, bounded and structured.** Not one agent over the whole PR. Each
 judge is fed: the node's spec body **plus its parent/siblings/children** (intent is only legible against
-the tree), the node's slice of the diff (already grouped by session proof), and the node's eval readings
-scenarios (the expected zero-loss behavior). It returns a **closed-schema** verdict —
+the tree) and the node's slice of the diff. It returns a **closed-schema** verdict —
 `{ verdict: conforms | diverges | spec-missing, severity: block | warn | note, rationale, evidence }` —
 never free prose. Judges run in parallel across nodes and are skipped entirely for a PR that touches no
 governed node.

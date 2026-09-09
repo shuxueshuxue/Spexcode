@@ -3,7 +3,7 @@ title: graph-stats
 status: active
 hue: 210
 session: 89e4d64b-8dde-4bd1-b60c-a3825caaba67
-desc: The board census and its graph walk — shell-owned tallies count composition, attention, and scenario coverage once, while category clicks on the graph cycle through the nodes behind each count.
+desc: The board census and its graph walk — shell-owned tallies count composition and attention once, while category clicks on the graph cycle through the nodes behind each count.
 code:
   - spec-dashboard/src/GraphStats.jsx#nextGraphStatNode
 related:

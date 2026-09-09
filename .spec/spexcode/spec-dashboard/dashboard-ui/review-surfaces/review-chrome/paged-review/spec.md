@@ -2,7 +2,7 @@
 title: paged-review
 status: active
 hue: 205
-desc: The server half of review-chrome's ONE Issues/Evals paging protocol — stable source projection and revision, shared query matching, full-set counts/facets, then one 25-row slice.
+desc: The server half of review-chrome's ONE Issues paging protocol — stable source projection and revision, shared query matching, full-set counts/facets, then one 25-row slice.
 code:
   - spec-cli/src/reviews.ts
 related:

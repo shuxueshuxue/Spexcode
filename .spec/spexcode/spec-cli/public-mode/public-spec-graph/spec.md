@@ -2,7 +2,7 @@
 title: public-spec-graph
 status: active
 hue: 150
-desc: Deterministic static Spec Graph publishing surface with no sessions, issues, evals, or write-capable backend.
+desc: Deterministic static Spec Graph publishing surface with no sessions, issues, or write-capable backend.
 code:
   - spec-cli/src/public-graph.ts#buildPublicGraph
 related:

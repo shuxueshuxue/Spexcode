@@ -2,7 +2,7 @@
 title: remark-polish
 status: active
 hue: 208
-desc: M4 of the eval/issue/remark refactor — the closing polish. Three independent strands over the built substrate: an anchor's canonical form is its STEP-NAME (m:ss derived from the current clip, surviving a re-measure), a remark's authoring reaches an agent through a NOTIFICATION fallback chain (filer → node's governing session → nobody, never a resolve), and a dangling remark track (renamed/deleted scenario) surfaces at node level instead of vanishing.
+desc: The remark's three polish edges as the code now has them: a reply's `▶m:ss · <step>` anchor is parsed and resolved by one helper in Thread.jsx that no thread home feeds a step timeline, so it seeks the frozen m:ss; a remark's loop-in copy reaches the thread author only; and a scenario-keyed remark thread whose scenario has nothing behind it stays an ordinary open thread in the issue list.
 related:
   - spec-dashboard/src/Thread.jsx
   - spec-cli/src/mentions.ts

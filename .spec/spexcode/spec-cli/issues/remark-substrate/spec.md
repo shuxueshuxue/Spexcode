@@ -2,7 +2,7 @@
 title: remark-substrate
 status: active
 hue: 210
-desc: The remark — one durable interaction primitive that attaches a resolvable concern to a host (an issue OR a scenario reading), authored from the CLI. A remark is a reply that carries a mutable resolved bit and the reading it was measured against; plain replies are untouched. The whole author→resolve→retract loop is CLI-first, so the dashboard adds no capability.
+desc: The remark — one durable interaction primitive that attaches a resolvable concern to a host (an issue, OR a node's scenario-keyed thread), authored from the CLI. A remark is a reply that carries a mutable resolved bit and the targetSha it was authored against; plain replies are untouched. The whole author→resolve→retract loop is CLI-first, so the dashboard adds no capability.
 related:
   - spec-cli/src/issues.ts
   - spec-cli/src/localIssues.ts

@@ -2,7 +2,7 @@
 title: review-chrome
 status: active
 hue: 205
-desc: The ONE shared paged-review contract and page chrome both review surfaces render — request-layer slices, GitHub ListView query/section/facet/pagination chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — so #/evals and #/issues cannot drift into near-identical dialects.
+desc: The ONE shared paged-review contract and page chrome the Issues pages render — request-layer slices, GitHub ListView query/section/facet/pagination chrome, structured anchor rows, shared state visuals, and the standalone DetailShell — kept in one module apart from the page that uses it.
 code:
   - spec-dashboard/src/ReviewShell.jsx#ListPage
   - spec-dashboard/src/ReviewShell.jsx#DetailShell

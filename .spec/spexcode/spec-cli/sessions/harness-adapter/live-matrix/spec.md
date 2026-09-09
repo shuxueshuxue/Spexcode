@@ -2,7 +2,7 @@
 title: live-matrix
 status: active
 hue: 280
-desc: The parameterized harness conformance scenario suite — eight live behaviors exercised by a test file against any registered launcher, filing per-scenario eval readings on that harness's node.
+desc: The eight live behaviors an adapter must show through a real dispatched session — undeclared stop · PreToolUse block · ask · deliver + steer · resume · liveness · commit gate · close — kept as one parameterized list; no test file drives them now.
 code:
 related:
   - spec-cli/src/harness.ts

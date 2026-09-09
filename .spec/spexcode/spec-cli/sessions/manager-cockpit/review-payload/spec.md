@@ -2,7 +2,7 @@
 title: review-payload
 status: active
 hue: 205
-desc: The session-side review bundle, the fork-anchored diff and its comment doors, and the merge dispatch — one module the cockpit and the eval package both read, owned by neither.
+desc: The session-side review bundle, the fork-anchored diff and its comment doors, and the merge dispatch — one module the cockpit, the HTTP routes, and the declaration verbs all read, owned by none of them.
 code:
   - spec-cli/src/session-review.ts
 related:

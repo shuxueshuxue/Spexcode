@@ -2,7 +2,7 @@
 title: graph-lean
 status: active
 hue: 175
-desc: The graph payload is a lean summary — no Issues/Evals row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
+desc: The graph payload is a lean summary — no Issues row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
 code:
   - packages/spec-core/src/graph.ts#buildBoard
 related:

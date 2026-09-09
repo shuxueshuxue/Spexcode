@@ -2,7 +2,7 @@
 title: forge-gate
 status: pending
 hue: 280
-desc: PENDING — the capstone. `spex forge gate <PR>` orchestrates Tier 0 → 0.5 → 1, then publishes the verdict; the CI workflow runs it on every PR. Also the one change that generalizes the session-eval evidence root from a session worktree to any PR ref. No code yet.
+desc: PENDING — the capstone. `spex forge gate <PR>` orchestrates Tier 0 → 0.5 → 1, then publishes the verdict; the CI workflow runs it on every PR. No code yet.
 related:
   - spec-cli/src/cli.ts
   - spec-cli/src/sessions.ts

@@ -2,7 +2,7 @@
 title: issues-cli
 status: active
 hue: 30
-desc: The `spex issue` / `spex remark` CLI surface, at its own altitude — argv parsing, console output and exit codes for the issue and remark verbs, above the layer the eval package imports.
+desc: The `spex issue` / `spex remark` CLI surface, at its own altitude — argv parsing, console output and exit codes for the issue and remark verbs, above the store modules whose verbs it renders.
 code:
   - spec-cli/src/issues-cli.ts
 related:

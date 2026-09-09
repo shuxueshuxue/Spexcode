@@ -2,7 +2,7 @@
 title: loop-in
 status: active
 hue: 260
-desc: The originator loop-in's eval-aware half — one composer per reply path, above both the store modules and the eval layer, so a reply's candidate chain is built in exactly one place.
+desc: The originator loop-in's composing half — one composer per reply path (`issue reply`, `remark add`, and the HTTP route of each), above the store modules, so a reply's candidate chain — the thread's author — is built in exactly one place.
 code:
   - spec-cli/src/loop-in.ts
 related:

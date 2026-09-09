@@ -2,7 +2,7 @@
 title: conformance-judge
 status: pending
 hue: 280
-desc: PENDING — the agentic core. Per touched node, judge whether a PR's diff honors that node's spec intent, fed the spec + its tree + the node's diff slice + its eval scenarios. Structured verdict, not free text. Deterministic spec-touch matrix is its input. No code yet.
+desc: PENDING — the agentic core. Per touched node, judge whether a PR's diff honors that node's spec intent, fed the spec + its tree + the node's diff slice. Structured verdict, not free text. Deterministic spec-touch matrix is its input. No code yet.
 related:
   - spec-cli/src/lint.ts
 ---

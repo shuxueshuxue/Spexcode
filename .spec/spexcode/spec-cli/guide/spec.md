@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, and `files` the agent-to-human path handoff.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec` prints the spec.md file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, `files` the agent-to-human path handoff, and `web` the local-web-service handoff.
 code:
   - spec-cli/src/guide.ts
 related:

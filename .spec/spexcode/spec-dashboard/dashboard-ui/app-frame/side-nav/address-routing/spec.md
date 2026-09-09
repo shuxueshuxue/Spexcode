@@ -2,7 +2,7 @@
 title: address-routing
 status: active
 hue: 205
-desc: A single dashboard address vocabulary for clickable references — graph nodes, sessions, issues, and evals — projected to canonical hash URLs and executed through one navigation helper.
+desc: A single dashboard address vocabulary for clickable references — graph nodes, spec documents, sessions and their faces, issues, and review lists — projected to canonical hash URLs and executed through one navigation helper.
 code:
   - spec-dashboard/src/address.js
 related:

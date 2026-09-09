@@ -2,7 +2,7 @@
 title: review-surfaces
 status: active
 hue: 205
-desc: Evals and Issues are ONE paged-review product rendered twice — the two page families plus the shared chrome, filter engine, and thread that keep them from drifting into near-identical dialects.
+desc: The Issues pages as ONE paged-review product — the page family plus the shared chrome, filter engine, and thread it renders through, each kept in its own node so the page cannot grow a private dialect of them.
 ---
 # review-surfaces
 

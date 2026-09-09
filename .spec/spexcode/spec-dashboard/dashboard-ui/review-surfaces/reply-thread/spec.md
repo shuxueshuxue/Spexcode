@@ -2,7 +2,7 @@
 title: reply-thread
 status: active
 hue: 250
-desc: The ONE thread surface every discussion home renders — the reply list, its docked composer, and the marks a reply can carry (time anchor, evidence, remark verbs) — so an issue thread and an eval's remark thread are the same component, never two dialects.
+desc: The ONE thread surface every discussion home renders — the reply list, its docked composer, and the marks a reply can carry (time anchor, evidence, remark verbs) — so a local thread and a forge thread are the same component, never two dialects.
 code:
   - spec-dashboard/src/Thread.jsx
 related:

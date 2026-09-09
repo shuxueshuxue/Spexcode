@@ -2,7 +2,7 @@
 title: issue-remark-split
 status: active
 hue: 30
-desc: One issue store with two read-time tracks: drainable issue threads and scenario-scoped remarks, separated by concern while preserving shared storage and reply semantics.
+desc: One issue store, one merged read: a scenario-keyed remark thread (concern `eval: <node> · <scenario>`) is listed, shown, and counted like any other issue thread; the propose-close nudge is the one read that skips those containers.
 ---
 # issue-remark-split
 

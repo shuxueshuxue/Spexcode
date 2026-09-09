@@ -2,7 +2,7 @@
 title: context-dock
 status: active
 hue: 205
-desc: The right context dock — the routed spec node's scenarios and open issues, collapsed until asked for.
+desc: The right context dock — the routed spec node's open issues, collapsed until asked for.
 code:
   - spec-dashboard/src/ContextDock.jsx
 related:

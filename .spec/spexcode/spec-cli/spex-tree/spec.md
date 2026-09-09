@@ -2,7 +2,7 @@
 title: spex graph (tree render)
 status: active
 hue: 200
-desc: The CLI's human-readable graph view — the assembled board as an indented, status-coloured terminal tree with drift/stale-eval/open-issues badges.
+desc: The CLI's human-readable graph view — the assembled board as an indented, status-coloured terminal tree with drift and open-issues badges.
 code:
   - spec-cli/src/tree.ts#renderTree
   - spec-cli/src/tree.ts#treeJson

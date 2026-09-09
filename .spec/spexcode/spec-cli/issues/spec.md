@@ -2,7 +2,7 @@
 title: issues
 status: active
 hue: 30
-desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local-store threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board (eval-remark threads split out — they are the eval scoreboard's, not issues).
+desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local-store threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board, a node's scenario-keyed remark threads included.
 code:
   - spec-cli/src/issues.ts
 related:

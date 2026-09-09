@@ -3,7 +3,7 @@ title: review
 status: active
 seed: false
 hue: 200
-desc: Grouping shelf for the `surface: review` prose presets — the eval detail's remark-composer `/` commands. A shelf, not a surface — routing stays field-driven per [[surface]].
+desc: Grouping shelf for the `surface: review` prose presets — remark templates the backend lists at `/api/plugins?surface=review`; no dashboard composer fetches them now. A shelf, not a surface — routing stays field-driven per [[surface]].
 ---
 # review
 

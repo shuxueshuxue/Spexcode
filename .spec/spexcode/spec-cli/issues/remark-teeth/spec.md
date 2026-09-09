@@ -2,7 +2,7 @@
 title: remark-teeth
 status: active
 hue: 205
-desc: The teeth of the remark — an unresolved remark ages its scenario like a drift event (the 4th, non-git freshness axis), and clearing it needs BOTH a second-party resolve AND a fresh reading after that resolve. Plus the server-side overlay that lifts the (node,scenario)↔eval-thread join out of the dashboard: one join, keyed in trunk, overlaid read-time onto every surface.
+desc: What an unresolved remark costs now: its thread stays open, and nothing more — no reading exists for it to age, and drift is the only staleness signal. The resolved bit and its instant ride the reply, move the board's thread stamp (issues.ts), and are read by no freshness computation; a scenario-keyed thread folds into its node's issue counts like any other (graph.ts).
 code:
 related:
   - spec-cli/src/issues.ts

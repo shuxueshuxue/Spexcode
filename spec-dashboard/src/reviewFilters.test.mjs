@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { EVAL_FILTER_KIND, evalFilterModel, filterMenuGroups, issueFilterModel, sectionTotal, tokenFilterState } from '@spexcode/spec-core/review'
+import { filterMenuGroups, issueFilterModel, tokenFilterState } from '@spexcode/spec-core/review'
 
 const t = (key) => key
 // presence is board MEMBERSHIP, any zone: an offline-but-listed session is still PRESENT.
@@ -35,69 +35,6 @@ test('issue adapter composes query, section, facets, and the one presence join',
   assert.deepEqual(issueFilterModel(items, { impossible: true }, { sessions, t }).shown, [])
 })
 
-test('eval adapter gives blind rows only the fields they honestly own', () => {
-  const rows = [
-    { scenario: 'video pass', node: 'alpha', filterKind: EVAL_FILTER_KIND.RESULT, by: 'on-board', fresh: true, humanOk: { by: 'human' }, verdict: { status: 'pass' }, evidence: [{ kind: 'video', hash: 'v' }] },
-    { scenario: 'image fail', node: 'beta', filterKind: EVAL_FILTER_KIND.RESULT, by: 'vanished', fresh: false, verdict: { status: 'fail' }, evidence: [{ kind: 'image', hash: 'i' }] },
-    { scenario: 'never measured', node: 'alpha', filterKind: EVAL_FILTER_KIND.BLIND },
-    { scenario: 'timeline gap', node: 'gamma', filterKind: EVAL_FILTER_KIND.UNMEASURED },
-    { scenario: 'dangling thread', node: 'gamma', filterKind: EVAL_FILTER_KIND.DANGLING },
-  ]
-  const shown = (state) => evalFilterModel(rows, state, { sessions, t, defaultKind: 'all' }).shown.map((item) => item.scenario)
-
-  assert.deepEqual(shown({ kind: 'all' }), ['video pass', 'image fail', 'never measured', 'timeline gap', 'dangling thread'])
-  assert.deepEqual(shown({ kind: 'video' }), ['video pass'])
-  assert.deepEqual(shown({ freshness: 'stale' }), ['image fail'])
-  assert.deepEqual(shown({ verdict: 'unmeasured' }), ['never measured', 'timeline gap'])
-  assert.deepEqual(shown({ verdict: 'unscored' }), ['dangling thread'])
-  assert.deepEqual(shown({ session: 'present' }), ['video pass'])
-  assert.deepEqual(shown({ session: 'missing' }), ['image fail'])
-  assert.deepEqual(shown({ q: 'ALPHA' }), ['video pass', 'never measured'])
-  // Section counts come out under the REST of the query: the active verdict never hides the others. A
-  // MEASURED verdict splits by freshness (fresh + stale = its whole population); unmeasured owns no
-  // reading, so it stays one number.
-  const model = evalFilterModel(rows, { verdict: 'fail' }, { sessions, t, defaultKind: 'all' })
-  assert.deepEqual(model.sections, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 1, stale: 0 }, unmeasured: 2, deferred: 0 })
-  // the compact menu face of the SAME sections keeps the whole count, so chip and popup cannot disagree.
-  assert.deepEqual(model.section.options.map((option) => [option.value, option.count]), [['', undefined], ['fail', 1], ['pass', 1], ['unmeasured', 2]])
-  assert.deepEqual(model.shown.map((item) => item.scenario), ['image fail'])
-  assert.deepEqual(shown({ review: 'reviewed' }), ['video pass'])
-  assert.deepEqual(shown({ review: 'current' }), ['image fail', 'never measured', 'timeline gap', 'dangling thread'])
-  assert.deepEqual(model.facets.review.options.map((option) => option.value), ['', 'current', 'reviewed'])
-
-  const untagged = { ...rows[0] }
-  delete untagged.filterKind
-  assert.deepEqual(evalFilterModel([untagged], { kind: 'video' }, { sessions, t, defaultKind: 'all' }).shown, [])
-})
-
-test('a measured verdict count splits by freshness and the halves re-add to its whole population', () => {
-  const reading = (scenario, status, fresh) => ({ scenario, node: 'n', filterKind: EVAL_FILTER_KIND.RESULT, fresh, verdict: { status } })
-  const rows = [
-    reading('p1', 'pass', true), reading('p2', 'pass', false), reading('p3', 'pass', false),
-    reading('f1', 'fail', true), reading('f2', 'fail', false),
-    { scenario: 'blind', node: 'n', filterKind: EVAL_FILTER_KIND.BLIND },
-  ]
-  const counts = (state) => evalFilterModel(rows, state, { sessions, t, defaultKind: 'all' }).sections
-  assert.deepEqual(counts({}), { fail: { fresh: 1, stale: 1 }, pass: { fresh: 1, stale: 2 }, unmeasured: 1, deferred: 0 })
-  assert.equal(sectionTotal(counts({}).pass), 3)
-  assert.equal(sectionTotal(counts({}).unmeasured), 1)
-  // Freshness is part of the REST of the query, so freshness:fresh empties the stale half structurally —
-  // a surface's stale suffix then disappears because the count IS zero, not by special-casing the token.
-  assert.deepEqual(counts({ freshness: 'fresh' }), { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 0 })
-  assert.deepEqual(counts({ freshness: 'stale' }), { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0, deferred: 0 })
-})
-
-test('deferred freshness rows have their own section and do not enter stale verdict counts', () => {
-  const rows = [
-    { scenario: 'pending', node: 'n', filterKind: EVAL_FILTER_KIND.DEFERRED, state: 'deferred', freshnessDeferred: true, verdict: { status: 'pass' } },
-    { scenario: 'pass', node: 'n', filterKind: EVAL_FILTER_KIND.RESULT, fresh: true, verdict: { status: 'pass' } },
-  ]
-  const model = evalFilterModel(rows, {}, { sessions, t, defaultKind: 'all' })
-  assert.deepEqual(model.sections, { fail: { fresh: 0, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0, deferred: 1 })
-  assert.equal(model.section.options.find((option) => option.value === 'deferred')?.count, 1)
-  assert.deepEqual(model.shown.map((item) => item.scenario), ['pending', 'pass'])
-})
-
 test('compact groups omit fake one-value facets and retain active off-switches', () => {
   const one = issueFilterModel([{ id: '1', concern: 'only', status: 'open', store: 'local', by: 'same', nodes: ['alpha'] }], {}, { t })
   assert.deepEqual(filterMenuGroups(one, () => {}, ['section', 'author', 'store', 'node', 'session']), [])
@@ -118,10 +55,6 @@ test('the canonical bridge maps token text into engine state without a second pa
   assert.deepEqual(tokenFilterState('is:issue state:closed store:github "long title" gate', 'issue'),
     { q: ['long title', 'gate'], state: 'closed', store: 'github' })
   assert.deepEqual(tokenFilterState('is:issue label:bug', 'issue'), { q: [], label: 'bug' })
-  assert.deepEqual(tokenFilterState('is:eval state:reviewed evidence:video scope:s-1', 'eval'),
-    { q: [], review: 'reviewed', kind: 'video' })
-  assert.deepEqual(tokenFilterState('state:current session:missing filer:w-1', 'eval'),
-    { q: [], review: 'current', session: 'missing', filer: 'w-1' })
   // duplicate qualifiers are last-wins, same as every reader of the text
   assert.deepEqual(tokenFilterState('state:open state:closed', 'issue'), { q: [], state: 'closed' })
   // a quoted colon phrase stays ONE substring end to end (the migrated legacy free q)

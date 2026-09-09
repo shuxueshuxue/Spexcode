@@ -50,8 +50,8 @@ an exception carved out of the worktree model — it is the one writer the workt
    escape hatch that guard already names — and never `--no-verify`. This is the load-bearing difference
    from the neighbouring programmatic writers: [[local-issues]] and human sign-off may skip the pre-commit
    hook because their paths are unanchored **data**, and that justification does not transfer to a
-   `spec.md`, which is the contract itself. So the spec-lint shim and the eval backstop judge this commit
-   exactly as they judge a session's, and the non-bypassable reference-transaction candidate gate judges it
+   `spec.md`, which is the contract itself. So the spec-lint shim judges this commit exactly as it judges
+   a session's, and the non-bypassable reference-transaction candidate gate judges it
    after that. An edit that would break the spec↔code graph does not land.
 4. **Break, then recover, visibly.** The file is written before the commit is attempted, because the hook
    must judge the real tree. If the commit is refused for any reason, the original bytes are put back and

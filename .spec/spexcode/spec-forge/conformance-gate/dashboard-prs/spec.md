@@ -2,7 +2,7 @@
 title: dashboard-prs
 status: pending
 hue: 280
-desc: PENDING — the dashboard surface of the CI Gate. A PR badge on each touched node, a PR review lane beside sessions-in-review, and a PR proof overlay (session-eval rooted at the PR ref, with the conformance verdict layered on). The open-PR sibling dashboard-issues deferred. No code yet.
+desc: PENDING — the dashboard surface of the CI Gate. A PR badge on each touched node, a PR review lane beside sessions-in-review, and the conformance verdict shown on the PR. The open-PR sibling dashboard-issues deferred. No code yet.
 related:
   - spec-forge/src/resident.ts
   - spec-dashboard/src/SpecNode.jsx

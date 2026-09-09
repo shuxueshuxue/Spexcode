@@ -52,10 +52,10 @@ The graph is built **once per change, not once per poll — and only as much of 
   envelopes no longer carry lives there, any process may commit to it, and journal_mode=delete rewrites the file
   in place on every commit; it is folded while any session record exists, because with none no row derives from
   the store and the store's own birth — the first canonical access inside a build initializes it — is not an
-  input that moved during that build); each non-archived governed worktree's HEAD and `.spec` tree; the whole issue/remark-store stamp; and the
-  current session-eval projection states. That list IS this cache's answer to "is this a board input?", and a
+  input that moved during that build); each non-archived governed worktree's HEAD and `.spec` tree; and the
+  whole issue/remark-store stamp. That list IS this cache's answer to "is this a board input?", and a
   producer's domain is DERIVED from what it says moved rather than assigned by whoever signalled. An equal
-  revision returns the cached board and starts no assembly, whoever asked. A moved session record, database or projection
+  revision returns the cached board and starts no assembly, whoever asked. A moved session record or database
   revision takes the `sessions` splice; a moved graph/config/worktree/issue revision takes the `full` producer,
   so a blinded observer is still repaired and reported by [[graph-stream]]. This is validation, not a second
   poller or TTL.
@@ -80,8 +80,8 @@ The graph is built **once per change, not once per poll — and only as much of 
   have read. Input movement while a producer runs leaves the result dirty for the next read even when the
   corresponding watcher event was missed, and that anchor keeps the pre-move value, so the re-owed obligation
   cannot discharge itself against a revision the board never carried and converge on nothing. The completed
-  board's own issue and projection values become part of the anchor, so verification never certifies a value
-  the board did not carry. A slow validation or producer stays inside the same watchdog/abort/backoff path, and
+  board's own issue stamp becomes part of the anchor, so verification never certifies a value the board did
+  not carry. A slow validation or producer stays inside the same watchdog/abort/backoff path, and
   a refresh arriving during another joins it rather than queueing a second operation.
 - **Scoped invalidation (the dirty state carries independent obligations).** `invalidateBoard(scope)` records
   a structural `full` obligation and a session-projection obligation separately — as CLAIMS, which the
@@ -91,7 +91,7 @@ The graph is built **once per change, not once per poll — and only as much of 
   'sessions' read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
   `listSessions()` bracketed only by the record/prompt/resident-projection carrier (never a root/worktree
   `.spec` walk, issue read, identity read, or topology revision sample), with prev's per-path ops reused. Ordinary
-  lifecycle fields leave every node/eval/issue unit byte-identical. Archive and close are the one subtractive
+  lifecycle fields leave every node and issue unit byte-identical. Archive and close are the one subtractive
   topology transition already proven by that carrier: the splice removes overlays sourced by roots that left the
   active session set, drops empty ghost nodes, re-derives affected status/parent facts, and carries the old full
   revision minus those exact root entries. The active set is the row projection the splice actually publishes,
@@ -118,8 +118,8 @@ The graph is built **once per change, not once per poll — and only as much of 
   older full snapshot. The producer consumes only its own starting obligation: a later session completion during a
   long full build owes one splice, not another full build, while a full invalidation landing mid-splice still leaves structural full owed. Failure
   restores the consumed obligation. The structural builder remains single-flight; the session splice shares its
-  watchdog/error discipline but is not serialized behind unrelated full assembly. The equivalence obligation — at one fixed eval-projection generation, a
-  splice is indistinguishable from a full rebuild whenever only session state moved — is pinned by test,
+  watchdog/error discipline but is not serialized behind unrelated full assembly. The equivalence obligation — a splice is
+  indistinguishable from a full rebuild whenever only session state moved — is pinned by test,
   and the patrol's repair accounting
   ([[graph-stream]]) is the live alarm if it ever breaks.
 - **Cache until change.** A completed build is served verbatim until a real change invalidates it, so a
@@ -184,25 +184,6 @@ and turn a normal reload into backend event-loop and memory pressure.
   a read-driven verification is neither stale nor refreshing until it finds something, at which point the
   ordinary dirty machinery reports it like any other obligation.
 
-Session rows' eval summaries compose with this cache rather than hiding inside it (session proof): graph
-assembly batch-reads a separate content-addressed projection cache and may start only its missing/invalidated
-entries. A summary completion invalidates the board at `sessions` scope, so the sessions splice attaches the
-new stable projection without rebuilding node/eval/issue units. Lifecycle-only splices reuse unchanged summary
-entries; a relevant refs/worktree/remark event first advances their own generations, then invalidates the board.
-The graph cache therefore never fans out a full session-eval build, and a quiet cache hit starts zero eval work.
-
-The board's eval timeline input is latest-only: one reading per scenario is enough for the graph's state counts and
-review snapshot. Historical readings remain owned by the detail/session-eval paths. A cold board must not send the
-entire sidecar history through freshness probes when the overview cannot render those rows; this keeps graph latency
-bounded by the current verdict population rather than the retained reading count.
-
-Projection warmup is subscriber-gated and bounded: an ordinary HTTP/CLI graph read never starts historical
-session-eval work merely because session records exist. The delta stream enables warmup for the current era;
-the projection runner drains that work through a bounded queue, so one board change cannot fan out one full
-git/history build per session. When the last delta subscriber leaves, new warmup is disabled (in-flight work
-is allowed to settle and is never overlapped by a second batch); scoped Evals demand remains the explicit
-way to build an individual session's full model.
-
 **A single board build also has a bounded git process budget.** Graph assembly may need to inspect every
 linked worktree and governed session, but corpus width must lengthen the queue rather than widen the process
 tree: every per-worktree/session git operation owned by one build passes through one abort-aware scheduler
@@ -216,93 +197,25 @@ unbounded-fanout peak; no forced collection, larger timeout/memory budget, histo
 special case is part of the mechanism.
 
 The queue bounds unavoidable child work; graph assembly also removes avoidable child work. On the
-large-history path, all reading anchors ask the same question against the same HEAD. The HEAD-keyed drift
-index therefore loads reachable commit ids in one single-flight batch and every per-reading reachability
-verdict is a memory lookup — never one `merge-base --is-ancestor` process per reading. A failed or aborted
+large-history path, every governed path's drift question is asked against the same HEAD. The HEAD-keyed
+drift index therefore loads reachable commit ids in one single-flight batch and every per-path reachability
+verdict is a memory lookup — never one `merge-base --is-ancestor` process per path. A failed or aborted
 batch is not cached, a retry can recover, and advancing a root to a new HEAD evicts its old set through the
 same current-root cache ownership. Path-specific history remains lazy and bounded.
 
-**The same rule binds reading freshness, the larger half of a cold build's child work, and this build's share
-of it is to PLAN before it forks.** Assembly derives every node's rows first — a pure sidecar-read and axis
-projection that forks nothing — then primes the content and anchor probes with the whole demand set, and only
-then decorates rows from settled verdicts. The invariant it owes is that anchored-reading cost is bounded by
-what the verdicts require and is INDEPENDENT of the reading count N, whether the engine can plan its demand set
-up front or must discover it in rounds ([[code-anchor]]'s existence read, whose batching rule and measurements
-are [[hunk-ranges]]'). Priming per reading instead is the shape to recognize again: it re-forks the batch per
-unit, which is the exact inverse of what a batch is for. This is a cost boundary only — the served board is
-byte-identical to the reading-at-a-time path at every tip, which is the standing obligation whenever the batch
-is retuned.
-
-The CURRENT-tree half is bounded along a different axis. Resolving a reading's `code:` selectors parses the
-working-tree file, and a node's entries were asked one at a time, so the identical file was re-parsed once per
-entry: measured, 922 parses over 46 distinct files, 40.4 MB, repeated on every rebuild because nothing carried
-the result. Extraction is a pure function of (text, path, extractor), so the bound is DISTINCT CONTENT, never
-the entry count: one parse per content digest, reused for every entry that content backs and across rebuilds
-until the bytes change. The key is a digest, never mtime or size, because this gate decides whether a reading
-may testify at all — a stale unit list would let a dead selector read as alive, the exact silence the gate
-exists to break — and digesting costs about a tenth of parsing, so the read remains and only the parse is saved.
-
-Two costs this build still pays are named here rather than folded in, because each needs its own argument.
-The per-revision extraction memo is process-local, so a cold process re-parses revisions a previous one
-already settled; making it durable is a persistent-state decision that must argue its own case against
-[[drift-by-ancestry]]'s no-stored-state rule, not ride in as a cost tweak.
-
-That case has now been costed, and it does not close. Correctness is not the obstacle: the memo key already
-names an immutable Git object plus the complete parse identity the extractor contract demands (schema, host
-compiler path AND version, parse options, filename), so content that changes changes the oid and a compiler
-that changes changes the key — a durable entry has no staleness mode. What fails is the trade. Measured on
-this corpus: a fresh process assembles in **8,249ms**, and every subsequent full rebuild in that same process
-takes **1,108/1,007/1,011ms with zero parses**. The whole ~7.2s a durable ledger could recover is therefore
-paid ONCE PER PROCESS, not once per rebuild — while a live backend rebuilds on every commit and every issue
-write, and already pays only the second number. Buying a shared on-disk ledger — concurrent writers from the
-several backends a box runs, corruption handling, bounded growth — to shorten one startup is complexity that
-does not buy itself back. Recorded as decided-against with its measurement, not as an open question, so the
-next reader inherits the number instead of re-deriving the idea.
-
-Extraction is synchronous, and that is a LIVENESS question rather than a latency taste: `/health` computes
-nothing, so its latency measures only whether the loop can turn, and a probe that cannot answer is
-indistinguishable from a dead backend — the CLI allows a recorded backend 600ms and the supervisor allows a
-booting child 1000ms before it keeps the old one. Reducing how much is parsed shortens the stretch
-proportionally but never makes it yield, so the two repairs are separate and both are owed. The sweep that
-resolves every reading's selectors against the working tree was the dominant offender: nothing in that
-doubly-nested loop awaited, so it held the loop 1,104ms in one uninterrupted stretch. It now yields on a time
-budget, and `setImmediate` is the yield that matters — awaiting a synchronous-bodied `async` function only
-drains microtasks and never returns to the I/O phase. Measured across three cold builds, the worst `/health`
-sample fell 1,122ms → 507/530/552ms, and no sample exceeds the 600ms the CLI judges by.
-
-What remains is a floor, not a residue: **the longest indivisible step is one parse of the largest governed
-file, measured at 440ms**, and no yield can subdivide a single `createSourceFile`. So a scenario bound
-stricter than that cannot be met by scheduling alone — only by moving extraction off the event-loop thread.
-That option is now costed too, and it is decided against for the same reason as the durable ledger: not
-because a worker is expensive, but because the floor is paid ONCE. Measured across four consecutive builds in
-one process, the sweep's longest uninterrupted hold is 457ms on the first and 50/55/53ms on the rest — the
-yield budget itself, an order of magnitude under every threshold that acts on this signal. A long-lived
-backend rebuilds on every commit and every issue write and pays only the second number; the first is a
-process-start event. Buying worker infrastructure to shorten one startup does not buy itself back.
-
 **How that equality may be measured is part of the obligation, because the board is NOT byte-reproducible
 run to run on a live corpus.** Two runs of the SAME binary against a checkout that carries worktrees and
-session records already differ: `evalSummary.epoch` is minted once per process, and a row's lifecycle, note
-and status are live state that moves between two builds minutes apart. So a raw before/after diff there
+session records already differ: a session row's lifecycle, note and status are live state that moves
+between two builds minutes apart. So a raw before/after diff there
 reports the world's churn as a code difference. An equality claim on a live corpus therefore owes a
 same-binary control run establishing which fields vary on their own; only fields that control proves are
 per-process or live may be normalized, and every other field stays exactly as measured — normalization is
 how a real difference is kept visible, never how it is absorbed. The complementary trap is the quiet one: a
 corpus of fresh clones has no worktrees and no sessions, so the board's session half is empty on BOTH sides
 and equality over it is vacuous — a green result that never touched the half a session-side change would
-break. A claim about the whole board needs both substrates: pinned corpora for the node/eval/issue half,
+break. A claim about the whole board needs both substrates: pinned corpora for the node/issue half,
 and a session-bearing one for the rest. This binds every reader of this cache, not only the batching above:
 [[graph-stream]]'s invalidation and push half is measured against the same board and inherits the same rule.
-
-Because those object reads are build-wide rather than per-reading, they ride the same abort-aware async
-transport as every other build child. A synchronous child is outside the permit pool and cannot see the
-watchdog's signal, so it can be neither bounded nor killed; and one build-wide synchronous object read would
-be precisely the uninterruptible stretch the async fs walks removed. Batch width therefore lengthens a queue
-instead of widening a process tree or an argument vector: object reads are chunked to stay inside the
-transport's output bound and a per-commit hunk query is chunked to stay inside the kernel's exec argument
-limit, with overflow a loud error rather than a truncated parse. Collapsing the fan-out lowers the builder's
-own peak footprint as well as its child count, so the platform obligation above is met by construction
-rather than by a larger budget.
 
 The budget covers how much memory a build's children may hold, not only how many may run. Git sizes its
 mmap window, its mmap ceiling and its delta-base cache for a process that owns the machine, so a build's
@@ -312,24 +225,17 @@ bounded, uniformly and blind to which walk it is; a call outside the context kee
 resource boundary only: output, exit status and stderr are byte-identical under every setting, which is the
 standing obligation whenever the bound is retuned.
 
-Bounding processes is not enough on its own, because what a build RETAINS scales too. A fold over an
-adopted corpus reads many off-history anchors, and asking each of them a repository-wide question made the
-build's own heap — not its child processes — the binding term. So the off-history content fallback asks
-only about the governed paths each reading claims and keeps only those verdicts (the former measurement core); retention
-scales with governed breadth, not repository width, and the same three-round platform obligation covers the
-builder's own memory, not merely its descendants.
-
 **The serialization is cached too.** `getBoardJson()` runs `JSON.stringify` once per build; a poll storm
 of cache hits pays zero serialization CPU (only the ETag hash for the 304 path). The SSE path keeps the
 object — it decomposes it into delta units ([[graph-delta]]).
 
 **The build itself must not block the liveness probe.** Even coalesced to one, a build with a long
-*synchronous* stretch freezes `/health`. The two dominant stretches were full-tree fs walks — `raws()`
-(the spec.md walk) and `measurement-node walk` (the measurement contract walk), ~1s of uninterrupted `readFileSync`. Their hot
-twins `rawsAsync()`/`evalNodesAsync()` read through `fs/promises`, yielding the event loop between files,
-so `/health` answers *during* a build instead of behind it. The git walks were already async+parallel and
-HEAD-cached (they never re-fork per node — [[graph-lean]]/source-of-truth), so async fs closed the last
-sync gap. Only the hot graph path uses the async twins; the light one-shot callers keep the sync forms.
+*synchronous* stretch freezes `/health`. The dominant stretch was the full-tree fs walk — `raws()` (the
+spec.md walk), ~1s of uninterrupted `readFileSync`. Its hot twin `rawsAsync()` reads through `fs/promises`,
+yielding the event loop between files, so `/health` answers *during* a build instead of behind it. The git
+walks were already async+parallel and HEAD-cached (they never re-fork per node —
+[[graph-lean]]/source-of-truth), so async fs closed the last sync gap. Only the hot graph path uses the
+async twin; the light one-shot callers keep the sync form.
 
 **Degrade loudly, never pile up — and the build NECESSARILY settles.** A build slower than a budget logs
 one warning (the fail-loud regression alarm — a silent slow graph is how this returned). The route races
@@ -356,39 +262,18 @@ disappeared. A shared index remains warm while at least one live root references
 removed immediately, so retained memory is bounded by live checkouts rather than the number of sessions that
 have existed in the process.
 
-**Where a full build's time actually goes — measured, so the budget warning names a lever instead of a mood.**
-On a 476-node adopter corpus (429 nodes carrying `measurement contract`, 2,521 declared scenarios, 3,023 stored readings) a
-fresh-process full build logged 1710 / 1825 / 1870 ms against the 1500ms budget. The `sourceIndexes` +
-`loadSpecs` baseline — history and drift included — is 394–524ms of that and is **shared with `spex spec lint`**,
-which is why a no-server lint of the same corpus finishes at 1.61s wall while the board needs more: the
-difference is not the tree walk. Board-only work, in size order: eval timeline and freshness derivation
-778–876ms, the `.spec`/`measurement contract` walk 227–405ms, the scenario and remark index 109–129ms, session census and
-liveness 98–119ms, worktree layout and overlay discovery 102–108ms — and then everything else (overlay/ghost
-projection, issue merge, review fold, the resident session-eval copy, identity, and serializing a 583KB board)
-under 7ms each. Inside freshness on that corpus, the 558.7–591.8ms attributed to selector-anchor verification is
-**cold-process working-tree parsing, not steady-state verification cost**: it is the same first-build parse
-`currentTreeUnitMemo` already absorbs, and a repeat rebuild in the same process spends 12–15ms where the first
-spent 507ms. The content fallback across all 3,023 readings is 29.7–35.8ms.
+**Where a full build's time goes is measured, so the budget warning names a lever instead of a mood.** The
+`sourceIndexes` + `loadSpecs` baseline — history and drift included — is **shared with `spex spec lint`**,
+so a no-server lint and the board pay most of their cost in common; what the board adds on top is its own
+work — the session census and liveness, worktree layout and overlay discovery, the issue merge and review
+fold, identity, and serializing the board — and that is where a budget warning should send a reader.
 
-The dimension is readings and their code axes, not node count. At 119 / 238 / 357 / 476 ids the readings go
-882 / 1,543 / 2,176 / 3,023 while full freshness goes 621.0 / 663.9 / 714.6 / 911.7 ms — **sublinear**, which
-says the cost is a fixed sum re-paid per build rather than a walk that scales wrongly. That fixed sum is what
-selector anchor scope now scopes to the root's current head, and the corpus that exhibits it is **spexcode
-governing itself** — 1,850 anchored demands deduplicating to 1,018 distinct queries — not the 476-node adopter
-measured above: none of that adopter's 1,144 distinct reading `targetSha`s is reachable from its HEAD, so zero
-selector queries reach the hit engine there and it cannot show this cost at all. Ordering without freshness
-(`order: true`, 229.8ms) is not the substitute it looks like —
-it deliberately emits `freshnessDeferred`, and the review summary's counts need real fresh/stale decisions.
-
-Three measurement pitfalls belong with those numbers, because each produces a clean-looking wrong answer.
+Two measurement pitfalls belong with any such number, because each produces a clean-looking wrong answer.
 `startBuild()` defers its producer one event-loop turn and the warning timer starts after that defer, so
-end-to-end waiting (2117–2329ms on the same corpus) is a different quantity from the logged build time and the
-two may not be compared. A 3755ms sample from a live server is a real slow sample of this same path rather than
-a corpus floor: that run interleaved asynchronous `session summary build failed` and resource-monitor work,
-while the board's own synchronous `sessionEvalProjections()` call measures 0.4ms in an isolated process. And
-one build per fresh process does not merely hide the in-process memos — the 507ms-versus-12ms gap above is a
-factor of forty, the whole distance between "a cache buys nothing here" and "this is the dominant cost",
-decided by sampling method alone ([[taste]]'s sampling rule and its load-matched-pairs corollary).
+end-to-end waiting is a different quantity from the logged build time and the two may not be compared. And
+one build per fresh process hides every in-process memo: a cold-only sample is the whole distance between
+"a cache buys nothing here" and "this is the dominant cost", decided by sampling method alone ([[taste]]'s
+sampling rule and its load-matched-pairs corollary).
 
 This is the third half of [[graph-delivery]]'s one budget: [[graph-lean]] decides *how much* rides the
 wire, [[graph-stream]] decides *when* the wire is paid, and graph-cache decides *how often the graph is

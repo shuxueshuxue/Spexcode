@@ -2,7 +2,7 @@
 title: issues-cli
 status: active
 hue: 30
-desc: The `spex issue` / `spex remark` CLI surface, at its own altitude — argv parsing, console output and exit codes for the issue and remark verbs, above the layer the eval package imports.
+desc: The `spex issue` / `spex remark` CLI surface, at its own altitude — argv parsing, console output and exit codes for the issue and remark verbs, above the store modules whose verbs it renders.
 code:
   - spec-cli/src/issues-cli.ts
 related:
@@ -31,10 +31,8 @@ calls the read/write verbs that `issues.ts` and `localIssues.ts` export, and it 
 The split is by ALTITUDE, not by domain: the issue domain still belongs to [[issues]] and the local store to
 [[local-issues]]; what moved is the part that talks to a terminal.
 
-Its position is what makes it useful. Sitting above both the store modules and the eval layer, it is a place
-where a value composed from both can legally be assembled — which is what the remaining half of the cycle
-work needs and what no module below eval could offer. Its own imports of `issues.ts` are therefore ordinary
-STATIC imports; the deferred `await import('./issues.js')` that `localIssues.ts` used to carry existed only
+Its position is what makes it useful. Sitting above the store modules, its own imports of `issues.ts` are
+ordinary STATIC imports; the deferred `await import('./issues.js')` that `localIssues.ts` used to carry existed only
 because a handler down there had to reach a module that imported it back, and it is gone with the handler.
 
 This module is deliberately NOT merged into `cli.ts`. That file is the thin dispatch hub ([[cli-surface]]),

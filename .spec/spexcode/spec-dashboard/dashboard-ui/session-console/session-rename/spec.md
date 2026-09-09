@@ -158,8 +158,8 @@ Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text row
 separate destructive close row. This node supplies the session actions; it never forks the menu chrome.
 
 This node's slices of the shared files are the rename/confirm-modal styling in `styles.css` and the
-rename route in `index.ts`; the eval tab's `.eval-*` styles and its eval-blob endpoint, reworked in
-the measure-and-score reframe, are the former measurement layer's churn, not session-rename's drift.
+rename route in `index.ts`; anything else in those files is another feature's churn, not session-rename's
+drift.
 
 ## the row context menu
 

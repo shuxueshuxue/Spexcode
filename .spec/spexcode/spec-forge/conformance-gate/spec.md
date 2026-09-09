@@ -39,8 +39,8 @@ A forge event (PR opened/synchronized) runs `spex forge gate <PR>` in CI. Four l
   *code changed / spec untouched* — the silent divergence the dogfood forbids.
 - **Tier 1 — agentic, the verdict.** One judge per touched node, structured output. Owned by
   [[conformance-judge]].
-- **Tier 2 — agentic, optional (default off).** On `diverges`/`spec-missing`, propose the spec edit or
-  missing eval scenario as a forge **suggestion** — never an auto-push or auto-merge.
+- **Tier 2 — agentic, optional (default off).** On `diverges`/`spec-missing`, propose the spec edit as a
+  forge **suggestion** — never an auto-push or auto-merge.
 
 ## the load-bearing decision — writing back does NOT break the read-only contract
 

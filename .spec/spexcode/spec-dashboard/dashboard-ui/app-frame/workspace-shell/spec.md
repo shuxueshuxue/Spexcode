@@ -50,7 +50,7 @@ ownership.
 Every hosted view uses this channel for route writes. Graph and Sessions, including the SessionInterface
 mounted beneath the Sessions view, dispatch `open` for page changes, object/resource surfaces, and replace
 semantics; address projections are converted to `{ page, param, query }` before dispatch and never call the
-global writer. Evals and Issues use `ownQuery` for list state and `open` for doors/details and replacement.
+global writer. Issues uses `ownQuery` for list state and `open` for doors/details and replacement.
 Shell-owned chrome (`Shell`, `Dock`, `SideBar`, `TabStrip`) is the deliberate route-writing boundary for
 rail, dock, and tab actions; it is not a hosted view and therefore does not receive a ViewScope. The static
 `ownershipBoundary.test.mjs` allow-list makes that distinction executable: view descendants cannot import the
@@ -60,7 +60,7 @@ global navigator, while shell chrome remains the one owner allowed to do so.
 whole shell hangs off, re-derived from what the product is rather than from what the code used to be:
 
   - **Where is everything? — FINDING, on the left.** The rail is the **top-level board bar** of route anchors
-  (`sessions`, `spec`, `evals`, `issues`, `settings`) whose one light means the current resident board.
+  (`sessions`, `spec`, `issues`, `settings`) whose one light means the current resident board.
   Graph remains an addressable legacy view but is not a top-level rail destination. A separate
   mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
   surface with two projections; projection styling belongs to the dock header, never the route light.
@@ -70,13 +70,13 @@ whole shell hangs off, re-derived from what the product is rather than from what
   its own forest and console ([[session-console]]), so a finding dock beside it would only repeat the same list
   under an empty header. Review surfaces and Settings have no dock anywhere in their address family — a detail
   route never inherits the previous Spec/Explorer projection from workspace state, which belongs to document
-  routes only. Evals, Issues, and Settings use the shared workspace/tab strip; Issues omits the
+  routes only. Issues and Settings use the shared workspace/tab strip; Issues omits the
   activity rail while retaining the strip. Spec/file routes keep the Spec rail selection and derive the explorer
   projection. Thus the sidebar describes the working set rather than being a setting maintained
   beside it ([[dock-modes]]). Route links may select a related projection as a secondary action, while the
   dedicated rail panel control alone changes open/closed state.
 - **What am I reading? — HOLDING, in the center.** The tab strip is the working set and the route is the
-  active tab; everything held is an address — a node, a file, a session, or a resident Evals/Issues/Settings board.
+  active tab; everything held is an address — a node, a file, a session, or a resident Issues/Settings board.
   Board detail routes focus their corresponding resident tab.
   **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
   区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
@@ -98,7 +98,7 @@ whole shell hangs off, re-derived from what the product is rather than from what
   its own `--line-status` height and never covers a view; a terminal's final xterm row fits above it. One-pixel
   `--line` borders own the vertical and horizontal seams, meeting as a T at the lower-left rail junction.
   The frame itself is what fills it: the workspace identity
-  and the ONE BOARD LEDGER — spec nodes by state, every eval scenario state, open issues, live
+  and the ONE BOARD LEDGER — spec nodes by state, open issues, live
   sessions — is true of the window on every route, so no view may own a duplicate and each group is
   registered here. The identity is one compact project-mark/name button that owns the catalog switcher
   and `/projects` door; the route rail contains no duplicate chip. On a graph address the same buttons acquire graph focus-walk behavior; their visual

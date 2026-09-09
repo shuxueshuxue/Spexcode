@@ -19,7 +19,7 @@ related:
 
 # composer
 
-Command Box, TimelineChat, session launch prompts, issue replies, eval remarks, a new issue's description,
+Command Box, TimelineChat, session launch prompts, issue replies and remarks, a new issue's description,
 and the prose send card are different product actions, but
 they should not each invent a textarea. They share one small editor shell: a quiet bordered surface, a borderless controlled
 textarea that grows from a useful floor to its home's cap, and a persistent action footer. The footer is
@@ -30,7 +30,7 @@ that distinguishes a composition commit from an ordinary Enter. It deliberately 
 meaning. Message homes decide that plain Enter sends and Shift+Enter adds a line; launch homes use the same
 plain-Enter submit and Shift+Enter newline grammar, while still supplying an explicit pointer action. Each home still supplies its placeholder,
 menus, triggers, attachment controls, send behavior,
-error copy, and draft lifetime. Issues and Evals keep the one `ReplyComposer` behavior in `Thread.jsx`;
+error copy, and draft lifetime. Issues keeps the one `ReplyComposer` behavior in `Thread.jsx`;
 Command Box keeps its session control grammar in [[command-box]]; the Issues compose page ([[issues-view]])
 mounts the same shell with its own action row and submit; the prose send card ([[prose-dispatch]]) floats
 the shell at the pointer, carrying the passage in the preview slot and its recipient in the footer. Reuse stops at this natural boundary,

@@ -55,8 +55,7 @@ already resolves its target to a full current Session before it fetches the cock
 Session's `title` rather than re-deriving or borrowing the payload label. This keeps a review title on the same
 wire-derived path as every other visible surface without an extra liveness probe. The @-mention `sub` line and
 the board's worktree-overlay attribution are a different concept (a spec-op source badge, not the session's
-identity), and the eval/proof headline is deliberately node-spec-title anchored with no agent-authored claim —
-those stay as they are.
+identity) — those stay as they are.
 
 **The bare parts don't ride the wire.** There is no top-level `name`; the raw parts remain under
 `raw: { name, title }`, whose only sanctioned consumer is an explicitly raw surface (the rename prefill must

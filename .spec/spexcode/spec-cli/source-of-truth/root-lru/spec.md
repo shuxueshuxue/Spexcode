@@ -26,9 +26,9 @@ knobs, and one bare literal that no operator could tune at all.
 ## expanded spec
 
 root-lru owns ONE question: given a root that now wants `key`, what stays warm and what is evicted. It is a
-leaf module by construction — it imports nothing from the spec graph, the eval sidecar, or git — so both
-layers depend on it without either depending on the other. That is the shape the whole spec/eval
-unification is aiming at: shared derivations live somewhere neither consumer owns.
+leaf module by construction — it imports nothing from the spec graph or git — so every layer that keeps
+per-HEAD work warm depends on it without depending on the others. That is the shape a shared derivation
+takes: it lives somewhere neither consumer owns.
 
 The policy is **reference-counted, not plain LRU**, and that distinction is its reason to exist. Entries are
 keyed by something IMMUTABLE — a HEAD, or a ledger path plus HEAD — so two checkouts on the same commit
@@ -58,7 +58,7 @@ caller wants the reference-counted immutable-key rule, not merely that it wants 
 ## the spec index under this policy
 
 Both indices are read for **several checkouts at once** — the backend's own root plus every session
-  worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
+  worktree (graph assembly reads each session worktree's spec tree at that worktree's own HEAD) — so the cache shares an
   in-flight promise for equal checkout heads in one common Git store while its ownership is keyed by the
   current checkout. Its immutable content key is the checkout HEAD plus the project-namespaced persistent
   ledger path: that path binds the common repository store and Git interpretation identity, so linked

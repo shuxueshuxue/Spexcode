@@ -22,13 +22,12 @@ surface can acknowledge its own completed write through the provider alone. The 
 the shared backend-health frame, so an unreachable backend shows one global retry banner before any runtime is
 asked to boot.
 
-**There is one runtime.** Every address — a canonical `#/evals` or `#/evals/<node>/<scenario>` link, its
-legacy session-scoped spelling, `#/issues`, a session, a node — mounts the same resident App, and review
+**There is one runtime.** Every address — `#/issues`, an `#/issues/<id>` detail, a session, a node —
+mounts the same resident App, and review
 routes are ordinary resident workspace documents inside it ([[workspace-shell]], [[view-registry]]). The root
 no longer selects a lighter surface for a cold review URL: that fast path gave review routes a second host to
 drift in and made the tab strip vanish on cold review navigation, so it was withdrawn in favour of one host
-with one chrome. A legacy Evals address still normalizes to the canonical route and still mounts the SAME
-the measurement view components; there is no second renderer, data projection, or URL vocabulary.
+with one chrome. There is no second renderer, data projection, or URL vocabulary.
 
 The static [[public-spec-graph]] face is a compile-time exception: with `VITE_PUBLIC_GRAPH_ONLY=1`, the root
 hands even a copied review URL to the sealed App, which normalizes the hash to `#/graph`. The live dashboard

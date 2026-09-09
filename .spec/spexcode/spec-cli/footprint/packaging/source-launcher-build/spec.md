@@ -20,7 +20,7 @@ the complete ordered workspace build driver before starting `dist/cli.js`. Both 
 atomic artifacts, so neither can run stale or partially emitted code.
 Concurrent source-workspace launchers take one cross-process build lock and re-check freshness after the owner
 finishes, so hooks and polling cannot start duplicate full builds.
-The recovery covers core, eval, forge, and CLI together: building only the CLI would leave its package imports
+The recovery covers core, forge, and CLI together: building only the CLI would leave its package imports
 stale or missing. Freshness is judged against the runtime closure only: a test file beside the sources
 (`*.test.ts`) is not an input, so a test-only edit never turns the launcher stale and never triggers a build.
 

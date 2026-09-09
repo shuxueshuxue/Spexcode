@@ -87,7 +87,7 @@ Invalidation alone is not visibility: [[graph-delta]] broadcasts only when board
 carries one top-level freshness stamp (open/thread/reply counts + the latest activity instant) that
 **every** thread write moves — a reply, a remark, a resolve, a retract, a close, on a noded or nodeless
 thread alike. That stamp folds the **whole store, both remark hosts**, not the issue population the
-surfaces read: the issue read deliberately splits eval-remark tracks out ([[eval-issue-split]]), which is a
+surfaces read: the issue read deliberately splits eval-remark tracks out ([[issue-remark-split]]), which is a
 question about *which page renders a thread*, while the stamp answers *whether anything was written at
 all*. Deriving one from the other is the mistake that reaches furthest — a carrier folded over the issue
 half alone moved no byte for a scenario-hosted remark, the no-change suppression correctly swallowed the

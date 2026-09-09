@@ -8,7 +8,7 @@ desc: M4 of the eval/issue/remark refactor — finish the forum kill at the bott
 
 ## raw source
 
-M3 ([[eval-issue-split]]) killed the word "forum" from every code identifier, but deliberately left the
+M3 ([[issue-remark-split]]) killed the word "forum" from every code identifier, but deliberately left the
 **data directory** named `.spec/.forum` — a rename touches every deployment's on-disk store, so it was
 parked as residue. The directive was to refactor the substrate all the way down, and the directory name is
 the bottom-most name there is. So it goes too: the store now lives at `.spec/.issues`, and the local store is
@@ -47,5 +47,5 @@ never a silent union. Loud has one shape on every surface: a read (`spex issue l
 (`open`/`reply`) alike fail as the CLI's clean one-line `spex issue: <message>` plus a non-zero exit — the
 message carries both directory names and the repair; a raw stack trace is internals, never the error surface.
 
-This retires [[eval-issue-split]]'s "deliberate residue": the forum kill is now complete at every layer, and
+This retires [[issue-remark-split]]'s "deliberate residue": the forum kill is now complete at every layer, and
 the migration mechanism — not the old name — is the standing contract.

@@ -83,7 +83,7 @@ const heads = page.locator('.dock .ft-section-head')
 const door = page.locator('.dock .dock-head-act[aria-label]').filter({ has: page.locator('svg') }).first()
 // open three more closed roots on top of whatever the route revealed
 for (let i = 0, opened = 0; i < await nodeRows.count() && opened < 3; i++) {
-  if (await nodeRows.nth(i).locator('.ft-caret .caret:not(.is-open)').count()) { await nodeRows.nth(i).click(); opened++; await page.waitForTimeout(120) }
+  if (await nodeRows.nth(i).locator('.ft-caret .caret:not(.is-open)').count()) { await nodeRows.nth(i).locator('.ft-caret').click(); opened++; await page.waitForTimeout(120) }
 }
 await page.waitForSelector('.dock .ft-dir', { timeout: 20000 })
 await page.locator('.dock .ft-dir').first().click()
@@ -92,7 +92,7 @@ const routeBefore = await page.evaluate(() => location.hash)
 record('explorer.before', { openNodes: await openNodeCarets(), openDirs: await openDirs(), route: routeBefore })
 assert.ok(facts['explorer.before'].openNodes >= 3 && facts['explorer.before'].openDirs >= 1, 'fixture: branches open in both sections')
 
-// the disclosure mark is a chevron and nesting is a line
+// the disclosure mark is a chevron, and depth is indentation alone — no guide hangs from the caret slot
 const marks = await page.evaluate(() => {
   const rows = [...document.querySelectorAll('.dock .ft-row')]
   const triangles = rows.filter((row) => /[▸▾]/.test(row.textContent)).length
@@ -115,8 +115,8 @@ record('explorer.marks', marks)
 assert.equal(marks.triangles, 0, 'no triangle glyph survives')
 assert.equal(marks.openTag, 'svg'); assert.equal(marks.openRotation, 90); assert.equal(marks.closedRotation, 0)
 assert.equal(marks.heads, 0, 'section zone heads have no disclosure control')
-assert.deepEqual(marks.zones.map((zone) => zone.label), ['Specs', 'Files'])
-assert.ok(marks.guides && marks.guides.image && marks.guides.left === '12px' && marks.guides.width === `${marks.guides.depth * 11}px`, 'N guides for depth N, dropped from the caret slot')
+assert.deepEqual(marks.zones.map((zone) => zone.label), ['Spec tree', 'Files'])
+assert.ok(marks.guides && marks.guides.image === false, 'no indent guide is drawn beneath a nested row')
 
 // where the door is: on the dock head, beside search, never inside a section head
 const doorLabel = await door.getAttribute('aria-label')

@@ -20,10 +20,16 @@ The left dock. A spec node **is** a folder, so the tree that navigates the proje
 same shape on disk, on the board, and here.
 
 **It is built from the board the app already holds, not from a new endpoint.** The node list carries
-`parent` and `code:` — that is the whole hierarchy plus every governed file, already in memory. A tree route
-would have been a second projection of the same data, free to disagree with the board about what exists.
-Only a node's attachments are fetched, and only on the expand that reveals them, so a reader who never opens
-a branch never pays for its folder listing.
+`parent`, which is the whole hierarchy, already in memory. A tree route would have been a second projection
+of the same data, free to disagree with the board about what exists. Nothing else is fetched: a node is one
+row, and opening a branch costs no request.
+
+**One node is ONE ROW — the folder is the object.** Beneath an open node sit its child nodes and nothing
+else. The files a node governs and the attachments in its folder are not rows here: the node's own document
+([[spec-view]]) already shows its code and its folder, and the Files projection lists the disk as the disk
+([[disk-tree]]). Listing them a third time made the tree a file browser wearing a spec tree's clothes, and
+doubled the rows a reader had to scan past to reach the next node. A spec atlas built beside the product
+drew the same tree with nodes only and read better for it; this is that reading brought home.
 
 **THE TREE IS A VIEW OF THE ADDRESS, so routing to a node opens the branch that holds it.** Its ANCESTORS
 open, never the node itself: disclosure means "show me what is inside", and forcing that on arrival would
@@ -42,44 +48,54 @@ TWO ledgers — the open spec nodes and the open disk directories ([[disk-tree]]
 projection had the first defect for as long as its folders kept row-local flags: closing the Files
 section forgot every folder inside it.
 
-**A row does both things.** Clicking a node focuses it on the board *and* discloses its contents. Splitting
-those into two hit targets would make the common move — look inside this node — cost two clicks in a list
-built for scanning.
+**Two hands on one row: the label is the address, the caret is the hinge.** Clicking a node's label opens
+its document and discloses nothing; pressing its caret discloses its children and opens nothing. They used to
+be one target, and every click that meant "read this node" also blew its branch open under the pointer and
+shoved the rest of the list down — the list moved while the reader was scanning it, and a reader who only
+wanted to look at a node had to fold it back by hand. A folder that opens only when its hinge is pressed
+stays where the reader left it. A leaf keeps the caret's slot empty so labels stay in one column. The caret
+is a real button with `aria-expanded`, so the keyboard reaches the hinge the same way the pointer does.
 
 **The graph is one click from the tree.** A graph entry at the tree's head opens the resident Spec tab at its
 bare address, which both focuses the held tab and clears any node or file selector; merely restoring the
 previous selector would leave the door looking inert whenever a concrete Spec document is already open.
 
-**The disclosure mark is a thin chevron, and nesting is drawn as a line.** Every collapsible row — a node,
-a directory, a section head, and the conversation's seams and tool rows ([[conversation]]) — wears
-[[icon-system]]'s one `Caret`: a stroke chevron that turns a quarter to say "open", the grammar Obsidian's
-file explorer and outliner read in (<https://docs.obsidian.md/Reference/CSS+variables/Components/Indentation+guides>),
-rather than a filled triangle, which reads as a bullet. Beneath an open row, each nested level hangs from a
-hairline indent guide dropped from the centre of its parent's caret slot at the divider weight (`--edge`):
-rows are flat siblings, so each draws its own segment and the stack joins into one continuous line, and
-a reader can see which branch a deep row belongs to without counting indents.
+**The disclosure mark is a thin chevron, and depth is carried by indentation alone.** Every collapsible row
+— a node, a directory, and the conversation's seams and tool rows ([[conversation]]) — wears [[icon-system]]'s
+one `Caret`: a stroke chevron that turns a quarter to say "open", rather than a filled triangle, which reads
+as a bullet. There are no indent guides: with one row per node and eleven pixels per level, the stair of
+labels already says which branch a row belongs to, and the hairlines that used to hang from every caret slot
+were more ink than information in a list this sparse.
 
-**Files keep the colours their chips have in the popup**, so a governed file and an attachment look the same
-wherever they are listed rather than teaching the reader two vocabularies for one thing.
+**A row's voice is its colour, not a bullet.** Rows rest in the muted tone; the branch that holds the focused
+node lifts to body ink so the reader sees the route they are on; the focused node itself carries the
+selected wash and the one weight step the dock spends. The status square every row used to wear was a
+bullet, not a signal — a row wears exactly one small mark, and only when it says something: the active hue
+for a node being worked on now, the drift hue for a node whose code has moved on without it. Settled nodes
+wear nothing.
 
-**A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]; a governed file row opens
-[[file-view]], and an attachment row opens the same FileView through its `.spec/<node>/<name>` logical
-address. The dock used to open a layer over the frame, because the frame had no content area to open
-anything into — that limitation is gone with [[workspace-shell]], and with it the layer. Clicking here and
-clicking a tab now reach the same place by the same address. Plain and ctrl/⌘ placement are the shared
-[[tab-strip]] gestures; the tree does not carry a second tab policy.
+**Files keep the colours their chips have in the popup** in the projection that lists them ([[disk-tree]]),
+so a file looks the same wherever it is listed rather than teaching the reader two vocabularies for one thing.
+
+**A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]. The dock used to open a layer
+over the frame, because the frame had no content area to open anything into — that limitation is gone with
+[[workspace-shell]], and with it the layer. Clicking here and clicking a tab now reach the same place by the
+same address. Plain and ctrl/⌘ placement are the shared [[tab-strip]] gestures; the tree does not carry a
+second tab policy.
 
 **The tree names itself through the dock, not through a strip of its own.** "Explorer" and the node tally
 live in [[dock-modes]]' single header row, because they describe the dock that is currently projecting the
 explorer; a projection that re-declares its own name is a second answer to a question answered one row
 above, and it cost a chrome band to give.
 
-**The explorer shows TWO sections, and they are two projections of one project.** SPECS is this tree and FILES
-is the disk listed as the disk ([[disk-tree]]). Both are always mounted and identified by static `.si-zone`
-heads: a count pod, sentence-case label, and trailing hairline. The heads' trailing hairlines are the only
-boundary between the sections; the explorer does not add a second full-width divider. There is no section-level disclosure state or
-localStorage preference; only a spec node or disk directory can disclose its own children. The explorer head's
-collapse-folders door still folds those child ledgers together, leaving both zone heads and their roots visible.
+**The explorer shows TWO sections, and they are two projections of one project.** SPEC TREE is this tree and
+FILES is the disk listed as the disk ([[disk-tree]]). Both are always mounted and identified by static
+`.si-zone` heads: a sentence-case label in the section's hue, its tally in tabular figures a step quieter,
+and the trailing hairline every zone head in the product wears ([[dock-modes]]). The head is a quiet label,
+not a badge: the bordered count pod read as chrome around a list that is already short, so the count is bare
+text, and the hairline is the only boundary between the sections. There is no section-level disclosure state or localStorage preference;
+only a spec node or disk directory can disclose its own children. The explorer head's collapse-folders door
+still folds those child ledgers together, leaving both zone heads and their roots visible.
 
 **Collapse folders is a door of the EXPLORER, not of a section.** One action folds every open folder in
 both projections — every disclosed spec node and every disclosed disk directory — through the one store,

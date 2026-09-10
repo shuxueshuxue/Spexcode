@@ -6,7 +6,6 @@ import ExplorerContextMenu from './ExplorerContextMenu.jsx'
 import { STATUS } from './specMeta.js'
 import { navigate } from './route.js'
 import { isNewTabGesture, openNewTab } from './tabs.js'
-import { fetchNodeFiles } from './data.js'
 import DiskTree from './DiskTree.jsx'
 import { useT } from './i18n/index.jsx'
 import { useResizable } from './useResizable.js'
@@ -16,10 +15,10 @@ import { revealSpecPath, toggleSpecNode, useSpecTreeState } from './specTreeStat
 // [[file-tree]]: the left dock. A spec node is a FOLDER, so the tree that navigates the project is the
 // folder tree — the same shape on disk, on the board, and here.
 //
-// It builds from the board the app already holds rather than a new endpoint: the node list carries `parent`
-// and `code:`, which is the whole hierarchy plus every governed file. A tree route would have been a second
-// projection of data already in memory, free to disagree with the board about what exists. Only a node's
-// attachments are fetched, lazily, on the expand that reveals them.
+// It builds from the board the app already holds rather than a new endpoint: the node list carries `parent`,
+// which is the whole hierarchy. A tree route would have been a second projection of data already in memory,
+// free to disagree with the board about what exists. Nothing is fetched here: a node is one row, and its files
+// belong to its document and to the Files projection ([[disk-tree]]).
 
 const kidsOf = (specs) => {
   const kids = new Map()
@@ -34,74 +33,54 @@ const kidsOf = (specs) => {
 // A row declares WHAT IT IS on the element itself (`data-menu-*`). The explorer then needs exactly one
 // right-click/keyboard seam for every projection instead of a handler per row kind, and a row that grows
 // later joins the menu by naming its subject rather than by wiring anything.
-function Row({ depth, onClick, open, hasKids, dot, label, kind, active, subject = null }) {
+//
+// TWO HANDS ON ONE ROW. The label is the address: clicking it opens the node's document and nothing else.
+// The caret is the hinge: clicking it discloses the branch and nothing else. They used to be one target,
+// and every click that meant "read this node" also blew its branch open under the pointer and shoved the
+// rest of the list down — the list moved while the reader was scanning it. A folder that only opens when
+// its hinge is pressed stays where the reader left it ([[file-tree]]). A leaf keeps the caret's slot
+// empty so labels stay in one column.
+function Row({ depth, onOpen, onToggle, open, hasKids, mark, label, toggleLabel, kind, active, onPath, subject = null }) {
   return (
-    <button type="button" className={`ft-row ft-${kind}${active ? ' on' : ''}`}
-      style={{ paddingLeft: 6 + depth * 11, '--depth': depth }} onClick={onClick} data-tip={label}
+    <div className={`ft-row ft-${kind}${active ? ' on' : ''}${onPath ? ' path' : ''}`}
+      style={{ paddingLeft: 6 + depth * 11, '--depth': depth }}
       data-menu-kind={subject?.kind} data-menu-id={subject?.id} data-menu-path={subject?.path}>
-      <span className="ft-caret">{hasKids && <Caret open={open} />}</span>
-      {dot ? <i className="ft-dot" style={{ background: dot }} /> : <span className="ft-dot ft-none" />}
-      <span className="ft-label">{label}</span>
-    </button>
+      {hasKids
+        ? <button type="button" className="ft-caret" aria-expanded={open} aria-label={toggleLabel} onClick={onToggle}><Caret open={open} /></button>
+        : <span className="ft-caret ft-caret-none" aria-hidden="true" />}
+      <button type="button" className="ft-label" onClick={onOpen} data-tip={label}>{label}</button>
+      {/* the one mark a row may wear: a node being worked on now, or one whose code has moved on without it.
+          Settled nodes wear nothing — a square on every row was a bullet, not a signal. */}
+      {mark && <i className={`ft-mark ft-mark-${mark}`} />}
+    </div>
   )
 }
 
-// One node: its own row, then — only while expanded — its governed files, its attachments, and its
-// children. Attachments are fetched on first expand and kept, so re-opening a branch is instant and a
-// reader who never expands a node never pays for its folder listing.
-function NodeRow({ node, depth, kids, focusId, onOpenFile }) {
+// One node is ONE ROW — a folder that is the object itself. Its children are the only things listed
+// beneath it. The files a node governs and the attachments in its folder are not rows here: the node's own
+// document already shows its code and its folder, and the Files projection lists the disk as the disk
+// ([[disk-tree]]). Listing them a third time here made the tree a file browser wearing a spec tree's
+// clothes, and doubled the rows a reader had to scan past to reach the next node.
+function NodeRow({ node, depth, kids, focusId, pathIds }) {
+  const t = useT()
   // disclosure lives in the shared store, not here: a row unmounts whenever an ancestor collapses or the
   // dock folds, and a local flag would be erased by a gesture that had nothing to do with it.
   const { open: openIds } = useSpecTreeState()
   const open = openIds.has(node.id)
-  const setOpen = (next) => {
-    const value = typeof next === 'function' ? next(open) : next
-    if (value !== open) toggleSpecNode(node.id)
-  }
-  const [files, setFiles] = useState(null)
-  useEffect(() => {
-    if (!open || files) return undefined
-    let live = true
-    fetchNodeFiles(node.id).then((f) => live && setFiles(f)).catch(() => live && setFiles([]))
-    return () => { live = false }
-  }, [open, files, node.id])
-
   const children = kids.get(node.id) || []
-  const governed = (node.code || []).map((c) => c.split('#')[0]).filter((v, i, a) => a.indexOf(v) === i)
-  const hasKids = children.length > 0 || governed.length > 0
-
+  const hasKids = children.length > 0
+  const mark = node.status === 'active' ? 'active' : node.drift > 0 || node.status === 'drift' ? 'drift' : null
   return (
     <>
-      <Row depth={depth} kind="node" label={node.title || node.id} active={focusId === node.id}
-        subject={{ kind: 'node', id: node.id }}
-        dot={STATUS[node.status]?.color} hasKids={hasKids} open={open}
-        // The row does BOTH: it focuses the node on the board (the address the tree is a view of) and
-        // discloses its contents. Splitting them into two hit targets would make the common move — look
-        // inside this node — cost two clicks in a list built for scanning.
+      <Row depth={depth} kind="node" label={node.title || node.id} active={focusId === node.id} onPath={pathIds.has(node.id)}
+        subject={{ kind: 'node', id: node.id }} mark={mark} hasKids={hasKids} open={open}
+        toggleLabel={t('fileTree.disclose', { name: node.title || node.id })}
+        onToggle={() => toggleSpecNode(node.id)}
         // A plain click opens the node in the focused tab; ctrl/⌘ opens it in a new tab ([[tab-strip]]).
-        // Disclosure never opens the governed files it reveals: the node's own document already shows its
-        // code, so a click that asked to read a node must not mint a file tab behind it.
-        onClick={(e) => {
-          setOpen((v) => !v)
-          if (isNewTabGesture(e)) openNewTab('spec', node.id)
-          else navigate('spec', node.id)
-        }} />
-      {open && (
-        <>
-          {governed.map((f) => (
-            <Row key={`c:${f}`} depth={depth + 1} kind="code" label={f.split('/').pop()} subject={{ kind: 'file', path: f }}
-              onClick={(e) => (isNewTabGesture(e) ? openNewTab : navigate)('file', f)} />
-          ))}
-          {(files || []).map((f) => (
-            <Row key={`a:${f.name}`} depth={depth + 1} kind="att" label={f.name}
-              subject={{ kind: 'file', path: `.spec/${node.id}/${f.name}` }}
-              onClick={(e) => (isNewTabGesture(e) ? openNewTab : navigate)('file', `.spec/${node.id}/${f.name}`)} />
-          ))}
-          {children.map((c) => (
-            <NodeRow key={c.id} node={c} depth={depth + 1} kids={kids} focusId={focusId} onOpenFile={onOpenFile} />
-          ))}
-        </>
-      )}
+        onOpen={(e) => (isNewTabGesture(e) ? openNewTab : navigate)('spec', node.id)} />
+      {open && children.map((c) => (
+        <NodeRow key={c.id} node={c} depth={depth + 1} kids={kids} focusId={focusId} pathIds={pathIds} />
+      ))}
     </>
   )
 }
@@ -113,8 +92,8 @@ function Section({ name, count, tone, children }) {
   return (
     <section className="ft-section">
       <div className={`ft-section-head si-zone si-zone-${tone}`} role="heading" aria-level="2">
-        <span className="si-zone-count" aria-hidden="true">{count}</span>
         <span className="si-zone-label ft-section-name">{name}</span>
+        <span className="si-zone-count" aria-hidden="true">{count}</span>
       </div>
       <div className="ft-section-body">{children}</div>
     </section>
@@ -125,7 +104,7 @@ function Section({ name, count, tone, children }) {
 // "Explorer, 355" belongs to the dock that is currently projecting the explorer, and a projection that
 // re-declares its own name is the second answer to a question already answered one row above. The two
 // The two zone heads below name the projections inside the list, not the list itself.
-export default function FileTree({ specs, focusId, onOpenFile, embedded = false }) {
+export default function FileTree({ specs, focusId, embedded = false }) {
   const t = useT()
   const [width, onDrag, reset] = useResizable(DOCK_BAND.key, DOCK_BAND.initial, DOCK_BAND)
   const [fileCount, setFileCount] = useState(0)
@@ -141,13 +120,16 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     for (const s of specs || []) parents.set(s.id, s.parent || null)
     return parents
   }, [specs])
-  useEffect(() => {
-    if (!focusId || !parentOf.has(focusId)) return
-    const path = []
-    for (let id = parentOf.get(focusId), guard = 0; id && guard < 64; id = parentOf.get(id), guard++) path.push(id)
-    revealSpecPath(path)
+  const pathIds = useMemo(() => {
+    const ids = new Set()
+    if (!focusId || !parentOf.has(focusId)) return ids
+    for (let id = parentOf.get(focusId), guard = 0; id && guard < 64; id = parentOf.get(id), guard++) ids.add(id)
+    return ids
   }, [focusId, parentOf])
-  const open = useCallback((f) => onOpenFile?.(f), [onOpenFile])
+  useEffect(() => {
+    const path = [...pathIds]
+    if (path.length) revealSpecPath(path)
+  }, [pathIds])
   const sendNode = useCallback((id) => navigate('spec', id, { query: { send: '1' } }), [])
   const [menu, setMenu] = useState(null)
   // A path's owner is already in the board the tree is built from, so "reveal owning node" needs no lookup
@@ -211,7 +193,7 @@ export default function FileTree({ specs, focusId, onOpenFile, embedded = false 
     <div className="filetree" style={embedded ? { width: '100%' } : { width }}>
       <div className="ft-body" onContextMenu={onRowContextMenu} onKeyDown={onRowKeyDown}>
         <Section name={t('fileTree.specs')} count={specs.length} tone="specs">
-          {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} onOpenFile={open} />)}
+          {roots.map((r) => <NodeRow key={r.id} node={r} depth={0} kids={kids} focusId={focusId} pathIds={pathIds} />)}
         </Section>
         {/* A published tree ships the spec index and its documents, never the repository's source. Offering
             an empty Files section there would name a capability the payload cannot answer. */}

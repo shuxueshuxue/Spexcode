@@ -699,7 +699,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    outline round the bend, then paper — so the card's side curves out into the baseline and joins the pane
    below with no corner. The band's own bottom rule is covered where the paper is and shows where it is not,
    which is exactly the line an editor draws under a live tab. */
-.tab-shoulder { position: absolute; bottom: 0; width: 8px; height: 8px; pointer-events: none; }
+.tab-shoulder { position: absolute; bottom: 0; width: 9px; height: 8px; pointer-events: none; }   /* 9, not 8: the extra column lies over the card's own edge, so its straight inset rule ends where the curve leaves it instead of running on beside the bend */
 .tab-shoulder-l { left: -8px; background: radial-gradient(circle at 0 0, transparent 7px, var(--edge) 7.5px 8.5px, var(--paper) 9px); }
 .tab-shoulder-r { right: -8px; background: radial-gradient(circle at 100% 0, transparent 7px, var(--edge) 7.5px 8.5px, var(--paper) 9px); }
 /* THE BAND MEETS THE PAGE AT A HAIRLINE, EXCEPT UNDER THE ACTIVE TAB. The active card IS the page: its paper

@@ -404,6 +404,7 @@ test('the strip is one clipping row of cards on the band, never a wrapped or scr
   assert.match(css, /\.tabstrip-tabs\s*\{[^}]*padding-left:\s*var\(--space-2\);/s)
   // the active card's shoulders curve its sides into the baseline; it must overflow and sit above its neighbours to draw them
   assert.match(css, /\.tab\.on\s*\{[^}]*overflow:\s*visible;[^}]*z-index:\s*1;/s)
+  assert.match(css, /\.tab-shoulder\s*\{[^}]*width:\s*9px;[^}]*height:\s*8px;/s)   // one column wider than its offset: it covers the card's straight rule where the curve takes over
   assert.match(css, /\.tab-shoulder-l\s*\{[^}]*left:\s*-8px;[^}]*radial-gradient\(circle at 0 0, transparent 7px, var\(--edge\) 7\.5px 8\.5px, var\(--paper\) 9px\)/s)
   assert.match(css, /\.tab-shoulder-r\s*\{[^}]*right:\s*-8px;[^}]*radial-gradient\(circle at 100% 0/s)
   // one face: control-size type, a round close target on the active card and under the pointer

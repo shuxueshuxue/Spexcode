@@ -21,4 +21,4 @@ than finished: declare `park`, not `done`/`awaiting`, until the child reports a 
    Update that current-state body with any changed intent.
 2. **Commit before declare:** commit the code and spec it justifies before done or merge; independent intent gets
    its own node.
-3. **Keep the loss signal honest:** run `spex spec lint` (the blocking correctness gate). Prove changed behaviour through the real product and hand the evidence to the reviewer with `spex session files add`.
+3. **Keep the loss signal honest:** run `spex spec lint` (the blocking correctness gate). Prove changed behaviour through the real product and hand the evidence to the reviewer as one HTML report (the `review-report` skill) posted with `spex session files add`.

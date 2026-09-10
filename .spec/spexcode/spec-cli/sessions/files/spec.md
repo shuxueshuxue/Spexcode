@@ -126,7 +126,8 @@ the list can change after the reference was written, and a guess at which file w
 The always-materialized system contract mentions the capability in one short operational line: after producing
 an artifact worth handing back, an agent publishes its path with `spex session files add <path>` and points at it as
 `[[file:<name>]]`. Detailed usage stays in `spex guide files`; the prompt advertises the capability without
-becoming a second manual.
+becoming a second manual. Review evidence goes out as one self-contained HTML report rather than a stream of
+loose files; [[review-report]] is the skill that says how, and the report is posted like any other file.
 
 The guide teaches the three CLI operations, the fact that the path is live and host-local, and that the
 dashboard downloads only on click. It explicitly distinguishes this from [[file-attach]], which sends human

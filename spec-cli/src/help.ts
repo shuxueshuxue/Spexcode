@@ -418,8 +418,8 @@ commit since the spec's version touched an ANCHORED unit's lines, unacked — th
 drift; same-file selectors OR'd, one error naming the hit selectors) · one-govern (a node
 governs >1 DISTINCT file) · living (a "## vN" changelog heading) · id-format (an
 id char outside the whitelist — ascii [a-z0-9-] or a non-ascii unicode letter/number, CJK ok — or a
-leaf id reused) · mention (a [[id]] naming no node) · diagram-id (a box in a node's architecture diagram
-that is not one of its direct children or \`others\`) · diagram-source (a box citing a path that is neither a
+leaf id reused) · mention (a [[id]] naming no node) · diagram-id (a box in a node's diagram.json of
+diagram_type architecture that is not one of its direct children or \`others\`) · diagram-source (a box citing a path that is neither a
 spec nor a governed file). Warns: coverage · drift
 (UNANCHORED drift — always advisory, never blocks; on a scoped file's MISS, \`lint.scopedCodeMiss:
 "ignore"\` may silence it) · anchor (anchoring a type) · owners (whole-file governors only; scoped don't count) ·

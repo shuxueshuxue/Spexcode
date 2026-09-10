@@ -366,18 +366,20 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   // diagram-id / diagram-source ([[diagram]]): a node's architecture diagram is a picture of its own children,
   // not a free canvas. Every box is one of the node's direct children — a box's id IS the child's node id, one
   // rule for every child — or the one `others` box small children fold into; every source a box cites is a spec
-  // in the tree or a file some node governs. Only architecture diagrams have boxes that are nodes and cite
-  // sources, so only `diagram.architecture.json` is read here; whether a diagram draws at all is archify's
-  // verdict, shown in the diagram's own slot. Read at the tip, like every other rule.
+  // in the tree or a file some node governs. A node's diagram is its one `diagram.json`; only a file whose
+  // `diagram_type` is architecture has boxes that are nodes and cite sources, so only those are checked here —
+  // whether a diagram draws at all is archify's verdict, shown in the diagram's own slot. Read at the tip, like
+  // every other rule.
   const specPaths = new Set(specs.map((s) => s.path))
   for (const s of specs) {
-    const file = s.path.replace(/spec\.md$/, 'diagram.architecture.json')
+    const file = s.path.replace(/spec\.md$/, 'diagram.json')
     if (!existsAtTip(file)) continue
-    let ir: { components?: unknown }
+    let ir: { diagram_type?: unknown; components?: unknown }
     try { ir = JSON.parse(textAtTip(file) ?? '') } catch (e) {
       out.push({ level: 'error', rule: 'diagram-id', spec: s.id, file, msg: `${file} is not JSON (${(e as Error).message}) — its boxes cannot be checked against the children of '${s.id}'` })
       continue
     }
+    if (ir?.diagram_type !== 'architecture') continue
     const children = specs.filter((c) => c.parent === s.id).map((c) => c.id)
     const childSet = new Set(children)
     const boxes = Array.isArray(ir?.components) ? ir.components as { id?: unknown; sources?: unknown }[] : []

@@ -24,8 +24,11 @@ const railHref = (page) => routeHash(page)
 const PAGE_KEYS = {}
 
 // The dock's one rail control owns only open/closed state. Projection choice belongs to the route link
-// that led there; it never gets the route's active styling and never navigates by itself. It is deliberately
-// a smaller, muted control separated from the route group, so it reads as frame chrome rather than a sixth tab.
+// that led there; it never gets the route's active styling and never navigates by itself. It is the rail's
+// first cell, the height of the top band, so it sits in the window's corner on the tab strip's own line and
+// reads as frame chrome rather than a sixth tab. The glyph is `panel-left` in BOTH states: it names the dock
+// this control owns, the same rule the right dock's switch follows — a flipped `panel-right` here drew a
+// panel on the wrong side to say "closed". State is `aria-pressed`, and the sidebar standing beside it.
 function DockToggle() {
   const t = useT()
   const { dock } = useWorkspace()
@@ -35,7 +38,7 @@ function DockToggle() {
   return (
     <button type="button" className="rail-btn rail-panel-toggle" data-tip={label} aria-label={label}
       aria-pressed={dock} onClick={() => setDock((value) => !value)}>
-      <Icon name={dock ? 'panel-left' : 'panel-right'} size={18} />
+      <Icon name="panel-left" size={18} />
     </button>
   )
 }

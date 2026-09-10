@@ -54,12 +54,18 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   remaining width; review detail addresses remain on that surface and never acquire the dock. Because review addresses are not
   tabs, the rail remembers the last issues address and returns to it when the matching rail entry is
   pressed after leaving the surface.
-- **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted mirrored panel
-  button: `panel-left` while open and `panel-right` while closed, with `aria-pressed` reporting the same
-  boolean. It changes only dock open/closed state, never the route, projection, tab list, or route light. It
-  is a smaller 14px muted control with a restrained separator and spacing from the navigation group, so it
-  reads as frame chrome rather than an independent tab. The dock header has no collapse control. Folding
-  removes only the dock panel; the same rail DOM control remains at the same position and reopens it immediately.
+- **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted panel button
+  that draws `panel-left` in BOTH states — it names the dock it owns, exactly as the document's right-dock
+  switch always draws `panel-right` — with `aria-pressed` reporting open/closed. A glyph that flipped to
+  `panel-right` to say "closed" drew a panel on the wrong side. It changes only dock open/closed state, never
+  the route, projection, tab list, or route light. It is the rail's FIRST CELL and exactly the top band's
+  height (`--line-top`, shared with the dock head and the tab strip, [[tab-layout]]): the switch sits in the
+  window's corner on the same line as the strip, the way an editor's sidebar toggle does, so the top of the
+  frame reads as one row and the route icons begin under it. It is muted, has no fill, no light and no
+  separator, and lifts to ink on hover, so it reads as frame chrome rather than an independent tab; a rail
+  with nothing to fold omits the cell and keeps its plain top padding. The dock header has no collapse
+  control. Folding removes only the dock panel; the same rail DOM control remains at the same position and
+  reopens it immediately.
   The control is mounted wherever a sidebar exists to fold: the shell's dock, or the Sessions document's own
   forest ([[session-console]]), which follows the same open/closed boolean so Spec and Sessions fold from one
   control. Bare review and settings boards omit it because they have neither sidebar.

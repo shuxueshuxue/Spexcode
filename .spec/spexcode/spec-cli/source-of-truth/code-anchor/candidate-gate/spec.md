@@ -41,6 +41,12 @@ and the pre-commit hook performs the same Git-only classification before materia
 set comes from the candidate specs, not `lint.governedRoots` (that setting controls source discovery and a
 spec may explicitly govern a path outside it).
 
+**The gate runs the one spex the machine has.** It resolves the project's own install (`node_modules/.bin/spex`),
+else `spex` on PATH — the same two-step rule as [[main-guard]]'s pre-commit — and never a launcher found inside the
+candidate's own checkout. With nothing resolvable it prints that the lint was skipped and lets the ref advance,
+because [[ci-gate]] is the backstop; an environment that cannot start spex is not a failed lint and must not read
+as one.
+
 **A skip that hides a coverage gap names it.** Deciding to skip requires both the changed paths and the claim
 set, so the classification already knows which changed paths are source under `lint.governedRoots` that no
 candidate spec claims — and adding exactly such a file is, by definition, a candidate that touches nothing

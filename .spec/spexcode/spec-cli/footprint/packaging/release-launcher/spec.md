@@ -18,11 +18,10 @@ delegates to `@spexcode/spec-cli`'s own launcher. The root package therefore shi
 its README, and dependencies chosen by its manifest; it does not keep a second hand-maintained inventory of
 child package directories.
 
-The CLI launcher executes `dist/cli.js` with Node. In a source workspace it first imports a fresh closure from
-the main checkout when available, then rebuilds only changed packages and their dependents; if that baseline
-is unavailable or stale, it rebuilds the complete closure with the ordered root driver. The driver calls each
-package's atomic build directly, while direct source callers used by development tests select their loader
-explicitly. An installed user never needs TypeScript or tsx to run
+The CLI launcher executes `dist/cli.js` with Node. In a source workspace whose runtime closure is absent or
+stale it rebuilds that workspace's complete closure with the ordered root driver first ([[source-launcher-build]]).
+The driver calls each package's atomic build directly, while direct source callers used by development tests
+select their loader explicitly. An installed user never needs TypeScript or tsx to run
 SpexCode, because an installed package has no source workspace and the launcher only executes its shipped
 JavaScript. This keeps package ownership truthful: every package publishes the JavaScript it executes, and
 the root is a metapackage rather than an alternate source layout.

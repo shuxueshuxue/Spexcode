@@ -40,7 +40,13 @@
 
 /* THE AGENT IS THE PAGE: full measure, no bubble, no tint. */
 .tx-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.tx-say-text { max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+.tx-say-text { position: relative; max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+/* the turn's copy control (the host's, `renderCopy`) sits in its top-right corner, over the text rather than
+   beside it so the measure never narrows; it shows while the turn is pointed at or holds focus. Where nothing
+   can point it is always there, so it cannot sit over words: it drops to its own line under the turn. */
+.tx-copy { position: absolute; top: 0; right: 0; z-index: 1; display: flex; opacity: 0; transition: opacity var(--tx-dur-rise) ease; }
+.tx-say-text:hover > .tx-copy, .tx-copy:focus-within { opacity: 1; }
+@media (hover: none) { .tx-copy { position: static; justify-content: flex-end; margin-top: var(--tx-space-2); opacity: 1; } }
 .tx-prose > p { margin: 0; }
 .tx-prose > p + p { margin-top: .75em; }
 

@@ -20,6 +20,8 @@ related:
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
   - spec-dashboard/test/timeline-load-earlier-position.e2e.mjs
   - spec-dashboard/src/readerSelection.js
+  - spec-dashboard/src/CopyButton.jsx
+  - spec-dashboard/src/clipboard.js
 ---
 
 # conversation
@@ -254,9 +256,19 @@ referent it cannot mistake, which is the thing a reader loses in a long turn. It
 [[prose-dispatch]] already offers a spec passage, minus the one part that surface needs and this one does
 not — an address to choose — because this composer already stands inside the session it is quoting.
 
-The copy acknowledgement is a transient overlay owned by the conversation shell. It must not become a flex
-row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is feedback,
-not conversation content.
+A selection's copy acknowledgement is a transient overlay owned by the conversation shell. It must not become a
+flex row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is
+feedback, not conversation content.
+
+**A MESSAGE CAN BE TAKEN WHOLE.** Every row that carries authored text wears one [[copy-control]]: the agent's
+note at the far end of its head, an event's note at the end of its line, a quoted message — the originating
+prompt, a sent message — beside its bubble, and each agent turn inside an opened seam or the live tail in the
+turn's own corner. It copies the row's authored Markdown whole, so a clamped note copies all of it, and a code
+block inside any of them carries its own control for just the code. The control belongs to the row, not to the
+selection: it exists in every browser, answers on itself rather than through the selection acknowledgement
+above, and its press neither takes the composer's focus nor retires a painted selection. Like the row's time it
+rests out of sight and comes up with the row under the pointer or keyboard focus, and it never adds to a row's
+height; on a touch screen it is simply there.
 
 **This footer sends to its own session and nowhere else, and the `@` in a draft does not change that.** An
 `@` naming an existing session is a passive reference ([[mentions]]) — text, not a route; delivering to

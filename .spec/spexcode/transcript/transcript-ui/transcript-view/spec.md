@@ -29,7 +29,11 @@ live tail, streamed as the agent works ([[message-stream]]). Both are the normal
 both are drawn here — `Quote`, the tool sentence (`ToolLine`), the tool run, the segment fold, `TranscriptView` —
 so a change to how a call reads changes it in history and in the tail at once, in every host, and no surface
 can drift into its own dialect. Prose is rendered by the host's `renderText`; the words the surface says come
-from its `labels`; the verbs and targets from its `vocabulary` ([[transcript-ui]]).
+from its `labels`; the verbs and targets from its `vocabulary` ([[transcript-ui]]). A turn that said something
+carries the host's copy control (`renderCopy`, [[copy-control]]) in its own top-right corner, over the text so
+the measure never narrows, shown while the turn is pointed at or holds focus; where nothing can point it is
+always shown, so it drops to its own line under the words instead of covering their first line. A tool-only turn
+carries none.
 
 **Live adds exactly one truth.** A tool call whose result the harness has not recorded yet carries no `output`;
 a LIVE reading draws that call as running — a small spinner and the word beside the sentence — and a run that

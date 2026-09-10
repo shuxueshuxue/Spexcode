@@ -1285,6 +1285,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-code:hover > .copy-btn, .doc-code > .copy-btn:focus-visible, .doc-code > .copy-btn.is-failed { opacity: 1; }
 /* where nothing can point the control is always shown, so the block keeps its corner clear of code */
 @media (hover: none) { .doc-code > .copy-btn { opacity: 1; } .doc-code > .doc-pre { padding-right: 36px; } }
+/* an agent turn that opens on a code block: the turn's control steps left of the block's, never onto it */
+.tx-say-text:has(> .rich-text > .doc-code:first-child) > .tx-copy { top: 6px; right: 34px; }
 .doc-link { color: var(--blue); }
 .doc-external { text-decoration: underline; text-underline-offset: 2px; }
 .doc-quote { margin: 0 0 10px; padding: 4px 12px; color: var(--muted); border-left: 2px solid var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
@@ -2929,13 +2931,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* THE AGENT IS THE PAGE: its report is the body — no well, no rule, no indent — at the prose size and held
    to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
-   footprint on a message. The copy button is a ghost for the one browser without Custom Highlight copy. */
+   footprint on a message; the copy control at the head's far end is the reader's. */
 .m-say { min-width: 0; max-width: 100%; }
 .m-say-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
 .m-say-chip { display: inline-flex; align-items: baseline; gap: 5px; font-size: var(--type-caption); font-weight: var(--weight-medium); }
 .m-ev-note { font-size: var(--type-prose); line-height: var(--leading-body); color: var(--ink2); overflow-wrap: anywhere; }
-.m-copy-note { margin-left: auto; padding: 0; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; opacity: 0; transition: opacity .12s; }
-.m-ev:hover .m-copy-note, .m-ev:focus-within .m-copy-note { opacity: 1; }
+/* A MESSAGE CAN BE TAKEN WHOLE ([[copy-control]]): every row that carries authored text wears one copy
+   control, shown while the row is pointed at — and always where nothing can point. It never adds to a row's
+   height: at the head's far end for a note, at the line's end for an event, beside the bubble for a quote. */
+.m-copy { opacity: 0; }
+.m-ev:hover .m-copy, .m-copy:focus-visible, .m-copy.is-failed { opacity: 1; }
+@media (hover: none) { .m-copy { opacity: 1; } }
+.m-say-head > .m-copy { align-self: center; margin: -4px 0 -4px auto; }
+.m-line > .m-copy { align-self: flex-start; margin: -1px 0 -3px auto; }
+.m-quote-line { display: flex; justify-content: flex-end; align-items: flex-start; gap: var(--space-3); min-width: 0; }
+.m-quote-line > .tx-quote { margin-left: 0; }
+.m-quote-line > .m-copy { margin-top: var(--space-2); }
 
 /* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
    page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.
@@ -3008,7 +3019,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .m-timeline { padding-inline: 14px; }
   .m-ev { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: var(--space-4) 0; }
   .m-ev > .m-gut { display: none; }
-  .m-say-head .m-copy-note { display: none; }
 }
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------
    The old transcript was a nested log: a tinted well, a rule under every turn, a role word above each one,

@@ -28,6 +28,9 @@ benchmarks, experiments, docs, and the skill-update manifest.
   `renderers/shared/render-context.mjs` is the one seam for per-render options: the library passes quality
   explicitly for one synchronous call, the CLI still passes it through the environment. The checker's result
   → diagnostics conversion moved from `bin` to `renderers/shared/artifact-diagnostics.mjs`.
+  `renderDiagram(…, { evidence: false })` drops an IR's source evidence (`meta.repository`,
+  `components[].sources`) from its copy before preparation, so the picture can be drawn with no repository;
+  the SVG is byte-identical either way (12/12 evidence-bearing IRs), only the page's source beacons need it.
   Proof: 32 IRs (26 real diagrams, 1 hand lifecycle, 5 examples) — CLI output byte-identical before and after
   (render 32/32, validate 32/32, inspect 18/18); library output in one process byte-identical to the CLI
   baselines, forward and reverse order. `test/library.test.mjs` pins the example pages by sha256.

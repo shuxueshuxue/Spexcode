@@ -40,9 +40,18 @@ function asDiagramError(error, stage) {
 
 // Validate, then lay out and draw, one IR. The IR is copied first: a renderer annotates the object it is given,
 // and the CLI always starts from freshly parsed JSON.
-async function prepared(type, ir, repoRoot) {
+// @@@evidence - an architecture IR may cite its sources (components[].sources, pinned by meta.repository), and
+// archify then refuses to render until it has verified them in a repository: origin matching the declared URL,
+// the pinned commit present, each file there. That feeds the delivered page's source beacons; the SVG itself
+// does not carry evidence (measured: byte-identical with it verified or dropped). `evidence: false` drops it from
+// the copy, so a reader that wants only the picture needs no repository and reads no git.
+async function prepared(type, ir, repoRoot, evidence) {
   assertType(type);
   const diagram = structuredClone(ir);
+  if (!evidence) {
+    if (diagram.meta) delete diagram.meta.repository;
+    for (const component of Array.isArray(diagram.components) ? diagram.components : []) delete component?.sources;
+  }
   let sourceEvidence;
   try {
     sourceEvidence = prepareDiagram(type, diagram, { repoRoot });
@@ -62,9 +71,10 @@ function drawSvg(type, diagram) {
 }
 
 // Render one IR to its page parts. `quality` is 'showcase' or 'standard' (default: the IR's own
-// meta.quality_profile); `repoRoot` enables and verifies revision-pinned source evidence (architecture).
-export async function renderDiagram(type, ir, { quality, repoRoot } = {}) {
-  const { diagram, sourceEvidence } = await prepared(type, ir, repoRoot);
+// meta.quality_profile); `repoRoot` enables and verifies revision-pinned source evidence (architecture);
+// `evidence: false` draws without it (see above) and returns sourceEvidence null.
+export async function renderDiagram(type, ir, { quality, repoRoot, evidence = true } = {}) {
+  const { diagram, sourceEvidence } = await prepared(type, ir, repoRoot, evidence);
   let svg;
   try {
     svg = withRenderContext({ quality }, () => drawSvg(type, diagram));
@@ -77,7 +87,7 @@ export async function layoutReport(type, ir, { quality, repoRoot } = {}) {
   if (type !== 'architecture' && type !== 'workflow') {
     throw new DiagramError('layout reports exist for architecture and workflow diagrams only', [], 'input');
   }
-  const { diagram } = await prepared(type, ir, repoRoot);
+  const { diagram } = await prepared(type, ir, repoRoot, true);
   try {
     return withRenderContext({ quality }, () => (type === 'architecture'
       ? renderArchitecture(diagram, { layoutOnly: true }).layoutReport

@@ -56,11 +56,15 @@ compatibility; a consumer handing IRs to upstream tooling strips it.
 **A library, not a set of scripts.** Upstream runs every step as its own process — the CLI spawns a
 renderer script that reads argv and writes a file, then spawns a checker script on that file. Here each of
 those scripts exports its logic as a function, and `@spexcode/archify` is that set of functions:
-`renderDiagram(type, ir, {quality, repoRoot})` returns the SVG and the page parts, `checkDiagram` renders and
+`renderDiagram(type, ir, {quality, repoRoot, evidence})` returns the SVG and the page parts, `checkDiagram` renders and
 runs the final-artifact check and reports problems as data (`ok`, `diagnostics` in the renderers' own
 vocabulary), `layoutReport` gives the receipt a cartographer repairs from, and `diagramHtml(parts)` assembles
 the self-contained page the CLI delivers. A diagram problem is a `DiagramError` carrying diagnostics, never a
-process exit. SpexCode imports these; nothing in SpexCode spawns an archify process. The upstream-shaped CLI
+process exit. An architecture IR may cite its sources, and archify then refuses to draw until it has verified
+them in a repository (origin, pinned commit, each file) — that evidence feeds the delivered page's source
+beacons, not the SVG, which is byte-identical with it verified or dropped; `evidence: false` drops it, so a
+reader that wants only the picture needs no repository. SpexCode imports these; nothing in SpexCode spawns an
+archify process. The upstream-shaped CLI
 stays in the package as a development tool and as the reference the library is proven against — the library
 reproduces its output byte for byte. Type declarations describe the library for TypeScript callers; the
 renderers stay JavaScript.

@@ -20,6 +20,8 @@ export declare class DiagramError extends Error {
 export interface DiagramOptions {
   quality?: 'showcase' | 'standard';
   repoRoot?: string;
+  /** false: draw the picture alone — the IR's source evidence is dropped, no repository is read. */
+  evidence?: boolean;
 }
 
 export interface DiagramParts {

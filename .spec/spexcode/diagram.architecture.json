@@ -1,0 +1,424 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SpexCode 顶层：三层叠栈，十一个子树",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "repository": {
+      "url": "https://github.com/shuxueshuxue/spexcode",
+      "revision": "f62710d243edbf6b16314775981307a4a75fa6d0"
+    },
+    "note": "主干 spec-dashboard → spec-cli → session-runtime 就是 L2 → L0 → L1 的依赖序。spec-forge 与 archify 不在任何一层：正文没给它们分层，图也不替它分。dashboard 与 cli 之间的两条 import 边是跨目录治理（launch.js 归 spec-cli，reviews.ts 与 uploads.ts 归 dashboard），不是前端依赖后端。看板只取 archify 的浏览器半边（样式与聚焦），那条边没画。所有数字都在 revision 那一刻的树上重算。"
+  },
+  "components": [
+    {
+      "id": "spec-forge",
+      "type": "backend",
+      "label": "spec-forge",
+      "sublabel": "13 节点",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/index.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        280,
+        70
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "archify",
+      "type": "backend",
+      "label": "archify",
+      "sublabel": "1 节点",
+      "sources": [
+        {
+          "path": ".spec/spexcode/archify/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "packages/archify/index.mjs",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        560,
+        70
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "spec-desktop",
+      "type": "frontend",
+      "label": "spec-desktop",
+      "sublabel": "5 节点",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-desktop/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-desktop/main.js",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        40,
+        170
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "spec-dashboard",
+      "type": "frontend",
+      "label": "spec-dashboard",
+      "sublabel": "97 节点",
+      "tag": "8 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-dashboard/src/main.jsx",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        40,
+        310
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "spec-cli",
+      "type": "backend",
+      "label": "spec-cli",
+      "sublabel": "167 节点",
+      "tag": "37 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/index.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        370,
+        300
+      ],
+      "size": [
+        190,
+        80
+      ]
+    },
+    {
+      "id": "session-runtime",
+      "type": "backend",
+      "label": "session-runtime",
+      "sublabel": "38 节点",
+      "tag": "10 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/session-runtime/spec.md",
+          "label": "spec"
+        }
+      ],
+      "pos": [
+        760,
+        310
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "session-protocol",
+      "type": "messagebus",
+      "label": "session-protocol",
+      "sublabel": "11 节点",
+      "tag": "3 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/session-protocol/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "packages/session-protocol/src/index.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        1060,
+        210
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "session-topology",
+      "type": "backend",
+      "label": "session-topology",
+      "sublabel": "4 节点",
+      "tag": "1 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/session-topology/spec.md",
+          "label": "spec"
+        }
+      ],
+      "pos": [
+        1060,
+        410
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "transcript",
+      "type": "backend",
+      "label": "transcript",
+      "sublabel": "7 节点",
+      "tag": "1 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/transcript/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "packages/transcript/src/index.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        760,
+        500
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "plugin-system",
+      "type": "backend",
+      "label": "plugin-system",
+      "sublabel": "3 节点",
+      "tag": "1 drift",
+      "sources": [
+        {
+          "path": ".spec/spexcode/plugin-system/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "packages/spec-core/src/specs.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        70,
+        500
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "x-plugins",
+      "type": "external",
+      "label": ".plugins",
+      "sublabel": "26 节点",
+      "sources": [
+        {
+          "path": ".spec/spexcode/.plugins/spec.md",
+          "label": "spec"
+        }
+      ],
+      "pos": [
+        370,
+        500
+      ],
+      "size": [
+        170,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "L2 · 参考工作台：L1 的消费者，不是守门人",
+      "wraps": [
+        "spec-desktop",
+        "spec-dashboard"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "L0 · 数据资产",
+      "wraps": [
+        "spec-cli"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "L1 · agent-army 底座：spec-cli 只是采用者之一",
+      "wraps": [
+        "session-runtime",
+        "session-protocol",
+        "session-topology",
+        "transcript"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "反射式插件：规格与实例分开",
+      "wraps": [
+        "plugin-system",
+        "x-plugins"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "spec-dashboard",
+      "to": "spec-cli",
+      "label": "19 imports",
+      "variant": "emphasis"
+    },
+    {
+      "from": "spec-cli",
+      "to": "session-runtime",
+      "label": "12 imports",
+      "variant": "emphasis"
+    },
+    {
+      "from": "spec-cli",
+      "to": "spec-dashboard",
+      "label": "反向 4 imports",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "from": "spec-desktop",
+      "to": "spec-dashboard",
+      "label": "同一份 dist",
+      "variant": "dashed",
+      "labelDy": 24
+    },
+    {
+      "from": "spec-forge",
+      "to": "spec-cli",
+      "label": "19 mentions",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "spec-cli",
+      "to": "x-plugins",
+      "label": "GET /api/plugins",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        465,
+        465
+      ]
+    },
+    {
+      "from": "x-plugins",
+      "to": "plugin-system",
+      "label": "实例 → 规格",
+      "variant": "dashed"
+    },
+    {
+      "from": "spec-cli",
+      "to": "transcript",
+      "label": "首个采用者",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "session-runtime",
+      "to": "session-protocol",
+      "label": "打开协议",
+      "variant": "dashed"
+    },
+    {
+      "from": "session-runtime",
+      "to": "session-topology",
+      "label": "解析收件人",
+      "variant": "dashed"
+    },
+    {
+      "from": "spec-cli",
+      "to": "archify",
+      "label": "画节点图",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "实线 = 代码事实，跨的却是 spec 树",
+      "items": [
+        "653 条 import 边从 274 个 code: 文件的相对 import 抬上来，一节点治理一文件，所以是 1:1 抬升",
+        "只有 42 条跨顶层子树，而这 42 条两端的文件全在同一个目录里 —— 跨的是 spec 树的分组，不是目录",
+        "所以 dashboard → cli 的 19 不是「前端依赖后端」：launch.js 在 UI 目录却归 spec-cli 管，reviews.ts / uploads.ts 在后端目录却归 dashboard 管"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "三层叠栈就是采用阶梯",
+      "items": [
+        "L0 数据资产（spec↔code 图 · git 派生历史 · spex lint）、L1 agent-army 底座、L2 参考工作台，每一层都要能脱离上面的层单独成立",
+        "L0 的实现和 L2 的 HTTP/SSE/WS 门面在同一个包里，所以只有 spec-cli 被单独框成 L0",
+        "spec-cli 对 L1 是采用者不是守门人：12 条 import 是它进 session-runtime；protocol 与 topology 是兄弟，不是上下层"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "虚线 = 意图边，框底小字 = 漂移",
+      "items": [
+        "1377 条 [[mention]] 来自 spec 正文，280 条跨顶层子树；图上只画正文明确讲过的几条",
+        "N drift = 治理文件在该 spec 上次修订之后被改过的节点数，全树 61 个，git 推导",
+        ".plugins 的 26 个节点里 25 个不治理代码：它是 dev-flow 契约树，/api/plugins 从它这里读"
+      ]
+    }
+  ]
+}

@@ -13,8 +13,10 @@ export type SpecDiagram =
 
 const FILE = /^diagram\.([^.]+)\.json$/
 
-// Rendering is a pure function of the IR text (no repository root is passed, so no git read), so one entry per
-// file content is the whole cache: an edited IR is a new key, an unchanged one renders once per process.
+// The reader draws the picture only: source evidence is not verified on read (that needs the repository's origin,
+// the pinned commit and every cited file — an authoring check), and the SVG does not depend on it. So rendering is
+// a pure function of the IR text, and one entry per file content is the whole cache: an edited IR is a new key,
+// an unchanged one renders once per process.
 const rendered = new Map<string, SpecDiagram>()
 
 async function render(file: string, type: string, text: string): Promise<SpecDiagram> {
@@ -24,7 +26,7 @@ async function render(file: string, type: string, text: string): Promise<SpecDia
   let ir: unknown
   try { ir = JSON.parse(text) } catch (e) { return fail(`not JSON: ${(e as Error).message}`) }
   try {
-    const parts = await renderDiagram(type, ir)
+    const parts = await renderDiagram(type, ir, { evidence: false })
     return { file, type, svg: parts.svg, note: typeof parts.meta?.note === 'string' ? parts.meta.note : null }
   } catch (e) {
     if (e instanceof DiagramError) return fail(e.message, e.diagnostics.map((d) => ({ code: d.code ?? null, message: d.message })))

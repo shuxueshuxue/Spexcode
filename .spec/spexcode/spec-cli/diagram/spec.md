@@ -35,9 +35,11 @@ a warning. They are not built yet; until they are, nothing checks a diagram agai
 the spec it belongs to, in the same commit as the change it reflects; nothing rendered is ever tracked. When a
 node's content is read, the backend renders its IR in-process through [[archify]]'s library into one SVG and
 hands it out with the body: the live content endpoint and the published graph's per-node document carry the
-same `diagram` field, so the two faces of the tree show the same picture by the same path. Rendering is a pure
-function of the IR's text — no repository root is passed, so no git is read — and the result is kept per IR
-content for the life of the process: an unchanged diagram renders once, an edited one is a new key.
+same `diagram` field, so the two faces of the tree show the same picture by the same path. The reader draws the
+picture only: the IR's cited sources are not verified on read — that takes the repository's origin, the pinned
+commit and every cited file, an authoring check (`archify validate --repo-root`, and the lint findings above) —
+and the SVG does not depend on them. So rendering is a pure function of the IR's text, reads no git, and is kept
+per IR content for the life of the process: an unchanged diagram renders once, an edited one is a new key.
 
 **A diagram that cannot be drawn says why, in its own slot.** Unknown type, invalid JSON, a schema or layout
 violation (with archify's own diagnostics), more than one diagram file in a folder, or a renderer crash: each

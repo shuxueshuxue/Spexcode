@@ -45,6 +45,19 @@ test('a diagram problem is data, not a crash: render throws DiagramError, check 
   await assert.rejects(renderDiagram('pie', {}), DiagramError);
 });
 
+test('evidence: false draws an IR that cites sources without a repository; by default that is refused', async () => {
+  const ir = read('web-app.architecture.json');
+  ir.meta = { ...ir.meta, repository: { url: 'https://github.com/example/app', revision: 'a'.repeat(40) } };
+  ir.components = ir.components.map((c, i) => (i === 0 ? { ...c, sources: [{ path: 'src/index.ts', label: 'code' }] } : c));
+  await assert.rejects(renderDiagram('architecture', ir), (e) => e instanceof DiagramError && e.diagnostics[0].code === 'repository-evidence/root-required');
+  const drawn = await renderDiagram('architecture', ir, { evidence: false });
+  assert.equal(drawn.sourceEvidence, null);
+  const { repository, ...meta } = ir.meta;
+  const bare = await renderDiagram('architecture', { ...ir, meta, components: ir.components.map(({ sources, ...c }) => c) });
+  assert.equal(drawn.svg, bare.svg);
+  assert.ok(ir.meta.repository && ir.components[0].sources, 'the caller\'s IR is not modified');
+});
+
 test('diagram.css is generated from the template, and every rule stays inside the .archify box', () => {
   const run = spawnSync(process.execPath, [fileURLToPath(new URL('scripts/generate-diagram-css.mjs', root)), '--check'], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stdout + run.stderr);

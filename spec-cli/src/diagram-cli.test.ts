@@ -98,6 +98,19 @@ test('check names each problem: a stranger box, a file that is not JSON, a missi
   assert.match(broken.out, /is not JSON/)
 })
 
+test('a node not committed yet is drawn but not cited, and the scaffold still passes check as written', { skip }, () => {
+  const { root, spex, read } = repo()
+  mkdirSync(join(root, '.spec/project/gamma'), { recursive: true })
+  writeFileSync(join(root, '.spec/project/gamma/spec.md'), node('gamma'))
+  const made = spex('scaffold', 'project')
+  assert.equal(made.code, 0, made.out)
+  assert.match(made.out, /1 left out because they are not committed there yet \(\.spec\/project\/gamma\/spec\.md\)/)
+  const gamma = read('.spec/project/diagram.json').components.find((c: { id: string }) => c.id === 'gamma')
+  assert.ok(gamma && gamma.sources === undefined, 'the uncommitted child is a box without sources')
+  const checked = spex('check', 'project')
+  assert.equal(checked.code, 0, checked.out)
+})
+
 test('another kind starts from archify\'s own example and draws; off GitHub, scaffold writes no sources', { skip }, () => {
   const { spex, read } = repo(null)
   assert.equal(spex('scaffold', 'beta', '--type', 'workflow').code, 0)

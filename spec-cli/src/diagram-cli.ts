@@ -68,6 +68,14 @@ async function scaffold(args: Args): Promise<number> {
     const children = specs.filter((s) => s.parent === node.id)
     if (!children.length) throw new DiagramCliError(`'${node.id}' has no children — an architecture diagram draws a node's children; choose another --type`)
     const repository = await publicRepository(root)
+    // Evidence is checked at the pinned commit, so only a file that exists there may be cited — a node created a
+    // minute ago and not yet committed would otherwise make the scaffold fail its own check.
+    const wanted = children.flatMap((child) => [child.path, ...(child.code[0] ? [child.code[0]] : [])])
+    const committed = new Set(repository
+      ? (await gitA(['-C', root, 'ls-tree', '-r', '--name-only', repository.revision, '--', ...wanted])).split('\n').filter(Boolean)
+      : [])
+    const cite = (path: string, label: string) => (committed.has(path) ? [{ path, label }] : [])
+    const leftOut = repository ? wanted.filter((path) => !committed.has(path)) : []
     // A plain grid every box fits in: the author moves boxes, archify's check says when the layout reads.
     const cols = Math.ceil(Math.sqrt(children.length))
     ir = {
@@ -80,12 +88,16 @@ async function scaffold(args: Args): Promise<number> {
         label: child.id,
         pos: [40 + (i % cols) * 230, 60 + Math.floor(i / cols) * 120],
         size: [180, 64],
-        ...(repository ? { sources: [{ path: child.path, label: 'spec' }, ...(child.code[0] ? [{ path: child.code[0], label: 'code' }] : [])] } : {}),
+        ...(() => {
+          const sources = [...cite(child.path, 'spec'), ...(child.code[0] ? cite(child.code[0], 'code') : [])]
+          return sources.length ? { sources } : {}
+        })(),
       })),
       connections: [],
     }
     receipt = `${children.length} boxes, one per child of '${node.id}'` + (repository
-      ? `, each citing its spec and governed file; revision pinned to ${repository.revision.slice(0, 9)}`
+      ? `, citing each child's spec and governed file as of ${repository.revision.slice(0, 9)}`
+        + (leftOut.length ? ` — ${leftOut.length} left out because they are not committed there yet (${leftOut.join(', ')}); commit them and run scaffold again with --force to cite them` : '')
       : ' — no sources: the origin is not a GitHub or Gitee repository, so they could not be verified')
   } else {
     ir = example(args.type)

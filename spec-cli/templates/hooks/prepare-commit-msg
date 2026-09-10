@@ -33,26 +33,20 @@ if ! grep -qiE '^Session:[[:space:]]' "$msg_file" && [ -n "${SPEXCODE_SESSION_ID
 git interpret-trailers --in-place --trailer "Session: $SPEXCODE_SESSION_ID" "$msg_file"
 fi
 
-# @@@ commit context - shared hooks can run ahead of a sibling checkout's CLI. Capture first, print
+# @@@ commit context - one spex (the project's install, else PATH; [[main-guard]]). Capture first, print
 # successful context verbatim, and report one advisory line for a resolved CLI that fails. An unresolved
-# CLI stays silent so an uninstalled adopter or sibling checkout does not acquire commit noise.
-main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+# CLI stays silent so an uninstalled adopter does not acquire commit noise.
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 spex_kind=
-if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then
-  spex_kind=pkg
-elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
+if [ -x "$repo_root/node_modules/.bin/spex" ]; then
   spex_kind=local
 elif command -v spex >/dev/null 2>&1; then
   spex_kind=path
-elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
-  spex_kind=pkg
 fi
 spex_cli() {
   case "$spex_kind" in
     path)  spex "$@" ;;
     local) "$repo_root/node_modules/.bin/spex" "$@" ;;
-    pkg)   if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then "$repo_root/spec-cli/bin/spex.mjs" "$@"; else "$main_root/spec-cli/bin/spex.mjs" "$@"; fi ;;
     *)     return 127 ;;
   esac
 }

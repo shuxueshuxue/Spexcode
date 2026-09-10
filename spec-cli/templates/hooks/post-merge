@@ -8,15 +8,12 @@
 #
 # The nudge TEXT and the on/off toggle both live in the CLI (`spex internal nudge <node>` prints nothing when
 # the feature is OFF in .spec/spexcode.json), so this hook is a THIN resolver + caller: resolve `spex` the same
-# three ways the pre-commit hook does, pass the merged node, echo whatever it prints. No CLI resolvable → no
+# two ways the pre-commit hook does (project install, else PATH), pass the merged node, echo whatever it prints. No CLI resolvable → no
 # nudge (safe degradation, same as the lint shim's advisory mode).
-main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 spex_run() {
-  if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then "$repo_root/spec-cli/bin/spex.mjs" "$@"
-  elif [ -x "$repo_root/node_modules/.bin/spex" ]; then "$repo_root/node_modules/.bin/spex" "$@"
+  if [ -x "$repo_root/node_modules/.bin/spex" ]; then "$repo_root/node_modules/.bin/spex" "$@"
   elif command -v spex >/dev/null 2>&1; then spex "$@"
-  elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then "$main_root/spec-cli/bin/spex.mjs" "$@"
   else return 127; fi
 }
 

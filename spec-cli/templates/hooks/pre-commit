@@ -2,30 +2,25 @@
 # spexcode-managed-hook-v1
 # @@@ shared spex runner - resolve the `spex` CLI ONCE, into spex_cli(), so BOTH the main-guard trunk
 # lookup and the spec-lint shim shim through the same mechanism (no duplicated, drift-prone resolution).
-# This must work for BOTH ways this hook ships: a real project that installed @spexcode/spec-cli, and the
-# SpexCode monorepo dogfooding itself from source. cwd stays the committing worktree either way. main_root
-# is the parent of the shared git *common* dir (= layout.ts mainCheckout()); a fresh session worktree has
-# no node_modules of its own, so the dogfood tsx path reaches the main checkout's. First that exists wins:
-#   1. `spex` on PATH                  - installed globally / on the shell PATH.
-#   2. <repo>/node_modules/.bin/spex   - a project that did `npm i @spexcode/spec-cli` (the dep's bin).
-#   3. monorepo launcher by path       - dogfood: bin/spex.mjs (owns tsx resolution + the mid-merge guard).
-main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
+# THERE IS ONE spex: the project's own install if it has one, else the one on PATH. A checkout is never asked
+# to run the launcher it happens to carry in its tree - that made the gate depend on where a worktree sat on
+# disk (a launcher's bare imports resolve by walking UP to a node_modules, which a detached worktree outside
+# the main checkout does not have), and it judged a branch that changes lint by its own half-built lint.
+# On a dogfood machine the PATH `spex` IS the main checkout's development build; CI judges every branch with
+# the branch's own code. First that exists wins:
+#   1. <repo>/node_modules/.bin/spex   - a project that did `npm i @spexcode/spec-cli` (the dep's bin).
+#   2. `spex` on PATH                  - installed globally / the dogfood machine's main-checkout shim.
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 spex_kind=
-if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then
-  spex_kind=pkg
-elif [ -x "$repo_root/node_modules/.bin/spex" ]; then
+if [ -x "$repo_root/node_modules/.bin/spex" ]; then
   spex_kind=local
 elif command -v spex >/dev/null 2>&1; then
   spex_kind=path
-elif [ -x "$main_root/spec-cli/bin/spex.mjs" ]; then
-  spex_kind=pkg
 fi
 spex_cli() {
   case "$spex_kind" in
     path)  spex "$@" ;;
     local) "$repo_root/node_modules/.bin/spex" "$@" ;;
-    pkg)   if [ -x "$repo_root/spec-cli/bin/spex.mjs" ]; then "$repo_root/spec-cli/bin/spex.mjs" "$@"; else "$main_root/spec-cli/bin/spex.mjs" "$@"; fi ;;
     *)     return 127 ;;
   esac
 }
@@ -107,7 +102,7 @@ if [ -z "${SPEXCODE_SKIP_LINT:-}" ]; then
       exit 1
     fi
   else
-    # Advisory hook: no CLI found (project hasn't installed @spexcode/spec-cli; monorepo not `npm install`ed).
+    # Advisory hook: no CLI found (project hasn't installed @spexcode/spec-cli; no global spex on PATH).
     echo "• SpexCode: spec-lint skipped — no \`spex\` CLI found (install @spexcode/spec-cli); CI still enforces." >&2
   fi
 fi

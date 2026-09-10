@@ -58,9 +58,15 @@ their managed header or a known exact legacy digest; custom hooks remain untouch
 is checked by static bytes rather than executing a hook with probe arguments. The hook is advisory and
 bypassable; the non-bypassable backstop is [[ci-gate]].
 
-The hook runs the CLI of the checkout it guards: the repository's own `spec-cli/bin/spex.mjs` when the checkout
-ships one, else a local `node_modules` install, else `spex` on PATH, else the main checkout's launcher. A worktree
-is therefore judged by the code it carries, never by whichever stale global install happens to be first on PATH.
+**The hook runs ONE spex: the project's own install when it has one (`node_modules/.bin/spex`), else the `spex`
+on PATH.** It never runs a launcher it finds inside the checkout it guards. The earlier rule did — "a worktree is
+judged by the code it carries" — and it cost two things: the checkout's launcher only worked where the worktree
+sat under the main checkout, because its bare imports resolved by walking up to main's `node_modules`, an
+invariant nobody had written down and a detached worktree elsewhere broke in silence; and a branch that changed
+lint was judged by its own half-built lint. On a dogfood machine the PATH `spex` is the main checkout's
+development build, so every worktree and every hook run the same code; a branch that changes the tooling is
+judged with its own code where that belongs — in [[ci-gate]], which runs the branch's `spex spec lint` on the
+branch's own tree. With no spex resolvable the hooks stay advisory and say so.
 
 This node owns **only** the main-authoring guard. The same `pre-commit` file also carries the
 [[commit-surgery]] footprint station (unconditional materialize + staged-index repair, after this gate)

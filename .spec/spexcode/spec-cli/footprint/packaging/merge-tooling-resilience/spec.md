@@ -25,11 +25,12 @@ not a crash.
 
 Two rules make the tooling survive it:
 
-- **One entry.** Every spex invocation goes through the launcher (`spec-cli/bin/spex.mjs`) - the PATH bin,
-  the hook-baked `SPEX` (materialize + the codex launch script), and the git-hook fallbacks alike. Nothing
-  bakes a raw source entry: the launcher owns compiled execution and this guard, so every caller inherits both.
-  In a source workspace it also builds the complete runtime closure whenever its emitted runtime entries are absent
-  or older than runtime source. Test-only files (`*.test.*`) and declaration files (`*.d.ts`) are not runtime
+- **One entry.** Every spex invocation goes through the launcher (`spec-cli/bin/spex.mjs`) - the PATH bin and
+  the hook-baked `SPEX` (materialize + the codex launch script) alike; the git hooks themselves call the
+  project's installed `spex` or the one on PATH, never a launcher they find inside the checkout they guard
+  ([[main-guard]]). Nothing bakes a raw source entry: the launcher owns compiled execution and this guard, so
+  every caller inherits both. In a source workspace it also builds its own complete runtime closure whenever its
+  emitted runtime entries are absent or older than runtime source ([[source-launcher-build]]). Test-only files (`*.test.*`) and declaration files (`*.d.ts`) are not runtime
   inputs and do not trigger a workspace build on an ordinary CLI invocation. The `dist` directories are deliberately
   untracked, so a clean checkout must be able to take this path; a published package has no source tree and
   therefore never builds at runtime.

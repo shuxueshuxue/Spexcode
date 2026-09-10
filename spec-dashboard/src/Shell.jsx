@@ -444,17 +444,17 @@ function Content({ page, param, query, inactive = false }) {
   )
 }
 
-// The right dock's own switch. It draws `panel-right` and keeps drawing it: the glyph NAMES the dock this
-// control owns, it is not a readout of that dock's state. The mirrored pair has no empty-frame member, so a
-// state-flipping context toggle would have to draw `panel-left` — a panel on the LEFT — to mean "the right
-// dock is closed", which is a picture of the wrong region. State is `aria-pressed` plus the `.on` tint,
-// exactly as the rail's switch already carries it.
+// The right dock's own switch. It always draws the RIGHT panel's frame — the glyph NAMES the dock this
+// control owns — and says its state with the chevron inside it (`panel-right-close` while open,
+// `panel-right-open` while closed), exactly as the left dock's switch does with the panel-left family. A
+// switch that flipped to the LEFT panel to mean "the right dock is closed" pictured the wrong region.
+// State is also `aria-pressed` plus the `.on` tint.
 function ContextToggle({ visible, onToggle }) {
   const t = useT()
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
   return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
     aria-pressed={visible} aria-label={label} data-tip={label}>
-    <Icon name="panel-right" size={14} />
+    <Icon name={visible ? 'panel-right-close' : 'panel-right-open'} size={14} />
   </button>
 }
 

@@ -107,21 +107,20 @@ const ICONS = {
     vb: 18, sw: 1.4,
     node: <><circle cx="3" cy="4.5" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="9" r="1" fill="currentColor" stroke="none" /><circle cx="3" cy="13.5" r="1" fill="currentColor" stroke="none" /><path d="M6 4.5h9.5M6 9h9.5M6 13.5h9.5" /></>,
   },
-  // The mirrored pair that toggles the LEFT and RIGHT docks. The owned pane carries `icon-pane` so the
-  // switch can say its state the way editors do (VS Code's layout-sidebar pair): pane FILLED while that
-  // dock is open, HOLLOW while it is closed — same frame, same side, only the fill. Two lanes once landed
-  // green separately —
-  // one deleting "the duplicate panel-left", one drawing the fold toggle with it — and the merged main
-  // white-screened every user, because Icon threw on the missing name and the rail sits above every
-  // boundary. The pair lives together so neither half can be judged dead in isolation again.
-  'panel-left': {
-    vb: 18, sw: 1.4,
-    node: <><path className="icon-pane" d="M6.4 2.5H3.1a1.6 1.6 0 0 0-1.6 1.6v9.8a1.6 1.6 0 0 0 1.6 1.6h3.3z" fill="currentColor" stroke="none" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M6.4 2.5v13" /></>,
-  },
-  'panel-right': {
-    vb: 18, sw: 1.4,
-    node: <><path className="icon-pane" d="M11.6 2.5h3.3a1.6 1.6 0 0 1 1.6 1.6v9.8a1.6 1.6 0 0 1-1.6 1.6h-3.3z" fill="currentColor" stroke="none" /><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M11.6 2.5v13" /></>,
-  },
+  // The mirrored pair that toggles the LEFT and RIGHT docks — Lucide's panel-left / panel-right family,
+  // drawn at the sheet's default box and stroke so the switch speaks the same line as the collapse-all,
+  // search and archive glyphs beside it (a hand-drawn 18-box with a solid pane read as a different font).
+  // The verb rides a chevron INSIDE the frame: `-close` folds the pane in, `-open` unfolds it — both draw the
+  // same frame on the same side, so a state change never pictures the other dock. Two lanes once landed
+  // green separately — one deleting "the duplicate panel-left", one drawing the fold toggle with it — and
+  // the merged main white-screened every user, because Icon threw on the missing name and the rail sits
+  // above every boundary. The family lives together so no member can be judged dead in isolation again.
+  'panel-left': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /></> },
+  'panel-left-close': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m16 15-3-3 3-3" /></> },
+  'panel-left-open': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></> },
+  'panel-right': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /></> },
+  'panel-right-close': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /><path d="m8 9 3 3-3 3" /></> },
+  'panel-right-open': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /><path d="m10 15-3-3 3-3" /></> },
   // GitHub Primer Octicons `issue-opened-16` (MIT) — preserve the official filled ring + centre.
   'issue-opened': {
     vb: 16, fill: 'currentColor', stroke: 'none',

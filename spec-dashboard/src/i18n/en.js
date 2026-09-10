@@ -633,6 +633,7 @@ export default {
     lockTitle: 'ctrl-click opens in a new tab · right-click for session actions, including lock on graph',
     newSession: 'New Session',
     newSessionTitle: 'New Session',
+    newPill: 'New',   // the forest door's visible word; the full name stays on its aria-label
     searchTitle: 'Search',
     resizeList: 'Resize sessions list',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.

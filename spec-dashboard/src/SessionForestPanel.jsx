@@ -162,11 +162,12 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
         <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={bulkClosed} onError={onError} />
       ) : (
         <div className="si-toprow">
-          {/* The three doors share the sidebar row grammar: New carries its word; archive and search are
-              quiet glyphs at the end. Archive is route state, while search remains momentary. */}
+          {/* The three doors share the sidebar row grammar: New carries one short word (its full name is the
+              aria-label); archive and search are quiet glyphs at the end. Archive is route state, while search
+              remains momentary. */}
           <button type="button" className={`si-pill new${activeId === 'new' ? ' on' : ''}`} aria-label={t('session.newSessionTitle')} onClick={() => onSelect?.('new')}>
             <span className="si-pill-glyph"><Icon name="plus" size={14} /></span>
-            <span className="si-pill-label">{t('session.newSessionTitle')}</span>
+            <span className="si-pill-label">{t('session.newPill')}</span>
           </button>
           <button type="button" className={`si-pill archive${archiveActive ? ' on' : ''}`} aria-label={t('session.archiveTitle')} data-tip={t('session.archiveTitle')} onClick={onArchive}>
             <span className="si-pill-glyph"><Icon name="archive" size={14} /></span>

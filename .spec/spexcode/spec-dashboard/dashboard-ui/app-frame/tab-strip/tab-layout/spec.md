@@ -30,14 +30,18 @@ projection never moves it. When the sidebar is folded the dock head is gone and 
 anchor and the reader's way back to the sidebar stands exactly where the sidebar was.
 
 **The active tab is a card; the others are text on the band.** The active tab is a card of the page's own
-paper standing on the band: a hairline outlines its three free sides under an 8px shoulder, and its bottom is
+paper standing on the band: a hairline outlines its three free sides under 8px upper corners, and its bottom is
 open, so its paper runs straight down into the document with no line between, the way an editor's live tab is
-joined to its pane. The outline is what keeps the card legible in a theme where paper and panel are a few
+joined to its pane. Its lower corners are SHOULDERS, not corners: an 8px quarter-circle of paper outside each
+side curves the card's outline outward into the band's baseline, so the card flows into the pane rather than
+meeting it at a right angle. The outline is what keeps the card legible in a theme where paper and panel are a few
 steps apart. Inactive tabs are not boxes: muted text on the band, a short rule (the middle half of the height)
 between two inactive neighbours, a translucent wash under the pointer, and no rule beside the active card,
 whose outline already separates it. The pointer lights an inactive tab's INNER band — an inset rounded rect
 the height of the label, the same shape a session row wears — never the whole card. The row of cards
-stands off the sidebar's edge by a small inset, so the first card is not glued to the seam. The shared
+stands off its left neighbour by a 4px inset — the sidebar's seam, or the fold switch's cell when the sidebar
+is closed — and the sidebar head rows keep the same 4px trailing inset, so the fold switch and the first
+card sit close across the seam in either state. The shared
 hairline runs under everything else on the band — inactive
 tabs, the empty stretch, the action column. The line is the band's own (an inset rule at its bottom edge,
 which the active card's paper covers, and which shows through the transparent inactive tabs untouched); the

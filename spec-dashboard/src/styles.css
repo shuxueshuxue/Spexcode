@@ -412,7 +412,7 @@ body {
    a jump the reader reads as the layout moving. */
 .dock-head {
   flex: 0 0 var(--line-top); height: var(--line-top); display: flex; align-items: center; gap: var(--space-3);
-  padding: 0 var(--space-4) 0 var(--space-5); border-bottom: 1px solid var(--edge);
+  padding: 0 var(--space-2) 0 var(--space-5); border-bottom: 1px solid var(--edge);   /* trailing: the same small inset the tab row keeps, so the fold switch and the first card sit close across the seam */
   color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui);
 }
 .dock-head-name { color: var(--ink2); font-weight: var(--weight-medium); }
@@ -670,7 +670,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-end;
-  flex-wrap: nowrap; overflow: hidden; padding-left: var(--space-4);   /* the first card stands off the sidebar's edge */
+  flex-wrap: nowrap; overflow: hidden; padding-left: var(--space-2);   /* the first card stands just off the sidebar's edge */
 }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
@@ -691,9 +691,17 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   content: ''; position: absolute; left: 0; top: 25%; height: 50%; border-left: 1px solid var(--edge);
 }
 .tab.on {
-  min-width: 132px; background: var(--paper); color: var(--ink2);
+  min-width: 132px; background: var(--paper); color: var(--ink2); overflow: visible; z-index: 1;   /* visible: its shoulders lie outside the box; above its neighbours so they cover the next tab's edge */
   box-shadow: inset 1px 0 0 var(--edge), inset -1px 0 0 var(--edge), inset 0 1px 0 var(--edge);
 }
+/* THE SHOULDERS. An 8px box outside each lower corner, painted by one radial gradient centred on the box's
+   outer-top corner: inside the radius the band shows through, then a 1px ring of --edge continuing the card's
+   outline round the bend, then paper — so the card's side curves out into the baseline and joins the pane
+   below with no corner. The band's own bottom rule is covered where the paper is and shows where it is not,
+   which is exactly the line an editor draws under a live tab. */
+.tab-shoulder { position: absolute; bottom: 0; width: 9px; height: 8px; pointer-events: none; }   /* 9, not 8: the extra column lies over the card's own edge, so its straight inset rule ends where the curve leaves it instead of running on beside the bend */
+.tab-shoulder-l { left: -8px; background: radial-gradient(circle at 0 0, transparent 7px, var(--edge) 7.5px 8.5px, var(--paper) 9px); }
+.tab-shoulder-r { right: -8px; background: radial-gradient(circle at 100% 0, transparent 7px, var(--edge) 7.5px 8.5px, var(--paper) 9px); }
 /* THE BAND MEETS THE PAGE AT A HAIRLINE, EXCEPT UNDER THE ACTIVE TAB. The active card IS the page: its paper
    runs straight down into the document, the way an editor's live tab is joined to its pane, and the divider
    rule runs under everything else — inactive tabs, the empty band, the action cluster. The line is an inset
@@ -763,11 +771,9 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    in the margin. No light, no fill at rest: its state is the sidebar beside it, and `aria-pressed`. */
 .dock-toggle { appearance: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
 .dock-toggle-head { margin-left: auto; }
-.dock-head-act.dock-toggle { width: 26px; height: 26px; }
-/* STATE IS THE FILL, the way editors draw this switch: the owned pane is solid while that dock is open and
-   hollow while it is closed — same frame, same side, one glyph at one size (18px) wherever the switch stands. */
-.dock-toggle[aria-pressed="false"] .icon-pane, .context-toggle[aria-pressed="false"] .icon-pane { fill: none; }
-.dock-toggle-strip { flex: 0 0 40px; width: 40px; align-self: stretch; border-radius: 0; }
+/* state is the glyph's own chevron (Lucide panel-left-close / -open); the switch wears the head row's door
+   size where it rides a head row, and a 24px hover pill around the same 14px glyph in the strip */
+.dock-toggle-strip { flex: 0 0 32px; width: 32px; align-self: stretch; border-radius: 0; }   /* a cell, not the rail's width: the first card follows closely */
 .dock-toggle-strip svg { padding: 5px; box-sizing: content-box; border-radius: var(--radius); }
 .dock-toggle-strip:hover, .dock-toggle-strip:focus-visible { color: var(--ink2); background: transparent; }
 .dock-toggle-strip:hover svg, .dock-toggle-strip:focus-visible svg { background: var(--wash-hover); }
@@ -1873,8 +1879,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    Archive and Search are quiet glyphs at the row's end. */
 /* the forest's top row IS the top band ([[side-nav]], [[tab-layout]]): `--line-top` tall, so it lines up
    with the strip and the fold switch neither moves nor resizes when the fold carries it across. */
-.si-toprow { height: var(--line-top); display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-4); }
-.si-toprow .dock-toggle { flex: none; width: 28px; height: 28px; margin-left: 0; padding: 0; }
+.si-toprow { height: var(--line-top); display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2) 0 var(--space-4); }
+.si-toprow .dock-toggle { flex: none; width: 28px; height: 28px; margin-left: 0; padding: 0; color: var(--muted); }   /* muted like every other mount — `.si-pill`'s ink would make the switch brighten as the fold moved it */
+.si-toprow .dock-toggle:hover { color: var(--ink2); }
 .si-toprow + .si-session-scroll > .si-zone:first-child { padding-top: var(--space-2); }
 .si-pill {
   display: inline-flex; align-items: center; gap: var(--space-3); height: 28px; padding: 0 var(--space-4);

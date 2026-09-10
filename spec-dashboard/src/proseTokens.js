@@ -298,6 +298,7 @@ const blockElement = (h, token, children, options) => {
  * Map tokens to React elements. Callers supply only semantic handlers; no HTML renderer is accepted.
  * `softBreak` is the one dialect knob: 'break' renders an authoring wrap as a line break (message surfaces,
  * where a newline the writer typed is part of the reply), anything else reflows it into a space (documents).
+ * `renderCodeCopy(source, token)` supplies a code block's copy control; without it the block has none.
  */
 export function renderProseTokens(tokens, options = {}) {
   const h = options.h
@@ -309,7 +310,11 @@ export function renderProseTokens(tokens, options = {}) {
     if (token.type === 'inline') current().push(...renderInline(h, token.children, options))
     else if (token.type === 'fence' || token.type === 'code_block') {
       const language = token.info?.trim().split(/\s+/, 1)[0]
-      current().push(h('pre', { ...attrs(token, options.lineBase), className: 'doc-pre' }, h('code', { className: language ? `language-${language}` : undefined }, token.content)))
+      const block = h('pre', { ...attrs(token, options.lineBase), className: 'doc-pre' }, h('code', { className: language ? `language-${language}` : undefined }, token.content))
+      // The copy takes the source without the block's own closing newline: pasted into a shell, that
+      // newline would run the command before the reader has looked at it.
+      const copy = options.renderCodeCopy?.(token.content.replace(/\n$/, ''), token) ?? null
+      current().push(h('div', { className: 'doc-code' }, block, copy))
     } else if (token.type === 'prose_math_block') current().push(mathElement(h, token, true, attrs(token, options.lineBase)))
     else if (token.type === 'prose_time_anchor') {
       const value = options.renderTimeAnchor?.(token.meta, token, attrs(token, options.lineBase))

@@ -1,0 +1,343 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dashboard-ui — 六张目的地页 → app-frame → ui-primitives",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "repository": {
+      "url": "https://github.com/shuxueshuxue/spexcode",
+      "revision": "250fd0032ef54107b9225665ba2869635c0706bf"
+    },
+    "note": "这一层的正文只是一条选型记录，画不成拓扑，所以图的形状来自子节点之间的关系：页面挂在 app-frame 里，frame 用 ui-primitives 来画。session-console 到 ui-primitives 是最粗的边，比经过 frame 的还多；它画成普通线而不是主干，否则就等于说 frame 可有可无。有子树的八个画成框，四个单文件叶子折成一格。所有数字都在 revision 那一刻的树上重算。"
+  },
+  "components": [
+    {
+      "id": "session-console",
+      "type": "frontend",
+      "label": "session-console",
+      "sublabel": "23 节点 · 终端 或 Conversation",
+      "tag": "5 drift",
+      "pos": [
+        40,
+        90
+      ],
+      "size": [
+        200,
+        120
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/session-console/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-dashboard/src/SessionInterface.jsx",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "review-surfaces",
+      "type": "frontend",
+      "label": "review-surfaces",
+      "sublabel": "13 节点 · Evals/Issues 一个产品",
+      "pos": [
+        40,
+        246
+      ],
+      "size": [
+        200,
+        76
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/review-surfaces/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "graph",
+      "type": "frontend",
+      "label": "graph",
+      "sublabel": "8 节点 · 整幅 tidy-tree 桌面页",
+      "pos": [
+        40,
+        358
+      ],
+      "size": [
+        200,
+        76
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/graph/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "spec-view",
+      "type": "frontend",
+      "label": "spec-view",
+      "sublabel": "4 节点 · 一个节点当文档读",
+      "tag": "1 drift",
+      "pos": [
+        40,
+        470
+      ],
+      "size": [
+        200,
+        76
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/spec-view/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-dashboard/src/SpecView.jsx",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "file-view",
+      "type": "frontend",
+      "label": "file-view",
+      "sublabel": "2 节点 · 一个文件当文档读",
+      "pos": [
+        40,
+        582
+      ],
+      "size": [
+        200,
+        76
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/file-view/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-dashboard/src/FileView.jsx",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "type": "frontend",
+      "label": "settings",
+      "sublabel": "3 节点 · 语言 / 主题 / 快捷键",
+      "tag": "1 drift",
+      "pos": [
+        40,
+        694
+      ],
+      "size": [
+        200,
+        76
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/settings/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-dashboard/src/Settings.jsx",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "app-frame",
+      "type": "cloud",
+      "label": "app-frame",
+      "sublabel": "25 节点 · 页挂载之前就为真",
+      "tag": "1 drift",
+      "pos": [
+        470,
+        246
+      ],
+      "size": [
+        230,
+        340
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/app-frame/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "ui-primitives",
+      "type": "backend",
+      "label": "ui-primitives",
+      "sublabel": "10 节点 · 一份实现，多处挂载",
+      "tag": "3 drift",
+      "pos": [
+        860,
+        336
+      ],
+      "size": [
+        230,
+        160
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "others",
+      "type": "external",
+      "label": "其余 4 个叶子节点",
+      "sublabel": "session-picker · selection-attachment · code-selection · game-controller",
+      "pos": [
+        900,
+        90
+      ],
+      "size": [
+        420,
+        76
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-dashboard/dashboard-ui/spec.md",
+          "label": "spec"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "目的地页：路由到的六张页",
+      "wraps": [
+        "session-console",
+        "review-surfaces",
+        "graph",
+        "spec-view",
+        "file-view",
+        "settings"
+      ],
+      "pad": 20
+    }
+  ],
+  "connections": [
+    {
+      "from": "session-console",
+      "to": "app-frame",
+      "label": "24 imports · 5 back",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "from": "app-frame",
+      "to": "ui-primitives",
+      "label": "21 imports",
+      "variant": "emphasis"
+    },
+    {
+      "from": "session-console",
+      "to": "ui-primitives",
+      "label": "32 imports",
+      "variant": "default"
+    },
+    {
+      "from": "review-surfaces",
+      "to": "app-frame",
+      "label": "12 imports · 6 back",
+      "variant": "default"
+    },
+    {
+      "from": "graph",
+      "to": "app-frame",
+      "label": "4 imports · 3 back",
+      "variant": "default",
+      "labelDy": 22
+    },
+    {
+      "from": "spec-view",
+      "to": "app-frame",
+      "label": "2 imports · 1 back",
+      "variant": "default"
+    },
+    {
+      "from": "settings",
+      "to": "app-frame",
+      "label": "2 imports · 2 back",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "from": "graph",
+      "to": "spec-view",
+      "label": "3 imports · 1 back",
+      "variant": "default",
+      "labelAt": [
+        140,
+        448
+      ]
+    },
+    {
+      "from": "file-view",
+      "to": "spec-view",
+      "label": "1 import",
+      "variant": "default"
+    },
+    {
+      "from": "session-console",
+      "to": "others",
+      "label": "11 imports",
+      "variant": "default"
+    },
+    {
+      "from": "others",
+      "to": "ui-primitives",
+      "label": "2 imports",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "主干：页 → app-frame → ui-primitives",
+      "items": [
+        "页 → app-frame 的 import：session-console 24、review-surfaces 12、graph 4、spec-view 2、settings 2；file-view 一次都没有，只在正文里提到 4 次",
+        "app-frame 也 import 回每一张页（6 / 5 / 3 / 2 / 1 / 1）——那是 side-nav 的路由在挂载它们，不是页的实现",
+        "地址、导轨、调色板、滚动口、project 作用域都在 frame 里；页只是挂进去"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "最重的一条边绕过了 frame",
+      "items": [
+        "session-console → ui-primitives 32 imports，比它 import frame 的 24 多，也比 frame 自己的 21 多",
+        "ui-primitives 被 import 73 次，往外 import 只有 → graph 1 次：它是这一层唯一的汇",
+        "没画的汇入边：review-surfaces → 10、graph → 4、spec-view → 4"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "折叠掉的 4 个",
+      "items": [
+        "8 个有子树的画成框，4 个单文件叶子折成一格",
+        "session-picker / selection-attachment / code-selection 是刻意只做一份的跨面共享件；game-controller 只有契约、还没有代码",
+        "未画的折叠边：spec-view → 3 imports，以及格内 selection-attachment → code-selection 1"
+      ]
+    }
+  ]
+}

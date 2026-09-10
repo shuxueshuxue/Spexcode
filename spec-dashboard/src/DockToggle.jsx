@@ -8,11 +8,11 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 // it stands as the first cell of the tab strip: the panel's edge is where the panel would reappear. One
 // component, two mounts, one workspace boolean; it never navigates, never selects a projection, never lights.
 //
-// The glyph is `panel-left` in BOTH states: it names the dock this control owns, the same rule the right
-// dock's switch follows with `panel-right`. A flipped glyph drew a panel on the wrong side to say "closed".
-// State is `aria-pressed`, and the stylesheet reads it the way editors draw this switch: the owned pane is
-// FILLED while the sidebar is open and HOLLOW while it is closed. One size (18px) at both mounts, so the
-// glyph neither grows nor shrinks when the fold moves it from the head row to the strip.
+// The glyph always draws the LEFT panel's frame — it names the dock this control owns, the same rule the
+// right dock's switch follows with the panel-right family; a glyph that flipped to the other side's panel to
+// say "closed" pictured the wrong region. State is the chevron inside that frame: `panel-left-close` while
+// the sidebar is open (fold it in), `panel-left-open` while it is closed (unfold it) — Lucide's own pair, at
+// the 14px the head-row glyphs around it use, and one size at both mounts so the fold never resizes it.
 export default function DockToggle({ variant = 'head', className = '' }) {
   const t = useT()
   const { dock } = useWorkspace()
@@ -22,7 +22,7 @@ export default function DockToggle({ variant = 'head', className = '' }) {
   return (
     <button type="button" className={`dock-toggle dock-toggle-${variant}${className ? ` ${className}` : ''}`}
       data-tip={label} aria-label={label} aria-pressed={dock} onClick={() => setDock((value) => !value)}>
-      <Icon name="panel-left" size={18} />
+      <Icon name={dock ? 'panel-left-close' : 'panel-left-open'} size={14} />
     </button>
   )
 }

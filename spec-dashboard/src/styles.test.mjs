@@ -353,12 +353,9 @@ test('the fold switch rides the sidebar head while open and the strip\'s first c
   assert.match(css, /\.dock-toggle-strip\s*\{[^}]*flex:\s*0 0 40px;[^}]*align-self:\s*stretch;[^}]*border-radius:\s*0;/s)
   assert.match(css, /\.dock-toggle-strip svg\s*\{[^}]*padding:\s*5px;[^}]*border-radius:\s*var\(--radius\);/s)
   assert.match(css, /\.dock-toggle-strip:hover svg, \.dock-toggle-strip:focus-visible svg\s*\{\s*background:\s*var\(--wash-hover\);/)
-  // state is the fill: open = solid pane, closed = hollow pane, for both docks' switches
-  assert.match(css, /\.dock-toggle\[aria-pressed="false"\] \.icon-pane, \.context-toggle\[aria-pressed="false"\] \.icon-pane\s*\{\s*fill:\s*none;/)
   // the forest's top row is the band, so the switch neither moves nor resizes across the fold
   assert.match(css, /\.si-toprow\s*\{[^}]*height:\s*var\(--line-top\);/s)
   assert.match(css, /\.si-toprow \.dock-toggle\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/s)
-  assert.match(css, /\.dock-head-act\.dock-toggle\s*\{\s*width:\s*26px;\s*height:\s*26px;/)
   // the pane is a card: rounded lower corners on the panel ground
   assert.match(css, /\.viewhost\s*\{[^}]*border-radius:\s*0 0 var\(--radius-tab\) var\(--radius-tab\);/s)
   assert.match(css, /\.app-content-column\s*\{\s*background:\s*var\(--panel\);/)

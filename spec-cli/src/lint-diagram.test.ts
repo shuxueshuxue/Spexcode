@@ -9,8 +9,9 @@ import { extractors } from '@spexcode/spec-core'
 import { specLint } from './lint.js'
 import { tsxBin } from './tsx-bin.js'
 
-// [[diagram]]'s two lint errors through the REAL `spex spec lint` in throwaway repos: a node's architecture
-// diagram draws its own children (box id = child node id, or `others`) and cites only specs or governed files.
+// [[diagram]]'s two lint errors through the REAL `spex spec lint` in throwaway repos: a node's diagram.json, when
+// its diagram_type is architecture, draws its own children (box id = child node id, or `others`) and cites only
+// specs or governed files.
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
@@ -56,7 +57,7 @@ const lint = (root: string) => {
 
 test('a diagram of the node\'s own children, citing specs and governed files, is clean — `.plugins` and `others` included', { skip }, () => {
   const { root } = repo({
-    '.spec/project/diagram.architecture.json': diagram([
+    '.spec/project/diagram.json': diagram([
       box('alpha', ['.spec/project/alpha/spec.md', 'src/a.ts']), box('.plugins', ['.spec/project/.plugins/spec.md']), box('others'),
     ]),
   })
@@ -66,7 +67,7 @@ test('a diagram of the node\'s own children, citing specs and governed files, is
 })
 
 test('a box that is not a direct child is a diagram-id error — a stranger, a grandchild, an alias', { skip }, () => {
-  const { root } = repo({ '.spec/project/diagram.architecture.json': diagram([box('alpha'), box('gamma'), box('deep'), box('x-plugins')]) })
+  const { root } = repo({ '.spec/project/diagram.json': diagram([box('alpha'), box('gamma'), box('deep'), box('x-plugins')]) })
   const r = lint(root)
   assert.equal(r.code, 1, r.out)
   assert.equal(r.diagram.length, 3, r.out)
@@ -76,27 +77,27 @@ test('a box that is not a direct child is a diagram-id error — a stranger, a g
 
 test('a cited source that is neither a spec nor a governed file is a diagram-source error', { skip }, () => {
   const { root } = repo({
-    '.spec/project/diagram.architecture.json': diagram([box('alpha', ['src/loose.ts', 'src/gone.ts', '.spec/project/alpha/spec.md'])]),
+    '.spec/project/diagram.json': diagram([box('alpha', ['src/loose.ts', 'src/gone.ts', '.spec/project/alpha/spec.md'])]),
   })
   const r = lint(root)
   assert.equal(r.code, 1, r.out)
   assert.deepEqual(r.diagram.map((line) => line.match(/cites (\S+)/)?.[1]), ['src/loose.ts,', 'src/gone.ts,'], r.out)
 })
 
-test('an architecture diagram that is not JSON cannot be checked, and says so; other diagram types are not read', { skip }, () => {
+test('a diagram.json that is not JSON cannot be checked, and says so; one of another diagram_type is not checked', { skip }, () => {
   const { root } = repo({
-    '.spec/project/diagram.architecture.json': '{ not json',
-    '.spec/project/alpha/diagram.workflow.json': JSON.stringify({ steps: [{ id: 'anything' }] }),
+    '.spec/project/diagram.json': '{ not json',
+    '.spec/project/alpha/diagram.json': JSON.stringify({ diagram_type: 'workflow', steps: [{ id: 'anything' }] }),
   })
   const r = lint(root)
   assert.equal(r.diagram.length, 1, r.out)
-  assert.match(r.diagram[0], /diagram-id: .*diagram\.architecture\.json is not JSON/)
+  assert.match(r.diagram[0], /diagram-id: .*\/project\/diagram\.json is not JSON/)
 })
 
 test('the commit gate judges the candidate tree, not the working files', { skip }, async () => {
-  const { root, git } = repo({ '.spec/project/diagram.architecture.json': diagram([box('gamma')]) })
+  const { root, git } = repo({ '.spec/project/diagram.json': diagram([box('gamma')]) })
   const bad = git('rev-parse', 'HEAD').trim()
-  writeFileSync(join(root, '.spec/project/diagram.architecture.json'), diagram([box('alpha')]))
+  writeFileSync(join(root, '.spec/project/diagram.json'), diagram([box('alpha')]))
   git('commit', '-qam', 'fix the box')
   const clean = await specLint(root, extractors(root))
   assert.deepEqual(clean.filter((f) => f.rule.startsWith('diagram-')), [])

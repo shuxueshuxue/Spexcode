@@ -125,8 +125,9 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       optional leading dot; no space / '/' / '_' / uppercase Latin), and its leaf dir name
                       is unique tree-wide.
   mention    (error)  every [[node-id]] in prose names a real node (fenced/backticked samples exempt).
-  diagram-id (error)  a node's diagram.architecture.json draws its own children: every box's id is one of
-                      the node's DIRECT child ids (one rule for every child, \`.plugins\` included), or
+  diagram-id (error)  a node's diagram is its one diagram.json beside spec.md (the type is the file's own
+                      diagram_type). An architecture diagram draws its own children: every box's id is one
+                      of the node's DIRECT child ids (one rule for every child, \`.plugins\` included), or
                       \`others\` for small children folded together. A file that is not JSON errors here too.
   diagram-source (error) every source a box cites is a spec.md in the tree or a file some node claims in
                       code:. Diagrams have no staleness check of their own: they are revised with the

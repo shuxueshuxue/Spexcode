@@ -255,7 +255,7 @@
       ]
     },
     {
-      "id": "x-plugins",
+      "id": ".plugins",
       "type": "external",
       "label": ".plugins",
       "sublabel": "26 节点",
@@ -306,7 +306,7 @@
       "label": "反射式插件：规格与实例分开",
       "wraps": [
         "plugin-system",
-        "x-plugins"
+        ".plugins"
       ]
     }
   ],
@@ -347,7 +347,7 @@
     },
     {
       "from": "spec-cli",
-      "to": "x-plugins",
+      "to": ".plugins",
       "label": "GET /api/plugins",
       "variant": "dashed",
       "fromSide": "bottom",
@@ -358,7 +358,7 @@
       ]
     },
     {
-      "from": "x-plugins",
+      "from": ".plugins",
       "to": "plugin-system",
       "label": "实例 → 规格",
       "variant": "dashed"

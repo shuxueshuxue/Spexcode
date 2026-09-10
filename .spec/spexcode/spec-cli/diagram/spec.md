@@ -7,6 +7,8 @@ code:
   - spec-cli/src/spec-diagram.ts
 related:
   - packages/archify/index.mjs
+  - spec-cli/src/lint.ts
+  - spec-cli/src/lint-diagram.test.ts
   - spec-cli/src/index.ts
   - spec-cli/src/public-graph.ts
   - spec-cli/src/spec-attachments.ts
@@ -26,10 +28,9 @@ revision it was drawn at and the spec and code paths it was drawn from.
 **The diagram is a projection of the tree, not a free canvas.** An `architecture` diagram's components are
 the node's direct children, by one rule for every child: a box's id is the child's node id, and small children
 may fold into one `others` box. Every source path it cites is a spec path in the tree or a file some node's
-`code:` governs. Two [[spec-lint]] errors are to carry those two facts, `diagram-id` and `diagram-source`. They
-are not built yet; until they are, nothing checks a diagram against the tree it projects. The one node id
-archify's id pattern refuses today is `.plugins`, for its leading dot, so the id rule arrives with that pattern
-widened to allow one.
+`code:` governs. Two [[spec-lint]] errors carry those two facts, `diagram-id` and `diagram-source`, and block a
+commit like any other lint error. Every node id the tree can mint is a valid box id: archify's id pattern
+allows the one leading dot `.plugins` carries ([[archify]]), so the rule needs no alias.
 
 **Its freshness rides on the node's own spec.** The diagram lives beside `spec.md` and is revised in the same
 commits as the node's intent, so it has no staleness check of its own: when a node's spec is revised, its

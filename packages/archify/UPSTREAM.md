@@ -54,6 +54,8 @@ benchmarks, experiments, docs, and the skill-update manifest.
 - `renderers/shared/generated-brand-marks.mjs`: the catalog is empty (`BRAND_MARKS = []`); the
   brand-marks API still answers, a component naming a `brand` simply gets no mark.
 - `schemas/*.schema.json` + regenerated `renderers/shared/generated-validators.mjs`: one optional field,
-  `meta.note` (string, ≤600 chars).
+  `meta.note` (string, ≤600 chars); and `common.schema.json`'s id pattern accepts one leading dot
+  (`^\.?[a-zA-Z][a-zA-Z0-9_-]*$`), because a box id is a SpexCode node id and `.plugins` is one. The viewer
+  resolves ids with `getElementById` and quoted attribute selectors, so a dot needs no escaping there.
 - `renderers/shared/cli.mjs` / `utils.mjs` / `assets/template.html`: `meta.note` is rendered as
   `<p class="diagram-note">` under the diagram, above the cards, visible in embed mode.

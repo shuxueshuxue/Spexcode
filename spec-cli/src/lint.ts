@@ -363,6 +363,38 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     }
   }
 
+  // diagram-id / diagram-source ([[diagram]]): a node's architecture diagram is a picture of its own children,
+  // not a free canvas. Every box is one of the node's direct children — a box's id IS the child's node id, one
+  // rule for every child — or the one `others` box small children fold into; every source a box cites is a spec
+  // in the tree or a file some node governs. Only architecture diagrams have boxes that are nodes and cite
+  // sources, so only `diagram.architecture.json` is read here; whether a diagram draws at all is archify's
+  // verdict, shown in the diagram's own slot. Read at the tip, like every other rule.
+  const specPaths = new Set(specs.map((s) => s.path))
+  for (const s of specs) {
+    const file = s.path.replace(/spec\.md$/, 'diagram.architecture.json')
+    if (!existsAtTip(file)) continue
+    let ir: { components?: unknown }
+    try { ir = JSON.parse(textAtTip(file) ?? '') } catch (e) {
+      out.push({ level: 'error', rule: 'diagram-id', spec: s.id, file, msg: `${file} is not JSON (${(e as Error).message}) — its boxes cannot be checked against the children of '${s.id}'` })
+      continue
+    }
+    const children = specs.filter((c) => c.parent === s.id).map((c) => c.id)
+    const childSet = new Set(children)
+    const boxes = Array.isArray(ir?.components) ? ir.components as { id?: unknown; sources?: unknown }[] : []
+    for (const box of boxes) {
+      const id = String(box?.id)
+      if (id !== 'others' && !childSet.has(id)) {
+        const shown = children.length > 12 ? `${children.slice(0, 12).join(', ')}, …` : children.join(', ')
+        out.push({ level: 'error', rule: 'diagram-id', spec: s.id, file, msg: `box '${id}' in ${file} is not a child of '${s.id}' — a box's id is its child's node id, or 'others' for the small ones folded together (children: ${shown || 'none'})` })
+      }
+      for (const source of Array.isArray(box?.sources) ? box.sources as { path?: unknown }[] : []) {
+        const path = String(source?.path)
+        if (!specPaths.has(path) && !governedClaims.has(path))
+          out.push({ level: 'error', rule: 'diagram-source', spec: s.id, file, msg: `box '${id}' in ${file} cites ${path}, which is neither a spec in the tree nor a file any node governs — cite the child's spec.md or the file its node claims in code:` })
+      }
+    }
+  }
+
   // coverage: every governed source file must be claimed by at least one spec.
   if (governed.length === 0)
     out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })

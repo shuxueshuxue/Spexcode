@@ -47,11 +47,13 @@ experiments, docs, and the skill-update manifest. The CLI keeps eight commands �
 inspect, check, migrate, doctor, help — and loses seven. `UPSTREAM.md` names the commit and the cut so a later
 sync has a baseline; every local change is listed there.
 
-**One schema extension.** `meta.note` — an optional string on every diagram type — is the only field this
+**Two schema changes.** `meta.note` — an optional string on every diagram type — is the only field this
 fork adds. It carries the author's short note under the diagram (what was folded, which relation is an
-inference); everything else in the schemas stays exactly as strict as upstream, and the generated validators
-are re-derived from the schemas rather than edited. An IR that uses `note` is one field away from upstream
-compatibility; a consumer handing IRs to upstream tooling strips it.
+inference). And an id may start with one dot: an architecture box's id is its node's id ([[diagram]]), and a
+SpexCode node id may carry one leading dot (`.plugins`), so the shared id pattern accepts exactly that and no
+more. Everything else in the schemas stays exactly as strict as upstream, and the generated validators are
+re-derived from the schemas rather than edited. A consumer handing IRs to upstream tooling strips `note` and
+must not use a dotted id.
 
 **A library, not a set of scripts.** Upstream runs every step as its own process — the CLI spawns a
 renderer script that reads argv and writes a file, then spawns a checker script on that file. Here each of

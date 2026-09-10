@@ -58,6 +58,18 @@ test('evidence: false draws an IR that cites sources without a repository; by de
   assert.ok(ir.meta.repository && ir.components[0].sources, 'the caller\'s IR is not modified');
 });
 
+// A SpexCode node id may carry one leading dot (`.plugins`), and an architecture box's id IS its node's id, so
+// the fork's id pattern allows exactly one leading dot — every id the tree can mint, nothing looser.
+test('a box id may start with one dot, and only one', async () => {
+  const renamed = (to) => JSON.parse(JSON.stringify(read('web-app.architecture.json')).replaceAll('"cache"', `"${to}"`));
+  const drawn = await renderDiagram('architecture', renamed('.cache'));
+  assert.match(drawn.svg, /data-node-id="\.cache"/);
+  assert.equal((await checkDiagram('architecture', renamed('.cache'))).ok, true);
+  for (const bad of ['..cache', '.', '.9cache']) {
+    await assert.rejects(renderDiagram('architecture', renamed(bad)), DiagramError, bad);
+  }
+});
+
 test('diagram.css is generated from the template, and every rule stays inside the .archify box', () => {
   const run = spawnSync(process.execPath, [fileURLToPath(new URL('scripts/generate-diagram-css.mjs', root)), '--check'], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stdout + run.stderr);

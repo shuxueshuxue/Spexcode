@@ -290,15 +290,20 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
             onAuxClick={(e) => { if (!isClosing && e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
-            <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
-              onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
-              <TabKindIcon tab={tab} />
-              <TabDot tab={tab} specs={specs} sessions={sessions} />
-              <span className="tab-label">{tabLabel}</span>
-            </button>
-            <button type="button" className="tab-x" onClick={() => { if (!isClosing) close(tab) }} aria-label={t('tabs.close')}>
-              <Icon name="x" size={11} />
-            </button>
+            {/* the INNER band is what lights under the pointer — an inset rounded rect, the same shape a
+                session row wears — while the tab's own box keeps the card outline, the dividers and the
+                drop marks. */}
+            <div className="tab-inner">
+              <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
+                onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
+                <TabKindIcon tab={tab} />
+                <TabDot tab={tab} specs={specs} sessions={sessions} />
+                <span className="tab-label">{tabLabel}</span>
+              </button>
+              <button type="button" className="tab-x" onClick={() => { if (!isClosing) close(tab) }} aria-label={t('tabs.close')}>
+                <Icon name="x" size={11} />
+              </button>
+            </div>
           </div>
         )
       })}

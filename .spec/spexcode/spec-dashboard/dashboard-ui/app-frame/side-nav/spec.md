@@ -62,13 +62,15 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   sidebar's own head row — the explorer head's far corner, dressed as a head door; the Sessions forest's
   top row's far corner, dressed as a pill — the place an editor keeps the control that closes the panel you
   are looking at. While the sidebar is CLOSED there is no head row, so the switch is the tab strip's first
-  cell ([[tab-layout]]): the rail's width wide and the band tall, an 18px glyph under a 28px hover pill,
-  standing at the panel's edge where the panel would reappear. The rail itself carries no switch. It draws
-  `panel-left` in BOTH states — it names the dock it owns, exactly as the document's right-dock switch
-  always draws `panel-right` — with `aria-pressed` reporting open/closed; a glyph that flipped to
-  `panel-right` to say "closed" drew a panel on the wrong side, and the owned pane is drawn solid so the
-  glyph reads at 15px. It changes only dock open/closed state, never the route, projection, tab list, or
-  route light, and has no light of its own. Folding removes the dock panel and its head row, and the same
+  cell ([[tab-layout]]): the rail's width wide and the band tall, standing at the panel's edge where the
+  panel would reappear. The rail itself carries no switch. It draws `panel-left` in BOTH states — it names
+  the dock it owns, exactly as the document's right-dock switch always draws `panel-right` — and says its
+  state the way editors do: the owned pane is FILLED while the sidebar is open and HOLLOW while it is
+  closed (`aria-pressed` carries the same boolean). A glyph that flipped to `panel-right` to say "closed"
+  drew a panel on the wrong side. The glyph is one size, 18px, at both mounts, and the head rows it rides
+  are the band's own height (the explorer head, and the forest's top row, both `--line-top`), so the fold
+  carries the switch across without it moving vertically or changing size. It changes only dock
+  open/closed state, never the route, projection, tab list, or route light, and has no light of its own. Folding removes the dock panel and its head row, and the same
   control reappears at the strip's edge in the same instant, so the reader's pointer has one short move
   to reopen it.
   The control is mounted wherever a sidebar exists to fold: the shell's dock, or the Sessions document's own

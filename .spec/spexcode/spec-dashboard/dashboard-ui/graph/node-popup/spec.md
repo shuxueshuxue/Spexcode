@@ -8,6 +8,7 @@ code:
   - spec-dashboard/src/NodeView.jsx
 related:
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/NodeDiagram.jsx
 ---
 # node-popup
 
@@ -47,7 +48,8 @@ document; the tab model supplies held navigation when the reader asks for anothe
 node **carries** ([[node-attachments]]): the rest of its own folder — an evidence directory, a raw
 capture, a note beside the spec — uses the same file-document address grammar behind its node-owned API gate.
 The popup remains a reference lens; it does not embed a source reader or make prose and code one screen.
-Then the body as a living current-state document (the two
+A node that carries a diagram shows it next, inline and focusable, the same component the document uses
+([[node-diagram]]). Then the body as a living current-state document (the two
 labelled parts — raw source / expanded spec — when authored that way, else the flat body). Neither part is
 an agent-authored *current state* — what's-done is read from the derived status, never narrated, because
 agents hallucinate completion. The proof and

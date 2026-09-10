@@ -50,12 +50,12 @@ test('cross-package arrivals carry an immutable predecessor ledger', () => {
   for (const commit of [
     '2a5560b11', 'f19ce3af2', '59f51a6b0', 'bbd00164a', '0962fb0e0',
     '7e90b791d', '023e91b4c', 'dff2d31c7', '2f8d5fb71', '3d0e60e6b',
-    '377c832f4', 'b1c36fb04',
+    '377c832f4', 'b1c36fb04', 'bf14545a1', '8044c100f',
   ]) assert.match(specCliSpec, new RegExp('`' + commit + '`'), `arrival ledger omitted ${commit}`)
   for (const edge of [
     '@hono/node-ws', 'node-pty', '@spexcode/spec-core',
     '@spexcode/spec-forge', '@spexcode/session-application',
-    '@spexcode/session-selflaunch', '@vscode/tree-sitter-wasm',
+    '@spexcode/session-selflaunch', '@vscode/tree-sitter-wasm', '@spexcode/archify',
   ]) assert.ok(specCliSpec.includes(`\`${edge}\``), `arrival ledger omitted ${edge}`)
   assert.match(specCliSpec, /No package predecessor/)
   assert.match(specCliSpec, /Same-change subtraction/)

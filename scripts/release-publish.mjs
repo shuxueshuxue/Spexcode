@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const RELEASE_PACKAGES = Object.freeze([
+  { id: 'archify', dir: 'packages/archify', name: '@spexcode/archify', build: [['run', 'build']] },
   { id: 'transcript', dir: 'packages/transcript', name: '@spexcode/transcript', build: [['run', 'build']] },
   { id: 'transcript-ui', dir: 'packages/transcript-ui', name: '@spexcode/transcript-ui', build: [['run', 'build']] },
   { id: 'session-protocol', dir: 'packages/session-protocol', name: '@spexcode/session-protocol', build: [['run', 'build']] },
@@ -15,7 +16,6 @@ export const RELEASE_PACKAGES = Object.freeze([
   { id: 'session-application', dir: 'packages/session-application', name: '@spexcode/session-application', build: [['run', 'build']] },
   { id: 'session-selflaunch', dir: 'packages/session-selflaunch', name: '@spexcode/session-selflaunch', build: [['run', 'build']] },
   { id: 'core', dir: 'packages/spec-core', name: '@spexcode/spec-core', build: [['run', 'build']] },
-  { id: 'archify', dir: 'packages/archify', name: '@spexcode/archify', build: [['run', 'build']] },
   { id: 'dashboard', dir: 'spec-dashboard', name: '@spexcode/spec-dashboard', build: [['run', 'prepack']] },
   { id: 'forge', dir: 'spec-forge', name: '@spexcode/spec-forge', build: [['run', 'build']] },
   { id: 'cli', dir: 'spec-cli', name: '@spexcode/spec-cli', build: [['run', 'build']] },

@@ -21,7 +21,7 @@ export type CliProfile = Readonly<{
   hooks: ReadonlySet<string>
 }>
 
-const REPO_COMMANDS = ['spec', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
+const REPO_COMMANDS = ['spec', 'diagram', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
 const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
 const REPO_HOOKS = new Set(['spec-first', 'spec-of-file', 'comment-altitude'])
 
@@ -470,6 +470,20 @@ verb — edit the JSON; \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex evidence put (stash evidence bytes)',
   },
+  diagram: {
+    line: 'diagram <verb>        a node\'s picture of its level: scaffold · check',
+    body: `Usage: spex diagram scaffold <node> [--type architecture|workflow|sequence|dataflow|lifecycle] [--force]
+       spex diagram check <node> [--html <file>] [--json]
+
+scaffold writes <node folder>/diagram.json to start from. For architecture (the default) it draws one box per
+direct child, with the child's id, spec and governed file already filled in and the revision pinned to HEAD; for
+the other kinds it writes archify's example of that kind to rewrite. It never replaces a file without --force.
+
+check draws the node's diagram.json the way the dashboard does, runs archify's final-artifact check and the two
+tree rules the commit gate enforces, and prints every problem with archify's suggested fix. It exits non-zero
+until everything passes. --html writes the full viewer page for a visual pass; --json prints the whole verdict.`,
+    see: 'spex guide diagram (the format and the loop) · spex spec search (find the node) · spex spec lint',
+  },
   evidence: {
     line: 'evidence put|get      content-addressed bytes: put stashes & prints the hash, get reads back',
     body: `Usage: spex evidence put <file|->
@@ -487,11 +501,12 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec format · evidence handoff · .spec/spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec format · evidence handoff · .spec/spexcode.json · footprint · diagram',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
        spex guide settings   every .spec/spexcode.json / .spec/spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
+       spex guide diagram    a node's diagram.json: the five kinds, the rules, the scaffold → check loop
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
 (\`spex help <cmd>\`); guide carries what the commands assume you know.`,
@@ -647,7 +662,7 @@ export function overviewHelp(): string {
   const visible = (name: string) => profileAllowsCommand(profile, name)
   const projectLines = ['graph', 'init', 'materialize', 'doctor', 'uninstall', 'serve', 'dashboard', 'open', 'guidance']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
-  const nounLines = ['spec', 'session', 'peer', 'issue', 'evidence', 'flat']
+  const nounLines = ['spec', 'diagram', 'session', 'peer', 'issue', 'evidence', 'flat']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   const manualLines = ['guide'].filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   return `spex — SpexCode CLI (spec↔code graph${full ? ' + worktree session state machine' : ''})
@@ -671,6 +686,6 @@ ${full ? `  ${SEL_NOTE.split('\n').join('\n  ')}\n  ${JSON_NOTE.split('\n').join
   ${ROUTING_NOTE.split('\n').join('\n  ')}
 ${full ? `  ${MENTION_NOTE.split('\n').join('\n  ')}` : ''}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide settings · guide footprint.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide settings · guide footprint · guide diagram.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

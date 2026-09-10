@@ -239,11 +239,11 @@ test('--harness seeds hook nodes only when a selected native adapter can emit th
     .filter((path) => path === 'spec.md' || String(path).endsWith('/spec.md')).length
   // The counts move whenever a plugin node is added or retired, and that is the point: a node that leaks
   // into a selection whose adapter cannot emit its events shows up here as an off-by-one before it ships.
-  // Last moved by the review-report skill node, which every harness receives.
+  // Last moved by the review-report skill node, landing beside the atlas skill; every harness receives both.
   const cases: ReadonlyArray<readonly [string, number]> = [
-    ['zcode', 24],
-    ['claude', 26],
-    ['zcode,claude', 26],
+    ['zcode', 25],
+    ['claude', 27],
+    ['zcode,claude', 27],
   ]
   for (const [selected, expectedNodes] of cases) {
     const { proj, spex } = freshRepo()

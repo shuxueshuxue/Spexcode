@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec` prints the spec.md file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, `files` the agent-to-human path handoff, and `web` the local-web-service handoff.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec` prints the spec.md file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, `files` the agent-to-human path handoff, `web` the local-web-service handoff, and `diagram` a node's diagram and the loop that draws it.
 code:
   - spec-cli/src/guide.ts
 related:
@@ -83,6 +83,11 @@ the agent from one verb, picked by an optional topic:
   neither starts nor copies the service, so an agent builds and serves a production dist with relative asset
   paths, reads its base from `location.pathname`, and keeps that local server alive rather than mistaking a live
   page for an uploaded artifact.
+- **`diagram` → the node-DIAGRAM manual.** A node's one `diagram.json` ([[diagram]]): the five kinds and when each
+  fits, the two tree rules an architecture diagram obeys, the fields an author writes, where the full schemas
+  live, what not to put on a picture, and the loop — find the node, `spex diagram scaffold`, edit,
+  `spex diagram check` until it passes, lint, commit with the spec ([[diagram-cli]]). The page names the schemas
+  by package, never by a machine path, because the guide pages are exported into the guidance catalog.
 
 Every page describes the PRESENT model. `spex guide settings` documents `SPEX_PROFILE` as a launch-time
 harness property, never repository configuration. A retired knob is absent from the active field list; when silently

@@ -24,12 +24,17 @@ The file is the archify IR verbatim — components, connections, boundaries, car
 revision it was drawn at and the spec and code paths it was drawn from.
 
 **The diagram is a projection of the tree, not a free canvas.** An `architecture` diagram's components are
-the node's direct children (their ids are the node ids; small ones may fold into one `others` box). Every
-source path it cites is a spec path in the tree or a file some node's `code:` governs. And the diagram is
-drawn at a revision: when the node's children or their governed files change after that revision, the
-picture may be stale — the same reading, derived live from git, that [[spec-lint]] gives code drift. Three
-lint findings are to carry those three facts: `diagram-id` and `diagram-source` as errors, `diagram-stale` as
-a warning. They are not built yet; until they are, nothing checks a diagram against the tree it projects.
+the node's direct children, by one rule for every child: a box's id is the child's node id, and small children
+may fold into one `others` box. Every source path it cites is a spec path in the tree or a file some node's
+`code:` governs. Two [[spec-lint]] errors are to carry those two facts, `diagram-id` and `diagram-source`. They
+are not built yet; until they are, nothing checks a diagram against the tree it projects. The one node id
+archify's id pattern refuses today is `.plugins`, for its leading dot, so the id rule arrives with that pattern
+widened to allow one.
+
+**Its freshness rides on the node's own spec.** The diagram lives beside `spec.md` and is revised in the same
+commits as the node's intent, so it has no staleness check of its own: when a node's spec is revised, its
+picture is part of what the author revisits. `meta.repository.revision` keeps only the meaning archify gives
+it — the commit the cited sources are checked at.
 
 **The IR is the truth; the picture is derived, by the backend, on read.** `diagram.*.json` is committed with
 the spec it belongs to, in the same commit as the change it reflects; nothing rendered is ever tracked. When a

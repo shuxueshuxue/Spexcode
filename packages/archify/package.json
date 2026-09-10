@@ -1,0 +1,40 @@
+{
+  "name": "@spexcode/archify",
+  "version": "0.7.0-next.16",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "description": "SpexCode's vendored archify runtime: JSON-IR diagram renderers and validators (architecture / workflow / sequence / dataflow / lifecycle) with no runtime dependencies.",
+  "license": "MIT",
+  "bin": {
+    "archify": "./bin/archify.mjs"
+  },
+  "files": [
+    "bin",
+    "renderers",
+    "schemas",
+    "assets",
+    "migrations",
+    "examples/*.json",
+    "scripts/check-render-output.mjs",
+    "scripts/generate-validators.mjs",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "UPSTREAM.md"
+  ],
+  "exports": {
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node -e \"process.exit(0)\"",
+    "prepublishOnly": "node ../../scripts/release-publish.mjs --from-package-publish",
+    "test": "node bin/archify.mjs doctor"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
+  }
+}

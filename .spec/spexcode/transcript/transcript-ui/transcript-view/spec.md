@@ -30,10 +30,11 @@ both are drawn here — `Quote`, the tool sentence (`ToolLine`), the tool run, t
 so a change to how a call reads changes it in history and in the tail at once, in every host, and no surface
 can drift into its own dialect. Prose is rendered by the host's `renderText`; the words the surface says come
 from its `labels`; the verbs and targets from its `vocabulary` ([[transcript-ui]]). A turn that said something
-carries the host's copy control (`renderCopy`, [[copy-control]]) in its own top-right corner, over the text so
-the measure never narrows, shown while the turn is pointed at or holds focus; where nothing can point it is
-always shown, so it drops to its own line under the words instead of covering their first line. A tool-only turn
-carries none.
+carries the host's copy control (`renderCopy`, [[copy-control]]) in its text's bottom-right corner, where a
+paragraph's last line is usually short — inside the text rather than under it, because under it is often the
+turn's first tool call with its chevron at the far right, and the measure never narrows. It shows while the text
+is pointed at or holds focus and takes no pointer while hidden; where nothing can point it is always shown, so it
+drops to its own line under the words instead of covering their last line. A tool-only turn carries none.
 
 **Live adds exactly one truth.** A tool call whose result the harness has not recorded yet carries no `output`;
 a LIVE reading draws that call as running — a small spinner and the word beside the sentence — and a run that

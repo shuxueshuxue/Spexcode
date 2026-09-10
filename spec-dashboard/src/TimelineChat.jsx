@@ -835,7 +835,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
       <div className="m-ev m-ev-prompt" key="prompt" data-at={atOf(promptTs)}>
-        <div className="m-quote-line"><CopyButton text={detail.prompt} className="m-copy" /><Quote ts={promptTs} text={detail.prompt} /></div>
+        <div className="m-quote-line"><Quote ts={promptTs} text={detail.prompt} /><CopyButton text={detail.prompt} className="m-copy" /></div>
         {promptTs ? gutter(promptTs) : <div className="m-gut" />}
       </div>,
     )
@@ -859,8 +859,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
       rows.push(
         <div className="m-ev m-ev-sent" key={i} data-at={atOf(item.ts)}>
           <div className="m-quote-line">
-            <CopyButton text={item.text} className="m-copy" />
             <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+            <CopyButton text={item.text} className="m-copy" />
           </div>
           {gutter(item.ts)}
         </div>,
@@ -878,9 +878,9 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
                 <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
                 <span className="m-ev-word">{t(`status.${item.status}`)}</span>
               </span>
-              {item.text && <CopyButton text={item.text} className="m-copy" />}
             </div>
             {item.text && <ClampedNote text={item.text} />}
+            {item.text && <CopyButton text={item.text} className="m-copy" />}
           </article>
         </div>,
       )

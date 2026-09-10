@@ -1285,8 +1285,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-code:hover > .copy-btn, .doc-code > .copy-btn:focus-visible, .doc-code > .copy-btn.is-failed { opacity: 1; }
 /* where nothing can point the control is always shown, so the block keeps its corner clear of code */
 @media (hover: none) { .doc-code > .copy-btn { opacity: 1; } .doc-code > .doc-pre { padding-right: 36px; } }
-/* an agent turn that opens on a code block: the turn's control steps left of the block's, never onto it */
-.tx-say-text:has(> .rich-text > .doc-code:first-child) > .tx-copy { top: 6px; right: 34px; }
+/* an agent turn that ends on a code block: its bottom-right control steps left of the block's corner column,
+   so on a one-line block the two never stack */
+.tx-say-text:has(> .rich-text > .doc-code:last-child) > .tx-copy { right: 34px; }
 .doc-link { color: var(--blue); }
 /* a posted file named in prose (`[[file:<name>]]`, [[files]]): a link wearing the posted-file glyph; a name the
    session's list does not answer to exactly once stays dotted and opens nothing */
@@ -2935,22 +2936,23 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* THE AGENT IS THE PAGE: its report is the body — no well, no rule, no indent — at the prose size and held
    to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
-   footprint on a message; the copy control at the head's far end is the reader's. */
+   footprint on a message. */
 .m-say { min-width: 0; max-width: 100%; }
 .m-say-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
 .m-say-chip { display: inline-flex; align-items: baseline; gap: 5px; font-size: var(--type-caption); font-weight: var(--weight-medium); }
 .m-ev-note { font-size: var(--type-prose); line-height: var(--leading-body); color: var(--ink2); overflow-wrap: anywhere; }
 /* A MESSAGE CAN BE TAKEN WHOLE ([[copy-control]]): every row that carries authored text wears one copy
-   control, shown while the row is pointed at — and always where nothing can point. It never adds to a row's
-   height: at the head's far end for a note, at the line's end for an event, beside the bubble for a quote. */
-.m-copy { opacity: 0; }
-.m-ev:hover .m-copy, .m-copy:focus-visible, .m-copy.is-failed { opacity: 1; }
-@media (hover: none) { .m-copy { opacity: 1; } }
-.m-say-head > .m-copy { align-self: center; margin: -4px 0 -4px auto; }
-.m-line > .m-copy { align-self: flex-start; margin: -1px 0 -3px auto; }
-.m-quote-line { display: flex; justify-content: flex-end; align-items: flex-start; gap: var(--space-3); min-width: 0; }
-.m-quote-line > .tx-quote { margin-left: 0; }
-.m-quote-line > .m-copy { margin-top: var(--space-2); }
+   control, hung just under the message's bottom-right corner — in the empty space between rows, so it never
+   covers a word or adds height — and shown while the row is pointed at. Hidden, it takes no pointer, so the
+   space it hangs in stays the reader's. Where nothing can point it is always there, on its own line. */
+.m-say, .m-line, .m-quote-line { position: relative; }
+.m-copy { position: absolute; top: 100%; right: 0; z-index: 1; opacity: 0; pointer-events: none; }
+.m-ev:hover .m-copy, .m-copy:focus-visible, .m-copy.is-failed { opacity: 1; pointer-events: auto; }
+.m-quote-line { display: flex; justify-content: flex-end; min-width: 0; }
+@media (hover: none) {
+  .m-copy { position: static; display: flex; margin: var(--space-2) 0 0 auto; opacity: 1; pointer-events: auto; }
+  .m-quote-line { flex-direction: column; align-items: flex-end; }
+}
 
 /* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
    page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.

@@ -52,12 +52,19 @@ never reaches the block around it: a press on a code block's control inside a cl
 leaves the note clamped.
 
 **The control is shown by what it copies.** It rests hidden and appears while the thing it copies is pointed
-at or holds keyboard focus; where nothing can point (`hover: none`, a phone) it is simply there, and so it
-may never sit over words — a code block keeps its corner clear of code and an agent turn drops its control to
-its own line under the text. Where it sits is the host's grammar, not this node's: a code block wears it in
-its top-right corner ([[prose-renderer]]); the conversation puts a note's at its head's far end, an event's at
-its line's end, a quoted message's beside its bubble, and an agent turn's in the turn's corner through the
-transcript package's `renderCopy` slot ([[conversation]], [[transcript-ui]]).
+at or holds keyboard focus; while hidden it takes no pointer, so wherever it rests stays the reader's. Where
+nothing can point (`hover: none`, a phone) it is simply there, and so it may never sit over words — a code block
+keeps its corner clear of code, and a message's control takes its own line under the message.
+
+**A code block's control is top-right; a message's is bottom-right.** A code block is read as an object, and its
+control sits in its top-right corner ([[prose-renderer]]). A message is read to its end, and its control sits at
+its bottom-right, where the reader finishes: the conversation hangs a note's, an event's and a quoted message's
+just under the message's bottom-right corner, in the empty space between rows, so it adds no height and covers
+no word ([[conversation]]); an agent turn inside a transcript keeps its control inside the text's bottom-right
+corner — where a paragraph's last line is usually short — because right under a turn's text is often its first
+tool call, whose chevron sits at the far right ([[transcript-view]], through the package's `renderCopy` slot). The
+two corners are what keep a message that opens or ends on a code block from stacking two controls; a turn that
+ends on a one-line code block moves its own control one control-width left of the block's.
 
 **The prose renderer places it, the root supplies it.** The renderer stays loadable where the app's icons and
 words are not (a node test renders it bare), so it never imports the control: the root mounts it once through

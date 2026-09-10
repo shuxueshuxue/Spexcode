@@ -260,15 +260,17 @@ A selection's copy acknowledgement is a transient overlay owned by the conversat
 flex row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is
 feedback, not conversation content.
 
-**A MESSAGE CAN BE TAKEN WHOLE.** Every row that carries authored text wears one [[copy-control]]: the agent's
-note at the far end of its head, an event's note at the end of its line, a quoted message — the originating
-prompt, a sent message — beside its bubble, and each agent turn inside an opened seam or the live tail in the
-turn's own corner. It copies the row's authored Markdown whole, so a clamped note copies all of it, and a code
-block inside any of them carries its own control for just the code. The control belongs to the row, not to the
-selection: it exists in every browser, answers on itself rather than through the selection acknowledgement
-above, and its press neither takes the composer's focus nor retires a painted selection. Like the row's time it
-rests out of sight and comes up with the row under the pointer or keyboard focus, and it never adds to a row's
-height; on a touch screen it is simply there.
+**A MESSAGE CAN BE TAKEN WHOLE.** Every row that carries authored text wears one [[copy-control]] at the
+message's bottom-right, where the reader finishes it: hung just under the corner of the agent's note, of an
+event's note, and of a quoted message's bubble — the originating prompt, a sent message — in the empty space
+between rows; each agent turn inside an opened seam or the live tail keeps it inside its text's bottom-right
+corner ([[transcript-view]]). A code block inside any of them carries its own control for just the code, in the
+block's top-right. The message's control copies the row's authored Markdown whole, so a clamped note copies all
+of it. It belongs to the row, not to the selection: it exists in every browser, answers on itself rather than
+through the selection acknowledgement above, and its press neither takes the composer's focus nor retires a
+painted selection. Like the row's time it rests out of sight and comes up with the row under the pointer or
+keyboard focus; hidden, it takes no pointer, so the space it hangs in stays the next row's. It never adds to a
+row's height, except on a touch screen, where it is simply there on its own line under the message.
 
 **A POSTED FILE IS ONE CLICK AWAY.** A `[[file:<name>]]` anywhere in this conversation's prose — a note, a quoted
 message, an agent turn in a seam or the live tail — resolves against this session's own posted list ([[files]])

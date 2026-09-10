@@ -179,9 +179,11 @@ try {
     const buttonPage = await makePage({ api: 'reject', fallback: 'success', customHighlight })
     try {
       await setComposer(buttonPage)
-      const control = buttonPage.locator('.m-ev-say:visible .m-say-head .m-copy')
+      // a hidden control takes no pointer; the reader reaches it by pointing at the note first
+      await buttonPage.locator('.m-ev-say:visible .m-ev-note').hover()
+      const control = buttonPage.locator('.m-ev-say:visible .m-say > .m-copy')
       await control.click()
-      await buttonPage.locator('.m-ev-say:visible .m-say-head .m-copy.is-copied').waitFor({ state: 'visible' })
+      await buttonPage.locator('.m-ev-say:visible .m-say > .m-copy.is-copied').waitFor({ state: 'visible' })
       const button = await state(buttonPage)
       assert.equal(button.probe.apiCalls, 1, 'copy button skipped the Clipboard API seam')
       assert.equal(button.probe.execCalls, 1, 'copy button skipped the fallback seam')

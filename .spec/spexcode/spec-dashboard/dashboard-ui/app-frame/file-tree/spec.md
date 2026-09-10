@@ -67,12 +67,17 @@ as a bullet. There are no indent guides: with one row per node and eleven pixels
 labels already says which branch a row belongs to, and the hairlines that used to hang from every caret slot
 were more ink than information in a list this sparse.
 
-**A row's voice is its colour, not a bullet.** Rows rest in the muted tone; the branch that holds the focused
-node lifts to body ink so the reader sees the route they are on; the focused node itself carries the
-selected wash and the one weight step the dock spends. The status square every row used to wear was a
-bullet, not a signal — a row wears exactly one small mark, and only when it says something: the active hue
-for a node being worked on now, the drift hue for a node whose code has moved on without it. Settled nodes
-wear nothing.
+**A row's voice is its colour, not a bullet — and it is the session row's voice.** The explorer and the
+session list are one product's two sidebars, so a tree row is drawn exactly as a session row is
+([[session-console]]'s `.si-item`): the dock stands on the panel ground the session list stands on, a row is
+an inset rounded band at the session row's measure, it rests in body ink, the branch that holds the focused
+node and any row under the pointer lift to heading ink with the hover wash, and the focused node carries the
+selected wash and the medium weight. The first cut gave the tree its own quieter palette — a darker ground,
+muted rows, a lighter hand — and next to the session list it read as a faded stranger; one grammar for both
+is the fix, not a third palette. Muted is spent only on what is not the row: the hinge and the section tally.
+The status square every row used to wear was a bullet, not a signal — a row wears exactly one small mark,
+and only when it says something: the active hue for a node being worked on now, the drift hue for a node
+whose code has moved on without it. Settled nodes wear nothing.
 
 **Files keep the colours their chips have in the popup** in the projection that lists them ([[disk-tree]]),
 so a file looks the same wherever it is listed rather than teaching the reader two vocabularies for one thing.
@@ -89,13 +94,12 @@ explorer; a projection that re-declares its own name is a second answer to a que
 above, and it cost a chrome band to give.
 
 **The explorer shows TWO sections, and they are two projections of one project.** SPEC TREE is this tree and
-FILES is the disk listed as the disk ([[disk-tree]]). Both are always mounted and identified by static
-`.si-zone` heads: a sentence-case label in the section's hue, its tally in tabular figures a step quieter,
-and the trailing hairline every zone head in the product wears ([[dock-modes]]). The head is a quiet label,
-not a badge: the bordered count pod read as chrome around a list that is already short, so the count is bare
-text, and the hairline is the only boundary between the sections. There is no section-level disclosure state or localStorage preference;
-only a spec node or disk directory can disclose its own children. The explorer head's collapse-folders door
-still folds those child ledgers together, leaving both zone heads and their roots visible.
+FILES is the disk listed as the disk ([[disk-tree]]). Both are always mounted and identified by the session
+list's own zone heads, unchanged — count pod, sentence-case label, trailing hairline ([[dock-modes]]) — so
+the two sidebars share one head grammar; only the hue is the section's own. The hairline is the only
+boundary between the sections. There is no section-level disclosure state or localStorage preference; only a
+spec node or disk directory can disclose its own children. The explorer head's collapse-folders door still
+folds those child ledgers together, leaving both zone heads and their roots visible.
 
 **Collapse folders is a door of the EXPLORER, not of a section.** One action folds every open folder in
 both projections — every disclosed spec node and every disclosed disk directory — through the one store,

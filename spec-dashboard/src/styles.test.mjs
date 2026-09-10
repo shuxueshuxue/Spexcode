@@ -106,10 +106,12 @@ test('three weights, two radius rungs, one elevation — the geometry is spendab
 })
 
 test('the ground ladder is four tones deep and every theme carries all four', () => {
-  // chrome recedes (--ground: rail, dock, status bar, context dock), toolbars sit between (--panel),
-  // the ONE content plane is next (--paper), and --raised is the only rung ABOVE it: what a menu, a
-  // pop-over, or a floating composer is painted. The whole point is that a reader can see where the
-  // document is without a border telling them; two tones five values apart could not do that.
+  // chrome recedes (--ground: rail, status bar, context dock), sidebars and toolbars sit between (--panel:
+  // the finding dock stands on the same rung as the Sessions forest it is the sibling of — one sidebar
+  // grammar, one ground — [[dock-modes]]), the ONE content plane is next (--paper), and --raised is the
+  // only rung ABOVE it: what a menu, a pop-over, or a floating composer is painted. The whole point is that
+  // a reader can see where the document is without a border telling them; two tones five values apart
+  // could not do that.
   const themes = [...css.matchAll(/:root(?:\[data-theme=\w+\])?\s*\{([\s\S]*?)\n\}/g)].map((m) => m[1])
   assert.equal(themes.length, 9, 'the default plus eight presets')
   for (const block of themes) {
@@ -118,7 +120,8 @@ test('the ground ladder is four tones deep and every theme carries all four', ()
     }
   }
   assert.match(css, /\.side-rail\s*\{[^}]*background:\s*var\(--ground\);/s)
-  assert.match(css, /\.dock\s*\{[^}]*background:\s*var\(--ground\);/s)
+  assert.match(css, /\.dock\s*\{[^}]*background:\s*var\(--panel\);/s)
+  assert.match(css, /\.si-list\s*\{[^}]*background:\s*var\(--panel\);/s, 'the two sidebars stand on one rung')
   assert.match(css, /\.statusbar\s*\{[^}]*background:\s*var\(--ground\);/s)
   assert.match(css, /\.tabstrip\s*\{[^}]*background:\s*var\(--panel\);/s)
   assert.match(css, /\.viewhost\s*\{[^}]*background:\s*var\(--paper\);/s)

@@ -85,15 +85,16 @@ function NodeRow({ node, depth, kids, focusId, pathIds }) {
   )
 }
 
-// SPECS and FILES are two projections of one explorer, always present and identified by static zone heads.
+// SPEC TREE and FILES are two projections of one explorer, always present and identified by the session list's
+// own zone heads (count pod, label, hairline) so the two sidebars read as one.
 // Their rows own the only disclosures: spec nodes and disk directories expand independently, while the
 // explorer head's collapse-folders door can clear both ledgers together ([[dock-modes]]).
 function Section({ name, count, tone, children }) {
   return (
     <section className="ft-section">
       <div className={`ft-section-head si-zone si-zone-${tone}`} role="heading" aria-level="2">
-        <span className="si-zone-label ft-section-name">{name}</span>
         <span className="si-zone-count" aria-hidden="true">{count}</span>
+        <span className="si-zone-label ft-section-name">{name}</span>
       </div>
       <div className="ft-section-body">{children}</div>
     </section>

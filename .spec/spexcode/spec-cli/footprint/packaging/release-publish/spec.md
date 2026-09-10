@@ -24,15 +24,16 @@ related:
 # release-publish
 
 The metapackage is not a release unit by itself. A release is the committed set of fourteen public packages,
-listed here in publication order: `@spexcode/transcript`, `@spexcode/transcript-ui`,
+listed here in publication order: `@spexcode/archify`, `@spexcode/transcript`, `@spexcode/transcript-ui`,
 `@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`,
 `@spexcode/session-events`, `@spexcode/session-application`, `@spexcode/session-selflaunch`,
-`@spexcode/spec-core`, `@spexcode/archify`, `@spexcode/spec-dashboard`, `@spexcode/spec-forge`,
-`@spexcode/spec-cli`, and `spexcode`. Every public package
+`@spexcode/spec-core`, `@spexcode/spec-dashboard`, `@spexcode/spec-forge`, `@spexcode/spec-cli`, and `spexcode`. Every public package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
-the publication order is transcript (it depends on nothing), transcript-ui, session-protocol, session-topology, session-runtime, session-events, session-application,
-session-selflaunch, core, archify, dashboard, forge, CLI, root. archify ([[archify]]) depends on nothing at runtime;
-it precedes the dashboard, which bundles its browser half at build time, and the CLI, which renders with it. The session stack is published in dependency order;
+the publication order is archify, transcript (neither depends on anything), transcript-ui, session-protocol,
+session-topology, session-runtime, session-events, session-application, session-selflaunch, core, dashboard, forge,
+CLI, root. archify ([[archify]]) goes first: it depends on nothing at runtime, the dashboard bundles its browser half
+and the CLI renders with it, and a package that has never been published before is the one most likely to be
+refused — first in line, a refusal leaves the registry untouched instead of half a release behind it. The session stack is published in dependency order;
 dashboard is independent of the root's
 install closure, but it is still a public installation entrypoint and belongs to the same release action. It
 follows core (its only runtime dependency) and precedes CLI, so when a new CLI first tells someone to install

@@ -612,7 +612,12 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    the content column and then down its left edge. That is the whole of the "raised panel" feel — the same
    thing Obsidian reads as, and it costs no shadow. --shadow stays ONE elevation spent only on things that
    genuinely float (menus, the palette), never stacked to fake a surface. */
-.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); }
+.viewhost { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--paper); position: relative; box-shadow: inset 1px 0 0 var(--panel); border-radius: 0 0 var(--radius-tab) var(--radius-tab); }
+/* the pane's lower corners are rounded like the active card's upper ones, the column behind it is the
+   band's own --panel, and the row stops a few pixels short of the status row so that ground shows under the
+   corners: the document reads as one card standing on the chrome from strip to status row. */
+.app-content-column { background: var(--panel); }
+.app-content-row { padding-bottom: var(--space-2); }
 .view-graph { display: block; }
 .graphview { position: absolute; inset: 0; }
 
@@ -665,7 +670,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 }
 .tabstrip-tabs {
   flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-end;
-  flex-wrap: nowrap; overflow: hidden;
+  flex-wrap: nowrap; overflow: hidden; padding-left: var(--space-4);   /* the first card stands off the sidebar's edge */
 }
 /* the routed place, named, when no document is held. Quiet: it is orientation, not a title. */
 .tab-place {
@@ -696,7 +701,13 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    paper; inactive tabs are transparent (their hover wash is translucent), so the line shows through them
    untouched. The content host owns no top rule of its own: one seam, one owner. */
 .tabstrip { box-shadow: inset 0 -1px 0 var(--edge); }
-.tab:not(.on):hover, .tab:not(.on):focus-within { background: var(--wash-hover); color: var(--ink2); }
+/* the pointer lights the INNER band — an inset rounded rect like a session row's — never the whole card */
+.tab-inner {
+  flex: 1 1 auto; min-width: 0; height: 24px; margin: 0 var(--space-2); display: flex; align-items: center;
+  border-radius: var(--radius); transition: background-color var(--dur-tab) ease;
+}
+.tab:not(.on):hover, .tab:not(.on):focus-within { color: var(--ink2); }
+.tab:not(.on):hover .tab-inner, .tab:not(.on):focus-within .tab-inner { background: var(--wash-hover); }
 @keyframes tab-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes tab-out { to { opacity: 0; transform: scaleX(.72); } }
 .tab.tab-closing {
@@ -716,7 +727,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* every tab wears the one face ([[tab-strip]]): kind icon or status mark, the label, and a round close
    target that appears on the active card and under the pointer. */
 .tab-face {
-  flex: 1 1 auto; display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 12px; height: 100%;
+  flex: 1 1 auto; display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: 0 var(--space-2) 0 var(--space-4); height: 100%;
   background: none; border: 0; color: inherit; cursor: pointer;
   font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui);
 }
@@ -726,7 +737,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 .tab-spinner { flex: 0 0 auto; color: var(--blue); animation: tab-spin .9s linear infinite; font-style: normal; }
 @keyframes tab-spin { to { transform: rotate(360deg); } }
 .tab-x {
-  flex: 0 0 20px; width: 20px; height: 20px; margin-right: var(--space-3); display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 20px; width: 20px; height: 20px; margin-right: var(--space-1); display: inline-flex; align-items: center; justify-content: center;
   padding: 0; background: none; border: 0; border-radius: var(--radius-full);
   color: var(--muted); cursor: pointer; opacity: 0;
   transition: opacity var(--dur-tab) ease, color var(--dur-tab) ease, background-color var(--dur-tab) ease;
@@ -752,6 +763,10 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    in the margin. No light, no fill at rest: its state is the sidebar beside it, and `aria-pressed`. */
 .dock-toggle { appearance: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
 .dock-toggle-head { margin-left: auto; }
+.dock-head-act.dock-toggle { width: 26px; height: 26px; }
+/* STATE IS THE FILL, the way editors draw this switch: the owned pane is solid while that dock is open and
+   hollow while it is closed — same frame, same side, one glyph at one size (18px) wherever the switch stands. */
+.dock-toggle[aria-pressed="false"] .icon-pane, .context-toggle[aria-pressed="false"] .icon-pane { fill: none; }
 .dock-toggle-strip { flex: 0 0 40px; width: 40px; align-self: stretch; border-radius: 0; }
 .dock-toggle-strip svg { padding: 5px; box-sizing: content-box; border-radius: var(--radius); }
 .dock-toggle-strip:hover, .dock-toggle-strip:focus-visible { color: var(--ink2); background: transparent; }
@@ -1681,7 +1696,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* Sessions owns its complete document frame. The forest is a sibling of the document column, so its
    width is paid before the document tabstrip is laid out instead of the shell strip being painted above
    a list that starts underneath it. */
-.si-document { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.si-document { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--panel); }   /* the chrome ground the pane's corners show against */
 .si-document > .tabstrip { flex: 0 0 auto; }
 .si-document > .si-panel { flex: 1 1 auto; min-width: 0; min-height: 0; }
 .si-panel {
@@ -1689,7 +1704,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
      as the rest of the dashboard, so re-theming the app re-themes the console with it. The embedded terminal
      stays dark on its own (--term-bg), the one surface that is legitimately a dark terminal. */
   flex: 1; min-width: 0;
-  background: var(--paper); border: none; border-radius: 0;
+  background: var(--paper); border: none; border-radius: 0 0 var(--radius-tab) var(--radius-tab);   /* the session pane is the card here: the viewhost's own corners sit under the forest sidebar */
   overflow: clip; display: flex;   /* clip, not hidden: never a caret-reveal scroll target (see .st-host) */
 }
 .si-list {
@@ -1845,7 +1860,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-zone-all-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the sidebar's three doors are rows in the same grammar as the sessions under them: New carries its word;
    Archive and Search are quiet glyphs at the row's end. */
-.si-toprow { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-4) var(--space-4) var(--space-2); }
+/* the forest's top row IS the top band ([[side-nav]], [[tab-layout]]): `--line-top` tall, so it lines up
+   with the strip and the fold switch neither moves nor resizes when the fold carries it across. */
+.si-toprow { height: var(--line-top); display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-4); }
+.si-toprow .dock-toggle { flex: none; width: 28px; height: 28px; margin-left: 0; padding: 0; }
+.si-toprow + .si-session-scroll > .si-zone:first-child { padding-top: var(--space-2); }
 .si-pill {
   display: inline-flex; align-items: center; gap: var(--space-3); height: 28px; padding: 0 var(--space-4);
   background: none; border: 0; border-radius: var(--radius); cursor: pointer;
@@ -1854,6 +1873,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-pill-glyph { display: flex; }
 .si-pill-label { white-space: nowrap; }
 .si-pill.new { flex: 1; min-width: 0; color: var(--ink2); font-weight: var(--weight-medium); }
+.si-pill.new .si-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* the word yields before it runs under the glyphs */
 .si-pill:hover { background: var(--wash-hover); color: var(--ink2); }
 .si-pill.new.on, .si-pill.archive.on { background: var(--wash-selected); color: var(--blue); }
 /* Archive is routed overlay state; Search is the momentary click twin of ⌥+/ ([[session-search]]). */

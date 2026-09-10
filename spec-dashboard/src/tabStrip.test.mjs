@@ -131,7 +131,7 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   // Each switch draws the panel it OWNS and keeps drawing it: the sidebar switch's `panel-left`, the document's
   // `panel-right`. The pair has no empty-frame member, so a state-flipping switch would have to draw the
   // OTHER side's panel to say "closed" — a picture of the wrong region. State is `aria-pressed`.
-  assert.match(dockToggleSource, /<Icon name="panel-left" size=\{variant === 'strip' \? 18 : 15\} \/>/)
+  assert.match(dockToggleSource, /<Icon name="panel-left" size=\{18\} \/>/)
   assert.match(dockToggleSource, /aria-pressed=\{dock\}/)
   assert.doesNotMatch(dockToggleSource, /name="panel-right"/)
   assert.doesNotMatch(sideBar, /<DockToggle|name="panel-left"/)   // the rail draws no switch of its own

@@ -35,7 +35,10 @@ open, so its paper runs straight down into the document with no line between, th
 joined to its pane. The outline is what keeps the card legible in a theme where paper and panel are a few
 steps apart. Inactive tabs are not boxes: muted text on the band, a short rule (the middle half of the height)
 between two inactive neighbours, a translucent wash under the pointer, and no rule beside the active card,
-whose outline already separates it. The shared hairline runs under everything else on the band — inactive
+whose outline already separates it. The pointer lights an inactive tab's INNER band — an inset rounded rect
+the height of the label, the same shape a session row wears — never the whole card. The row of cards
+stands off the sidebar's edge by a small inset, so the first card is not glued to the seam. The shared
+hairline runs under everything else on the band — inactive
 tabs, the empty stretch, the action column. The line is the band's own (an inset rule at its bottom edge,
 which the active card's paper covers, and which shows through the transparent inactive tabs untouched); the
 content host owns no top rule of its own — one seam, one owner, on the shell strip and on the session

@@ -10,7 +10,9 @@ import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 //
 // The glyph is `panel-left` in BOTH states: it names the dock this control owns, the same rule the right
 // dock's switch follows with `panel-right`. A flipped glyph drew a panel on the wrong side to say "closed".
-// State is `aria-pressed` — and the sidebar standing beside it, or not.
+// State is `aria-pressed`, and the stylesheet reads it the way editors draw this switch: the owned pane is
+// FILLED while the sidebar is open and HOLLOW while it is closed. One size (18px) at both mounts, so the
+// glyph neither grows nor shrinks when the fold moves it from the head row to the strip.
 export default function DockToggle({ variant = 'head', className = '' }) {
   const t = useT()
   const { dock } = useWorkspace()
@@ -20,7 +22,7 @@ export default function DockToggle({ variant = 'head', className = '' }) {
   return (
     <button type="button" className={`dock-toggle dock-toggle-${variant}${className ? ` ${className}` : ''}`}
       data-tip={label} aria-label={label} aria-pressed={dock} onClick={() => setDock((value) => !value)}>
-      <Icon name="panel-left" size={variant === 'strip' ? 18 : 15} />
+      <Icon name="panel-left" size={18} />
     </button>
   )
 }

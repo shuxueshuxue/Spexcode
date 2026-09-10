@@ -353,6 +353,15 @@ test('the fold switch rides the sidebar head while open and the strip\'s first c
   assert.match(css, /\.dock-toggle-strip\s*\{[^}]*flex:\s*0 0 40px;[^}]*align-self:\s*stretch;[^}]*border-radius:\s*0;/s)
   assert.match(css, /\.dock-toggle-strip svg\s*\{[^}]*padding:\s*5px;[^}]*border-radius:\s*var\(--radius\);/s)
   assert.match(css, /\.dock-toggle-strip:hover svg, \.dock-toggle-strip:focus-visible svg\s*\{\s*background:\s*var\(--wash-hover\);/)
+  // state is the fill: open = solid pane, closed = hollow pane, for both docks' switches
+  assert.match(css, /\.dock-toggle\[aria-pressed="false"\] \.icon-pane, \.context-toggle\[aria-pressed="false"\] \.icon-pane\s*\{\s*fill:\s*none;/)
+  // the forest's top row is the band, so the switch neither moves nor resizes across the fold
+  assert.match(css, /\.si-toprow\s*\{[^}]*height:\s*var\(--line-top\);/s)
+  assert.match(css, /\.si-toprow \.dock-toggle\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/s)
+  assert.match(css, /\.dock-head-act\.dock-toggle\s*\{\s*width:\s*26px;\s*height:\s*26px;/)
+  // the pane is a card: rounded lower corners on the panel ground
+  assert.match(css, /\.viewhost\s*\{[^}]*border-radius:\s*0 0 var\(--radius-tab\) var\(--radius-tab\);/s)
+  assert.match(css, /\.app-content-column\s*\{\s*background:\s*var\(--panel\);/)
 })
 
 test('the chrome bands the budget does not allow are gone from the sheet', () => {
@@ -392,9 +401,12 @@ test('the strip is one clipping row of cards on the band, never a wrapped or scr
   assert.match(css, /\.tabstrip\s*\{\s*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/)
   // inactive neighbours: a short rule between them, a wash on hover, no box
   assert.match(css, /\.tab:not\(\.on\) \+ \.tab:not\(\.on\)::before\s*\{[^}]*top:\s*25%;[^}]*height:\s*50%;[^}]*border-left:\s*1px solid var\(--edge\);/s)
-  assert.match(css, /\.tab:not\(\.on\):hover, \.tab:not\(\.on\):focus-within\s*\{[^}]*background:\s*var\(--wash-hover\);/s)
+  assert.match(css, /\.tab-inner\s*\{[^}]*height:\s*24px;[^}]*margin:\s*0 var\(--space-2\);[^}]*border-radius:\s*var\(--radius\);/s)
+  assert.match(css, /\.tab:not\(\.on\):hover \.tab-inner, \.tab:not\(\.on\):focus-within \.tab-inner\s*\{\s*background:\s*var\(--wash-hover\);/)
+  assert.doesNotMatch(css, /\.tab:not\(\.on\):hover, \.tab:not\(\.on\):focus-within\s*\{[^}]*background:/s)
+  assert.match(css, /\.tabstrip-tabs\s*\{[^}]*padding-left:\s*var\(--space-4\);/s)
   // one face: control-size type, a round close target on the active card and under the pointer
-  assert.match(css, /\.tab-face\s*\{[^}]*padding:\s*0 var\(--space-2\) 0 12px;[^}]*font-size:\s*var\(--type-control\);/s)
+  assert.match(css, /\.tab-face\s*\{[^}]*padding:\s*0 var\(--space-2\) 0 var\(--space-4\);[^}]*font-size:\s*var\(--type-control\);/s)
   assert.match(css, /\.tab-x\s*\{[^}]*flex:\s*0 0 20px;[^}]*width:\s*20px;[^}]*height:\s*20px;[^}]*border-radius:\s*var\(--radius-full\);[^}]*opacity:\s*0;/s)
   assert.match(css, /\.tab\.on \.tab-x, \.tab:hover \.tab-x, \.tab:focus-within \.tab-x\s*\{[^}]*opacity:\s*1;/s)
   assert.match(css, /\.tab\s*\{[^}]*animation:\s*tab-in var\(--dur-tab\) ease backwards;/s)

@@ -745,6 +745,17 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
   padding: 0 var(--space-3);
 }
 .tab-list-button { position: relative; }
+/* THE FOLD SWITCH ([[side-nav]]). Open, it is the LAST door of the sidebar's own head row and wears that
+   row's grammar (`dock-head-act` in the explorer head, `si-pill` in the forest's), pushed to the far corner.
+   Closed, it is the strip's first cell: the full band tall and the rail's width wide, an 18px glyph under a
+   28px hover pill, so the switch reads as a button the size of an editor's sidebar toggle rather than a mark
+   in the margin. No light, no fill at rest: its state is the sidebar beside it, and `aria-pressed`. */
+.dock-toggle { appearance: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.dock-toggle-head { margin-left: auto; }
+.dock-toggle-strip { flex: 0 0 40px; width: 40px; align-self: stretch; border-radius: 0; }
+.dock-toggle-strip svg { padding: 5px; box-sizing: content-box; border-radius: var(--radius); }
+.dock-toggle-strip:hover, .dock-toggle-strip:focus-visible { color: var(--ink2); background: transparent; }
+.dock-toggle-strip:hover svg, .dock-toggle-strip:focus-visible svg { background: var(--wash-hover); }
 .tab-list-button.clipped::after {
   content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--blue);
 }
@@ -856,15 +867,10 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
 }
 
 /* ---- left navigation rail ---- */
-/* The rail's FIRST cell is the fold switch, and it is exactly the top band's height ([[side-nav]]): the
-   switch sits in the window's corner on the same line as the dock head and the tab strip, the way an
-   editor's sidebar toggle does, so the top of the frame reads as one row — [switch][dock head][tabs … list]
-   — and the route icons begin under it. A rail with nothing to fold keeps the plain top padding instead. */
 .side-rail {
   flex: 0 0 40px; display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
-  padding: 0 0 var(--space-5); background: var(--ground); border-right: 1px solid var(--line);
+  padding: var(--space-5) 0; background: var(--ground); border-right: 1px solid var(--line);
 }
-.side-rail:not(:has(.rail-panel-toggle)) { padding-top: var(--space-5); }
 .rail-spacer { flex: 1; }
 /* a rail entry is a real anchor ([[side-nav]]); the chip is a button — one look for both */
 .rail-btn {
@@ -872,14 +878,6 @@ button.sb-item:hover { background: color-mix(in srgb, var(--line) 45%, transpare
   background: none; border: none; border-radius: var(--radius); cursor: pointer; color: var(--muted);
   text-decoration: none;
 }
-/* the switch is chrome, not a route: no fill, no light, no separator — the glyph in the corner, lifting to
-   ink on hover. Its state is the sidebar standing beside it (and `aria-pressed`), never a second glyph. */
-.rail-panel-toggle {
-  width: 40px; height: var(--line-top); margin: 0 0 var(--space-2); padding: 0; border-radius: 0;
-  color: var(--muted); background: transparent;
-}
-.rail-panel-toggle:hover, .rail-panel-toggle:focus-visible { color: var(--ink2); background: transparent; }
-.rail-panel-toggle svg { width: 16px; height: 16px; }
 .rail-btn:hover { background: var(--wash-hover); color: var(--ink2); }
 .rail-btn.disabled { color: var(--line); cursor: not-allowed; }
 .rail-btn.disabled:hover { background: none; color: var(--line); }

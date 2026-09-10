@@ -108,7 +108,7 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, trailing = null, onSessionContextMenu = null }) {
+export default function TabStrip({ specs, sessions, route, leading = null, trailing = null, onSessionContextMenu = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
   // ONE ROW, AND A LIST FOR WHAT THE ROW CANNOT SHOW. Tabs shrink toward their floor and then the row
@@ -258,6 +258,7 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
   // tab list) can hang below it, and the action cluster keeps its own column that no tab can run under.
   return (
     <div className="tabstrip">
+      {leading}
       <div ref={tabsHostRef} className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
       {renderedTabs.map((tab, index) => {

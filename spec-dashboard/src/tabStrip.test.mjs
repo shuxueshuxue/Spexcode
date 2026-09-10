@@ -12,6 +12,7 @@ const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', impor
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
 const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
+const dockToggleSource = readFileSync(new URL('./DockToggle.jsx', import.meta.url), 'utf8')
 const fileTree = readFileSync(new URL('./FileTree.jsx', import.meta.url), 'utf8')
 const forest = readFileSync(new URL('./SessionForestPanel.jsx', import.meta.url), 'utf8')
 const sessionsView = readFileSync(new URL('./SessionsView.jsx', import.meta.url), 'utf8')
@@ -106,7 +107,7 @@ test('resident issue tabs share the workspace strip and keep the activity rail',
   // but the rail — the top-level board switch — never disappears.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /<SideBar page=\{page\} graphOnly=\{graphOnly\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
+  assert.match(shell, /<SideBar page=\{page\} graphOnly=\{graphOnly\} needsYou=\{needsYou\} \/>/)
   assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
   assert.match(shell, /if \(page === 'issues'\) return 'none'/)
 })
@@ -127,14 +128,13 @@ test('resident tabs and the activity rail share view-owned page icons', () => {
 })
 
 test('both dock switches speak the panel vocabulary, and each names the dock it owns', () => {
-  // Each switch draws the panel it OWNS and keeps drawing it: the rail's `panel-left`, the document's
+  // Each switch draws the panel it OWNS and keeps drawing it: the sidebar switch's `panel-left`, the document's
   // `panel-right`. The pair has no empty-frame member, so a state-flipping switch would have to draw the
   // OTHER side's panel to say "closed" — a picture of the wrong region. State is `aria-pressed`.
-  const dockToggle = sideBar.match(/function DockToggle\(\)[\s\S]*?\n}\n/)
-  assert.ok(dockToggle, 'SideBar must keep the dock toggle')
-  assert.match(dockToggle[0], /<Icon name="panel-left" size=\{18\} \/>/)
-  assert.match(dockToggle[0], /aria-pressed=\{dock\}/)
-  assert.doesNotMatch(dockToggle[0], /panel-right/)
+  assert.match(dockToggleSource, /<Icon name="panel-left" size=\{variant === 'strip' \? 18 : 15\} \/>/)
+  assert.match(dockToggleSource, /aria-pressed=\{dock\}/)
+  assert.doesNotMatch(dockToggleSource, /name="panel-right"/)
+  assert.doesNotMatch(sideBar, /<DockToggle|name="panel-left"/)   // the rail draws no switch of its own
   const contextToggle = shell.match(/function ContextToggle\([\s\S]*?\n}\n\nexport default function Shell/)
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
   assert.match(contextToggle[0], /<Icon name="panel-right" size=\{14\} \/>/)

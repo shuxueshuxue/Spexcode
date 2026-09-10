@@ -19,12 +19,15 @@ related:
 The strip is one visible band on every route, `--line-top` (36px) tall and never taller. When it has no
 document tabs it names the routed place quietly; when it has tabs it names the working set. The right edge is
 the shell-owned action column: the tab list first, then the active document's registry actions, then the
-shell's own trailing control. Documents contribute actions through the registry; they do not add a second
+shell's own trailing control. The left edge is the shell-owned leading cell, occupied by the fold switch
+only while the sidebar is closed. Documents contribute actions through the registry; they do not add a second
 toolbar or identity row.
 
-**The top of the frame is one row.** The band shares its height with the dock head, the context head and the
-rail's fold switch ([[side-nav]]), so `[switch][dock head][tabs … list]` reads as a single line across the
-window whatever the route, and switching projection or folding the dock never moves it.
+**The top of the frame is one row.** The band shares its height with the dock head and the context head, so
+`[dock head][tabs … list]` reads as a single line across the window whatever the route, and switching
+projection never moves it. When the sidebar is folded the dock head is gone and the fold switch
+([[side-nav]]) takes the strip's first cell instead — `[switch][tabs … list]` — so the line keeps its left
+anchor and the reader's way back to the sidebar stands exactly where the sidebar was.
 
 **The active tab is a card; the others are text on the band.** The active tab is a card of the page's own
 paper standing on the band: a hairline outlines its three free sides under an 8px shoulder, and its bottom is

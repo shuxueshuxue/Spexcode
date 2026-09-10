@@ -339,19 +339,20 @@ test('launcher session tallies keep the status line geometry and semantic slash 
   assert.doesNotMatch(css, /@media \(max-width:\s*900px\)[\s\S]*?\.sb-launcher-(?:list|summary)/)
 })
 
-test('the dock toggle is the rail\'s first cell on the top band\'s line, and reads as frame chrome', () => {
-  // the switch is exactly the top band tall, so [switch][dock head][tabs] is one row across the window
+test('the fold switch rides the sidebar head while open and the strip\'s first cell while closed', () => {
+  // the top rows share one height, so the switch is on the same line wherever it stands
   assert.match(css, /--line-top:\s*36px;/)
-  assert.match(css, /\.rail-panel-toggle\s*\{[^}]*width:\s*40px;[^}]*height:\s*var\(--line-top\);[^}]*padding:\s*0;[^}]*border-radius:\s*0;/s)
-  assert.match(css, /\.rail-panel-toggle\s*\{[^}]*color:\s*var\(--muted\);[^}]*background:\s*transparent;/s)
-  assert.match(css, /\.rail-panel-toggle\s+svg\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px;/s)
-  assert.doesNotMatch(css, /\.rail-panel-toggle::after/)
-  // the rail starts at the window's top edge only when it carries the switch
-  assert.match(css, /\.side-rail\s*\{[^}]*padding:\s*0 0 var\(--space-5\);/s)
-  assert.match(css, /\.side-rail:not\(:has\(\.rail-panel-toggle\)\)\s*\{\s*padding-top:\s*var\(--space-5\);/)
-  // the dock head and the context head stand on the same line
   assert.match(css, /\.dock-head\s*\{[^}]*flex:\s*0 0 var\(--line-top\);[^}]*height:\s*var\(--line-top\);/s)
   assert.match(css, /\.ctx-head\s*\{[^}]*flex:\s*0 0 var\(--line-top\);/s)
+  // the rail carries no switch any more
+  assert.doesNotMatch(css, /rail-panel-toggle/)
+  assert.match(css, /\.side-rail\s*\{[^}]*padding:\s*var\(--space-5\) 0;/s)
+  // in a head row it is the last door, pushed to the corner; in the strip it is a full-height 40px cell with a hover pill
+  assert.match(css, /\.dock-toggle\s*\{[^}]*color:\s*var\(--muted\);[^}]*background:\s*transparent;[^}]*border:\s*0;/s)
+  assert.match(css, /\.dock-toggle-head\s*\{\s*margin-left:\s*auto;/)
+  assert.match(css, /\.dock-toggle-strip\s*\{[^}]*flex:\s*0 0 40px;[^}]*align-self:\s*stretch;[^}]*border-radius:\s*0;/s)
+  assert.match(css, /\.dock-toggle-strip svg\s*\{[^}]*padding:\s*5px;[^}]*border-radius:\s*var\(--radius\);/s)
+  assert.match(css, /\.dock-toggle-strip:hover svg, \.dock-toggle-strip:focus-visible svg\s*\{\s*background:\s*var\(--wash-hover\);/)
 })
 
 test('the chrome bands the budget does not allow are gone from the sheet', () => {

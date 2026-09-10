@@ -92,12 +92,12 @@ try {
   await page.goto(`${base}/#/issues`, { waitUntil: 'domcontentloaded' })
   await page.locator('.viewhost.view-issues').waitFor({ state: 'visible' })
   // Issues keeps the rail (the top-level board switch is on every route) with Issues selected, but mounts
-  // no Explorer dock and therefore no fold control ([[side-nav]])
+  // no Explorer dock and therefore no fold switch anywhere — not in a head row, not in the strip ([[side-nav]])
   const issues = await page.evaluate(() => ({
     hash: location.hash,
     rails: document.querySelectorAll('.side-rail').length,
     selected: document.querySelector('.side-rail a[href="#/issues"]')?.getAttribute('aria-current') === 'page',
-    toggles: document.querySelectorAll('.rail-panel-toggle').length,
+    toggles: document.querySelectorAll('.dock-toggle').length,
     docks: document.querySelectorAll('.filetree').length,
   }))
   assert.deepEqual(issues, { hash: '#/issues', rails: 1, selected: true, toggles: 0, docks: 0 })

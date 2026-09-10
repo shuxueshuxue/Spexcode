@@ -1,0 +1,492 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "sessions — 底座 → 生命周期 → 适配器 → 宿主",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "repository": {
+      "url": "https://github.com/shuxueshuxue/spexcode",
+      "revision": "250fd0032ef54107b9225665ba2869635c0706bf"
+    },
+    "note": "主干 sessions-core → lifecycle → harness-adapter → session-host：共享底座、生命周期、两条适配器轴依次叠上去。sessions-core 直接 import harness-adapter 的旁路比主干那一段还粗，所以单独画出。人的入口分两种：经 backend 的 remote-client 和 manager-cockpit，直连 tmux 的 live-view 和 session-attach。六个小节点折进 others，它们的边写在卡片里。所有数字都在 revision 那一刻的树上重算。"
+  },
+  "components": [
+    {
+      "id": "remote-client",
+      "type": "frontend",
+      "label": "remote-client",
+      "sublabel": "spex 作 backend 的瘦客户端",
+      "tag": "1 drift",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/remote-client/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/client.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "manager-cockpit",
+      "type": "frontend",
+      "label": "manager-cockpit",
+      "sublabel": "review / merge 服务端算好",
+      "pos": [
+        40,
+        370
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/manager-cockpit/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/cockpit.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "others",
+      "type": "external",
+      "label": "其余 6 个小节点",
+      "sublabel": "files · web · session-label · ls-cjk-width · session-nesting · session-reparent",
+      "tag": "1 drift",
+      "pos": [
+        40,
+        700
+      ],
+      "size": [
+        440,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "session-selectors",
+      "type": "backend",
+      "label": "session-selectors",
+      "sublabel": "id · 前缀 · 分支 · self",
+      "pos": [
+        300,
+        120
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/session-selectors/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/session-selectors.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "sessions-core",
+      "type": "backend",
+      "label": "sessions-core",
+      "sublabel": "6 节点 · 共享层 sessions.ts",
+      "tag": "6 drift",
+      "pos": [
+        300,
+        310
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/sessions-core/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/sessions.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "injected-context",
+      "type": "backend",
+      "label": "injected-context",
+      "sublabel": "12 节点 · 只注入指针，不贴正文",
+      "tag": "1 drift",
+      "pos": [
+        620,
+        120
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/injected-context/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "type": "backend",
+      "label": "lifecycle",
+      "sublabel": "17 节点 · launch/state/runtime",
+      "tag": "5 drift",
+      "pos": [
+        620,
+        310
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/lifecycle/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "comms",
+      "type": "messagebus",
+      "label": "comms",
+      "sublabel": "6 节点 · 投递=追加，监督=follow",
+      "tag": "1 drift",
+      "pos": [
+        620,
+        500
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/comms/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "harness-adapter",
+      "type": "cloud",
+      "label": "harness-adapter",
+      "sublabel": "17 节点 · 每种 harness 一个实现",
+      "tag": "7 drift",
+      "pos": [
+        880,
+        310
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/harness-adapter/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/harness.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "session-host",
+      "type": "cloud",
+      "label": "session-host",
+      "sublabel": "tmux-host / process-host",
+      "tag": "1 drift",
+      "pos": [
+        1140,
+        310
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/session-host/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/session-host.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "live-view",
+      "type": "frontend",
+      "label": "live-view",
+      "sublabel": "每个 viewer 一个 tmux client",
+      "tag": "1 drift",
+      "pos": [
+        1140,
+        500
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/live-view/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/pty-bridge.ts",
+          "label": "code"
+        }
+      ]
+    },
+    {
+      "id": "session-attach",
+      "type": "frontend",
+      "label": "session-attach",
+      "sublabel": "前台 tmux attach · 仅本地",
+      "tag": "1 drift",
+      "pos": [
+        1140,
+        600
+      ],
+      "size": [
+        176,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/sessions/session-attach/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/attach.ts",
+          "label": "code"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "共享底座",
+      "wraps": [
+        "sessions-core",
+        "session-selectors"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "注入 / 存在 / 互通",
+      "wraps": [
+        "injected-context",
+        "lifecycle",
+        "comms"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "两条适配器轴：harness / 宿主",
+      "wraps": [
+        "harness-adapter",
+        "session-host"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "人的入口：经 backend",
+      "wraps": [
+        "remote-client",
+        "manager-cockpit"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "人的入口：直连 tmux",
+      "wraps": [
+        "live-view",
+        "session-attach"
+      ],
+      "pad": 20
+    }
+  ],
+  "connections": [
+    {
+      "from": "sessions-core",
+      "to": "lifecycle",
+      "label": "8 imports · 5 back",
+      "variant": "emphasis"
+    },
+    {
+      "from": "lifecycle",
+      "to": "harness-adapter",
+      "label": "4 imports",
+      "variant": "emphasis"
+    },
+    {
+      "from": "harness-adapter",
+      "to": "session-host",
+      "label": "5 imports",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sessions-core",
+      "to": "harness-adapter",
+      "label": "7 imports",
+      "variant": "default",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          388,
+          620
+        ],
+        [
+          968,
+          620
+        ]
+      ]
+    },
+    {
+      "from": "sessions-core",
+      "to": "session-selectors",
+      "label": "2 imports · 1 back",
+      "variant": "default",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "lifecycle",
+      "to": "injected-context",
+      "label": "1 import",
+      "variant": "default",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "comms",
+      "to": "lifecycle",
+      "label": "2 imports",
+      "variant": "default",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "comms",
+      "to": "sessions-core",
+      "label": "4 imports",
+      "variant": "default",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "from": "injected-context",
+      "to": "harness-adapter",
+      "label": "2 imports · 1 back",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "from": "remote-client",
+      "to": "sessions-core",
+      "label": "2 imports",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "manager-cockpit",
+      "to": "sessions-core",
+      "label": "2 imports",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "from": "live-view",
+      "to": "session-host",
+      "label": "1 import",
+      "variant": "default",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [
+        1228,
+        412
+      ]
+    },
+    {
+      "from": "session-attach",
+      "to": "session-host",
+      "label": "1 import",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "主干：底座 → 生命周期 → harness 缝 → 宿主",
+      "items": [
+        "sessions-core 是共享底座（sessions.ts + session-record.ts），lifecycle 与它互相 import（8 · 5 back），并且直接 import harness-adapter（7）",
+        "harness-adapter 是唯一的 harness 缝：产品代码里禁止 if (codex) / if (claude)；session-host 是第二条轴——session 跑在什么容器里",
+        "session-host 被 harness-adapter(5)、sessions-core(4)、lifecycle(3)、live-view、attach 直接 import，正文自己承认『到处假定 tmux』"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "持久的是 worktree，不是进程",
+      "items": [
+        "记录放在每用户全局库 ~/.spexcode，按 harness session_id 键；列表每次从库枚举、按 createdAt 排序，backend 重启不丢",
+        "agent 写自己的状态，只能 propose merge / close；merge 和 close 由人做",
+        "没有东西自动消失：自结束的 session 仍可找到；dashboard 和终端是同一份状态的两张脸"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "两类人的入口，以及被折叠的 6 个",
+      "items": [
+        "remote-client / manager-cockpit 经 backend（HTTP）：backend 是唯一的 tmux 执行者",
+        "live-view / session-attach 直连 tmux：attach 是唯一刻意本地的动词，终端无法经 HTTP 代理",
+        "折叠的 6 个小节点合计与 sessions-core 互 import 4 · 4、被 lifecycle import 3；图上未画这些边"
+      ]
+    }
+  ]
+}

@@ -33,6 +33,7 @@
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
+    "@spexcode/archify": "0.7.0-next.16",
     "@spexcode/session-application": "0.7.0-next.16",
     "@spexcode/session-selflaunch": "0.7.0-next.16",
     "@spexcode/spec-core": "0.7.0-next.16",

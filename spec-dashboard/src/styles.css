@@ -1225,6 +1225,17 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-att { margin-top: -8px; }
 .doc-att .gov-f { color: var(--cyan); }
 
+/* [[node-diagram]] — the node's diagram, between its chip rows and its prose. The box is archify's own canvas
+   (its palette follows this sheet's color-scheme, so a light theme gets the light diagram); the frame is ours. */
+.node-diagram { margin: 0 0 var(--space-6); }
+.node-diagram .archify { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.node-diagram .archify svg [data-node-id] { cursor: pointer; }
+.node-diagram-note { margin-top: var(--space-2); color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-relaxed); }
+.node-diagram-failed { padding: var(--space-3) var(--space-4); border: 1px solid color-mix(in srgb, var(--red) 40%, transparent); border-radius: var(--radius); font-size: var(--type-meta); color: var(--ink2); }
+.node-diagram-h { display: block; color: var(--red); font-weight: var(--weight-medium); }
+.node-diagram-error { margin: var(--space-1) 0 0; }
+.node-diagram-diagnostics { margin: var(--space-1) 0 0; padding-left: var(--space-5); color: var(--muted); }
+
 /* [[source-view]]: a governed file opened in place, under the prose that claims it. Bounded height — it is
    a reading window inside the spec pane, never a curtain that buries the body below it. */
 .srcview { margin: 9px 0 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--paper); }

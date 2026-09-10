@@ -38,7 +38,10 @@ spec-dashboard, spec-forge) stay as components, not the brand.
 Every direct dashboard dependency has a live importer or an explicit boundary reason. The CodeMirror CM6
 family (`@codemirror/*` and `@lezer/highlight`) owns the virtualized read-only source and merge-diff faces;
 `katex` and `markdown-it` own the single rich-conversation renderer. These arrivals have no predecessor to
-remove: the prior surfaces were hand-rendered and had no replaceable package edge. `@spexcode/spec-core` is the
+remove: the prior surfaces were hand-rendered and had no replaceable package edge. `@spexcode/archify` arrives
+the same way: nodes had no diagrams, so nothing is replaced, and the dashboard takes only its browser half —
+the generated diagram stylesheet and the focus/id module ([[node-diagram]]) — while the renderer stays in the
+backend; the dependency test holds that line. `@spexcode/spec-core` is the
 browser-safe shared authority, while `@spexcode/spec-cli` is retained only for its public `ranker` export.
 The desktop Electron dependency is deliberately outside the root workspaces in `spec-desktop/package.json`, so
 users who do not run the optional shell do not ingest its runtime. A dependency may be added without a removal

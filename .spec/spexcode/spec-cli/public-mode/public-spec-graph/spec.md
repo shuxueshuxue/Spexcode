@@ -6,6 +6,7 @@ desc: Deterministic static Spec Graph publishing surface with no sessions, issue
 code:
   - spec-cli/src/public-graph.ts#buildPublicGraph
 related:
+  - spec-cli/src/spec-diagram.ts
   - scripts/public-graph-build.mjs
   - scripts/public-graph-registry.json
   - spec-dashboard/src/public-mode.js
@@ -51,7 +52,9 @@ answer, and without inventing an entry that exists only here.
 repository identity, exact Git `revision`, a relocatable `sourceRoot: "."`, and deterministic node rows.
 The index retains graph-reading fields (`id`, `parent`, `path`, title/status metadata, governance paths),
 while `--content-dir <path>` writes one `spexcode.public-spec-document/v1` JSON document per node with its
-rendered spec body/parts. Runtime sessions, overlays, issue summaries, and write affordances never
+rendered spec body/parts and its `diagram` — the node's diagram already drawn to SVG, the reason it could not
+be, or `null` when the node carries none ([[diagram]]) — so a published tree shows the picture with no backend
+and no renderer. Runtime sessions, overlays, issue summaries, and write affordances never
 enter either payload. The same command without `--out` writes identical index bytes to stdout.
 
 `npm run build:public` builds the dashboard with `VITE_PUBLIC_GRAPH_ONLY=1` and copies that snapshot plus

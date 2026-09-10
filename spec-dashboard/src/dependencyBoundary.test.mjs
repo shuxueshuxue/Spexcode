@@ -22,13 +22,20 @@ test('direct dashboard dependencies have a live owner or explicit boundary', () 
   const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
   const requiredImports = [
     '@codemirror/lang-javascript', '@codemirror/language', '@codemirror/merge', '@codemirror/state',
-    '@codemirror/view', '@lezer/highlight', '@spexcode/spec-cli', '@spexcode/spec-core', '@spexcode/transcript', '@spexcode/transcript-ui',
+    '@codemirror/view', '@lezer/highlight', '@spexcode/archify', '@spexcode/spec-cli', '@spexcode/spec-core', '@spexcode/transcript', '@spexcode/transcript-ui',
     '@xterm/xterm', '@xterm/addon-fit',
     '@xyflow/react', 'katex', 'markdown-it', 'react', 'react-dom', '@vitejs/plugin-react',
   ]
   for (const name of requiredImports) assert.ok(names.includes(name), `manifest lost required edge ${name}`)
   for (const name of requiredImports) assert.ok(source.includes(name), `dependency has no live importer: ${name}`)
   assert.equal(manifest.dependencies, undefined, 'dashboard runtime dependencies stay in devDependencies for the bundled app')
+})
+
+// The diagram is drawn by the backend; the dashboard takes only archify's browser half — its stylesheet and the
+// focus/id helpers — and never the renderer, whose Node-only modules would otherwise land in the bundle.
+test('the dashboard imports archify\'s browser half, never its renderer', () => {
+  const entries = [...source.matchAll(/from '(@spexcode\/archify[^']*)'|import '(@spexcode\/archify[^']*)'/g)].map((m) => m[1] ?? m[2])
+  assert.deepEqual([...new Set(entries)].sort(), ['@spexcode/archify/browser', '@spexcode/archify/diagram.css'])
 })
 
 test('new renderer dependencies carry an explicit no-predecessor exemption', () => {
@@ -43,12 +50,12 @@ test('cross-package arrivals carry an immutable predecessor ledger', () => {
   for (const commit of [
     '2a5560b11', 'f19ce3af2', '59f51a6b0', 'bbd00164a', '0962fb0e0',
     '7e90b791d', '023e91b4c', 'dff2d31c7', '2f8d5fb71', '3d0e60e6b',
-    '377c832f4', 'b1c36fb04',
+    '377c832f4', 'b1c36fb04', 'bf14545a1', '8044c100f',
   ]) assert.match(specCliSpec, new RegExp('`' + commit + '`'), `arrival ledger omitted ${commit}`)
   for (const edge of [
     '@hono/node-ws', 'node-pty', '@spexcode/spec-core',
     '@spexcode/spec-forge', '@spexcode/session-application',
-    '@spexcode/session-selflaunch', '@vscode/tree-sitter-wasm',
+    '@spexcode/session-selflaunch', '@vscode/tree-sitter-wasm', '@spexcode/archify',
   ]) assert.ok(specCliSpec.includes(`\`${edge}\``), `arrival ledger omitted ${edge}`)
   assert.match(specCliSpec, /No package predecessor/)
   assert.match(specCliSpec, /Same-change subtraction/)

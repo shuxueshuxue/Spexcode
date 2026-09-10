@@ -19,6 +19,7 @@ import Prose from './Prose.js'
 import { setToken } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
 import ProseActions from './ProseActions.jsx'
+import NodeDiagram from './NodeDiagram.jsx'
 import { useSpecContent } from './specContent.js'
 import 'katex/dist/katex.min.css'
 
@@ -182,6 +183,7 @@ export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
         <div className="doc-gov prose"><span className="doc-gov-h">{t('nodeView.proseNode')}</span></div>
       )}
       {!graphOnly && <NodeAttachments nodeId={node.id} enabled />}
+      {content?.diagram && <NodeDiagram nodeId={node.id} diagram={content.diagram} />}
       {(() => {
         // body/parts are lazy-loaded ([[graph-lean]]); `node.* ??` keeps a fixture (or a fuller payload) working.
         // While the fetch is in flight (content still null, nothing on the node) show a spinner rather than an

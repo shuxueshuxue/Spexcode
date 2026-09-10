@@ -37,6 +37,7 @@ import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './sour
 import { listSourceDir } from './source-list.js'
 import { loadConfig as loadLintConfig } from './lint.js'
 import { listNodeAttachments, readNodeAttachment } from './spec-attachments.js'
+import { specDiagram } from './spec-diagram.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
@@ -146,10 +147,12 @@ app.get('/api/specs', async (c) => c.json(await loadSpecs()))
 // from their paged endpoints and cannot be reconstructed from this corpus.
 app.get('/api/specs/lite', (c) => c.json(loadSpecsLite()))
 // one node's body + parsed parts ([[graph-lean]]): the board no longer ships either, so the detail view
-// fetches this when a node opens. 404 for an unknown id.
-app.get('/api/specs/:id/content', (c) => {
-  const x = specContent(c.req.param('id'))
-  return x ? c.json(x) : c.json({ body: '', parts: null }, 404)
+// fetches this when a node opens — with the node's rendered diagram, if it carries one ([[diagram]]). 404 for
+// an unknown id.
+app.get('/api/specs/:id/content', async (c) => {
+  const id = c.req.param('id')
+  const x = specContent(id)
+  return x ? c.json({ ...x, diagram: await specDiagram(id) }) : c.json({ body: '', parts: null, diagram: null }, 404)
 })
 // [[spec-body-edit]]: the WRITE half of the spec document — a human at the board replaces a line range of
 // a node's body and it lands as a real commit. The endpoint takes no path (it derives one from the node id)

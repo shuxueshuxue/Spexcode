@@ -1,0 +1,365 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "spec-forge — forge 链接追踪器的 8 个子节点",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "repository": {
+      "url": "https://github.com/shuxueshuxue/spexcode",
+      "revision": "250fd0032ef54107b9225665ba2869635c0706bf"
+    },
+    "note": "主干 forge-cli → links → port：port 只读，links 做反查，forge-cli 对外暴露。箭头按 import 方向画；每对之间只有一条 import，所以边上写被 import 的符号而不是数字。唯一知道 vendor 的地方是端口与驱动那一组。conformance-gate 仍是 pending、没有代码，只有虚线的提及边。所有数字都在 revision 那一刻的树上重算。"
+  },
+  "components": [
+    {
+      "id": "forge-cli",
+      "type": "backend",
+      "label": "forge-cli",
+      "sublabel": "spex issue links",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/forge-cli/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/cli.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "links",
+      "type": "backend",
+      "label": "links",
+      "sublabel": "纯函数 · 三种链接来源",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/links/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/links.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        620,
+        60
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "forge-cache",
+      "type": "database",
+      "label": "forge-cache",
+      "sublabel": "delta 喂养 · 每读重算",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/forge-cache/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/cache.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        910,
+        60
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "gitlab",
+      "type": "cloud",
+      "label": "gitlab",
+      "sublabel": "REST v4 · 第二个驱动",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/gitlab/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/drivers/gitlab.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        330,
+        280
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "port",
+      "type": "messagebus",
+      "label": "port",
+      "sublabel": "ForgeDriver · 纯类型接口",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/port/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/port.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        620,
+        280
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "conformance-gate",
+      "type": "security",
+      "label": "conformance-gate",
+      "sublabel": "PENDING · 5 节点 · 无代码",
+      "tag": "pending",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/conformance-gate/spec.md",
+          "label": "spec"
+        }
+      ],
+      "pos": [
+        910,
+        280
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "forge-host",
+      "type": "backend",
+      "label": "forge-host",
+      "sublabel": "由 origin 推断 host",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/forge-host/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/drivers.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        330,
+        500
+      ],
+      "size": [
+        170,
+        60
+      ]
+    },
+    {
+      "id": "dashboard-issues",
+      "type": "frontend",
+      "label": "dashboard-issues",
+      "sublabel": "resident.ts · 看板角标",
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-forge/dashboard-issues/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-forge/src/resident.ts",
+          "label": "code"
+        }
+      ],
+      "pos": [
+        910,
+        500
+      ],
+      "size": [
+        170,
+        60
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "host 无关：解析与缓存",
+      "wraps": [
+        "links",
+        "forge-cache"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "端口与驱动（唯一 vendor 感知处）",
+      "wraps": [
+        "gitlab",
+        "port",
+        "forge-host"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "forge-cli",
+      "to": "links",
+      "label": "resolveLinks()",
+      "variant": "emphasis"
+    },
+    {
+      "from": "links",
+      "to": "port",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "forge-cache",
+      "to": "links",
+      "label": "每读重算"
+    },
+    {
+      "from": "forge-cache",
+      "to": "port",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "forge-cli",
+      "to": "port",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "forge-cli",
+      "to": "forge-host",
+      "label": "resolveForgeHost()",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "from": "gitlab",
+      "to": "port",
+      "label": "实现"
+    },
+    {
+      "from": "forge-host",
+      "to": "gitlab",
+      "label": "注册",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "forge-host",
+      "to": "port",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "from": "dashboard-issues",
+      "to": "forge-host",
+      "label": "resolveForgeHost()",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelAt": [
+        840,
+        537
+      ]
+    },
+    {
+      "from": "dashboard-issues",
+      "to": "port",
+      "fromSide": "top",
+      "toSide": "right"
+    },
+    {
+      "from": "dashboard-issues",
+      "to": "forge-cache",
+      "label": "ForgeCache",
+      "fromSide": "right",
+      "toSide": "right",
+      "labelAt": [
+        1104,
+        440
+      ]
+    },
+    {
+      "from": "conformance-gate",
+      "to": "port",
+      "label": "依赖写动词",
+      "variant": "dashed"
+    },
+    {
+      "from": "conformance-gate",
+      "to": "dashboard-issues",
+      "label": "2 次提到",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        1002,
+        420
+      ]
+    },
+    {
+      "from": "conformance-gate",
+      "to": "forge-cache",
+      "label": "1 次提到",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "port 是唯一接缝，而且只是类型",
+      "items": [
+        "port.ts 只导出 ForgeIssue / ForgePR / ForgeDriver 等类型；有代码的 7 个子节点里 6 个 import 它，全是 import type，没有运行时依赖",
+        "vendor 只出现在两处驱动：github（drivers/github.ts，借 gh 的鉴权与仓库识别）和 gitlab（REST v4 + PAT）；forge-host 按 origin remote 选驱动，无驱动的 host 退化为空切片而不是错 host 调用"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "只读：git 才是真相",
+      "items": [
+        "tracer 从不写 node 的 version/status——status 由 deriveStatus 从 git 推；合并这个唯一执行事实经 git 回到图里，不经这个包",
+        "issue/PR 认领 node 的三种来源：node/<id> PR 分支、正文 Spec: <id> 标记、PR closes issue 的传递；typo 的标记链接不到任何 node，marker 优先于传递",
+        "port 的窄写动词（createIssue / createComment / closeIssue）只给 spec-cli 的 Issue port 用；驱动仍是唯一网络接缝"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "两个出口，一个待办",
+      "items": [
+        "forge-cli：spex issue links 与 --pending，实时读；dashboard-issues：常驻 ForgeCache 非阻塞折进 /api/graph，没有 forge 或 gh 时静默无角标",
+        "conformance-gate：pending 设计、5 个节点、无代码——deliver-port 的 inward 半边，需要 port 今天没有的写动词（开/更新 PR、发 Check、sticky comment）"
+      ]
+    }
+  ]
+}

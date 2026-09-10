@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/SpecView.jsx
 related:
   - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/NodeDiagram.jsx
   - spec-dashboard/src/SourceView.jsx
   - spec-dashboard/src/styles.css
 ---
@@ -25,8 +26,9 @@ its place as a quick lens on board focus; this is where a node is READ.
 no markdown `#` in front of it; its one-line description reads as a muted subtitle directly under it; and
 the at-a-glance signals — the status word with its colour tick, the version, drift when
 any, and the last editing session — sit in one property row above a hairline, as tints and plain text
-rather than a boxed strip. The governed-file and attachment rows follow as labelled chip rows, and the
-prose begins under them without a rule of its own.
+rather than a boxed strip. The governed-file and attachment rows follow as labelled chip rows; a node that
+carries a diagram shows it next, inline ([[node-diagram]]); and the prose begins under them without a rule of
+its own.
 
 Inline `[[id]]` references in that shared renderer are real detail anchors: they use the canonical
 `#/spec/<id>` address, ordinary clicks focus the resident Spec tab, and Ctrl/Command-click uses [[tab-strip]]'s

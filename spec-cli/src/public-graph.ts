@@ -1,4 +1,5 @@
 import { loadSpecs, repoRoot, resolveProjectIdentity, gitA } from '@spexcode/spec-core'
+import { specDiagram, type SpecDiagram } from './spec-diagram.js'
 
 export const PUBLIC_GRAPH_SCHEMA = 'spexcode.public-spec-graph/v1' as const
 export const PUBLIC_GRAPH_PAYLOAD_NAME = 'public-graph.json' as const
@@ -35,6 +36,7 @@ export type PublicGraphDocument = Readonly<{
   id: string
   body: string
   parts: unknown
+  diagram: SpecDiagram | null
 }>
 
 export type PublicGraphArtifact = Readonly<{
@@ -78,14 +80,16 @@ export async function buildPublicGraphArtifact(): Promise<PublicGraphArtifact> {
     identity: Object.freeze({ title: identity.title, icon: identity.icon }),
     nodes: Object.freeze(nodes.map(stableNode).sort((a, b) => a.path.localeCompare(b.path))),
   })
-  const documents = Object.freeze(nodes
-    .map((node) => Object.freeze({
-      schema: 'spexcode.public-spec-document/v1' as const,
-      revision,
-      id: node.id,
-      body: node.body,
-      parts: node.parts,
-    }))
+  // The static document carries the same rendered diagram the live content endpoint serves ([[diagram]]), so a
+  // published tree shows the picture with no backend and no renderer in the browser.
+  const documents = Object.freeze((await Promise.all(nodes.map(async (node) => Object.freeze({
+    schema: 'spexcode.public-spec-document/v1' as const,
+    revision,
+    id: node.id,
+    body: node.body,
+    parts: node.parts,
+    diagram: await specDiagram(node.id, root),
+  }))))
     .sort((a, b) => a.id.localeCompare(b.id)))
   return Object.freeze({ graph, documents })
 }

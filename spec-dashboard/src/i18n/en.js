@@ -508,6 +508,9 @@ export default {
     releaseTitle: 'release the lock (or click the session again)',
   },
 
+  nodeDiagram: {
+    failed: ({ file }) => `${file} did not render`,
+  },
   nodeView: {
     carries: 'Carries',
     paneSpec: 'spec',

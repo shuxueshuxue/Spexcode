@@ -620,6 +620,7 @@ export default {
     lockTitle: 'ctrl+点击在新标签打开 · 右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话',
+    newPill: '新建',
     searchTitle: '搜索',
     resizeList: '调整会话列表宽度',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。

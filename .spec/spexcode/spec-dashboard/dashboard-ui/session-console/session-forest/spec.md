@@ -24,7 +24,7 @@ with them — grouping, disclosure, the archive's fourth zone and its index, the
 
 **The forest sidebar speaks one row grammar**: its top row is the frame's top band (`--line-top` tall,
 level with the tab strip) and holds three doors plus the fold switch ([[side-nav]]) at its far end —
-`＋ New Session` carrying its word (the word yields to an ellipsis before it runs under the glyphs), then
+`＋ New` carrying one short word (its full name, New Session, is the door's accessible label), then
 quiet archive and search glyphs — and those doors are rows
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between

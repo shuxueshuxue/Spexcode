@@ -243,6 +243,11 @@ export default function DiffDocument({ sessionId }) {
   const entries = [...committed.map((file) => ({ scope: 'branch', file })), ...working.map((file) => ({ scope: 'working', file }))]
   const comments = state.data?.comments || []; const unsent = comments.filter((comment) => !comment.sentAt).length
   const current = entries.find((entry) => entryKey(entry) === selected) || entries[0] || null
+  // The current file object is refreshed with the board, but its identity key is not. Keep the registration
+  // callback keyed to that stable address so a live parent render cannot look like an editor configuration
+  // change to DiffFile. Recreating CodeMirror for every graph update resets its native scroller to the top.
+  const currentKey = current ? entryKey(current) : ''
+  const registerCurrentView = useCallback((path, view) => registerView(currentKey, view), [registerView, currentKey])
   const selectedIndex = Math.max(0, entries.findIndex((entry) => entryKey(entry) === selected))
   const toggleDir = useCallback((key) => setOpenDirs((open) => { const next = new Set(open); if (!next.delete(key)) next.add(key); return next }), [])
   // Hunk stepping walks the READING LIST, so ↓ off the end of one file opens the next one instead of
@@ -301,7 +306,7 @@ export default function DiffDocument({ sessionId }) {
         {!committed.length && <div className="diff-scope-note">{branchNote}</div>}
         {current && <DiffFile key={`${entryKey(current)}:${current.file.diffIdentity}`} sessionId={sessionId} file={current.file} scope={current.scope}
           open mode={mode} wrap={wrap} comments={comments.filter((comment) => comment.filePath === current.file.path)}
-          onView={(path, view) => registerView(entryKey(current), view)} onNext={() => navigateChunk(1)} onPrevious={() => navigateChunk(-1)}
+          onView={registerCurrentView} onNext={() => navigateChunk(1)} onPrevious={() => navigateChunk(-1)}
           onComment={(start, end) => { if (start == null) return; setDraft({ filePath: current.file.path, lineStart: start, lineEnd: end }); setBody('') }}
           onEdit={(comment) => { setDraft(comment); setBody(comment.body) }} onRetract={retract} />}
       </div>

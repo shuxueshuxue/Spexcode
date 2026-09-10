@@ -1,11 +1,16 @@
 ---
 title: diagram
-status: pending
+status: active
 hue: 30
-desc: A spec node may carry one archify diagram of its own level — an IR file beside its spec.md that is the node's picture of its children, versioned with the spec, rendered on demand, and judged against the tree it projects.
+desc: A spec node may carry one archify diagram of its own level — an IR file beside its spec.md that is the node's picture of its children, versioned with the spec, drawn by the backend and shown inline above the body.
+code:
+  - spec-cli/src/spec-diagram.ts
 related:
-  - packages/archify/package.json
+  - packages/archify/index.mjs
+  - spec-cli/src/index.ts
+  - spec-cli/src/public-graph.ts
   - spec-cli/src/spec-attachments.ts
+  - spec-dashboard/src/NodeDiagram.jsx
 ---
 
 # diagram
@@ -23,23 +28,31 @@ the node's direct children (their ids are the node ids; small ones may fold into
 source path it cites is a spec path in the tree or a file some node's `code:` governs. And the diagram is
 drawn at a revision: when the node's children or their governed files change after that revision, the
 picture may be stale — the same reading, derived live from git, that [[spec-lint]] gives code drift. Three
-lint findings carry those three facts: `diagram-id` and `diagram-source` are errors, `diagram-stale` is a
-warning.
+lint findings are to carry those three facts: `diagram-id` and `diagram-source` as errors, `diagram-stale` as
+a warning. They are not built yet; until they are, nothing checks a diagram against the tree it projects.
 
-**The IR is the truth; the page is derived.** `diagram.*.json` is committed with the spec it belongs to, in
-the same commit as the change it reflects. The rendered page is never tracked: the CLI renders it on demand
-through [[archify]] — validated, sources checked, delivered — and caches it under the project's own store
-keyed by the IR's content and the revision, so an unchanged diagram renders once. The dashboard embeds that
-page above the node's body in archify's embed mode (page chrome hidden; zoom, focus, the semantic lens and
-the animated main path kept) and bridges its clicks back into the tree: a click selects that child, a
-double-click descends to its level. The public graph ships the same rendered pages beside the documents.
+**The IR is the truth; the picture is derived, by the backend, on read.** `diagram.*.json` is committed with
+the spec it belongs to, in the same commit as the change it reflects; nothing rendered is ever tracked. When a
+node's content is read, the backend renders its IR in-process through [[archify]]'s library into one SVG and
+hands it out with the body: the live content endpoint and the published graph's per-node document carry the
+same `diagram` field, so the two faces of the tree show the same picture by the same path. Rendering is a pure
+function of the IR's text — no repository root is passed, so no git is read — and the result is kept per IR
+content for the life of the process: an unchanged diagram renders once, an edited one is a new key.
+
+**A diagram that cannot be drawn says why, in its own slot.** Unknown type, invalid JSON, a schema or layout
+violation (with archify's own diagnostics), more than one diagram file in a folder, or a renderer crash: each
+comes back as `{ file, type, error, diagnostics }` instead of an SVG. It never costs the node its document —
+the body is served either way.
+
+**Shown inline, not in a viewer.** The dashboard puts the SVG straight into the node's page ([[node-diagram]]),
+styled by archify's generated stylesheet and driven by its small browser module — no iframe, no viewer script,
+no renderer in the bundle. A click focuses a box: its neighbours stay lit, everything else dims, and the edges
+it touches keep a pulse flowing from source to target. A double-click on a box whose id is one of this node's
+children opens that child.
 
 **Who draws it.** A person, or a cartographer agent handed the level's context — the node's body, its
 children's excerpts, the relations folded between their subtrees — and told to choose the type on that
 evidence, keep every card line grounded, and repair from archify's receipts until the validator is green.
 What the agent learns about the spec while drawing (a claim the code does not bear out, a stale count) is
-filed as an issue, not stored with the picture.
-
-This node names the contract. The reader path (the render endpoint, the dashboard slot, the click bridge),
-the three lint findings, and the writer (`spex atlas`, which fills a node's folder from a level's context)
-are the next steps and will claim their code here as they land.
+filed as an issue, not stored with the picture. The writer (`spex atlas`, which fills a node's folder from a
+level's context) is the next step after the lint findings.

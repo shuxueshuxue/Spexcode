@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { checkDiagram, DiagramError, diagramHtml, layoutReport, renderDiagram, runtimeAssets } from '../index.mjs';
+import { checkDiagram, DiagramError, diagramHtml, layoutReport, renderDiagram } from '../index.mjs';
 
 const root = new URL('..', import.meta.url);
 const examples = fs.readdirSync(new URL('examples/', root)).filter((f) => f.endsWith('.json')).sort();
@@ -45,19 +45,29 @@ test('a diagram problem is data, not a crash: render throws DiagramError, check 
   await assert.rejects(renderDiagram('pie', {}), DiagramError);
 });
 
-test('a linked page carries no viewer code of its own and names the content-hashed shared runtime', async () => {
-  const ir = read('web-app.architecture.json');
-  const parts = await renderDiagram('architecture', ir, optsOf(ir));
-  const inline = diagramHtml(parts);
-  const linked = diagramHtml(parts, { runtime: { base: '../assets/archify' } });
-  const assets = runtimeAssets();
-  assert.deepEqual(assets.map((a) => a.name.replace(/\.[0-9a-f]{10}\./, '.#.')), ['archify-fonts.#.css', 'archify-viewer.#.css', 'archify-viewer.#.js']);
-  for (const a of assets) {
-    assert.ok(linked.includes(`../assets/archify/${a.name}`), a.name);
-    assert.ok(!linked.includes(a.content.slice(0, 200)), `${a.name} is not inlined`);
-    assert.ok(inline.includes(a.content.slice(0, 200)), `${a.name} is inlined in the self-contained page`);
+test('diagram.css is generated from the template, and every rule stays inside the .archify box', () => {
+  const run = spawnSync(process.execPath, [fileURLToPath(new URL('scripts/generate-diagram-css.mjs', root)), '--check'], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  const css = fs.readFileSync(new URL('assets/diagram.css', root), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const selectors = [...css.replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)]
+    .flatMap((m) => m[1].replace(/@media[^{]*\{/g, '').split(',')).map((s) => s.trim()).filter(Boolean);
+  assert.ok(selectors.length > 100, `${selectors.length} selectors`);
+  for (const s of selectors) assert.match(s, /^\.archify(?![\w-])/, s);
+});
+
+test('scopeIds makes an inline SVG self-contained: every id it defines and every reference carries the prefix', async () => {
+  const { scopeIds } = await import('../browser.mjs');
+  for (const f of examples) {
+    const ir = read(f);
+    const scoped = scopeIds((await renderDiagram(typeOf(f), ir, optsOf(ir))).svg, 'd1');
+    const ids = new Set([...scoped.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+    assert.ok(ids.size > 0, f);
+    for (const id of ids) assert.ok(id.startsWith('d1-'), `${f}: unscoped id ${id}`);
+    for (const m of scoped.matchAll(/url\(#([^)]+)\)|href="#([^"]+)"/g)) assert.ok(ids.has(m[1] ?? m[2]), `${f}: dangling ${m[0]}`);
+    for (const m of scoped.matchAll(/aria-(?:labelledby|describedby)="([^"]+)"/g)) {
+      for (const id of m[1].split(/\s+/)) assert.ok(ids.has(id), `${f}: dangling aria reference ${id}`);
+    }
   }
-  assert.ok(linked.length < inline.length / 5, `linked page ${linked.length} B vs inline ${inline.length} B`);
 });
 
 test('the generated validators are up to date with the schemas', () => {

@@ -9,6 +9,9 @@
   "license": "MIT",
   "files": [
     "index.mjs",
+    "index.d.ts",
+    "browser.mjs",
+    "browser.d.ts",
     "renderers",
     "schemas",
     "assets",
@@ -16,12 +19,21 @@
     "examples/*.json",
     "scripts/check-render-output.mjs",
     "scripts/generate-validators.mjs",
+    "scripts/generate-diagram-css.mjs",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
     "UPSTREAM.md"
   ],
   "exports": {
-    ".": "./index.mjs",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.mjs"
+    },
+    "./browser": {
+      "types": "./browser.d.ts",
+      "default": "./browser.mjs"
+    },
+    "./diagram.css": "./assets/diagram.css",
     "./package.json": "./package.json"
   },
   "engines": {
@@ -35,5 +47,6 @@
   "devDependencies": {
     "ajv": "^8.20.0"
   },
-  "main": "./index.mjs"
+  "main": "./index.mjs",
+  "types": "./index.d.ts"
 }

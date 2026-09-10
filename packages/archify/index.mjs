@@ -1,10 +1,8 @@
-// @spexcode/archify — the library face ([[archify]]). A diagram is rendered in-process: IR in, page parts out,
-// diagnostics thrown as data. The CLI (bin/archify.mjs) and these functions share every step — the same
+// @spexcode/archify — the library face ([[archify]]). A diagram is rendered in-process: IR in, SVG and page parts
+// out, diagnostics thrown as data. The CLI (bin/archify.mjs) and these functions share every step — the same
 // preparation, the same renderer functions, the same page assembly, the same final-artifact check — so the
 // two produce identical bytes; the difference is only that the CLI runs each step in its own process.
-import { createHash } from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
+// The browser half is separate and imports nothing from here: assets/diagram.css and browser.mjs.
 import { diagramPage, loadTemplate, prepareDiagram } from './renderers/shared/cli.mjs';
 import { prepareDiagramBrandMarks } from './renderers/shared/brand-marks.mjs';
 import { withRenderContext } from './renderers/shared/render-context.mjs';
@@ -108,67 +106,8 @@ export async function checkDiagram(type, ir, options = {}) {
   };
 }
 
-// ---- the viewer runtime, and the page ------------------------------------------------------------------
-// The viewer is three blocks of the template: the embedded font face, the stylesheet, and the viewer script.
-// None of them carries a translated string or a per-diagram slot (every {{i18n:…}} token and every ARCHIFY
-// slot is in the markup), so one copy serves every page in every language. A page either carries them inline
-// (a single self-contained file) or links a shared copy (a site of many diagrams downloads the viewer once).
-const RUNTIME_BLOCKS = [
-  { key: 'fonts', ext: 'css', pattern: /<style id="archify-fonts">\n?([\s\S]*?)<\/style>/ },
-  { key: 'viewer', ext: 'css', pattern: /<style>\n?([\s\S]*?)<\/style>/ },
-  { key: 'viewer', ext: 'js', pattern: /<script>\n?(\s*var Archify = \{\};[\s\S]*?)<\/script>/ },
-];
-let runtime = null;
-function runtimeParts() {
-  if (runtime) return runtime;
-  const template = loadTemplate();
-  const blocks = RUNTIME_BLOCKS.map((block) => {
-    const matches = [...template.matchAll(new RegExp(block.pattern.source, 'g'))];
-    if (matches.length !== 1) throw new Error(`archify runtime: expected one ${block.key}.${block.ext} block in the template, found ${matches.length}`);
-    const [whole, content] = matches[0];
-    const hash = createHash('sha256').update(content).digest('hex').slice(0, 10);
-    return { ...block, whole, content, name: `archify-${block.key}.${hash}.${block.ext}` };
-  });
-  runtime = { template, blocks };
-  return runtime;
-}
-
-// The shared runtime's files: [{ name, content }]. Names carry a content hash, so a cache never serves a stale viewer.
-export function runtimeAssets() {
-  return runtimeParts().blocks.map(({ name, content }) => ({ name, content }));
-}
-
-// Write the runtime into `dir` (idempotent: an existing file with the same name has the same bytes).
-export function writeRuntime(dir) {
-  fs.mkdirSync(dir, { recursive: true });
-  const names = [];
-  for (const { name, content } of runtimeAssets()) {
-    const file = path.join(dir, name);
-    if (!fs.existsSync(file)) fs.writeFileSync(file, content);
-    names.push(name);
-  }
-  return names;
-}
-
-const linkedTemplates = new Map();
-function linkedTemplate(base) {
-  if (linkedTemplates.has(base)) return linkedTemplates.get(base);
-  const { template, blocks } = runtimeParts();
-  const href = (name) => `${base.replace(/\/+$/, '')}/${name}`;
-  let linked = template;
-  for (const block of blocks) {
-    const tag = block.ext === 'css'
-      ? `<link rel="stylesheet" href="${href(block.name)}">`
-      : `<script src="${href(block.name)}"></script>`;
-    linked = linked.replace(block.whole, () => tag);
-  }
-  linkedTemplates.set(base, linked);
-  return linked;
-}
-
-// One diagram's page. `runtime: 'inline'` (default) is a self-contained file — identical to what the CLI
-// delivers; `runtime: { base }` links the shared runtime at `base` (a URL path relative to the page, or absolute).
-export function diagramHtml({ meta, svg, cards, sourceEvidence = null }, { runtime: mode = 'inline' } = {}) {
-  const template = mode === 'inline' ? loadTemplate() : linkedTemplate(mode.base);
-  return diagramPage({ template, meta, svg, cards, sourceEvidence });
+// One diagram's self-contained page — the exact file `archify render` delivers (viewer, font, cards, note). The
+// final-artifact check reads this page; a host that shows diagrams inline uses the svg with assets/diagram.css.
+export function diagramHtml({ meta, svg, cards, sourceEvidence = null }) {
+  return diagramPage({ template: loadTemplate(), meta, svg, cards, sourceEvidence });
 }

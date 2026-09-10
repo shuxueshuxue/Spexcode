@@ -31,10 +31,17 @@ benchmarks, experiments, docs, and the skill-update manifest.
   Proof: 32 IRs (26 real diagrams, 1 hand lifecycle, 5 examples) — CLI output byte-identical before and after
   (render 32/32, validate 32/32, inspect 18/18); library output in one process byte-identical to the CLI
   baselines, forward and reverse order. `test/library.test.mjs` pins the example pages by sha256.
-- **The shared viewer runtime.** The template's font face, stylesheet and viewer script carry no translated
-  string and no per-diagram slot, so `runtimeAssets()` / `writeRuntime(dir)` emit them once, content-hashed,
-  and `diagramHtml(parts, { runtime: { base } })` links them instead of inlining (≈ 85 KB per page instead
-  of ≈ 800 KB). `runtime: 'inline'` (the default) is the CLI's self-contained page.
+- **The browser half (`assets/diagram.css`, `browser.mjs`).** A host shows `renderDiagram()`'s SVG inline
+  instead of in the viewer. `scripts/generate-diagram-css.mjs` derives `assets/diagram.css` (≈ 20 KB) from the
+  template's stylesheet: the rules that style the SVG, scoped under one `.archify` box (the viewer's page root and
+  diagram container collapse into it), limited to states a host can reach (detail level, focus), with the two
+  theme palettes merged into `light-dark()` so the box follows the page's `color-scheme`, plus the page body's
+  typeface and canvas and one added rule (the relationship pulse loops while a focus holds). Re-run it after a
+  template sync; `--check` fails on a stale file. `browser.mjs` exports `scopeIds` (prefix the SVG's fixed ids and
+  their references, so several copies can share a document) and `focusDiagram` (the viewer's focus states plus
+  its relationship pulse on the focused node's edges). Proof: over the 26 real diagrams in both themes, every
+  SVG element's computed style inline equals the viewer's at rest. Exported as `@spexcode/archify/browser` and
+  `@spexcode/archify/diagram.css`; `index.d.ts` / `browser.d.ts` type the two entries.
 - **`bin/` is no longer the published surface** (no `bin` field; it is kept as the upstream-shaped
   development CLI and the byte-identity reference).
 - `bin/archify.mjs`: the `compare`, `preview`, `visual-check`, `guide`, `brands`, `examples` and `demo`

@@ -499,6 +499,9 @@ export default {
     releaseTitle: '解除锁定（或再次单击该会话）',
   },
 
+  nodeDiagram: {
+    failed: ({ file }) => `${file} 未能绘制`,
+  },
   nodeView: {
     carries: '携带',
     paneSpec: '规格',

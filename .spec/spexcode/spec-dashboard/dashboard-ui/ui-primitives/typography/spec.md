@@ -74,8 +74,10 @@ from becoming a number encoded inside an unrelated component ([[status-bar]]).
 Four rungs, deepest to brightest, plus one surface that is not on the ladder at all:
 
 - **`--term-bg`** — the well: the embedded terminal, and the floor of the window. Not a rung (below).
-- **`--ground`** — the chrome floor: the rail, the finding dock, the status bar, the context dock.
-- **`--panel`** — between: the tab strip, toolbars, the session list, cards laid on paper.
+- **`--ground`** — the chrome floor: the rail, the status bar, the context dock.
+- **`--panel`** — between: the tab strip, toolbars, the two sidebars (the finding dock and the session list
+  it is the sibling of — one sidebar grammar, one rung; the dock once sat a step lower on `--ground` and
+  read as a darker, fainter stranger beside the Sessions forest, [[dock-modes]]), cards laid on paper.
 - **`--paper`** — the one content plane, and the only tone a document is drawn on.
 - **`--raised`** — the only rung ABOVE the plane: every menu, pop-over, tooltip, notice, and floating
   composer. Brightest.

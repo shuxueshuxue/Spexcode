@@ -26,8 +26,8 @@ The dock is one finding surface with two projections: **explorer** finds governe
 **sessions** finds active sessions.
 
 The explorer shows two SECTIONS — the spec tree ([[file-tree]]) and the real directory tree ([[disk-tree]]).
-They are two projections of the same project, identified by static zone heads — a quiet label, its tally as bare
-tabular text, and the trailing hairline. Neither section has a top-level expand/collapse control: only spec nodes and disk directories
+They are two projections of the same project, identified by the session list's zone heads: a count pod, a label,
+and a trailing hairline — the dock and the Sessions forest share one sidebar grammar and one panel ground. Neither section has a top-level expand/collapse control: only spec nodes and disk directories
 disclose their own children, while the explorer head's collapse-folders door can clear both ledgers.
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which

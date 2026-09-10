@@ -52,8 +52,9 @@ async function makePage({ api = 'absent', fallback = 'success', customHighlight 
       },
     })
   }, { apiMode: api, fallbackMode: fallback, keepHighlight: customHighlight })
-  await page.route('**/api/sessions/*/timeline', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify(timeline),
+  // the read carries its window (`?limit=`); the fixture answers as a whole window so a poll seats it again
+  await page.route('**/api/sessions/*/timeline*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ ...timeline, offset: 0, total: timeline.events.length, stamp: 1 }),
   }))
   await page.goto(`${base}/#/sessions/${encodeURIComponent(sessionId)}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.tl-chat:visible').waitFor({ state: 'visible', timeout: 30_000 })
@@ -172,22 +173,30 @@ try {
     await ownSelectionPage.close()
   }
 
-  const buttonPage = await makePage({ api: 'reject', fallback: 'success', customHighlight: false })
-  try {
-    await setComposer(buttonPage)
-    await buttonPage.locator('.m-copy-note:visible').click()
-    await buttonPage.locator('.m-copy-status').waitFor({ state: 'visible' })
-    const button = await state(buttonPage)
-    assert.equal(button.probe.apiCalls, 1, 'copy button skipped the Clipboard API seam')
-    assert.equal(button.probe.execCalls, 1, 'copy button skipped the fallback seam')
-    assert.equal(button.probe.apiText, NOTE, 'copy button API payload')
-    assert.equal(button.probe.fallbackText, NOTE, 'copy button fallback payload')
-    assert.equal(button.failed, false, 'copy button reported failure after confirmed fallback')
-    assert.equal(button.active, true, 'copy button moved composer focus')
-    assert.equal(button.nativeSelection, '', 'copy button created a document Selection')
-    results.push({ name: 'button uses shared seam', ...button })
-  } finally {
-    await buttonPage.close()
+  // The note's copy control exists whether or not Custom Highlight does, enters the same seam, and answers on
+  // itself rather than through the conversation's selection status.
+  for (const customHighlight of [true, false]) {
+    const buttonPage = await makePage({ api: 'reject', fallback: 'success', customHighlight })
+    try {
+      await setComposer(buttonPage)
+      // a hidden control takes no pointer; the reader reaches it by pointing at the note first
+      await buttonPage.locator('.m-ev-say:visible .m-ev-note').hover()
+      const control = buttonPage.locator('.m-ev-say:visible .m-say > .m-copy')
+      await control.click()
+      await buttonPage.locator('.m-ev-say:visible .m-say > .m-copy.is-copied').waitFor({ state: 'visible' })
+      const button = await state(buttonPage)
+      assert.equal(button.probe.apiCalls, 1, 'copy button skipped the Clipboard API seam')
+      assert.equal(button.probe.execCalls, 1, 'copy button skipped the fallback seam')
+      assert.equal(button.probe.apiText, NOTE, 'copy button API payload')
+      assert.equal(button.probe.fallbackText, NOTE, 'copy button fallback payload')
+      assert.equal(button.status, '', 'copy button borrowed the selection status overlay')
+      assert.equal(button.active, true, 'copy button moved composer focus')
+      assert.deepEqual(button.caret, [5, 5], 'copy button changed the composer caret')
+      assert.equal(button.nativeSelection, '', 'copy button created a document Selection')
+      results.push({ name: `button uses shared seam (Custom Highlight ${customHighlight ? 'present' : 'absent'})`, ...button })
+    } finally {
+      await buttonPage.close()
+    }
   }
 
   const cleanupPage = await makePage({ api: 'success' })

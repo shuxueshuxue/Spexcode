@@ -379,22 +379,8 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
       out.push({ level: 'error', rule: 'diagram-id', spec: s.id, file, msg: `${file} is not JSON (${(e as Error).message}) — its boxes cannot be checked against the children of '${s.id}'` })
       continue
     }
-    if (ir?.diagram_type !== 'architecture') continue
     const children = specs.filter((c) => c.parent === s.id).map((c) => c.id)
-    const childSet = new Set(children)
-    const boxes = Array.isArray(ir?.components) ? ir.components as { id?: unknown; sources?: unknown }[] : []
-    for (const box of boxes) {
-      const id = String(box?.id)
-      if (id !== 'others' && !childSet.has(id)) {
-        const shown = children.length > 12 ? `${children.slice(0, 12).join(', ')}, …` : children.join(', ')
-        out.push({ level: 'error', rule: 'diagram-id', spec: s.id, file, msg: `box '${id}' in ${file} is not a child of '${s.id}' — a box's id is its child's node id, or 'others' for the small ones folded together (children: ${shown || 'none'})` })
-      }
-      for (const source of Array.isArray(box?.sources) ? box.sources as { path?: unknown }[] : []) {
-        const path = String(source?.path)
-        if (!specPaths.has(path) && !governedClaims.has(path))
-          out.push({ level: 'error', rule: 'diagram-source', spec: s.id, file, msg: `box '${id}' in ${file} cites ${path}, which is neither a spec in the tree nor a file any node governs — cite the child's spec.md or the file its node claims in code:` })
-      }
-    }
+    out.push(...diagramTreeFindings(s.id, file, ir, children, (path) => specPaths.has(path) || governedClaims.has(path)))
   }
 
   // coverage: every governed source file must be claimed by at least one spec.
@@ -548,6 +534,30 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   }
 
   return { sourceFiles: governed.slice().sort(), findings: out }
+}
+
+// The two tree rules for one node's diagram ([[diagram]]), shared by the lint loop above and by
+// `spex diagram check` ([[diagram-cli]]), which judges a single node by exactly the rules the commit gate applies.
+// Only an architecture diagram's boxes are nodes; any other diagram_type has nothing to check here.
+export function diagramTreeFindings(nodeId: string, file: string, ir: { diagram_type?: unknown; components?: unknown } | null,
+  children: readonly string[], knownSource: (path: string) => boolean): Finding[] {
+  if (ir?.diagram_type !== 'architecture') return []
+  const out: Finding[] = []
+  const childSet = new Set(children)
+  const boxes = Array.isArray(ir.components) ? ir.components as { id?: unknown; sources?: unknown }[] : []
+  for (const box of boxes) {
+    const id = String(box?.id)
+    if (id !== 'others' && !childSet.has(id)) {
+      const shown = children.length > 12 ? `${children.slice(0, 12).join(', ')}, …` : children.join(', ')
+      out.push({ level: 'error', rule: 'diagram-id', spec: nodeId, file, msg: `box '${id}' in ${file} is not a child of '${nodeId}' — a box's id is its child's node id, or 'others' for the small ones folded together (children: ${shown || 'none'})` })
+    }
+    for (const source of Array.isArray(box?.sources) ? box.sources as { path?: unknown }[] : []) {
+      const path = String(source?.path)
+      if (!knownSource(path))
+        out.push({ level: 'error', rule: 'diagram-source', spec: nodeId, file, msg: `box '${id}' in ${file} cites ${path}, which is neither a spec in the tree nor a file any node governs — cite the child's spec.md or the file its node claims in code:` })
+    }
+  }
+  return out
 }
 
 export const DRIFT_GUIDANCE = `DRIFT — a governed file has moved ahead of its spec. A CHECKPOINT, not a chore: find WHERE the truth

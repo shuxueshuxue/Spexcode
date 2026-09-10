@@ -33,8 +33,8 @@ needs a repository nor enters the noun-first command map.
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
-after its noun, so an id can never occupy a verb slot and no id is a reserved word. Five noun drawers
-(`spec` · `session` · `peer` · `issue` · `evidence`), plus bare project verbs (`graph` ·
+after its noun, so an id can never occupy a verb slot and no id is a reserved word. Six noun drawers
+(`spec` · `diagram` · `session` · `peer` · `issue` · `evidence`), plus bare project verbs (`graph` ·
 `init` · `materialize` · `doctor` · `serve` · `dashboard` · `open` · `guidance` · `uninstall`) allowed only because
 their object stays inside THIS project (`open` selects one of its nodes/sessions/files; `dashboard`'s object is
 the HOST's project set) — there is no free cross-project object slot — plus the two help surfaces (`help` ·

@@ -11,7 +11,7 @@ export class SessionFileError extends Error {
 
 type SessionFileLock = <T>(id: string, body: () => T) => T
 
-export const SESSION_FILE_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+export const SESSION_FILE_PREVIEW_MAX_BYTES = 16 * 1024 * 1024
 export type SessionFilePreviewKind = 'text' | 'image' | 'html'
 const HTML_EXTENSIONS = new Set(['.html', '.htm'])
 const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.json', '.yaml', '.yml', '.toml', '.ini', '.log', '.csv', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.css', '.xml', '.py', '.go', '.rs', '.java', '.sh', '.sql'])
@@ -84,15 +84,28 @@ export function readSessionFiles(id: string): string[] {
   return readFiles(id)
 }
 
-export function addSessionFile(id: string, input: string, lock: SessionFileLock, cwd = process.cwd()): { path: string; added: boolean } {
+// How prose points at a posted file: the shortest `/`-bounded tail of its path that no other posted path
+// shares. The dashboard resolves `[[file:<tail>]]` against the same list by the same rule, so the reference
+// printed here is one it will open.
+export function fileReference(path: string, files: readonly string[]): string {
+  const parts = path.split('/').filter(Boolean)
+  for (let n = 1; n <= parts.length; n++) {
+    const tail = parts.slice(-n).join('/')
+    if (files.filter((other) => other.endsWith(`/${tail}`)).length === 1) return `[[file:${tail}]]`
+  }
+  return `[[file:${path}]]`
+}
+
+export function addSessionFile(id: string, input: string, lock: SessionFileLock, cwd = process.cwd()): { path: string; added: boolean; reference: string } {
   const path = resolve(cwd, input)
   currentFile(path)
   return lock(id, () => {
     requireSession(id)
     const files = readFiles(id)
-    if (files.includes(path)) return { path, added: false }
-    writeFiles(id, [...files, path])
-    return { path, added: true }
+    if (files.includes(path)) return { path, added: false, reference: fileReference(path, files) }
+    const next = [...files, path]
+    writeFiles(id, next)
+    return { path, added: true, reference: fileReference(path, next) }
   })
 }
 

@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec` prints the spec.md file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, `files` the agent-to-human path handoff, and `web` the local-web-service handoff.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec` prints the spec.md file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, `files` the agent-to-human path handoff, `web` the local-web-service handoff, and `diagram` a node's diagram and the loop that draws it.
 code:
   - spec-cli/src/guide.ts
 related:
@@ -74,14 +74,20 @@ the agent from one verb, picked by an optional topic:
   (any-order switching, `spex uninstall` as the empty policy).
 - **`files` → the agent-to-human PATH handoff.** The three `session files` verbs, the live and host-local
   meaning of a posted absolute path, add-time readable-file check, list-time invalid marker, the default
-  persistent evidence location outside the product repository, and the dashboard's click-time preview/download. It states the safe
-  preview types and 2 MiB refusal ceiling rather than implying every file can render, and distinguishes this
+  persistent evidence location outside the product repository, how prose points at a posted file (`[[file:<name>]]`,
+  printed by `add`), and the dashboard's click-time preview/download. It states the safe
+  preview types and 16 MiB refusal ceiling rather than implying every file can render, and distinguishes this
   from [[file-attach]] so an agent does not upload an artifact merely to hand it back.
 - **`web` → the agent-to-human LOOPBACK handoff.** The three `session web` verbs, their explicit-port
   loopback URL requirement, and the dashboard's click-time same-origin proxy. It makes clear that posting
   neither starts nor copies the service, so an agent builds and serves a production dist with relative asset
   paths, reads its base from `location.pathname`, and keeps that local server alive rather than mistaking a live
   page for an uploaded artifact.
+- **`diagram` → the node-DIAGRAM manual.** A node's one `diagram.json` ([[diagram]]): the five kinds and when each
+  fits, the two tree rules an architecture diagram obeys, the fields an author writes, where the full schemas
+  live, what not to put on a picture, and the loop — find the node, `spex diagram scaffold`, edit,
+  `spex diagram check` until it passes, lint, commit with the spec ([[diagram-cli]]). The page names the schemas
+  by package, never by a machine path, because the guide pages are exported into the guidance catalog.
 
 Every page describes the PRESENT model. `spex guide settings` documents `SPEX_PROFILE` as a launch-time
 harness property, never repository configuration. A retired knob is absent from the active field list; when silently

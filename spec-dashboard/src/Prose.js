@@ -1,10 +1,12 @@
-import { createElement, useMemo } from 'react'
+import { cloneElement, createElement, isValidElement, useContext, useMemo } from 'react'
 import { parseProseTokens, renderProseTokens } from './proseTokens.js'
+import { CodeCopyContext } from './clipboard.js'
 
 // The only React entry to the prose token boundary. Consumers provide semantic handlers; they never
 // choose a parser or a rendering dialect beyond `softBreak`. `lineBase` is caller-owned provenance for
-// governed documents.
-export default function Prose({ children, className = '', lineBase = 0, softBreak, renderSpecRef, renderEvidence, renderTimeAnchor }) {
+// governed documents. A code block's copy control is not a consumer's choice: it comes from the root.
+export default function Prose({ children, className = '', lineBase = 0, softBreak, renderSpecRef, renderEvidence, renderTimeAnchor, renderFileRef }) {
+  const CodeCopy = useContext(CodeCopyContext)
   const tokens = useMemo(() => {
     try { return parseProseTokens(children) } catch { return null }
   }, [children])
@@ -13,20 +15,26 @@ export default function Prose({ children, className = '', lineBase = 0, softBrea
   // targets) and are rebuilt every render, so a memo keyed on them never hit — it only looked optimised.
   // Pinning them in a ref would hit, and render stale anchors. Mapping itself is object construction;
   // KaTeX, the one expensive step, is cached at the parser boundary instead.
+  // One key sequence for everything the mapping places in a child list — its own elements and whatever a
+  // semantic handler returns, which the caller builds without knowing it lands in a list.
+  let key = 0
+  const keyed = (handler) => handler && ((...args) => {
+    const value = handler(...args)
+    return isValidElement(value) && value.key == null ? cloneElement(value, { key: `prose-${key++}` }) : value
+  })
   const content = tokens ? renderProseTokens(tokens, {
-    h: (() => {
-      let key = 0
-      return (type, props, ...children) => {
-        const hasProps = props !== null && typeof props === 'object' && !Array.isArray(props)
-        const attrs = hasProps ? { ...props, key: props.key ?? `prose-${key++}` } : { key: `prose-${key++}` }
-        return hasProps ? createElement(type, attrs, ...children) : createElement(type, attrs, props, ...children)
-      }
-    })(),
+    h: (type, props, ...children) => {
+      const hasProps = props !== null && typeof props === 'object' && !Array.isArray(props)
+      const attrs = hasProps ? { ...props, key: props.key ?? `prose-${key++}` } : { key: `prose-${key++}` }
+      return hasProps ? createElement(type, attrs, ...children) : createElement(type, attrs, props, ...children)
+    },
     lineBase,
     softBreak,
-    renderSpecRef,
-    renderEvidence,
-    renderTimeAnchor,
+    renderSpecRef: keyed(renderSpecRef),
+    renderEvidence: keyed(renderEvidence),
+    renderTimeAnchor: keyed(renderTimeAnchor),
+    renderFileRef: keyed(renderFileRef),
+    renderCodeCopy: CodeCopy ? (text) => createElement(CodeCopy, { text }) : undefined,
   }) : createElement('p', null, children == null ? '' : String(children))
   return createElement('div', { className }, content)
 }

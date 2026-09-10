@@ -763,10 +763,8 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
    in the margin. No light, no fill at rest: its state is the sidebar beside it, and `aria-pressed`. */
 .dock-toggle { appearance: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
 .dock-toggle-head { margin-left: auto; }
-.dock-head-act.dock-toggle { width: 26px; height: 26px; }
-/* STATE IS THE FILL, the way editors draw this switch: the owned pane is solid while that dock is open and
-   hollow while it is closed — same frame, same side, one glyph at one size (18px) wherever the switch stands. */
-.dock-toggle[aria-pressed="false"] .icon-pane, .context-toggle[aria-pressed="false"] .icon-pane { fill: none; }
+/* state is the glyph's own chevron (Lucide panel-left-close / -open); the switch wears the head row's door
+   size where it rides a head row, and a 24px hover pill around the same 14px glyph in the strip */
 .dock-toggle-strip { flex: 0 0 40px; width: 40px; align-self: stretch; border-radius: 0; }
 .dock-toggle-strip svg { padding: 5px; box-sizing: content-box; border-radius: var(--radius); }
 .dock-toggle-strip:hover, .dock-toggle-strip:focus-visible { color: var(--ink2); background: transparent; }

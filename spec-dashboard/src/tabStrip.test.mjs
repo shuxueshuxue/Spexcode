@@ -128,16 +128,16 @@ test('resident tabs and the activity rail share view-owned page icons', () => {
 })
 
 test('both dock switches speak the panel vocabulary, and each names the dock it owns', () => {
-  // Each switch draws the panel it OWNS and keeps drawing it: the sidebar switch's `panel-left`, the document's
-  // `panel-right`. The pair has no empty-frame member, so a state-flipping switch would have to draw the
-  // OTHER side's panel to say "closed" — a picture of the wrong region. State is `aria-pressed`.
-  assert.match(dockToggleSource, /<Icon name="panel-left" size=\{18\} \/>/)
+  // Each switch draws the frame of the panel it OWNS in both states — the sidebar switch the panel-left
+  // family, the document's the panel-right family — and says open/closed with the chevron inside that frame,
+  // never by drawing the OTHER side's panel. Both glyphs are Lucide's, at the head rows' 14px.
+  assert.match(dockToggleSource, /<Icon name=\{dock \? 'panel-left-close' : 'panel-left-open'\} size=\{14\} \/>/)
   assert.match(dockToggleSource, /aria-pressed=\{dock\}/)
-  assert.doesNotMatch(dockToggleSource, /name="panel-right"/)
+  assert.doesNotMatch(dockToggleSource, /panel-right-/)
   assert.doesNotMatch(sideBar, /<DockToggle|name="panel-left"/)   // the rail draws no switch of its own
   const contextToggle = shell.match(/function ContextToggle\([\s\S]*?\n}\n\nexport default function Shell/)
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
-  assert.match(contextToggle[0], /<Icon name="panel-right" size=\{14\} \/>/)
+  assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
 })

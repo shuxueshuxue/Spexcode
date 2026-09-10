@@ -63,11 +63,13 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   top row's far corner, dressed as a pill — the place an editor keeps the control that closes the panel you
   are looking at. While the sidebar is CLOSED there is no head row, so the switch is the tab strip's first
   cell ([[tab-layout]]): the rail's width wide and the band tall, standing at the panel's edge where the
-  panel would reappear. The rail itself carries no switch. It draws `panel-left` in BOTH states — it names
-  the dock it owns, exactly as the document's right-dock switch always draws `panel-right` — and says its
-  state the way editors do: the owned pane is FILLED while the sidebar is open and HOLLOW while it is
-  closed (`aria-pressed` carries the same boolean). A glyph that flipped to `panel-right` to say "closed"
-  drew a panel on the wrong side. The glyph is one size, 18px, at both mounts, and the head rows it rides
+  panel would reappear. The rail itself carries no switch. It always draws the LEFT panel's frame — it
+  names the dock it owns, exactly as the document's right-dock switch always draws the right panel's — and
+  says its state with the chevron inside that frame: Lucide's `panel-left-close` while the sidebar is open
+  (fold it in) and `panel-left-open` while it is closed (unfold it), with `aria-pressed` carrying the same
+  boolean. A glyph that flipped to the other side's panel to say "closed" drew the wrong region. The glyph
+  is Lucide's, at the head rows' own 14px and stroke, so it reads as one of the doors beside it rather than
+  a different font; it is one size at both mounts, and the head rows it rides
   are the band's own height (the explorer head, and the forest's top row, both `--line-top`), so the fold
   carries the switch across without it moving vertically or changing size. It changes only dock
   open/closed state, never the route, projection, tab list, or route light, and has no light of its own. Folding removes the dock panel and its head row, and the same

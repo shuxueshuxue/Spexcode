@@ -128,7 +128,8 @@ worktree state to inspect and continue with the immutable candidate tree.
   is an error; so is a `diagram.json` that is not JSON, since its boxes cannot be checked. Other diagram types
   are not checked: only an architecture diagram's boxes are nodes. Whether a diagram draws at all is archify's verdict, shown in its own slot.
 - **diagram-source** (error): every source a box cites is a `spec.md` in the tree or a file some node claims
-  in `code:` — the same two sets the graph already knows. A diagram has no staleness rule of its own: it
+  in `code:` — the same two sets the graph already knows. Both rules live in one function that
+  `spex diagram check` calls on a single node ([[diagram-cli]]), so an author's check and the gate never disagree. A diagram has no staleness rule of its own: it
   lives beside its node's spec and is revised with it.
 - **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole

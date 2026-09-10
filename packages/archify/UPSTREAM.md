@@ -53,6 +53,9 @@ benchmarks, experiments, docs, and the skill-update manifest.
   `migrate`, `doctor`, `help`.
 - `renderers/shared/generated-brand-marks.mjs`: the catalog is empty (`BRAND_MARKS = []`); the
   brand-marks API still answers, a component naming a `brand` simply gets no mark.
+- `renderers/architecture/render-architecture.mjs` and `renderers/sequence/render-sequence.mjs`: one unused import
+  each (`polylinePath`, `isFinitePoint`) removed, so the fork passes this repository's dead-binding lint;
+  `scripts/generate-validators.mjs` marks its output as generated for that lint (an eslint-disable banner).
 - `schemas/*.schema.json` + regenerated `renderers/shared/generated-validators.mjs`: one optional field,
   `meta.note` (string, ≤600 chars); and `common.schema.json`'s id pattern accepts one leading dot
   (`^\.?[a-zA-Z][a-zA-Z0-9_-]*$`), because a box id is a SpexCode node id and `.plugins` is one. The viewer

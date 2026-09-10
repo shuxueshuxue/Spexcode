@@ -776,6 +776,13 @@ if (cmd === 'serve') {
   // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
+} else if (cmd === 'diagram') {
+  if (process.argv[3] === undefined) {
+    console.log((await import('./help.js')).commandHelp('diagram'))
+  } else {
+    const { runDiagram } = await import('./diagram-cli.js')
+    await flushExit(await runDiagram(process.argv.slice(3)))
+  }
 } else if (cmd === 'evidence') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))

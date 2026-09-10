@@ -145,7 +145,7 @@ test('public session files CLI stores a live path and the backend authorizes onl
     const oversized = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(absolute)}&preview=1`)
     assert.deepEqual({ status: oversized.status, body: await oversized.json() }, {
       status: 413,
-      body: { error: `preview is limited to 2 MiB; download this ${SESSION_FILE_PREVIEW_MAX_BYTES + 1}-byte file instead` },
+      body: { error: `preview is limited to 16 MiB; download this ${SESSION_FILE_PREVIEW_MAX_BYTES + 1}-byte file instead` },
     })
 
     rmSync(artifact)

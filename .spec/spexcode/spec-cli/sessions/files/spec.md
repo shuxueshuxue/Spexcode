@@ -75,8 +75,10 @@ binaries, and unknown extensions have no preview and answer a named
 `415` directing the human to download them. That restricted set costs convenient PDF/SVG viewing, but keeps
 the preview contract explicit instead of relying on whatever renderer the browser happens to choose.
 
-Preview refuses a file larger than **2 MiB** with a named `413` that states the ceiling and actual size; it
-never truncates. The cap keeps a published multi-gigabyte artifact from becoming a browser allocation. The
+Preview refuses a file larger than **16 MiB** with a named `413` that states the ceiling and actual size; it
+never truncates. The cap keeps a published multi-gigabyte artifact from becoming a browser allocation, and it is
+set where it is because a review report is one self-contained HTML page with its screenshots inlined: a dozen
+real screenshots already weigh about 1.2 MB once base64-encoded, so a 2 MiB ceiling refused ordinary reports. The
 human may still download any posted file regardless of its previewability or size.
 
 ## dashboard handoff

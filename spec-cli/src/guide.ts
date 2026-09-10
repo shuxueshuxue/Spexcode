@@ -518,9 +518,9 @@ run \`spex session files ls\`: a target that disappeared or became unreadable is
 recreated or retracted; a valid path prints normally.
 
 The session page's top-right files icon is grey while the list is empty. Once live, it opens the posted list;
-choosing a path previews its current text or raster-image bytes in a pop-out, while the adjacent download tool
-downloads it through the backend at that moment. Previews are limited to 2 MiB, text and PNG/JPEG/GIF/WebP;
-other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
+choosing a path previews its current bytes in a tab beside the session, while the adjacent download tool
+downloads it through the backend at that moment. Previews are limited to 16 MiB: text, Markdown, HTML (rendered
+as a live page), and PNG/JPEG/GIF/WebP; other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
 marked invalid by the CLI; preview/download reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
 list.
 

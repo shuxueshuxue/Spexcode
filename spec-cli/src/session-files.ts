@@ -11,7 +11,7 @@ export class SessionFileError extends Error {
 
 type SessionFileLock = <T>(id: string, body: () => T) => T
 
-export const SESSION_FILE_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+export const SESSION_FILE_PREVIEW_MAX_BYTES = 16 * 1024 * 1024
 export type SessionFilePreviewKind = 'text' | 'image' | 'html'
 const HTML_EXTENSIONS = new Set(['.html', '.htm'])
 const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.json', '.yaml', '.yml', '.toml', '.ini', '.log', '.csv', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.css', '.xml', '.py', '.go', '.rs', '.java', '.sh', '.sql'])

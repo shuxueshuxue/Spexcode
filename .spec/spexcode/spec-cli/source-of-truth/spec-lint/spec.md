@@ -122,11 +122,11 @@ worktree state to inspect and continue with the immutable candidate tree.
   one place a `[[name]]` is resolved against the node universe at all. That makes the rule load-bearing
   rather than redundant: nothing else would notice a dangling reference. One finding per distinct dangling
   name — a name repeated in one body is still one broken edge.
-- **diagram-id** (error): a node's `diagram.architecture.json` draws its own children ([[diagram]]) — every
-  box's id is one of the node's DIRECT child ids, by one rule for every child (`.plugins` included), or
-  `others` for the small ones folded together. A grandchild, a stranger or an alias is an error; so is a file
-  that is not JSON, since its boxes cannot be checked. Only architecture diagrams are read: theirs are the
-  only boxes that are nodes. Whether a diagram draws at all is archify's verdict, shown in its own slot.
+- **diagram-id** (error): a node's `diagram.json` whose `diagram_type` is architecture draws its own children
+  ([[diagram]]) — every box's id is one of the node's DIRECT child ids, by one rule for every child
+  (`.plugins` included), or `others` for the small ones folded together. A grandchild, a stranger or an alias
+  is an error; so is a `diagram.json` that is not JSON, since its boxes cannot be checked. Other diagram types
+  are not checked: only an architecture diagram's boxes are nodes. Whether a diagram draws at all is archify's verdict, shown in its own slot.
 - **diagram-source** (error): every source a box cites is a `spec.md` in the tree or a file some node claims
   in `code:` — the same two sets the graph already knows. A diagram has no staleness rule of its own: it
   lives beside its node's spec and is revised with it.

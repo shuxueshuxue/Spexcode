@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { RELEASE_PACKAGES, assertReleaseCheckout, distTagFor, registryState, releasePlan, requireAbsentRegistry } from './release-publish.mjs'
+import { RELEASE_PACKAGES, assertReleaseCheckout, distTagFor, registryState, releasePlan, requireAbsentRegistry, bundleClosure } from './release-publish.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -102,4 +102,10 @@ test('a prerelease version publishes under next and a stable one under latest', 
   assert.equal(distTagFor('1.0.0-rc.1'), 'next')
   assert.equal(distTagFor('0.6.8'), 'latest')
   assert.equal(distTagFor('1.0.0'), 'latest')
+})
+
+test('the root bundle is the CLI and every release package it depends on, never the dashboard', () => {
+  const ids = bundleClosure(releasePlan().entries).map((entry) => entry.id)
+  assert.ok(ids.includes('cli') && ids.includes('core') && ids.includes('archify') && ids.includes('session-application'), ids.join(','))
+  assert.ok(!ids.includes('dashboard') && !ids.includes('transcript-ui') && !ids.includes('root'), ids.join(','))
 })

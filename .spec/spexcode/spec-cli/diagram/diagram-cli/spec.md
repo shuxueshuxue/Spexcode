@@ -28,7 +28,9 @@ plain grid every box fits in. The parts an author gets wrong by hand — which i
 the tree itself, and the file passes `check` as written; what remains is the drawing: placement, labels, edges,
 regions, cards, the note. Cited sources are evidence pinned to a commit of a public repository, so the scaffold
 pins `HEAD` and names the origin's GitHub or Gitee URL; on any other origin it writes no sources at all rather
-than evidence nothing can verify. For the other four kinds the tree implies no content, so it writes archify's
+than evidence nothing can verify. It cites only files that exist at the commit it pins: a node created a minute ago
+and not yet committed is still drawn, but uncited, and the receipt names what it left out and how to cite it
+later — otherwise the scaffold would fail its own check. For the other four kinds the tree implies no content, so it writes archify's
 own example of that kind under the node's title, to be rewritten. It never replaces an existing file without
 `--force`, and it refuses an architecture diagram for a node without children.
 

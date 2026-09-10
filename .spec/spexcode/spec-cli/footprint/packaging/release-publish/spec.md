@@ -39,6 +39,13 @@ install closure, but it is still a public installation entrypoint and belongs to
 follows core (its only runtime dependency) and precedes CLI, so when a new CLI first tells someone to install
 the dashboard package, that exact same-version repair is already resolvable from the registry.
 
+**The root is packed from a staging copy.** npm packs a bundled dependency only when it is a real directory, and
+in the workspace every `@spexcode` package is a symlink, so a root packed in place ships an empty bundle —
+0.7.0-next.17's root went out as four files that could not start `spex`. The release installs the CLI's
+release-internal closure, as real copies from this release's own tarballs, into a staging copy of the root and
+packs and publishes the root from there; no sibling is fetched back from the registry seconds after its publish.
+The rehearsal stages the root too and refuses a tarball that does not carry every package of that closure.
+
 `npm run release:check` is the local rehearsal: it validates the version/dependency graph, compiles the whole
 workspace closure once in dependency order (so a package that bundles a sibling's compiled entry at build time —
 the dashboard's `@spexcode/spec-cli/ranker` — resolves it in a fresh clone where that sibling is published later),

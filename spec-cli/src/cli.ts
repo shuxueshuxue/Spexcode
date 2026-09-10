@@ -1003,6 +1003,7 @@ if (cmd === 'serve') {
     } else if (verb === 'add') {
       const result = files.addSessionFile(id, path!, withSessionRecordLockSync)
       console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
+      console.log(`point at it as ${result.reference}`)
     } else if (verb === 'retract') {
       const result = files.retractSessionFile(id, path!, withSessionRecordLockSync)
       if (!result.removed) { console.error(`spex session files retract: path is not posted: ${result.path}`); process.exit(2) }

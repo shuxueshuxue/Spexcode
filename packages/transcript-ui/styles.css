@@ -40,7 +40,14 @@
 
 /* THE AGENT IS THE PAGE: full measure, no bubble, no tint. */
 .tx-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.tx-say-text { max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+.tx-say-text { position: relative; max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+/* the turn's copy control (the host's, `renderCopy`) sits in the text's bottom-right corner, where a paragraph's
+   last line is usually short — inside the text rather than under it, because under it is often the turn's first
+   tool call, whose chevron sits at the far right. It shows while the text is pointed at or holds focus, and takes
+   no pointer while hidden. Where nothing can point it is always there, so it drops to its own line instead. */
+.tx-copy { position: absolute; bottom: 0; right: 0; z-index: 1; display: flex; opacity: 0; pointer-events: none; transition: opacity var(--tx-dur-rise) ease; }
+.tx-say-text:hover > .tx-copy, .tx-copy:focus-within { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .tx-copy { position: static; justify-content: flex-end; margin-top: var(--tx-space-2); opacity: 1; pointer-events: auto; } }
 .tx-prose > p { margin: 0; }
 .tx-prose > p + p { margin-top: .75em; }
 

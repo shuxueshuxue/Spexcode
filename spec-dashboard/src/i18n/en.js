@@ -874,4 +874,18 @@ export default {
     sendFailed: 'not delivered — the agent may be offline',
     offlineHint: 'agent offline — messages cannot be delivered until it is relaunched',
   },
+
+  // the one copy control ([[copy-control]]): its name at rest, then the answer it gives on the button
+  clipboard: {
+    copyCode: 'copy code',
+    copyMessage: 'copy message',
+    copied: 'copied',
+    failed: 'copy failed',
+  },
+
+  // a `[[file:<name>]]` the session's posted list does not answer to exactly once ([[files]])
+  fileRef: {
+    missing: 'not among this session’s posted files',
+    ambiguous: ({ count }) => `matches ${count} posted files — name more of its path`,
+  },
 }

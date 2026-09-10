@@ -39,6 +39,9 @@ export type TranscriptUiOptions = Readonly<{
   // prose → elements. The default keeps the writer's line breaks and paragraphs and renders nothing else; a
   // host with a markdown pipeline passes it here and the same renderer serves every turn, quote and note.
   renderText: (text: string) => ReactNode
+  // a turn the agent said can be taken whole: the host supplies the control (its clipboard, its words), this
+  // package places it on the turn, handed the turn's authored text. Absent = the turn carries no control.
+  renderCopy: ((text: string) => ReactNode) | null
   // a live frame withholds output bodies; the host that knows the transport fetches one when a person opens
   // the call. Absent = every body is inline (a closed read) and a withheld one shows nothing to fetch with.
   loadToolOutput: ((toolId: string) => Promise<ToolOutputResult>) | null
@@ -66,6 +69,7 @@ export function PlainText({ text }: { text: string }) {
 
 export const defaultOptions: TranscriptUiOptions = {
   renderText: (text) => <PlainText text={text} />,
+  renderCopy: null,
   loadToolOutput: null,
   labels: defaultLabels,
   vocabulary: defaultVocabulary,

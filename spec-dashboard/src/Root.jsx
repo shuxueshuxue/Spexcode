@@ -5,6 +5,8 @@ import { DocumentActionProvider } from './documentActions.jsx'
 import { useT } from './i18n/index.jsx'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { BackendStatusFrame } from './BackendStatus.jsx'
+import { CodeCopyContext } from './clipboard.js'
+import { CodeCopy } from './CopyButton.jsx'
 
 const App = lazy(() => import('./App.jsx'))
 function RootContent() {
@@ -31,5 +33,5 @@ function RootContent() {
 }
 
 export default function Root() {
-  return <BackendStatusFrame><RootContent /></BackendStatusFrame>
+  return <BackendStatusFrame><CodeCopyContext.Provider value={CodeCopy}><RootContent /></CodeCopyContext.Provider></BackendStatusFrame>
 }

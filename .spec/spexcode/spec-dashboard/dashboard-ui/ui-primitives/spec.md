@@ -28,6 +28,8 @@ prose three ways. The pattern is the point: the second copy is where the defect 
 - [[resizable-panes]] — the one pane-resize mechanism: divider, clamp, persistence, and reset gesture.
 - [[transient-notices]] — the one short-lived result surface: a themed, dismissible stack with one default
   timeout instead of each page pinning an ad-hoc acknowledgement into its layout.
+- [[copy-control]] — the one copy control and clipboard seam: a code block or a message taken whole, as
+  authored, with the answer on the button pressed.
 
 What keeps this from becoming a junk drawer is a real admission test, applied twice. A node belongs here
 only when it is **owned by no single surface** — a widget only one page will ever mount belongs to that

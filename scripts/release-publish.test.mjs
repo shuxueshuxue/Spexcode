@@ -32,7 +32,7 @@ test('release producer keeps one complete ordered package set', () => {
   assert.equal(plan.version, JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version)
   assert.deepEqual(plan.entries.map((entry) => entry.id), [
     'transcript', 'transcript-ui', 'session-protocol', 'session-topology', 'session-runtime', 'session-events', 'session-application', 'session-selflaunch',
-    'core', 'dashboard', 'forge', 'cli', 'root',
+    'core', 'archify', 'dashboard', 'forge', 'cli', 'root',
   ])
   assert.equal(registryState(plan.entries, () => false), 'absent')
   assert.equal(registryState(plan.entries, () => true), 'complete')

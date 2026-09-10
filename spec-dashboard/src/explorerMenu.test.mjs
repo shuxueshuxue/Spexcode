@@ -12,10 +12,10 @@ const en = read('./i18n/en.js')
 const css = read('./styles.css')
 
 test('every explorer row declares its menu subject, and one seam reads them all', () => {
-  // the three spec-tree row kinds plus both disk-tree rows
+  // the spec tree's one row kind — a node is one row, its files are the disk tree's ([[file-tree]]) — plus
+  // both disk-tree rows
   assert.match(tree, /subject=\{\{ kind: 'node', id: node\.id \}\}/)
-  assert.match(tree, /subject=\{\{ kind: 'file', path: f \}\}/)
-  assert.match(tree, /subject=\{\{ kind: 'file', path: `\.spec\/\$\{node\.id\}\/\$\{f\.name\}` \}\}/)
+  assert.doesNotMatch(tree, /kind: 'file'/, 'the spec tree lists no file rows of its own')
   assert.match(disk, /data-menu-kind="dir" data-menu-path=\{entry\.path\}/)
   assert.match(disk, /data-menu-kind="file" data-menu-path=\{entry\.path\}/)
   // ONE handler pair on the shared body — no per-tree, per-row-kind menu wiring

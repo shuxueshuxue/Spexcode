@@ -39,13 +39,15 @@ try {
   await page.waitForURL(/#\/spec$/)
   await page.locator('.viewhost.view-spec .graphview').waitFor({ state: 'visible' })
   assert.equal(await page.locator('.filetree').count(), 1, 'Spec canvas keeps the Explorer dock')
-  assert.deepEqual((await page.locator('.ft-section-name').allTextContents()).map((text) => text.trim()), ['Specs', 'Files'])
+  assert.deepEqual((await page.locator('.ft-section-name').allTextContents()).map((text) => text.trim()), ['Spec tree', 'Files'])
   // Keep the already-booted board while opening the node, as a user click does; a full reload would
   // conflate the document transition with cold backend readiness.
   await page.evaluate(() => { location.hash = '#/spec/root' })
   await page.waitForURL(/#\/spec\/root/)
   await page.locator('.viewhost.view-spec .specview').waitFor({ state: 'visible' })
-  await page.locator('.ft-row.ft-node').first().click()
+  // the spec tree lists nodes only ([[file-tree]]); a governed file opens from the Files projection
+  await page.locator('.ft-row.ft-node .ft-label').first().click()
+  await page.locator('.ft-row.ft-dir').filter({ hasText: /^src$/ }).first().click()
   await page.locator('.ft-row.ft-code').first().click()
   await page.waitForURL(/#\/file\/src%2Fapp\.js|#\/file\/src\/app\.js/)
   await page.locator('.viewhost.view-file .cm-editor').waitFor({ state: 'visible' })

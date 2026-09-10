@@ -452,36 +452,41 @@ body.is-session-dragging .dock-archive-door:hover {
 }
 .ft-graph-entry:hover { color: var(--ink2); background: var(--wash-hover); }
 .ft-row {
-  display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 8px 2px 6px;
-  background: none; border: 0; cursor: pointer; text-align: left;
-  font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink);
+  display: flex; align-items: center; gap: 4px; width: 100%; padding: 2px 8px 2px 6px; border-radius: var(--radius);
+  font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--muted);
 }
-.ft-row:hover { background: var(--wash-hover); }
-.ft-row.on { background: var(--wash-selected); color: var(--ink2); }
+/* THE ROW'S VOICE IS ITS COLOUR, NOT A BULLET. Rows rest in the muted tone; the branch that holds the focused
+   node lifts to body ink so a reader sees the route they are on; the focused node itself carries the selected
+   wash and the one weight step the dock spends ([[file-tree]]). */
+.ft-row:hover { background: var(--wash-hover); color: var(--ink2); }
+.ft-row.path { color: var(--ink); }
+.ft-row.on { background: var(--wash-selected); color: var(--ink2); font-weight: var(--weight-semibold); }
 /* THE ONE DISCLOSURE MARK ([[icon-system]]'s Caret): a thin chevron, a quarter turn for open — the grammar
    Obsidian's explorer and outliner read in. Filled triangles read as bullets; a stroke chevron reads as a
    hinge. Every collapsible row in the product spends this one rule for the turn. */
 .caret { flex: none; color: var(--muted); transition: transform var(--dur-tab); }
 .caret.is-open { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .caret { transition: none; } }
-.ft-caret { flex: 0 0 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
-/* INDENT GUIDES: one hairline per ancestor level, dropped from the centre of the caret slot above, so a
-   nested branch reads as hanging from the row that discloses it — Obsidian's indentation guide, at the
-   same faint weight (`--edge`). Rows are flat siblings, so each draws its own segment; stacked with no
-   gap they join into one continuous line. The row's depth is the CSS variable its indent already uses. */
-.ft-row { position: relative; }
-.ft-row::before {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 12px; width: calc(var(--depth, 0) * 11px);
-  background: repeating-linear-gradient(to right, var(--edge) 0 1px, transparent 1px 11px); pointer-events: none;
+/* the hinge is its own hit target — pressing it opens the branch and never the document ([[file-tree]]) */
+.ft-caret {
+  flex: 0 0 14px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; background: none; border: 0; border-radius: var(--radius); color: var(--muted); cursor: pointer;
 }
-.ft-dot { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 2px; }
-.ft-dot.ft-none { background: none; }
-.ft-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* a governed file and an attachment keep the colours their chips use in the popup, so the same thing looks
-   the same wherever it is listed. */
-.ft-code .ft-label { color: var(--blue); }
-.ft-dir .ft-label { color: var(--ink); }
-.ft-code, .ft-dir { text-decoration: none; }
+.ft-caret:hover { color: var(--ink2); background: var(--wash-hover); }
+.ft-caret-none { cursor: default; }
+/* the address is the label: a button wearing the row's text, no chrome of its own */
+.ft-label {
+  flex: 1; min-width: 0; padding: 0; background: none; border: 0; text-align: left; cursor: pointer;
+  font: inherit; color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* the one mark a node may wear: worked-on now (active hue) or drifted (drift hue). Settled rows wear nothing. */
+.ft-mark { flex: 0 0 5px; width: 5px; height: 5px; border-radius: 50%; margin-right: 2px; }
+.ft-mark-active { background: var(--orange); }
+.ft-mark-drift { background: var(--yellow); }
+/* the disk projection's rows: a directory only discloses (whole row is the hinge), a file is an anchor */
+.ft-dir { cursor: pointer; background: none; border: 0; text-align: left; }
+.ft-code .ft-label, .ft-code { color: var(--blue); text-decoration: none; }
+.ft-code:hover { color: var(--ink2); }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
 /* THE SEAM IS ALSO A GRIP, and it says so the way the split's own resizer already does. These two hid a 6px
    grab strip with no feedback at all while [[resizable-panes]]'s divider lit under the pointer — two
@@ -498,9 +503,14 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
 /* the explorer's two projections ([[file-tree]], [[disk-tree]]) share the session list's zone grammar. Their
    static heads carry a count pod, label, and trailing hairline; only rows inside them disclose folders. */
 .ft-section + .ft-section { margin-top: var(--space-2); }
+/* A SECTION HEAD IS A QUIET LABEL, not a badge: sentence-case name in the section's hue, then its tally in
+   tabular figures a step quieter, then the zone grammar's trailing hairline. The bordered count pod read as
+   chrome around a list that is already short, so the count is bare text ([[file-tree]]). */
 .ft-section-head {
-  width: 100%;
+  width: 100%; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-1) 10px;
+  font-size: var(--type-caption); font-weight: var(--weight-semibold);
 }
+.ft-section-head .si-zone-count { border: 0; padding: 0; opacity: .7; font-weight: var(--weight-regular); font-variant-numeric: tabular-nums; }
 .si-zone-specs { --zh: var(--blue); }
 .si-zone-files { --zh: var(--muted); }
 .ft-note { padding: 3px 8px 3px 6px; color: var(--muted); font-size: var(--type-caption); }

@@ -51,9 +51,10 @@ export default {
   fileView: { none: 'no file selected' },
   fileTree: {
     aria: 'project file tree',
-    specs: 'Specs',
+    specs: 'Spec tree',
     files: 'Files',
     graph: 'Spec graph',
+    disclose: ({ name }) => `show what is inside ${name}`,
   },
   diskTree: {
     loading: 'loading…',

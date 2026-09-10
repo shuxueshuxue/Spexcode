@@ -50,9 +50,10 @@ export default {
   fileView: { none: '未选择文件' },
   fileTree: {
     aria: '项目文件树',
-    specs: '规格',
+    specs: '规格树',
     files: '文件',
     graph: '规格图谱',
+    disclose: ({ name }) => `展开 ${name}`,
     collapseAll: '收起所有规格文件夹',
   },
   diskTree: {

@@ -53,6 +53,10 @@ test('the strip is one clipping row, and the tab list is the way back to what th
   assert.match(source, /useEscLayer\(!!menu \|\| !!listMenu/)
 })
 
+test('the active card carries two shoulders that curve it into the pane', () => {
+  assert.match(source, /\{active && <><i className="tab-shoulder tab-shoulder-l" aria-hidden="true" \/><i className="tab-shoulder tab-shoulder-r" aria-hidden="true" \/><\/>\}/)
+})
+
 test('closing tabs retain their original visual slot while the live list updates', () => {
   assert.match(source, /renderedTabs\.splice\(Math\.max\(0, Math\.min\(entry\.index, renderedTabs\.length\)\)/)
 })

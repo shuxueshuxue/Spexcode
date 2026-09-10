@@ -304,6 +304,10 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
                 <Icon name="x" size={11} />
               </button>
             </div>
+            {/* the active card's SHOULDERS: two 8px quarter-circles outside its lower corners, filled with the
+                page's paper, so the card's sides curve outward into the band's baseline instead of meeting it
+                at a right angle — the way an editor's live tab flows into its pane. */}
+            {active && <><i className="tab-shoulder tab-shoulder-l" aria-hidden="true" /><i className="tab-shoulder tab-shoulder-r" aria-hidden="true" /></>}
           </div>
         )
       })}

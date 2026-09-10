@@ -40,6 +40,7 @@ import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
 import TabStrip from './TabStrip.jsx'
+import DockToggle from './DockToggle.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
 import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -1237,6 +1238,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       />}
       <div className="si-document">
         {route && <TabStrip specs={specs} sessions={sessions} route={route}
+          leading={!forestOpen ? <DockToggle variant="strip" /> : null}
           onSessionContextMenu={(next) => { setResourceMenu(false); setCtxMenu(next) }} />}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen

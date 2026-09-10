@@ -12,6 +12,7 @@ const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', impor
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
 const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
+const dockToggleSource = readFileSync(new URL('./DockToggle.jsx', import.meta.url), 'utf8')
 const fileTree = readFileSync(new URL('./FileTree.jsx', import.meta.url), 'utf8')
 const forest = readFileSync(new URL('./SessionForestPanel.jsx', import.meta.url), 'utf8')
 const sessionsView = readFileSync(new URL('./SessionsView.jsx', import.meta.url), 'utf8')
@@ -41,10 +42,15 @@ test('ordinary navigation names the focused tab so an inactive tab cannot be rep
   assert.match(tabs, /placeTab\(getTabs\(\), route, mode, priorKey\)/)
 })
 
-test('the strip enters shrink-wrap mode only when its minimums exceed the row', () => {
+test('the strip is one clipping row, and the tab list is the way back to what the row cannot show', () => {
+  assert.doesNotMatch(source, /wrapped|TAB_WRAP_FLOOR/)
   assert.match(source, /new ResizeObserver\(update\)/)
-  assert.match(source, /tabs\.length \* TAB_WRAP_FLOOR > host\.clientWidth/)
-  assert.match(source, /tabstrip-tabs\$\{wrapped \? ' wrapped' : ''\}/)
+  assert.match(source, /host\.scrollWidth > host\.clientWidth \+ 1/)
+  assert.match(source, /querySelector\('\.tab\.on'\)[\s\S]{0,40}scrollIntoView/)
+  assert.match(source, /className=\{`document-action-button tab-list-button\$\{clipped \? ' clipped' : ''\}/)
+  assert.match(source, /aria-haspopup="menu" aria-expanded=\{!!listMenu\}/)
+  assert.match(source, /\{tabs\.map\(\(tab\) => \{[\s\S]{0,700}setListMenu\(null\); open\(tab\)/)
+  assert.match(source, /useEscLayer\(!!menu \|\| !!listMenu/)
 })
 
 test('closing tabs retain their original visual slot while the live list updates', () => {
@@ -101,7 +107,7 @@ test('resident issue tabs share the workspace strip and keep the activity rail',
   // but the rail — the top-level board switch — never disappears.
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(sideBar, /<Icon name=\{iconFor\(page\) \|\| page\} size=\{18\} \/>/)
-  assert.match(shell, /<SideBar page=\{page\} graphOnly=\{graphOnly\} needsYou=\{needsYou\} hideDockToggle=\{!foldable\} \/>/)
+  assert.match(shell, /<SideBar page=\{page\} graphOnly=\{graphOnly\} needsYou=\{needsYou\} \/>/)
   assert.doesNotMatch(shell, /page !== 'issues' && <SideBar/)
   assert.match(shell, /if \(page === 'issues'\) return 'none'/)
 })
@@ -119,15 +125,16 @@ test('resident tabs and the activity rail share view-owned page icons', () => {
   assert.match(source, /const icon = isResident\(tab\.page\) \? iconFor\(tab\.page\) : null/)
   assert.match(source, /<TabKindIcon tab=\{tab\} \/>[\s\S]{0,100}<TabDot tab=\{tab\}/)
   assert.match(css, /\.tab-kind-icon\s*\{[^}]*flex:\s*0 0 13px;/s)
-  assert.match(css, /@container \(max-width:\s*100px\)\s*\{[^}]*\.tab-kind-icon, \.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
 })
 
 test('both dock switches speak the panel vocabulary, and each names the dock it owns', () => {
-  // The rail owns the LEFT dock and flips the mirrored pair as that dock's layout state. The document
-  // control owns the RIGHT dock and holds `panel-right` fixed: the pair has no empty-frame member, so a
-  // flipping right-dock switch would draw `panel-left` — a panel on the wrong side — to say "closed".
-  // Its state is `aria-pressed` plus the `.on` tint, never a glyph that pictures the other region.
-  assert.match(sideBar, /<Icon name=\{dock \? 'panel-left' : 'panel-right'\} size=\{18\} \/>/)
+  // Each switch draws the panel it OWNS and keeps drawing it: the sidebar switch's `panel-left`, the document's
+  // `panel-right`. The pair has no empty-frame member, so a state-flipping switch would have to draw the
+  // OTHER side's panel to say "closed" — a picture of the wrong region. State is `aria-pressed`.
+  assert.match(dockToggleSource, /<Icon name="panel-left" size=\{variant === 'strip' \? 18 : 15\} \/>/)
+  assert.match(dockToggleSource, /aria-pressed=\{dock\}/)
+  assert.doesNotMatch(dockToggleSource, /name="panel-right"/)
+  assert.doesNotMatch(sideBar, /<DockToggle|name="panel-left"/)   // the rail draws no switch of its own
   const contextToggle = shell.match(/function ContextToggle\([\s\S]*?\n}\n\nexport default function Shell/)
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
   assert.match(contextToggle[0], /<Icon name="panel-right" size=\{14\} \/>/)

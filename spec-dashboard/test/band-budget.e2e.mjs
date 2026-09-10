@@ -222,11 +222,12 @@ const secondSpec = specs.find((n) => n.id !== SPEC_ID && (n.code || []).length)?
 const session = sessionList.find((s) => !s.archived && s.liveness === 'online') || sessionList.find((s) => !s.archived)
 if (!session) throw new Error('no session on the board — cannot address #/sessions/<id>')
 
-// Resident board/spec tabs are intentionally deduplicated by the tab model. Use real session objects for
-// the pressure set so this gate actually exercises a multi-row strip instead of merely asserting one.
-const WRAP_TABS = sessionList.filter((s) => s?.id).slice(0, 16)
-  .map((s) => ({ page: 'sessions', param: s.id, query: null, pinned: true }))
-if (WRAP_TABS.length < 12) throw new Error('need twelve session objects to fill the strip past one row')
+// Resident board/spec tabs are intentionally deduplicated by the tab model. Use real governed-file
+// addresses for the pressure set — one tab per path, discovered from the board — so this gate actually
+// pushes the strip past what one row can show instead of merely asserting one row.
+const DEEP_TABS = [...new Set(specs.flatMap((n) => n.code || []))].slice(0, 16)
+  .map((path) => ({ page: 'file', param: path, query: null }))
+if (DEEP_TABS.length < 12) throw new Error('need twelve governed files to fill the strip past one row')
 const SESSION_ID = session.id
 
 const encodeParam = (param) => String(param).split('/').map(encodeURIComponent).join('/')
@@ -280,19 +281,20 @@ const seed = async (state) => {
     const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch { /* private mode */ } }
     set('spexcode.lang', 'en')          // aria labels and band classes must not shift with the locale
     set('spexcode.theme', 'minimal')
-    set('spexcode.tabs.root', JSON.stringify(wrapTabs))   // a strip deep enough to WRAP, rewritten per state so nothing carries over
+    set('spexcode.tabs.root', JSON.stringify(wrapTabs))   // a strip deep enough to CLIP, rewritten per state so nothing carries over
     set('spexcode.dock', s.D === 'closed' ? '0' : '1')
     set('spexcode.dockMode', s.D === 'sessions' ? 'sessions' : 'explorer')
     set('spexcode.ctxOpen', s.C === 'open' ? '1' : '0')
     set('spexcode.split', s.S === 'open' ? JSON.stringify(splitParam) : null)
     set('spexcode.statusHidden', '[]')
     set(`spexcode.session-surface.v1.root`, JSON.stringify({ defaultSurface: s.U, sessions: { [sessionId]: s.U } }))
-  }, { s: state, sessionId: SESSION_ID, wrapTabs: WRAP_TABS, splitParam: { page: 'spec', param: secondSpec, query: null } })
+  }, { s: state, sessionId: SESSION_ID, wrapTabs: DEEP_TABS, splitParam: { page: 'spec', param: secondSpec, query: null } })
 }
 
-// How many ROWS the strip wrapped to, read off the tabs' own tops. It rides beside the band count in
-// every state's report: the model says a strip on three rows is still one band, and a number nobody
-// prints is a claim nobody checks.
+// How many ROWS the strip occupies, read off the tabs' own tops. The strip is ONE clipping row: a deep
+// working set shrinks the tabs and then clips them behind the tab list ([[tab-strip]]); a second row of
+// tabs would be a band the model never granted. It rides beside the band count in every state's report,
+// because a number nobody prints is a claim nobody checks.
 const stripRows = () => document.querySelectorAll('.tab').length
   ? new Set([...document.querySelectorAll('.tab')].map((t) => Math.round(t.getBoundingClientRect().top))).size
   : 0
@@ -334,7 +336,7 @@ for (const state of traversal()) {
   const rows = await page.evaluate(stripRows)
   const predicted = B(state)
   const measured = bands.length
-  const ok = measured === predicted
+  const ok = measured === predicted && rows <= 1
   results.push({ state, predicted, measured, bands, rows, ok })
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${stateName(state).padEnd(44)} predicted ${predicted}  measured ${measured}  strip rows ${rows}${ok ? '' : `  EXCESS ${measured - predicted}`}`)
   console.log(`      ${bands.map((b) => `${b.cls.split(/\s+/)[0]}(${b.w}x${b.h})`).join('  ')}`)
@@ -361,15 +363,15 @@ for (const f of failures) for (const b of f.bands) {
 console.log('\n=== bands seen in breaching states ===')
 for (const [cls, n] of [...offenders].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(3)}  ${cls}`)
 
-// A WRAPPED STRIP IS STILL ONE BAND. Routes with a multi-object working set exercise this directly; board
-// routes intentionally retain only their resident board tab, so their single-row state is reported but is
-// not treated as a failure. A row becoming a band of its own would still raise the measured count above B.
-const flat = results.filter((r) => r.rows < 2)
-console.log('\n=== the tab strip, wrapped ===')
-console.log(`rows measured: ${[...new Set(results.map((r) => r.rows))].sort().join(', ')} — one band at every one of them`)
-if (flat.length) {
-  console.log(`  ${flat.length} state(s) did NOT wrap, so "one band however many rows" went unexercised there:`)
-  for (const r of flat) console.log(`    ${stateName(r.state)}`)
+// THE STRIP IS ONE ROW AT ANY DEPTH. Every state is entered with a working set deeper than the row can show,
+// and the strip must still lay it out on a single line — clipped, with the tab list as the way back — so a
+// state whose tabs sit at two different tops has grown a band the model never granted and FAILS above.
+const tall = results.filter((r) => r.rows > 1)
+console.log('\n=== the tab strip, one row ===')
+console.log(`rows measured: ${[...new Set(results.map((r) => r.rows))].sort().join(', ')} — a deep working set never thickened the band`)
+if (tall.length) {
+  console.log(`  ${tall.length} state(s) laid tabs on more than one row:`)
+  for (const r of tall) console.log(`    ${stateName(r.state)}  rows ${r.rows}`)
 }
 
 const theoremHolds = all.every((s) => B(s) >= 2 && B(s) <= 5)

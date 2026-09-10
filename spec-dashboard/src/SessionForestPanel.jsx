@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import DockToggle from './DockToggle.jsx'
 import { apiFetch } from './data.js'
 import { Icon } from './icons.jsx'
 import { SessionConsoleTreeRow, SessionZone } from './SessionWindow.jsx'
@@ -173,6 +174,8 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
           <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} data-tip={t('session.searchTitle')} onClick={onSearch}>
             <span className="si-pill-glyph"><Icon name="search" size={14} /></span>
           </button>
+          {/* the forest folds from the same switch the explorer does, in the same corner of its own head row */}
+          <DockToggle className="si-pill" />
         </div>
       )}
       <div className="si-session-scroll" data-session-scroll>

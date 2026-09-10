@@ -1,5 +1,6 @@
 import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SideBar from './SideBar.jsx'
+import DockToggle from './DockToggle.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
@@ -631,7 +632,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       <div className="app">
         <TooltipLayer />
         {helpOpen && <Legend onClose={closeHelp} />}
-        <SideBar page={page} graphOnly={graphOnly} needsYou={needsYou} hideDockToggle={!foldable} />
+        <SideBar page={page} graphOnly={graphOnly} needsYou={needsYou} />
         {dockMounted && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
             <Dock closing={closingDock} folding={foldingDock} mode={dockProjection} specs={specs} sessions={sessions}
@@ -644,7 +645,10 @@ export default function Shell({ routeOverride = null, inactive = false }) {
               {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
                   without an open document, which is one band wearing two names. The context toggle is a control
                   on the current document, so it rides the strip's own trailing cluster. */}
+              {/* the fold switch stands at the strip's left edge only while the sidebar it folds is closed;
+                  open, it rides that sidebar's own head row (DockToggle). A route with no sidebar has no switch. */}
               {page !== 'sessions' && <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
+                leading={foldable && !dock ? <DockToggle variant="strip" /> : null}
                 trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />}
               <Content page={page} param={param} query={query} inactive={inactive} />
             </div>

@@ -75,12 +75,17 @@ test('sessions document owns the only forest and rail labels resolve through i18
 test('the rail panel control folds the Sessions forest and is absent only where no sidebar exists', () => {
   const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
   const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
-  // Sessions mounts no shell dock, yet its document draws its own forest sidebar — so the control stays
-  // mounted there and folds that forest through the one workspace open/closed boolean. Bare review and
-  // settings boards have neither sidebar, and only they lose the control.
+  // Sessions mounts no shell dock, yet its document draws its own forest sidebar — so the fold switch is
+  // mounted there too and folds that forest through the one workspace open/closed boolean. The switch moves
+  // with the fold: the sidebar's own head row while open, the strip's first cell while closed. Bare review
+  // and settings boards have neither sidebar, and only they have no switch at all.
   assert.match(shell, /const foldable = dockKind !== 'none' \|\| page === 'sessions'/)
-  assert.match(shell, /hideDockToggle=\{!foldable\}/)
-  assert.doesNotMatch(shell, /hideDockToggle=\{page === 'sessions'\}/)
+  assert.match(shell, /leading=\{foldable && !dock \? <DockToggle variant="strip" \/> : null\}/)
+  assert.match(sessionInterface, /leading=\{!forestOpen \? <DockToggle variant="strip" \/> : null\}/)
+  const dockSrc = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const forest = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
+  assert.match(dockSrc, /<DockToggle className="dock-head-act" \/>\n\s*<\/span>/)
+  assert.match(forest, /<DockToggle className="si-pill" \/>\n\s*<\/div>/)
   assert.match(sessionInterface, /const \{ dock: forestOpen \} = useWorkspace\(\)/)
   // it is still ONE boolean; the forest just folds on it through the shared fold, so the mount outlives
   // the flag by one panel duration instead of blinking out ([[dock-modes]]).

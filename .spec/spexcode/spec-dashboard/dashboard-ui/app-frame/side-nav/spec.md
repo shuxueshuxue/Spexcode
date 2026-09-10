@@ -2,7 +2,7 @@
 title: side-nav
 status: active
 hue: 210
-desc: The modern-app skeleton — one route-lit icon rail plus a dedicated dock open/close switch.
+desc: The modern-app skeleton — one route-lit icon rail, plus the dock fold switch that moves with the fold.
 code:
   - spec-dashboard/src/SideBar.jsx#SideBar
   - spec-dashboard/src/SideBar.jsx#ENTRIES
@@ -12,6 +12,9 @@ related:
   - spec-dashboard/src/subtractive-boundaries.test.mjs
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/Dock.jsx
+  - spec-dashboard/src/DockToggle.jsx
+  - spec-dashboard/src/SessionForestPanel.jsx
+  - spec-dashboard/src/TabStrip.jsx
 ---
 
 # side-nav
@@ -54,12 +57,20 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
   remaining width; review detail addresses remain on that surface and never acquire the dock. Because review addresses are not
   tabs, the rail remembers the last issues address and returns to it when the matching rail entry is
   pressed after leaving the surface.
-- **Dock folding has one owner.** The rail's top control is a dedicated, permanently mounted mirrored panel
-  button: `panel-left` while open and `panel-right` while closed, with `aria-pressed` reporting the same
-  boolean. It changes only dock open/closed state, never the route, projection, tab list, or route light. It
-  is a smaller 14px muted control with a restrained separator and spacing from the navigation group, so it
-  reads as frame chrome rather than an independent tab. The dock header has no collapse control. Folding
-  removes only the dock panel; the same rail DOM control remains at the same position and reopens it immediately.
+- **Dock folding has one owner, and the switch moves with the fold.** One control (`DockToggle`) owns the
+  open/closed boolean and stands where the fold is: while the sidebar is OPEN it is the last door of that
+  sidebar's own head row — the explorer head's far corner, dressed as a head door; the Sessions forest's
+  top row's far corner, dressed as a pill — the place an editor keeps the control that closes the panel you
+  are looking at. While the sidebar is CLOSED there is no head row, so the switch is the tab strip's first
+  cell ([[tab-layout]]): the rail's width wide and the band tall, an 18px glyph under a 28px hover pill,
+  standing at the panel's edge where the panel would reappear. The rail itself carries no switch. It draws
+  `panel-left` in BOTH states — it names the dock it owns, exactly as the document's right-dock switch
+  always draws `panel-right` — with `aria-pressed` reporting open/closed; a glyph that flipped to
+  `panel-right` to say "closed" drew a panel on the wrong side, and the owned pane is drawn solid so the
+  glyph reads at 15px. It changes only dock open/closed state, never the route, projection, tab list, or
+  route light, and has no light of its own. Folding removes the dock panel and its head row, and the same
+  control reappears at the strip's edge in the same instant, so the reader's pointer has one short move
+  to reopen it.
   The control is mounted wherever a sidebar exists to fold: the shell's dock, or the Sessions document's own
   forest ([[session-console]]), which follows the same open/closed boolean so Spec and Sessions fold from one
   control. Bare review and settings boards omit it because they have neither sidebar.

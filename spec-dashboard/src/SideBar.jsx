@@ -4,10 +4,11 @@ import { Icon } from './icons.jsx'
 import { PUBLIC_PAGES, RAIL_PAGES, navigate, routeHash } from './route.js'
 import { focusLatestTab } from './tabs.js'
 import { withShortcut } from './bindings.js'
-import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { useWorkspaceApi } from './workspace.jsx'
 import { iconFor } from './viewCatalog.js'
 
-// The workspace's rail ([[side-nav]]) — a top-level board bar plus the dock visibility control. Board
+// The workspace's rail ([[side-nav]]) — the top-level board bar. The dock's fold switch is not here: it rides
+// the sidebar's own head row while open and the tab strip's first cell while closed (DockToggle). Board
 // entries are navigation only: their plain click changes the route and never creates a strip tab.
 // Glyphs come from the shared icon vocabulary ([[icon-system]], icons.jsx); labels live in tooltips/aria —
 // the rail stays slim.
@@ -22,23 +23,6 @@ const railHref = (page) => routeHash(page)
 // Which registry action reaches each rail entry. The rail is a READER of the keymap ([[keyboard-nav]]),
 // so an entry names the binding by id and the hint is resolved at render — never typed into the label.
 const PAGE_KEYS = {}
-
-// The dock's one rail control owns only open/closed state. Projection choice belongs to the route link
-// that led there; it never gets the route's active styling and never navigates by itself. It is deliberately
-// a smaller, muted control separated from the route group, so it reads as frame chrome rather than a sixth tab.
-function DockToggle() {
-  const t = useT()
-  const { dock } = useWorkspace()
-  const { setDock } = useWorkspaceApi()
-  if (!setDock) return null
-  const label = t(dock ? 'dockModes.collapse' : 'dockModes.expand')
-  return (
-    <button type="button" className="rail-btn rail-panel-toggle" data-tip={label} aria-label={label}
-      aria-pressed={dock} onClick={() => setDock((value) => !value)}>
-      <Icon name={dock ? 'panel-left' : 'panel-right'} size={18} />
-    </button>
-  )
-}
 
 function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0 }) {
   if (disabled) return (
@@ -72,7 +56,7 @@ function RailLink({ page, active, label, disabled = false, onNavigate, badge = 0
   )
 }
 
-export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDockToggle = false }) {
+export default function SideBar({ page, graphOnly = false, needsYou = 0 }) {
   const t = useT()
   const { setDock, setDockMode } = useWorkspaceApi()
   const entries = ENTRIES
@@ -80,7 +64,6 @@ export default function SideBar({ page, graphOnly = false, needsYou = 0, hideDoc
     // the rail is inert chrome for pointer focus ([[focus-return]]): a press navigates without taking DOM
     // focus, so chrome never becomes the focus-return ticket. Keyboard Tab still reaches every entry.
     <nav className="side-rail" aria-label={t('nav.railLabel')} onMouseDownCapture={inertChromePress}>
-      {!hideDockToggle && <DockToggle />}
       {entries.map((p) => (
         <RailLink key={p} page={p} active={page === p || (p === 'spec' && page === 'file')}
           label={withShortcut(t(`nav.${p}`), ...(PAGE_KEYS[p] || []))}

@@ -48,14 +48,19 @@ test('new renderer dependencies carry an explicit no-predecessor exemption', () 
 test('the CLI spec carries the subtraction rule and owns its no-predecessor exceptions', () => {
   assert.match(specCliSpec, /## Dependency arrival and subtraction/)
   assert.match(specCliSpec, /No package predecessor/)
-  // The rule, not a per-commit ledger: git answers when an edge arrived, the body answers what justifies it.
-  assert.ok(!/^\| `[0-9a-f]{7,}`/m.test(specCliSpec), 'the CLI spec body grew a commit ledger again')
   for (const edge of ['@spexcode/spec-core', '@spexcode/spec-forge', '@spexcode/session-application', '@spexcode/session-selflaunch', '@spexcode/transcript'])
     assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits its declared edge ${edge}`)
   for (const edge of ['@hono/node-ws', 'node-pty', '@spexcode/archify'])
     assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits no-predecessor exception ${edge}`)
   assert.match(specCliSpec, /\[\[archify\]\]/, 'the archify exception lost its owner node')
   assert.match(specCliSpec, /packages\/archify\/test\/library\.test\.mjs/, 'the archify exception lost its boundary check')
+})
+
+// The rule, not a per-commit ledger: git answers when an edge arrived, the body answers what justifies it.
+// A dependency history written as a table slips past lint's living rule, which only knows "## vN" headings.
+test('no dependency spec body carries a per-commit ledger', () => {
+  for (const [name, body] of [['spec-cli', specCliSpec], ['spec-dashboard', dashboardSpec]])
+    assert.ok(!/^\| `?[0-9a-f]{7,40}`?[ )]/m.test(body), `${name}'s body grew a commit ledger again`)
 })
 
 test('optional desktop runtime is outside root workspaces', () => {

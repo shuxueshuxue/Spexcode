@@ -870,4 +870,9 @@ export default {
     copied: '已复制',
     failed: '复制失败',
   },
+
+  fileRef: {
+    missing: '这个 session 没有登记这个文件',
+    ambiguous: ({ count }) => `匹配到 ${count} 个已登记的文件——多写一段路径`,
+  },
 }

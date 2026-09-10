@@ -270,6 +270,13 @@ above, and its press neither takes the composer's focus nor retires a painted se
 rests out of sight and comes up with the row under the pointer or keyboard focus, and it never adds to a row's
 height; on a touch screen it is simply there.
 
+**A POSTED FILE IS ONE CLICK AWAY.** A `[[file:<name>]]` anywhere in this conversation's prose — a note, a quoted
+message, an agent turn in a seam or the live tail — resolves against this session's own posted list ([[files]])
+and opens that file's resource tab, the one the files menu opens; on the phone, which has no resource tabs, it
+opens the file's preview page. A name the list does not answer to exactly once stays dotted and opens nothing. The
+conversation is what supplies the list to its prose, and it hands the same list on until the list itself changes,
+so a board push re-renders no reference.
+
 **This footer sends to its own session and nowhere else, and the `@` in a draft does not change that.** An
 `@` naming an existing session is a passive reference ([[mentions]]) — text, not a route; delivering to
 another running session stays the explicit `spex session send`, and handing a passage to one is

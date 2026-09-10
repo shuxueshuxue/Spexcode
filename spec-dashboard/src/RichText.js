@@ -6,7 +6,7 @@ import Prose from './Prose.js'
 // It supplies default semantic handlers and nothing else: `softBreak` passes straight through, because its
 // two consumers disagree — a timeline message keeps the newlines its writer typed, a previewed .md file is
 // a document whose authoring wraps reflow. Only the surface knows which it is holding.
-export default function RichText({ children, className = '', softBreak, renderSpecRef, renderEvidence, renderTimeAnchor }) {
+export default function RichText({ children, className = '', softBreak, renderSpecRef, renderEvidence, renderTimeAnchor, renderFileRef }) {
   const specRef = renderSpecRef || ((id, token, provenance) => {
     return createElement('span', { className: 'doc-ref', 'data-spec-id': id, ...provenance }, id)
   })
@@ -19,6 +19,7 @@ export default function RichText({ children, className = '', softBreak, renderSp
     renderSpecRef: specRef,
     renderEvidence: evidence,
     renderTimeAnchor,
+    renderFileRef,
   }, children)
 }
 

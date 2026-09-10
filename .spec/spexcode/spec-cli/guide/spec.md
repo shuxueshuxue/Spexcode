@@ -74,7 +74,8 @@ the agent from one verb, picked by an optional topic:
   (any-order switching, `spex uninstall` as the empty policy).
 - **`files` → the agent-to-human PATH handoff.** The three `session files` verbs, the live and host-local
   meaning of a posted absolute path, add-time readable-file check, list-time invalid marker, the default
-  persistent evidence location outside the product repository, and the dashboard's click-time preview/download. It states the safe
+  persistent evidence location outside the product repository, how prose points at a posted file (`[[file:<name>]]`,
+  printed by `add`), and the dashboard's click-time preview/download. It states the safe
   preview types and 16 MiB refusal ceiling rather than implying every file can render, and distinguishes this
   from [[file-attach]] so an agent does not upload an artifact merely to hand it back.
 - **`web` → the agent-to-human LOOPBACK handoff.** The three `session web` verbs, their explicit-port

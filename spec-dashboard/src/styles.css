@@ -1288,6 +1288,10 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* an agent turn that opens on a code block: the turn's control steps left of the block's, never onto it */
 .tx-say-text:has(> .rich-text > .doc-code:first-child) > .tx-copy { top: 6px; right: 34px; }
 .doc-link { color: var(--blue); }
+/* a posted file named in prose (`[[file:<name>]]`, [[files]]): a link wearing the posted-file glyph; a name the
+   session's list does not answer to exactly once stays dotted and opens nothing */
+.doc-file-ref > svg { display: inline-block; vertical-align: -2px; margin-right: 3px; }
+.doc-file-ref.is-unresolved { color: var(--muted); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
 .doc-external { text-decoration: underline; text-underline-offset: 2px; }
 .doc-quote { margin: 0 0 10px; padding: 4px 12px; color: var(--muted); border-left: 2px solid var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .doc-quote p { margin: 0; }

@@ -882,4 +882,10 @@ export default {
     copied: 'copied',
     failed: 'copy failed',
   },
+
+  // a `[[file:<name>]]` the session's posted list does not answer to exactly once ([[files]])
+  fileRef: {
+    missing: 'not among this session’s posted files',
+    ambiguous: ({ count }) => `matches ${count} posted files — name more of its path`,
+  },
 }

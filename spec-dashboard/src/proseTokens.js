@@ -116,6 +116,21 @@ const semanticPlugin = (md) => {
     return true
   })
 
+  // runs ahead of the node reference, which would otherwise read `file:<name>` as a node id
+  md.inline.ruler.before('prose_spec_ref', 'prose_file_ref', (state, silent) => {
+    if (!state.src.startsWith('[[file:', state.pos)) return false
+    const end = state.src.indexOf(']]', state.pos + 7)
+    const name = end < 0 ? '' : state.src.slice(state.pos + 7, end)
+    if (!name.trim() || name.includes('\n')) return false
+    if (!silent) {
+      const token = state.push('prose_file_ref', 'a', 0)
+      token.content = name.trim()
+      token.meta = { name: name.trim() }
+    }
+    state.pos = end + 2
+    return true
+  })
+
   md.block.ruler.before('paragraph', 'prose_time_anchor', (state, startLine, endLine, silent) => {
     const start = state.bMarks[startLine] + state.tShift[startLine]
     const end = state.eMarks[startLine]
@@ -254,6 +269,9 @@ const renderInline = (h, children = [], options) => {
     else if (token.type === 'prose_spec_ref') {
       const value = options.renderSpecRef?.(token.meta.id, token, attrs(token, options.lineBase))
       current().push(value ?? h('span', { ...attrs(token, options.lineBase), className: 'doc-ref', 'data-spec-id': token.meta.id }, token.meta.id))
+    } else if (token.type === 'prose_file_ref') {
+      const value = options.renderFileRef?.(token.meta.name, token, attrs(token, options.lineBase))
+      current().push(value ?? h('span', { ...attrs(token, options.lineBase), className: 'doc-file-ref', 'data-file-ref': token.meta.name }, token.meta.name))
     } else if (token.type === 'prose_evidence') {
       const value = options.renderEvidence?.(token.meta, token, attrs(token, options.lineBase))
       current().push(value ?? h('a', { ...attrs(token, options.lineBase), className: 'doc-evidence', href: token.meta.src, 'data-evidence-hash': token.meta.hash }, token.meta.alt))
@@ -299,6 +317,7 @@ const blockElement = (h, token, children, options) => {
  * `softBreak` is the one dialect knob: 'break' renders an authoring wrap as a line break (message surfaces,
  * where a newline the writer typed is part of the reply), anything else reflows it into a space (documents).
  * `renderCodeCopy(source, token)` supplies a code block's copy control; without it the block has none.
+ * `renderFileRef(name, token, provenance)` is the door a `[[file:<name>]]` opens; without it the name is text.
  */
 export function renderProseTokens(tokens, options = {}) {
   const h = options.h

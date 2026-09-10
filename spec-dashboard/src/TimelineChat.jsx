@@ -20,6 +20,7 @@ import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } 
 import { useAttachQueue } from './useAttachQueue.jsx'
 import { writeClipboard } from './clipboard.js'
 import { CopyButton } from './CopyButton.jsx'
+import { SessionFilesContext } from './fileRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
 import { inboxCommands } from './sessionCommands.js'
 
@@ -486,6 +487,11 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
   const items = useMemo(() => conversationItems(events || [], win.priorWorking), [events, win.priorWorking])
+  // what a `[[file:<name>]]` in this conversation resolves against; keyed by content, since a board push hands
+  // over a fresh array for an unchanged list and every reference below would re-render for nothing. The phone
+  // face has no resource tabs ([[mobile-ui]]), so there a reference opens the file's preview page instead.
+  const filesKey = (s.files || []).join('\n')
+  const filesScope = useMemo(() => ({ sessionId: s.id, files: filesKey ? filesKey.split('\n') : [], tabs: !isMobile }), [s.id, filesKey, isMobile])
   // THE OPEN SEAM STREAMS. A working record ends in an open seam; while the session is live that seam
   // subscribes to its interval's stream — the server advances the native thread only when it changed and
   // pushes what changed, merged by turn id in the subscriber — so the collapsed live tail and the expanded transcript are one
@@ -949,6 +955,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   }
 
   return (
+    <SessionFilesContext.Provider value={filesScope}>
     <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
@@ -980,6 +987,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
         specs={specs} sessions={sessions} boardCommands={boardCommands} />
     </div>
     </DashboardTranscriptUi>
+    </SessionFilesContext.Provider>
   )
 }
 

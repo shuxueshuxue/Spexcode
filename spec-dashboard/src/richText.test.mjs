@@ -160,3 +160,15 @@ test('a code block carries the root-supplied copy control, handed its source wit
   // only the block's own final newline goes; an authored blank line inside it stays
   assert.deepEqual(handed, ['npm test\n  echo "$HOME"\n', 'indented()'])
 })
+
+test('a posted-file reference is its own token, rendered by the host or left as its name', () => {
+  const source = 'Report: [[file:report.html]] beside [[copy-control]].'
+  const bare = renderRichText(source)
+  assert.match(bare, /<span class="doc-file-ref" data-file-ref="report\.html">report\.html<\/span>/)
+  assert.doesNotMatch(bare, /data-spec-id="file:/, 'a file reference never reads as a node id')
+  assert.match(bare, /data-spec-id="copy-control"/)
+  const seen = []
+  const hosted = renderRichText(source, { renderFileRef: (name) => { seen.push(name); return createElement('a', { className: 'probe' }, name) } })
+  assert.deepEqual(seen, ['report.html'])
+  assert.match(hosted, /<a class="probe">report\.html<\/a>/)
+})

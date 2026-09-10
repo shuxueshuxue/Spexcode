@@ -80,7 +80,11 @@ made this node necessary.
     ([[address-routing]]) — the same door the side rails wear, now available in prose;
   - `evidence` (an `/api/evidence/<hash>` media link) → the one shared evidence renderer (`BlobMedia`);
   - `time_anchor` (a `▶m:ss · step` head) → the seek component, with the host's seek/degraded state
-    arriving as a handler.
+    arriving as a handler;
+  - `file_ref` (`[[file:<name>]]`) → the host's door to a file its session posted ([[files]]). It is read
+    ahead of the node reference, so `file:` never reaches a surface as a node id; a surface with no session
+    behind it (a spec body, an issue) renders the bare name. Whatever element a handler returns is keyed by the
+    renderer, which is the one that puts it into a child list.
   Because the marks survive as tokens, the thread stops pre-stripping its own prose: the regex
   extraction and the sibling anchor/media rendering are DELETED, and a mark renders in place, wherever
   the text is read.

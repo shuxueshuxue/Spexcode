@@ -18,6 +18,11 @@ related:
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
   - spec-dashboard/test/session-files.e2e.mjs
+  - spec-dashboard/src/fileRefs.js
+  - spec-dashboard/src/fileRefs.test.mjs
+  - spec-dashboard/src/Transcript.jsx
+  - spec-dashboard/src/TimelineChat.jsx
+  - spec-dashboard/src/SessionTerm.jsx
 ---
 # files
 
@@ -100,11 +105,28 @@ uses the shared icon vocabulary and carries its accessible label/tooltip. A fail
 concrete session action error, while a preview refusal is shown inside the selected resource tab, never mistaken
 for file content. The dropdown is transient: clicking outside it dismisses it.
 
+## pointing at a posted file
+
+Prose points at a posted file as `[[file:<name>]]`. The name is the file's own name, or as much of the end of its
+path as no other path on the same session's list shares — the way a spec id is its shortest disambiguating path
+suffix. `spex session files add` prints the exact reference under the posted path, worked out against the list as
+it stands after the add, so an agent never has to guess it. The reference is a name rather than a path: it reads
+cleanly in a note and exposes nothing host-local.
+
+It resolves against the list of the session whose text holds it, and only when exactly one posted path equals it
+or ends with `/<name>`. In the dashboard a resolved reference is a door to that file — the same resource tab the
+files menu opens, reached by ordinary navigation to its address ([[resource-tabs]]) — from the Conversation's prose
+([[conversation]]) and from the live terminal pane, where it is read off the screen the way a `[[node]]` is
+([[mentions]]). The phone face has no resource tabs, so there it opens the file's preview page in a browser tab. A
+reference that no posted path answers to, or that more than one does, stays visibly unresolved and opens nothing:
+the list can change after the reference was written, and a guess at which file was meant is worse than saying so.
+
 ## agent awareness
 
 The always-materialized system contract mentions the capability in one short operational line: after producing
-an artifact worth handing back, an agent publishes its path with `spex session files add <path>`. Detailed
-usage stays in `spex guide files`; the prompt advertises the capability without becoming a second manual.
+an artifact worth handing back, an agent publishes its path with `spex session files add <path>` and points at it as
+`[[file:<name>]]`. Detailed usage stays in `spex guide files`; the prompt advertises the capability without
+becoming a second manual.
 
 The guide teaches the three CLI operations, the fact that the path is live and host-local, and that the
 dashboard downloads only on click. It explicitly distinguishes this from [[file-attach]], which sends human

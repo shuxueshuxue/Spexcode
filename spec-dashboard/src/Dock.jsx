@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import DockToggle from './DockToggle.jsx'
 import FileTree from './FileTree.jsx'
 import SessionContextMenu from './SessionContextMenu.jsx'
 import { SessionConsoleTreeRow } from './SessionWindow.jsx'
@@ -199,7 +200,8 @@ function DockHead({ mode, specs, sessions }) {
     <div className="dock-head">
       <span className="dock-head-name">{t(sessionMode ? 'dockModes.sessions' : 'dockModes.explorer')}</span>
       <span className="dock-head-count">{count}{offline && <em className="dock-stale">{t('backend.stale')}</em>}</span>
-      {/* The header owns projection doors only; open/closed belongs to the dedicated rail panel switch. */}
+      {/* The header owns the projection's doors, and — last, at the panel's far corner — the switch that folds
+          the panel itself (DockToggle); closed, that switch stands in the tab strip instead. */}
       <span className="dock-head-acts">
         {/* COLLAPSE FOLDERS is a door of the EXPLORER, not of either section inside it: the Specs tree and
             the Files tree are two projections of one list, so the one action that folds every open folder
@@ -229,6 +231,7 @@ function DockHead({ mode, specs, sessions }) {
               onClick={() => navigate('sessions', 'new')} />
           </>
         )}
+        <DockToggle className="dock-head-act" />
       </span>
     </div>
   )

@@ -55,7 +55,8 @@ Three focused child contracts keep this node readable:
   appended. Session creation (the New Session composer, a prose-dispatch send to a new target) appends the
   published session beside the tab the reader was on: a created document is a gesture, never a replacement.
 - [[tab-lifecycle]] owns close behavior, focus history, nearest-neighbor fallback, and resource/session return.
-- [[tab-layout]] owns the strip's visible row, drag ordering, wrapping, labels, seams, and action-cluster geometry.
+- [[tab-layout]] owns the strip's one visible row, drag ordering, the clipped tail and its tab list, labels, seams,
+  and action-cluster geometry.
 
 The cross-surface law is one mechanism: row surfaces use the shared new-tab predicate and tab APIs, while
 views write addresses through their host scope. The strip itself owns no session lifecycle actions beyond the shared

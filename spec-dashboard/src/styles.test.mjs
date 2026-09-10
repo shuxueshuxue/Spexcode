@@ -132,7 +132,9 @@ test('the ground ladder is four tones deep and every theme carries all four', ()
   // the top the hairline is the BAND's — an inset at its bottom edge that the active tab's paper covers, so
   // the tab joins its document — and the content host owns no top rule of its own.
   assert.match(css, /\.tabstrip\s*\{\s*box-shadow:\s*inset 0 -1px 0 var\(--edge\);\s*\}/)
-  assert.match(css, /\.tab:not\(\.on\)\s*\{[^}]*background:\s*var\(--panel\);[^}]*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/s)
+  // inactive tabs are transparent text on the band, so the band's own rule shows through them untouched
+  assert.match(css, /\.tab\s*\{[^}]*background:\s*transparent;/s)
+  assert.doesNotMatch(css, /\.tab:not\(\.on\)\s*\{[^}]*background:\s*var\(--panel\)/s)
   assert.doesNotMatch(css, /\.viewhost\s*\{[^}]*border-top:/s)
   assert.match(css, /\.viewhost\s*\{[^}]*box-shadow:\s*inset 1px 0 0 var\(--panel\);/s)
   // the dark terminal is a WELL in the plane: a --paper gutter runs down its leading edge
@@ -337,11 +339,29 @@ test('launcher session tallies keep the status line geometry and semantic slash 
   assert.doesNotMatch(css, /@media \(max-width:\s*900px\)[\s\S]*?\.sb-launcher-(?:list|summary)/)
 })
 
-test('the dock toggle reads as frame chrome, not a sixth route tab', () => {
-  assert.match(css, /\.rail-panel-toggle\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px;[^}]*color:\s*var\(--muted\);/s)
-  assert.match(css, /\.rail-panel-toggle\s*\{[^}]*padding:\s*0;/s)
-  assert.match(css, /\.rail-panel-toggle\s+svg\s*\{[^}]*width:\s*14px;[^}]*height:\s*14px;/s)
-  assert.match(css, /\.rail-panel-toggle::after\s*\{[^}]*border-bottom:\s*1px solid var\(--edge\);/s)
+test('the fold switch rides the sidebar head while open and the strip\'s first cell while closed', () => {
+  // the top rows share one height, so the switch is on the same line wherever it stands
+  assert.match(css, /--line-top:\s*36px;/)
+  assert.match(css, /\.dock-head\s*\{[^}]*flex:\s*0 0 var\(--line-top\);[^}]*height:\s*var\(--line-top\);/s)
+  assert.match(css, /\.ctx-head\s*\{[^}]*flex:\s*0 0 var\(--line-top\);/s)
+  // the rail carries no switch any more
+  assert.doesNotMatch(css, /rail-panel-toggle/)
+  assert.match(css, /\.side-rail\s*\{[^}]*padding:\s*var\(--space-5\) 0;/s)
+  // in a head row it is the last door, pushed to the corner; in the strip it is a full-height 40px cell with a hover pill
+  assert.match(css, /\.dock-toggle\s*\{[^}]*color:\s*var\(--muted\);[^}]*background:\s*transparent;[^}]*border:\s*0;/s)
+  assert.match(css, /\.dock-toggle-head\s*\{\s*margin-left:\s*auto;/)
+  assert.match(css, /\.dock-toggle-strip\s*\{[^}]*flex:\s*0 0 40px;[^}]*align-self:\s*stretch;[^}]*border-radius:\s*0;/s)
+  assert.match(css, /\.dock-toggle-strip svg\s*\{[^}]*padding:\s*5px;[^}]*border-radius:\s*var\(--radius\);/s)
+  assert.match(css, /\.dock-toggle-strip:hover svg, \.dock-toggle-strip:focus-visible svg\s*\{\s*background:\s*var\(--wash-hover\);/)
+  // state is the fill: open = solid pane, closed = hollow pane, for both docks' switches
+  assert.match(css, /\.dock-toggle\[aria-pressed="false"\] \.icon-pane, \.context-toggle\[aria-pressed="false"\] \.icon-pane\s*\{\s*fill:\s*none;/)
+  // the forest's top row is the band, so the switch neither moves nor resizes across the fold
+  assert.match(css, /\.si-toprow\s*\{[^}]*height:\s*var\(--line-top\);/s)
+  assert.match(css, /\.si-toprow \.dock-toggle\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/s)
+  assert.match(css, /\.dock-head-act\.dock-toggle\s*\{\s*width:\s*26px;\s*height:\s*26px;/)
+  // the pane is a card: rounded lower corners on the panel ground
+  assert.match(css, /\.viewhost\s*\{[^}]*border-radius:\s*0 0 var\(--radius-tab\) var\(--radius-tab\);/s)
+  assert.match(css, /\.app-content-column\s*\{\s*background:\s*var\(--panel\);/)
 })
 
 test('the chrome bands the budget does not allow are gone from the sheet', () => {
@@ -367,28 +387,35 @@ test('conversation day separators center their date on one continuous rule', () 
   assert.match(css, /\.m-day-label\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;[^}]*background:\s*var\(--paper\);/s)
 })
 
-test('tab widths follow content before wrapping and keep the active close affordance', () => {
-  assert.match(css, /\.tabstrip-tabs\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*container-type:\s*inline-size;/s)
-  assert.match(css, /\.tabstrip-tabs\.wrapped\s*\{[^}]*flex-wrap:\s*wrap;/s)
-  assert.match(css, /\.tabstrip-tabs\.wrapped \.tab\s*\{[^}]*flex:\s*0 1 auto;/s)
-  assert.match(css, /\.tab\s*\{[^}]*flex:\s*0 1 auto;[^}]*width:\s*auto;[^}]*min-width:\s*120px;[^}]*max-width:\s*240px;/s)
-  assert.match(css, /\.tab\s*\{[^}]*container-type:\s*inline-size;/s)
-  assert.match(css, /\.tabstrip-tabs:not\(\.wrapped\) \.tab\s*\{[^}]*container-type:\s*normal;/s)
-  assert.match(css, /\.tab\.on\s*\{[^}]*min-width:\s*132px;[^}]*background:\s*var\(--paper\);[^}]*border-right-color:\s*transparent;[^}]*border-radius:\s*var\(--radius\)/s)
-  assert.match(css, /\.tab\s*\{[^}]*border-radius:\s*var\(--radius\) var\(--radius\) 0 0;/s)
-  assert.match(css, /\.tab:not\(\.on\):hover\s*\{[^}]*background:\s*var\(--panel2\);[^}]*border-radius:\s*var\(--radius\) var\(--radius\) 0 0;/s)
-  assert.match(css, /\.tab:not\(\.on\):focus-within\s*\{[^}]*background:\s*var\(--panel2\);[^}]*border-radius:\s*var\(--radius\) var\(--radius\) 0 0;/s)
-  assert.match(css, /\.tab-face\s*\{[^}]*border-radius:\s*var\(--radius\) 0 0 0;/s)
-  assert.match(css, /\.tab-x\s*\{[^}]*border-radius:\s*0 var\(--radius\) 0 0;/s)
-  assert.match(css, /\.tab-x\s*\{[^}]*flex:\s*0 0 24px;[^}]*width:\s*24px;[^}]*opacity:\s*0;/s)
-  assert.match(css, /\.tab\.on \.tab-x, \.tab:hover \.tab-x\s*\{[^}]*opacity:\s*1;/s)
-  assert.match(css, /\.tab-x:hover\s*\{[^}]*background:\s*var\(--panel2\);[^}]*border-radius:\s*0 var\(--radius\) 0 0;/s)
+test('the strip is one clipping row of cards on the band, never a wrapped or scrolling one', () => {
+  // the row clips; nothing about it wraps, scrolls, or measures itself as a container
+  assert.match(css, /\.tabstrip\s*\{[^}]*min-height:\s*var\(--line-top\);/s)
+  assert.match(css, /\.tabstrip-tabs\s*\{[^}]*align-items:\s*flex-end;[^}]*flex-wrap:\s*nowrap;[^}]*overflow:\s*hidden;/s)
+  assert.doesNotMatch(css, /\.tabstrip-tabs\.wrapped|\.tabstrip-tabs\s*\{[^}]*container-type|\.tab\s*\{[^}]*container-type|@container[^{]*\{[^}]*\.tab-/s)
+  // a tab is a card the height of the band less its shoulder; content width between the two floors
+  assert.match(css, /\.tab\s*\{[^}]*flex:\s*0 1 auto;[^}]*width:\s*auto;[^}]*height:\s*calc\(var\(--line-top\) - 4px\);[^}]*min-width:\s*120px;[^}]*max-width:\s*260px;/s)
+  assert.match(css, /\.tab\s*\{[^}]*border-radius:\s*var\(--radius-tab\) var\(--radius-tab\) 0 0;[^}]*background:\s*transparent;/s)
+  assert.doesNotMatch(css, /\.tab\s*\{[^}]*border-right:/s)
+  // the active card: paper, outlined on its three free sides, open at the bottom into the page
+  assert.match(css, /\.tab\.on\s*\{[^}]*min-width:\s*132px;[^}]*background:\s*var\(--paper\);[^}]*box-shadow:\s*inset 1px 0 0 var\(--edge\), inset -1px 0 0 var\(--edge\), inset 0 1px 0 var\(--edge\);/s)
+  assert.match(css, /\.tabstrip\s*\{\s*box-shadow:\s*inset 0 -1px 0 var\(--edge\);/)
+  // inactive neighbours: a short rule between them, a wash on hover, no box
+  assert.match(css, /\.tab:not\(\.on\) \+ \.tab:not\(\.on\)::before\s*\{[^}]*top:\s*25%;[^}]*height:\s*50%;[^}]*border-left:\s*1px solid var\(--edge\);/s)
+  assert.match(css, /\.tab-inner\s*\{[^}]*height:\s*24px;[^}]*margin:\s*0 var\(--space-2\);[^}]*border-radius:\s*var\(--radius\);/s)
+  assert.match(css, /\.tab:not\(\.on\):hover \.tab-inner, \.tab:not\(\.on\):focus-within \.tab-inner\s*\{\s*background:\s*var\(--wash-hover\);/)
+  assert.doesNotMatch(css, /\.tab:not\(\.on\):hover, \.tab:not\(\.on\):focus-within\s*\{[^}]*background:/s)
+  assert.match(css, /\.tabstrip-tabs\s*\{[^}]*padding-left:\s*var\(--space-4\);/s)
+  // one face: control-size type, a round close target on the active card and under the pointer
+  assert.match(css, /\.tab-face\s*\{[^}]*padding:\s*0 var\(--space-2\) 0 var\(--space-4\);[^}]*font-size:\s*var\(--type-control\);/s)
+  assert.match(css, /\.tab-x\s*\{[^}]*flex:\s*0 0 20px;[^}]*width:\s*20px;[^}]*height:\s*20px;[^}]*border-radius:\s*var\(--radius-full\);[^}]*opacity:\s*0;/s)
+  assert.match(css, /\.tab\.on \.tab-x, \.tab:hover \.tab-x, \.tab:focus-within \.tab-x\s*\{[^}]*opacity:\s*1;/s)
   assert.match(css, /\.tab\s*\{[^}]*animation:\s*tab-in var\(--dur-tab\) ease backwards;/s)
   assert.match(css, /\.tab\.tab-closing\s*\{[^}]*animation:\s*tab-out var\(--dur-tab\) ease backwards;/s)
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.tab, \.tab\.tab-closing, \.tab-x\s*\{[^}]*transition:\s*none;/s)
-  assert.doesNotMatch(css, /\.tabstrip-tabs:has\(\.tab:nth-child\(8\)\)/)
-  assert.match(css, /@container \(max-width:\s*140px\)\s*\{[^}]*\.tab-face/s)
-  assert.match(css, /@container \(max-width:\s*100px\)\s*\{[^}]*\.tab-dot, \.tab-spinner\s*\{[^}]*display:\s*none;/s)
+  // the list button lives in the action column and carries a point while anything is clipped
+  assert.match(css, /\.tabstrip-actions\s*\{[^}]*margin-left:\s*auto;[^}]*height:\s*var\(--line-top\);/s)
+  assert.match(css, /\.tab-list-button\.clipped::after\s*\{[^}]*border-radius:\s*50%;[^}]*background:\s*var\(--blue\);/s)
+  assert.match(css, /\.sess-menu-item\.tab-list-current\s*\{[^}]*background:\s*var\(--wash-selected\);/s)
 })
 
 test('wheel is xterm-native — no browser quantizer, ledger, or synthetic bottoming', () => {

@@ -22,8 +22,10 @@ The left sidebar of the [[session-console]] is the mutable home of the session f
 triages, moves, folds, and walks. Its rows are [[session-row]]'s shared face; this node owns what the LIST does
 with them — grouping, disclosure, the archive's fourth zone and its index, the reparent gesture, and the keys.
 
-**The forest sidebar speaks one row grammar**: its three
-doors at the top — `＋ New Session` carrying its word, then quiet archive and search glyphs — are rows
+**The forest sidebar speaks one row grammar**: its top row is the frame's top band (`--line-top` tall,
+level with the tab strip) and holds three doors plus the fold switch ([[side-nav]]) at its far end —
+`＋ New Session` carrying its word (the word yields to an ellipsis before it runs under the glyphs), then
+quiet archive and search glyphs — and those doors are rows
 in the same shape as the sessions beneath them, not boxed buttons; a session row is an inset rounded band
 that wears the hover wash under the pointer and the selection wash when current, with no rule drawn between
 rows. Its overlay colour is a **continuous 2px status thread**: on top-level rows it spans the complete row

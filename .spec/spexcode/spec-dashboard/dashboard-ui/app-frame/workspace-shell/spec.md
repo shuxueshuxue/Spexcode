@@ -97,6 +97,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   optional dock stop at its top edge and the view/context row gets the rest of the height. The bar consumes
   its own `--line-status` height and never covers a view; a terminal's final xterm row fits above it. One-pixel
   `--line` borders own the vertical and horizontal seams, meeting as a T at the lower-left rail junction.
+  The content pane is a CARD on the chrome: its lower corners are rounded like the active tab's upper ones
+  and the column behind it is the band's own `--panel`, so the document reads as one card standing on the
+  chrome from strip to status row ([[tab-layout]]).
   The frame itself is what fills it: the workspace identity
   and the ONE BOARD LEDGER — spec nodes by state, open issues, live
   sessions — is true of the window on every route, so no view may own a duplicate and each group is

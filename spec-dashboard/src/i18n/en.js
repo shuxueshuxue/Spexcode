@@ -114,6 +114,7 @@ export default {
     settings: 'Settings',
     issueNew: 'New issue',
     openInNewTab: 'Open in a new tab',
+    list: 'Open tabs',
     menuLabel: 'tab actions',
     menuClose: 'Close',
     menuCloseOthers: 'Close others',

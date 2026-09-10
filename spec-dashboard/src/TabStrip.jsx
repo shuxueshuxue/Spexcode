@@ -22,8 +22,6 @@ const resourceLabel = (url) => {
   } catch { return url }
 }
 
-const TAB_WRAP_FLOOR = 128
-
 const tabWindowAddress = (tab) => {
   const hash = routeHash(tab.page, tab.param, tab.query)
   const scoped = PROJECT_ID ? projectHref(PROJECT_ID, hash) : hash
@@ -110,10 +108,17 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, trailing = null, onSessionContextMenu = null }) {
+export default function TabStrip({ specs, sessions, route, leading = null, trailing = null, onSessionContextMenu = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
-  const [wrapped, setWrapped] = useState(false)
+  // ONE ROW, AND A LIST FOR WHAT THE ROW CANNOT SHOW. Tabs shrink toward their floor and then the row
+  // clips; it never wraps onto a second row (a strip whose thickness was the working set moved the whole
+  // document down every time a reader opened one more thing) and never scrolls sideways behind a gesture.
+  // `clipped` is the mark that says some of the working set is out of sight — it lights the list button,
+  // which is the ONE way back to every held tab, visible or not.
+  const [clipped, setClipped] = useState(false)
+  const [listMenu, setListMenu] = useState(null)
+  const listButtonRef = useRef(null)
   const tabsHostRef = useRef(null)
   const startTabClose = useCallback((tab) => {
     const key = tabKey(tab)
@@ -132,16 +137,20 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
     const host = tabsHostRef.current
     if (!host || typeof ResizeObserver === 'undefined') return undefined
     const update = () => {
-      // Wrap while a tab can still keep a readable face. Waiting for the flex row to reach its 120px CSS
-      // minimum leaves labels and close affordances visibly cramped before the second row appears.
-      const next = tabs.length * TAB_WRAP_FLOOR > host.clientWidth
-      setWrapped((current) => (current === next ? current : next))
+      const next = host.scrollWidth > host.clientWidth + 1
+      setClipped((current) => (current === next ? current : next))
     }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(host)
     return () => observer.disconnect()
   }, [tabs.length])
+  // the active tab is never one of the clipped ones: a clipped row can still be moved programmatically,
+  // so focusing a tab (from the list, a shortcut, a link) brings it into the visible stretch.
+  useEffect(() => {
+    const el = tabsHostRef.current?.querySelector('.tab.on')
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [activeKey, tabs.length])
   const names = useDocumentNames()
   const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
@@ -162,10 +171,11 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
   const abandon = useRef(null)
   useEffect(() => () => abandon.current?.(), [])
   useEffect(() => {
-    if (!menu) return undefined
+    if (!menu && !listMenu) return undefined
     const dismiss = (event) => {
       if (event.target?.closest?.('.sess-menu')) return
       setMenu(null)
+      setListMenu(null)
     }
     window.addEventListener('click', dismiss)
     window.addEventListener('contextmenu', dismiss, true)
@@ -173,8 +183,15 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
       window.removeEventListener('click', dismiss)
       window.removeEventListener('contextmenu', dismiss, true)
     }
-  }, [menu])
-  useEscLayer(!!menu, () => setMenu(null))
+  }, [menu, listMenu])
+  useEscLayer(!!menu || !!listMenu, () => { setMenu(null); setListMenu(null) })
+  // the list hangs off the button's own corner, so it opens where the reader pressed rather than at a
+  // pointer position that a keyboard activation does not have.
+  const openList = (event) => {
+    event.stopPropagation()
+    const box = listButtonRef.current?.getBoundingClientRect()
+    setListMenu((current) => (current ? null : { x: box ? box.right - 220 : event.clientX, y: box ? box.bottom + 4 : event.clientY }))
+  }
 
   // The insertion point under a pointer: the tab it is over, and which HALF of that tab. Past the midpoint
   // means after — which on the last tab is the end of the strip, the one landing place no tab can name. The
@@ -236,14 +253,13 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
   closing.filter((entry) => !tabs.some((tab) => tabKey(tab) === entry.key))
     .sort((a, b) => a.index - b.index)
     .forEach((entry) => renderedTabs.splice(Math.max(0, Math.min(entry.index, renderedTabs.length)), 0, entry.tab))
-  // The band and the SCROLLER are two jobs, and they were one element. A strip that scrolls its tabs must
-  // clip, and a clipping band cannot let an action's dropdown out — the resource picker rendered correctly
-  // and was cut off at the strip's own 30px. Splitting them gives the tabs their scroller, leaves the band
-  // itself unclipped so a menu can hang below it, and stops a long tab list from scrolling the action
-  // cluster off the right edge.
+  // The band and the SCROLLER are two jobs, and they were one element. The tabs host clips its row so the
+  // working set never grows the band; the band itself stays unclipped so a menu (an action's dropdown, the
+  // tab list) can hang below it, and the action cluster keeps its own column that no tab can run under.
   return (
     <div className="tabstrip">
-      <div ref={tabsHostRef} className={`tabstrip-tabs${wrapped ? ' wrapped' : ''}`} role="tablist" aria-label={t('tabs.aria')}>
+      {leading}
+      <div ref={tabsHostRef} className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
       {renderedTabs.map((tab, index) => {
         const key = tabKey(tab)
@@ -251,8 +267,8 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
         const active = key === activeKey
         const tabLabel = label(tab, { specs, sessions, names, t })
         // the insertion marker rides the tab the moved one would land in front of — or, for the end of the
-        // strip, the trailing edge of the last tab. Two classes, one line, at home in any row of a wrapped
-        // strip because it is drawn on a tab rather than between them.
+        // strip, the trailing edge of the last tab. Two classes, one line, drawn on a tab rather than between
+        // them so the row's own dividers never have to move.
         const marks = `${drag?.key === key ? ' tab-moving' : ''}${drag?.before === key ? ' tab-drop-before' : ''}`
           + `${drag && drag.before === null && index === tabs.length - 1 ? ' tab-drop-after' : ''}`
         return (
@@ -274,21 +290,34 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
             onAuxClick={(e) => { if (!isClosing && e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document
                 they mean, so the gesture asks for no new vocabulary and no new surface. */}
-            <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
-              onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
-              <TabKindIcon tab={tab} />
-              <TabDot tab={tab} specs={specs} sessions={sessions} />
-              <span className="tab-label">{tabLabel}</span>
-            </button>
-            <button type="button" className="tab-x" onClick={() => { if (!isClosing) close(tab) }} aria-label={t('tabs.close')}>
-              <Icon name="x" size={11} />
-            </button>
+            {/* the INNER band is what lights under the pointer — an inset rounded rect, the same shape a
+                session row wears — while the tab's own box keeps the card outline, the dividers and the
+                drop marks. */}
+            <div className="tab-inner">
+              <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
+                onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
+                <TabKindIcon tab={tab} />
+                <TabDot tab={tab} specs={specs} sessions={sessions} />
+                <span className="tab-label">{tabLabel}</span>
+              </button>
+              <button type="button" className="tab-x" onClick={() => { if (!isClosing) close(tab) }} aria-label={t('tabs.close')}>
+                <Icon name="x" size={11} />
+              </button>
+            </div>
           </div>
         )
       })}
       </div>
-      {(activeActions.length > 0 || trailing) && (
+      {(tabs.length > 0 || activeActions.length > 0 || trailing) && (
         <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
+          {tabs.length > 0 && (
+            <button ref={listButtonRef} type="button"
+              className={`document-action-button tab-list-button${clipped ? ' clipped' : ''}${listMenu ? ' on' : ''}`}
+              aria-label={t('tabs.list')} data-tip={t('tabs.list')} aria-haspopup="menu" aria-expanded={!!listMenu}
+              onClick={openList}>
+              <Icon name="chevron-down" size={14} />
+            </button>
+          )}
           {activeActions.map((action) => {
             const label = action.disabled ? (action.disabledReason || action.label) : action.label
             return (
@@ -306,6 +335,25 @@ export default function TabStrip({ specs, sessions, route, trailing = null, onSe
           })}
           {trailing}
         </div>
+      )}
+      {listMenu && (
+        <ContextMenu x={listMenu.x} y={listMenu.y} anchorKey="tab-list" label={t('tabs.list')}>
+          <ContextMenuGroup>
+            {tabs.map((tab) => {
+              const key = tabKey(tab)
+              const active = key === activeKey
+              // the row wears the same face the tab does — kind icon for a resident page, the document's own
+              // status mark otherwise — so the list is the strip laid out downward, not a second vocabulary.
+              return (
+                <ContextMenuItem key={key} icon={isResident(tab.page) ? iconFor(tab.page) : 'files'}
+                  className={active ? 'tab-list-current' : ''} aria-current={active ? 'true' : undefined}
+                  onClick={(e) => { e.stopPropagation(); setListMenu(null); open(tab) }}>
+                  {label(tab, { specs, sessions, names, t })}
+                </ContextMenuItem>
+              )
+            })}
+          </ContextMenuGroup>
+        </ContextMenu>
       )}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} anchorKey={menu.key} label={t('tabs.menuLabel')}>

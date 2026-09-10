@@ -64,12 +64,10 @@ things are deliberately **not** bands, because each was a tempting way to smuggl
 - **Resize handles are not bands.** A grab strip between two panes is a seam, not a row ([[resizable-panes]]).
 - **The preview slot is a tab property**, not a band. What a tab is previewing changes the content, not the
   frame around it.
-- **A wrapped tab strip is one band, at any height.** The strip lays its working set out on as many rows as
-  it needs rather than scrolling ([[tab-strip]]); the rows are the strip's internal layout, and a model that
-  counted them would be counting the reader's open documents as chrome. This is the one place the model
-  separates a band's COUNT from its thickness, and the separation is deliberate: the budget bounds how many
-  things frame the content, never how tall any one of them is. Thickness here is the reader's own — it grows
-  only when someone holds another document, and it shrinks when they close one.
+- **The tab strip is one band, one row, at any depth of working set.** The strip lays its working set out on a
+  single clipping row and offers a tab list for what the row cannot show ([[tab-strip]]); it never grows a
+  second row, because a second row of tabs is a second band framing the content — one the reader did not
+  ask for by opening a document. The gate measures the rows and fails a state whose tabs sit at two tops.
 
 A vertical scrollport is where the content begins: everything below it belongs to the document, so nothing
 inside one is chrome, whatever its position ([[page-scroll]]). Membership is **declared, not measured** —
@@ -114,11 +112,11 @@ kind against every dock value, the context axis doubled on the one route that ow
 session surfaces, and a split state — classifies the bands the DOM actually renders, and fails any state
 where measured ≠ predicted, ranked by excess and named by offending class.
 
-**Every state is entered with a WORKING SET DEEP ENOUGH TO WRAP the strip,** and the row count is printed
-beside the band count. Measuring the fattest strip rather than an empty one is the stronger gate — an empty
-strip is the one shape in which a stowaway band has nowhere to hide — and it turns "one band however many
-rows" from a claim into a measurement. The gate fails if the strip stops wrapping, because a property that
-is no longer exercised is a property no longer checked, even while every state still passes. The classifier is seeded with
+**Every state is entered with a WORKING SET DEEPER THAN THE ROW CAN SHOW,** and the row count is printed
+beside the band count. Measuring the fullest strip rather than an empty one is the stronger gate — an empty
+strip is the one shape in which a stowaway band has nowhere to hide — and it turns "one row at any depth"
+from a claim into a measurement: a state whose tabs sit at more than one top fails, because the strip has
+grown a band the model never granted. The classifier is seeded with
 the shell's known chrome inventory so a band thicker than the geometric threshold is still caught by name,
 and falls back to geometry — a non-growing, statically-positioned container that spans its region's long
 axis and stays thin on the short one — so chrome the inventory has never heard of is caught anyway.

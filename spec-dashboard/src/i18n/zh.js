@@ -111,6 +111,7 @@ export default {
     settings: '设置',
     issueNew: '新建议题',
     openInNewTab: '在新标签打开',
+    list: '所有标签',
     menuLabel: '标签操作',
     menuClose: '关闭',
     menuCloseOthers: '关闭其他',

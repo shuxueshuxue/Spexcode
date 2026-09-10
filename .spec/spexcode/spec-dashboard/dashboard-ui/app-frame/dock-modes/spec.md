@@ -34,12 +34,13 @@ disclose their own children, while the explorer head's collapse-folders door can
 projection it shows and whether it exists at all. A node or a governed file belongs with the explorer.
 **Bare issues and settings boards have no sidebar, while their object details retain the dock.** The
 Sessions route mounts no finding dock: the Sessions document draws its own forest sidebar
-([[session-console]]), and that forest folds from the same rail control through the same open/closed state,
+([[session-console]]), and that forest folds from the same switch ([[side-nav]]) through the same open/closed state,
 so the reader has one fold rather than two. Projection selection is secondary state: the spec and graph
 route links select the explorer, while the sessions anchor selects no projection at all — its destination
 mounts no finding dock, so a projection written at click time could only dress the DEPARTING document's
-dock — and the rail light remains route-only. The dedicated mirrored rail panel
-control is the only open/closed owner, and clicking the active route is idempotent. Explorer rows retain
+dock — and the rail light remains route-only. The one fold switch ([[side-nav]]) — the head row's last
+door while open, the strip's first cell while closed — is the only open/closed owner, and clicking the
+active route is idempotent. Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
 a plain click navigates to `sessions/<id>` in the focused tab, while ctrl/⌘-click opens it in a new tab. The row is chrome around the session document, so its pointer press suppresses the native
 button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
@@ -59,9 +60,9 @@ differently-dressed sessions sidebar flashed, mounted whole and thrown away one 
 the band hands over dock⇄forest with zero intermediate sessions-projection mounts in both directions,
 including a fresh load carrying stale persisted `dockMode`.
 
-**The dock closes from the dedicated rail panel control, and the closing is a movement.** The permanently
-mounted mirrored rail button is the one open/closed door and reports `aria-pressed`; the dock header carries
-projection doors only. Opening and closing slide with one shared `--dur-panel` token rather than a duration
+**The dock closes from the one fold switch, and the closing is a movement.** The switch is the last door of
+the dock's own head row while the dock is open, and stands in the tab strip while it is closed
+([[side-nav]]); it reports `aria-pressed`. The head's other doors are the projection's own. Opening and closing slide with one shared `--dur-panel` token rather than a duration
 invented per panel, and the element outlives the state that
 hides it by exactly that long so the reverse is visible too.
 

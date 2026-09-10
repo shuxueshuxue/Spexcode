@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../shared/render-context.mjs';
 import { esc, renderDefinitions, renderSemanticSigil, textUnits } from '../shared/utils.mjs';
 import { animateAttr, focusEdgeAttrs, focusNodeAttrs, focusNodeTitle, loadDiagramWithBrandMarks, writeDiagram, svgAccessibleText, svgRootAttrs } from '../shared/cli.mjs';
 import { componentBox, boundaryBox, connectionPath } from '../shared/layout-report.mjs';
@@ -50,14 +51,9 @@ const componentTextFit = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const layoutJsonMode = process.argv.includes('--layout-json');
-const cliArgs = process.argv.filter((arg) => arg !== '--layout-json');
-const { diagram: arch, template, outPath, sourceEvidence } = await loadDiagramWithBrandMarks({
-  rendererDir: __dirname,
-  diagramType: 'architecture',
-  defaultExample: 'web-app.architecture.json',
-  argv: cliArgs,
-});
+// @@@ library seam - the renderer is a function of its IR: validated IR in, SVG (or the layout report) out,
+// diagnostics thrown. The script entry at the bottom is one caller; the library (index.mjs) is the other.
+export function renderArchitecture(arch, { layoutOnly = false } = {}) {
 
 const grid = gridLayout(arch);
 
@@ -1063,16 +1059,30 @@ ${renderLegend()}
 }
 
 validateArchitecture();
-if (layoutJsonMode) {
-  console.log(JSON.stringify(buildLayoutReport(), null, 2));
-  process.exit(0);
+if (layoutOnly) return { layoutReport: buildLayoutReport() };
+return { svg: renderSvg() };
 }
-writeDiagram({
-  outPath,
-  template,
-  diagramType: 'architecture',
-  meta: arch.meta,
-  svg: renderSvg(),
-  cards: arch.cards,
-  sourceEvidence,
-});
+
+if (isMainModule(import.meta.url)) {
+  const layoutJsonMode = process.argv.includes('--layout-json');
+  const cliArgs = process.argv.filter((arg) => arg !== '--layout-json');
+  const { diagram, template, outPath, sourceEvidence } = await loadDiagramWithBrandMarks({
+    rendererDir: __dirname,
+    diagramType: 'architecture',
+    defaultExample: 'web-app.architecture.json',
+    argv: cliArgs,
+  });
+  if (layoutJsonMode) {
+    console.log(JSON.stringify(renderArchitecture(diagram, { layoutOnly: true }).layoutReport, null, 2));
+    process.exit(0);
+  }
+  writeDiagram({
+    outPath,
+    template,
+    diagramType: 'architecture',
+    meta: diagram.meta,
+    svg: renderArchitecture(diagram).svg,
+    cards: diagram.cards,
+    sourceEvidence,
+  });
+}

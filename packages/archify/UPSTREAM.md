@@ -19,6 +19,24 @@ generated vendor-logo catalog, `bin/preview.mjs`, `bin/visual-check.mjs`, the re
 benchmarks, experiments, docs, and the skill-update manifest.
 
 ## Local changes
+- **Library face (`index.mjs`).** Upstream runs each step as its own process: `bin` spawns a renderer script,
+  the script reads argv and writes the page, then `bin` spawns the checker script on that file. Here each of
+  those scripts exports its logic as a function and keeps its script entry behind a main-module guard:
+  `renderArchitecture`, `compileWorkflowDiagram`, `renderSequenceSvg`, `renderDataflowSvg`,
+  `renderLifecycleSvg`, `checkRenderOutput`. `renderers/shared/cli.mjs` factors `prepareDiagram` (every
+  pre-render check + source evidence) and `diagramPage` (template fill) out of the script head and tail.
+  `renderers/shared/render-context.mjs` is the one seam for per-render options: the library passes quality
+  explicitly for one synchronous call, the CLI still passes it through the environment. The checker's result
+  → diagnostics conversion moved from `bin` to `renderers/shared/artifact-diagnostics.mjs`.
+  Proof: 32 IRs (26 real diagrams, 1 hand lifecycle, 5 examples) — CLI output byte-identical before and after
+  (render 32/32, validate 32/32, inspect 18/18); library output in one process byte-identical to the CLI
+  baselines, forward and reverse order. `test/library.test.mjs` pins the example pages by sha256.
+- **The shared viewer runtime.** The template's font face, stylesheet and viewer script carry no translated
+  string and no per-diagram slot, so `runtimeAssets()` / `writeRuntime(dir)` emit them once, content-hashed,
+  and `diagramHtml(parts, { runtime: { base } })` links them instead of inlining (≈ 85 KB per page instead
+  of ≈ 800 KB). `runtime: 'inline'` (the default) is the CLI's self-contained page.
+- **`bin/` is no longer the published surface** (no `bin` field; it is kept as the upstream-shaped
+  development CLI and the byte-identity reference).
 - `bin/archify.mjs`: the `compare`, `preview`, `visual-check`, `guide`, `brands`, `examples` and `demo`
   commands and their helpers are removed (74 KB → 45 KB); `doctor` no longer checks for the removed
   runtimes, references and compare fixtures. Kept: `render`, `deliver`, `validate`, `inspect`, `check`,

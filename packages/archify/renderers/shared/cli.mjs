@@ -8,10 +8,28 @@ import { validateEngineeringProfile } from './engineering-profiles.mjs';
 import { resolveOutputPath } from './output-path.mjs';
 import { prepareDiagramBrandMarks } from './brand-marks.mjs';
 import { resolveLocale, translateMessage } from './i18n.mjs';
+import { qualityProfileOverride } from './render-context.mjs';
 
 installRendererDiagnosticBoundary();
 
 const outputPathGuards = new Map();
+
+// Every check an IR must pass before it is drawn, and the repository evidence its sources resolve to. The CLI
+// head below and the library both call this; it throws diagnostics and never reads the process environment.
+export function prepareDiagram(diagramType, diagram, { repoRoot } = {}) {
+  validateSchema(diagramType, diagram);
+  validateGuidedViews(diagramType, diagram);
+  validateRelationshipIds(diagramType, diagram);
+  validateEngineeringProfile(diagramType, diagram);
+  return verifyRepositoryEvidence(diagramType, diagram, repoRoot);
+}
+
+// The viewer template, read once per process.
+let templateText = null;
+export function loadTemplate() {
+  templateText ??= fs.readFileSync(new URL('../../assets/template.html', import.meta.url), 'utf8');
+  return templateText;
+}
 
 // Common CLI head: node render-<type>.mjs [input.json] [output.html]
 // Keep this synchronous because callers also use it to establish the guarded
@@ -20,11 +38,7 @@ export function loadDiagram({ rendererDir, diagramType, defaultExample, argv = p
   const skillRoot = path.resolve(rendererDir, '../..');
   const inputPath = path.resolve(argv[2] || path.join(skillRoot, 'examples', defaultExample));
   const diagram = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
-  validateSchema(diagramType, diagram);
-  validateGuidedViews(diagramType, diagram);
-  validateRelationshipIds(diagramType, diagram);
-  validateEngineeringProfile(diagramType, diagram);
-  const sourceEvidence = verifyRepositoryEvidence(diagramType, diagram, process.env.ARCHIFY_REPO_ROOT);
+  const sourceEvidence = prepareDiagram(diagramType, diagram, { repoRoot: process.env.ARCHIFY_REPO_ROOT });
   const template = fs.readFileSync(path.join(skillRoot, 'assets/template.html'), 'utf8');
   const outputRequest = {
     requestedOutput: argv[3],
@@ -49,13 +63,10 @@ export async function loadDiagramWithBrandMarks(options) {
 
 const START_TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle']);
 
-// Common CLI tail: fill the template and write the standalone HTML file.
-export function writeDiagram({ outPath, template, diagramType, meta, svg, cards, sourceEvidence = null }) {
-  if (!START_TYPES.has(diagramType)) throw new Error(`writeDiagram: unknown diagram type ${JSON.stringify(diagramType)}`);
-  const outputGuard = outputPathGuards.get(outPath);
-  if (outputGuard) resolveOutputPath(outputGuard);
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, applyTemplate(template, {
+// One diagram page: the viewer template filled with this diagram's SVG, title, note, cards and evidence. The
+// CLI writes it to a file; the library returns it. Same function, so both produce the same bytes.
+export function diagramPage({ template, meta, svg, cards, sourceEvidence = null }) {
+  return applyTemplate(template, {
     title: meta.title,
     subtitle: meta.subtitle,
     note: meta.note,
@@ -65,7 +76,16 @@ export function writeDiagram({ outPath, template, diagramType, meta, svg, cards,
     visualPreset: meta.visual_preset || 'classic',
     guidedViews: meta.views || [],
     sourceEvidence,
-  }));
+  });
+}
+
+// Common CLI tail: fill the template and write the standalone HTML file.
+export function writeDiagram({ outPath, template, diagramType, meta, svg, cards, sourceEvidence = null }) {
+  if (!START_TYPES.has(diagramType)) throw new Error(`writeDiagram: unknown diagram type ${JSON.stringify(diagramType)}`);
+  const outputGuard = outputPathGuards.get(outPath);
+  if (outputGuard) resolveOutputPath(outputGuard);
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, diagramPage({ template, meta, svg, cards, sourceEvidence }));
   outputPathGuards.delete(outPath);
   console.log(outPath);
 }
@@ -153,7 +173,7 @@ export function svgRootAttrs(meta) {
   const engineeringProfile = meta.engineering_profile
     ? ` data-engineering-profile="${esc(meta.engineering_profile)}"`
     : '';
-  const requestedProfile = process.env.ARCHIFY_QUALITY_PROFILE || meta.quality_profile;
+  const requestedProfile = qualityProfileOverride() || meta.quality_profile;
   const qualityProfile = requestedProfile === 'showcase' ? 'showcase' : 'standard';
   const advisory = requestedProfile ? '' : ' data-quality-gates="advisory"';
   return `role="img" lang="${esc(resolveLocale(meta.locale))}" aria-labelledby="archify-diagram-title archify-diagram-description"${animation}${preset}${engineeringProfile} data-quality-profile="${esc(qualityProfile)}"${advisory}`;

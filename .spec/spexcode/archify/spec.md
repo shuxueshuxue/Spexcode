@@ -4,8 +4,12 @@ status: active
 hue: 30
 desc: SpexCode's vendored archify — the JSON-IR diagram renderers, validators, and viewer runtime that turn a node's diagram file into a page, carried as a dependency-free package because upstream is not on npm.
 code:
-  - packages/archify/package.json
+  - packages/archify/index.mjs
 related:
+  - packages/archify/package.json
+  - packages/archify/renderers/shared/render-context.mjs
+  - packages/archify/renderers/shared/cli.mjs
+  - packages/archify/test/library.test.mjs
   - packages/archify/bin/archify.mjs
   - packages/archify/UPSTREAM.md
   - packages/archify/schemas/common.schema.json
@@ -45,8 +49,27 @@ inference); everything else in the schemas stays exactly as strict as upstream, 
 are re-derived from the schemas rather than edited. An IR that uses `note` is one field away from upstream
 compatibility; a consumer handing IRs to upstream tooling strips it.
 
-**One version, one build, one seam.** The package is lockstep with every other public package
-([[release-publish]]) and has no build step. SpexCode calls it through its executable — `spex` resolves the
-package's `bin/archify.mjs` by module resolution, never by PATH — so the renderer runs in one process shape
-everywhere and the fork's internals stay private to it. It is a Node package: the dashboard never bundles
-it, it receives rendered pages over the API.
+**A library, not a set of scripts.** Upstream runs every step as its own process — the CLI spawns a
+renderer script that reads argv and writes a file, then spawns a checker script on that file. Here each of
+those scripts exports its logic as a function, and `@spexcode/archify` is that set of functions:
+`renderDiagram(type, ir, {quality, repoRoot})` returns the page parts, `checkDiagram` renders and runs the
+final-artifact check and reports problems as data (`ok`, `diagnostics` in the renderers' own vocabulary),
+`layoutReport` gives the receipt a cartographer repairs from, and `diagramHtml(parts, {runtime})` assembles a
+page. A diagram problem is a `DiagramError` carrying diagnostics, never a process exit. SpexCode imports these;
+nothing in SpexCode spawns an archify process. The upstream-shaped CLI stays in the package as a development
+tool and as the reference the library is proven against — the library reproduces its output byte for byte.
+
+**One seam for options.** A renderer reads its per-render options — the quality profile above all — through one
+module. The library sets them explicitly for one synchronous call; the CLI still passes them through the
+environment of its child process. Neither path knows about the other, and the library never touches
+`process.env`.
+
+**The viewer is shared, the diagram is not.** A page is the viewer (font face, stylesheet, script: ≈ 716 KB)
+plus one diagram (SVG, cards, note: tens of KB). The viewer carries no translated text and no per-diagram slot,
+so a site of many diagrams ships it once, content-hashed, and each page links it (≈ 85 KB a page); a
+self-contained page inlines it. Which to use is the caller's layout decision, not the renderer's.
+
+**One version, one build.** The package is lockstep with every other public package ([[release-publish]]) and
+has no build step. Its test renders every example in-process and compares each page to the sha256 of the page
+the CLI produced, checks that a broken IR comes back as diagnostics, that a linked page carries no viewer code,
+and that the generated validators match the schemas.

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../shared/render-context.mjs';
 import { esc, renderDefinitions, renderSemanticSigil, textUnits } from '../shared/utils.mjs';
 import { animateAttr, focusEdgeAttrs, focusNodeAttrs, focusNodeTitle, loadDiagramWithBrandMarks, writeDiagram, svgAccessibleText, svgRootAttrs } from '../shared/cli.mjs';
 import { throwDiagnosticProblems } from '../shared/diagnostics.mjs';
@@ -42,11 +43,10 @@ const nodeTextFit = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const { diagram: dataflow, template, outPath } = await loadDiagramWithBrandMarks({
-  rendererDir: __dirname,
-  diagramType: 'dataflow',
-  defaultExample: 'product-analytics.dataflow.json'
-});
+
+// @@@ library seam - the renderer is a function of its IR: validated IR in, SVG out, diagnostics thrown.
+// The script entry at the bottom is one caller of it; the library (index.mjs) is the other ([[archify]]).
+export function renderDataflowSvg(dataflow) {
 
 const viewBox = dataflow.meta?.viewBox || [940, 720];
 const layout = {
@@ -473,11 +473,21 @@ ${renderLegend()}
 }
 
 validateDataflow();
-writeDiagram({
-  outPath,
-  template,
-  diagramType: 'dataflow',
-  meta: dataflow.meta,
-  svg: renderSvg(),
-  cards: dataflow.cards,
-});
+return renderSvg();
+}
+
+if (isMainModule(import.meta.url)) {
+  const { diagram, template, outPath } = await loadDiagramWithBrandMarks({
+    rendererDir: __dirname,
+    diagramType: 'dataflow',
+    defaultExample: 'product-analytics.dataflow.json'
+  });
+  writeDiagram({
+    outPath,
+    template,
+    diagramType: 'dataflow',
+    meta: diagram.meta,
+    svg: renderDataflowSvg(diagram),
+    cards: diagram.cards,
+  });
+}

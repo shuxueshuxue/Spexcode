@@ -9,27 +9,11 @@ import {
   MIN_PROJECTED_NODE_TEXT_PX,
   projectedNodeTextPx,
 } from '../renderers/shared/desktop-readability.mjs';
+import { isMainModule } from '../renderers/shared/render-context.mjs';
 
-const input = process.argv[2];
-
-if (!input || input === '-h' || input === '--help') {
-  console.error('Usage: node scripts/check-render-output.mjs <diagram.html>');
-  process.exit(input ? 0 : 2);
-}
-
-const htmlPath = path.resolve(input);
-let html;
-try {
-  html = fs.readFileSync(htmlPath, 'utf8');
-} catch (err) {
-  console.error(JSON.stringify({
-    ok: false,
-    file: htmlPath,
-    checks: [{ name: 'file_readable', ok: false, details: [err.message] }],
-  }, null, 2));
-  process.exit(1);
-}
-
+// @@@ library seam - the final-artifact check is a function of one page's HTML; the script entry below is one
+// caller, the library (index.mjs) is the other ([[archify]]).
+export function checkRenderOutput(html, htmlPath = null) {
 const checks = [];
 let composition = {
   schemaVersion: 1,
@@ -272,9 +256,34 @@ if (svgMatches.length === 1) {
 }
 
 const ok = checks.every((check) => check.ok) && composition.status !== 'fail';
-console.log(JSON.stringify({ ok, file: htmlPath, checks, composition }, null, 2));
-// Let pending stdout writes drain: large receipts are asynchronous when piped.
-process.exitCode = ok ? 0 : 1;
+return { ok, file: htmlPath, checks, composition };
+}
+
+if (isMainModule(import.meta.url)) {
+const input = process.argv[2];
+  
+  if (!input || input === '-h' || input === '--help') {
+    console.error('Usage: node scripts/check-render-output.mjs <diagram.html>');
+    process.exit(input ? 0 : 2);
+  }
+  
+  const htmlPath = path.resolve(input);
+  let html;
+  try {
+    html = fs.readFileSync(htmlPath, 'utf8');
+  } catch (err) {
+    console.error(JSON.stringify({
+      ok: false,
+      file: htmlPath,
+      checks: [{ name: 'file_readable', ok: false, details: [err.message] }],
+    }, null, 2));
+    process.exit(1);
+  }
+  const result = checkRenderOutput(html, htmlPath);
+  console.log(JSON.stringify(result, null, 2));
+  // Let pending stdout writes drain: large receipts are asynchronous when piped.
+  process.exitCode = result.ok ? 0 : 1;
+}
 
 function collectArrows(fragment) {
   const arrows = [];

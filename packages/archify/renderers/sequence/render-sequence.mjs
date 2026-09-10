@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../shared/render-context.mjs';
 import { esc, renderDefinitions, renderSemanticSigil, textUnits } from '../shared/utils.mjs';
 import { animateAttr, focusEdgeAttrs, focusNodeAttrs, focusNodeTitle, loadDiagramWithBrandMarks, writeDiagram, svgAccessibleText, svgRootAttrs } from '../shared/cli.mjs';
 import { throwDiagnosticProblems } from '../shared/diagnostics.mjs';
@@ -15,11 +16,10 @@ const participantTextFit = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const { diagram: sequence, template, outPath } = await loadDiagramWithBrandMarks({
-  rendererDir: __dirname,
-  diagramType: 'sequence',
-  defaultExample: 'cache-miss-request.sequence.json'
-});
+
+// @@@ library seam - the renderer is a function of its IR: validated IR in, SVG out, diagnostics thrown.
+// The script entry at the bottom is one caller of it; the library (index.mjs) is the other ([[archify]]).
+export function renderSequenceSvg(sequence) {
 
 const viewBox = sequence.meta?.viewBox || [920, 760];
 // The timeline scales with viewBox height: a taller viewBox gains message room,
@@ -454,11 +454,21 @@ ${renderLegend()}
 }
 
 validateSequence();
-writeDiagram({
-  outPath,
-  template,
-  diagramType: 'sequence',
-  meta: sequence.meta,
-  svg: renderSvg(),
-  cards: sequence.cards,
-});
+return renderSvg();
+}
+
+if (isMainModule(import.meta.url)) {
+  const { diagram, template, outPath } = await loadDiagramWithBrandMarks({
+    rendererDir: __dirname,
+    diagramType: 'sequence',
+    defaultExample: 'cache-miss-request.sequence.json'
+  });
+  writeDiagram({
+    outPath,
+    template,
+    diagramType: 'sequence',
+    meta: diagram.meta,
+    svg: renderSequenceSvg(diagram),
+    cards: diagram.cards,
+  });
+}

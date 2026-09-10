@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainModule } from '../shared/render-context.mjs';
 import { esc, renderDefinitions, renderSemanticSigil, textUnits } from '../shared/utils.mjs';
 import { animateAttr, focusEdgeAttrs, focusNodeAttrs, focusNodeTitle, loadDiagramWithBrandMarks, writeDiagram, svgAccessibleText, svgRootAttrs } from '../shared/cli.mjs';
 import { throwDiagnosticProblems } from '../shared/diagnostics.mjs';
@@ -40,11 +41,10 @@ const stateTextFit = {
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const { diagram: lifecycle, template, outPath } = await loadDiagramWithBrandMarks({
-  rendererDir: __dirname,
-  diagramType: 'lifecycle',
-  defaultExample: 'agent-run.lifecycle.json'
-});
+
+// @@@ library seam - the renderer is a function of its IR: validated IR in, SVG out, diagnostics thrown.
+// The script entry at the bottom is one caller of it; the library (index.mjs) is the other ([[archify]]).
+export function renderLifecycleSvg(lifecycle) {
 
 const viewBox = lifecycle.meta?.viewBox || [980, 660];
 const layout = {
@@ -551,11 +551,21 @@ ${renderLegend()}
 }
 
 validateLifecycle();
-writeDiagram({
-  outPath,
-  template,
-  diagramType: 'lifecycle',
-  meta: lifecycle.meta,
-  svg: renderSvg(),
-  cards: lifecycle.cards,
-});
+return renderSvg();
+}
+
+if (isMainModule(import.meta.url)) {
+  const { diagram, template, outPath } = await loadDiagramWithBrandMarks({
+    rendererDir: __dirname,
+    diagramType: 'lifecycle',
+    defaultExample: 'agent-run.lifecycle.json'
+  });
+  writeDiagram({
+    outPath,
+    template,
+    diagramType: 'lifecycle',
+    meta: diagram.meta,
+    svg: renderLifecycleSvg(diagram),
+    cards: diagram.cards,
+  });
+}

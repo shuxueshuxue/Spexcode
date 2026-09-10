@@ -2,6 +2,7 @@
 // pure; renderers own their layout tables and pass measured rects
 // ({x, y, width, height, cx, cy}) in.
 
+import { qualityProfileOverride } from './render-context.mjs';
 import { recordDiagnostic } from './diagnostics.mjs';
 
 // In degraded mode (no ajv) a type-wrong top-level field reaches the renderer.
@@ -946,7 +947,7 @@ export function cleanLabelRouteClearanceProblems({
 function qualityProfileForGate(profile, profileIsAuthoritative) {
   return profileIsAuthoritative
     ? profile
-    : process.env.ARCHIFY_QUALITY_PROFILE || profile;
+    : qualityProfileOverride() || profile;
 }
 
 function collectEligibleRoutedRelations({ relations, endpointIds, pathFor }) {

@@ -8,7 +8,7 @@ import test from 'node:test'
 import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 import { initializeFreshSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
-import { drainSession, linkZCodeChildSession, markIdle, markState, sessionHookState } from './sessions.js'
+import { drainSession, linkZCodeChildSession, markIdle, markState, sessionHookState, superviseDelivery } from './sessions.js'
 import { stampRvSock } from './harness.js'
 
 const parent = 'managed-watch-realtime-parent'
@@ -60,6 +60,9 @@ test('canonical managed watch wakes the real parent transport once per state com
       })
     })
     await new Promise<void>((resolve, reject) => { server!.once('error', reject); server!.listen(socketPath, resolve) })
+    // The application transaction only appends the state event. The owning backend supervisor turns that
+    // event into one ordinary parent-queue prompt and drains it through the bound transport.
+    superviseDelivery(20)
 
     const waitForReceipt = async (count: number): Promise<void> => {
       const deadline = Date.now() + 5_000

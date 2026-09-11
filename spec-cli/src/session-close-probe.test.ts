@@ -56,13 +56,16 @@ test('close uses a target tmux probe when the global listing is busy', { concurr
     const tmux = join(bin, 'tmux')
     writeFileSync(tmux, `#!/bin/sh
 args="$*"
+case "$1" in
+  -V) echo 'tmux 3.4'; exit 0 ;;
+esac
 case "$args" in
-  *" list-panes -t ${id} "*)
+  *"list-panes -t ${id} "*)
     if [ -f "${tmuxState}" ]; then exit 1; fi
     printf '${id}\\t${process.pid}\\tbash\\n'
     ;;
-  *" list-panes "*) sleep 5; exit 1 ;;
-  *" kill-session "*) touch "${tmuxState}" ;;
+  *"list-panes "*) sleep 5; exit 1 ;;
+  *"kill-session "*) touch "${tmuxState}" ;;
   *) exit 1 ;;
 esac
 `)

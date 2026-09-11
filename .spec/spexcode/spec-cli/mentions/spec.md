@@ -51,6 +51,10 @@ grammar it wears a reserved qualified token, so reading a draft tells you which 
   at most one supervisor: two different selectors, an unknown one, and an ambiguous prefix each fail the
   create loudly rather than landing a worker at top level where nobody would notice the miss.
   `@parent:` moves a session at BIRTH; [[session-reparent]] moves one that already exists.
+- **`[[file:<name>]]` is a passive reference to a file its session posted** ([[files]]). The `file:` qualifier keeps
+  it out of the node vocabulary — `:` is no id character — so it never resolves or expands as a node. It resolves
+  only against the posted list of the session whose text holds it, and in the dashboard it opens that file wherever
+  a `[[node]]` would open its node, the live terminal pane included.
 - **The grammar is script-agnostic.** A reference token speaks the id vocabulary defined once in
   [[spec-lint]]'s id-format rule (unicode letters/numbers, `-`, optional leading dot) plus `_`, which occurs
   in minted parent-qualified ids. The parser and the autocomplete trigger scan use that same vocabulary, so

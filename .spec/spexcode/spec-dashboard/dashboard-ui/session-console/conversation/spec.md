@@ -20,6 +20,8 @@ related:
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
   - spec-dashboard/test/timeline-load-earlier-position.e2e.mjs
   - spec-dashboard/src/readerSelection.js
+  - spec-dashboard/src/CopyButton.jsx
+  - spec-dashboard/src/clipboard.js
 ---
 
 # conversation
@@ -254,9 +256,28 @@ referent it cannot mistake, which is the thing a reader loses in a long turn. It
 [[prose-dispatch]] already offers a spec passage, minus the one part that surface needs and this one does
 not — an address to choose — because this composer already stands inside the session it is quoting.
 
-The copy acknowledgement is a transient overlay owned by the conversation shell. It must not become a flex
-row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is feedback,
-not conversation content.
+A selection's copy acknowledgement is a transient overlay owned by the conversation shell. It must not become a
+flex row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is
+feedback, not conversation content.
+
+**A MESSAGE CAN BE TAKEN WHOLE.** Every row that carries authored text wears one [[copy-control]] at the
+message's bottom-right, where the reader finishes it: hung just under the corner of the agent's note, of an
+event's note, and of a quoted message's bubble — the originating prompt, a sent message — in the empty space
+between rows; each agent turn inside an opened seam or the live tail keeps it inside its text's bottom-right
+corner ([[transcript-view]]). A code block inside any of them carries its own control for just the code, in the
+block's top-right. The message's control copies the row's authored Markdown whole, so a clamped note copies all
+of it. It belongs to the row, not to the selection: it exists in every browser, answers on itself rather than
+through the selection acknowledgement above, and its press neither takes the composer's focus nor retires a
+painted selection. Like the row's time it rests out of sight and comes up with the row under the pointer or
+keyboard focus; hidden, it takes no pointer, so the space it hangs in stays the next row's. It never adds to a
+row's height, except on a touch screen, where it is simply there on its own line under the message.
+
+**A POSTED FILE IS ONE CLICK AWAY.** A `[[file:<name>]]` anywhere in this conversation's prose — a note, a quoted
+message, an agent turn in a seam or the live tail — resolves against this session's own posted list ([[files]])
+and opens that file's resource tab, the one the files menu opens; on the phone, which has no resource tabs, it
+opens the file's preview page. A name the list does not answer to exactly once stays dotted and opens nothing. The
+conversation is what supplies the list to its prose, and it hands the same list on until the list itself changes,
+so a board push re-renders no reference.
 
 **This footer sends to its own session and nowhere else, and the `@` in a draft does not change that.** An
 `@` naming an existing session is a passive reference ([[mentions]]) — text, not a route; delivering to

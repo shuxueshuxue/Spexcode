@@ -1267,9 +1267,32 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc-h2 { font-size: var(--type-subtitle); }
 .doc-h3 { font-size: var(--type-body); }
 .doc-h4, .doc-h5, .doc-h6 { font-size: var(--type-control); }
-.doc-pre { margin: 0 0 10px; padding: 10px 12px; background: var(--panel2); border-radius: var(--radius); overflow-x: auto; font-size: var(--type-control); line-height: var(--leading-relaxed); }
+.doc-code { position: relative; margin: 0 0 10px; }
+.doc-pre { margin: 0; padding: 10px 12px; background: var(--panel2); border-radius: var(--radius); overflow-x: auto; font-size: var(--type-control); line-height: var(--leading-relaxed); }
 .doc-pre code { background: none; padding: 0; color: var(--ink); }
+/* THE ONE COPY CONTROL ([[copy-control]]): a quiet square that answers on itself — a check that fades back,
+   or a failure that stays until the next press. A code block wears it in its top-right corner, on the
+   block's own ground, shown while the block is pointed at or holds focus. */
+.copy-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0;
+  color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  cursor: pointer; transition: opacity var(--dur-tab) ease, color var(--dur-tab) ease;
+}
+.copy-btn:hover { color: var(--ink2); }
+.copy-btn.is-copied { color: var(--green); }
+.copy-btn.is-failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+.doc-code > .copy-btn { position: absolute; top: 6px; right: 6px; opacity: 0; }
+.doc-code:hover > .copy-btn, .doc-code > .copy-btn:focus-visible, .doc-code > .copy-btn.is-failed { opacity: 1; }
+/* where nothing can point the control is always shown, so the block keeps its corner clear of code */
+@media (hover: none) { .doc-code > .copy-btn { opacity: 1; } .doc-code > .doc-pre { padding-right: 36px; } }
+/* an agent turn that ends on a code block: its bottom-right control steps left of the block's corner column,
+   so on a one-line block the two never stack */
+.tx-say-text:has(> .rich-text > .doc-code:last-child) > .tx-copy { right: 34px; }
 .doc-link { color: var(--blue); }
+/* a posted file named in prose (`[[file:<name>]]`, [[files]]): a link wearing the posted-file glyph; a name the
+   session's list does not answer to exactly once stays dotted and opens nothing */
+.doc-file-ref > svg { display: inline-block; vertical-align: -2px; margin-right: 3px; }
+.doc-file-ref.is-unresolved { color: var(--muted); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
 .doc-external { text-decoration: underline; text-underline-offset: 2px; }
 .doc-quote { margin: 0 0 10px; padding: 4px 12px; color: var(--muted); border-left: 2px solid var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .doc-quote p { margin: 0; }
@@ -2913,13 +2936,23 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 
 /* THE AGENT IS THE PAGE: its report is the body — no well, no rule, no indent — at the prose size and held
    to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
-   footprint on a message. The copy button is a ghost for the one browser without Custom Highlight copy. */
+   footprint on a message. */
 .m-say { min-width: 0; max-width: 100%; }
 .m-say-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
 .m-say-chip { display: inline-flex; align-items: baseline; gap: 5px; font-size: var(--type-caption); font-weight: var(--weight-medium); }
 .m-ev-note { font-size: var(--type-prose); line-height: var(--leading-body); color: var(--ink2); overflow-wrap: anywhere; }
-.m-copy-note { margin-left: auto; padding: 0; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; opacity: 0; transition: opacity .12s; }
-.m-ev:hover .m-copy-note, .m-ev:focus-within .m-copy-note { opacity: 1; }
+/* A MESSAGE CAN BE TAKEN WHOLE ([[copy-control]]): every row that carries authored text wears one copy
+   control, hung just under the message's bottom-right corner — in the empty space between rows, so it never
+   covers a word or adds height — and shown while the row is pointed at. Hidden, it takes no pointer, so the
+   space it hangs in stays the reader's. Where nothing can point it is always there, on its own line. */
+.m-say, .m-line, .m-quote-line { position: relative; }
+.m-copy { position: absolute; top: 100%; right: 0; z-index: 1; opacity: 0; pointer-events: none; }
+.m-ev:hover .m-copy, .m-copy:focus-visible, .m-copy.is-failed { opacity: 1; pointer-events: auto; }
+.m-quote-line { display: flex; justify-content: flex-end; min-width: 0; }
+@media (hover: none) {
+  .m-copy { position: static; display: flex; margin: var(--space-2) 0 0 auto; opacity: 1; pointer-events: auto; }
+  .m-quote-line { flex-direction: column; align-items: flex-end; }
+}
 
 /* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
    page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.
@@ -2992,7 +3025,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .m-timeline { padding-inline: 14px; }
   .m-ev { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: var(--space-4) 0; }
   .m-ev > .m-gut { display: none; }
-  .m-say-head .m-copy-note { display: none; }
 }
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------
    The old transcript was a nested log: a tinted well, a rule under every turn, a role word above each one,
@@ -3035,7 +3067,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .rich-text a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
 .rich-text img { display: block; max-width: 100%; height: auto; margin: .55em 0; border-radius: var(--radius); }
 .rich-text code { padding: .08em .3em; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
-.rich-text pre { max-width: 100%; margin: .55em 0; padding: 8px 10px; overflow-x: auto; color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+:where(.rich-text) .doc-code { margin: .55em 0; }
+.rich-text pre { max-width: 100%; margin: 0; padding: 8px 10px; overflow-x: auto; color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
 .rich-text pre code { padding: 0; white-space: pre; background: transparent; border: 0; }
 .rich-text table { display: block; max-width: 100%; margin: .55em 0; overflow-x: auto; border-collapse: collapse; }
 .rich-text th, .rich-text td { padding: 4px 7px; white-space: nowrap; text-align: left; border: 1px solid var(--line); }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import RichText from './RichText.js'
+import { CodeCopyContext } from './clipboard.js'
 
 const renderRichText = (value, props = null) => renderToStaticMarkup(createElement(RichText, props, value))
 
@@ -145,4 +146,29 @@ test('renders math through Markdown nesting without treating code as a formula',
   assert.match(html, /<ul>/)
   assert.equal((html.match(/class="katex"/g) || []).length, 3)
   assert.match(html, /<code>\$not_math\$<\/code>/)
+})
+
+test('a code block carries the root-supplied copy control, handed its source without the closing newline', () => {
+  const source = ['```sh', 'npm test', '  echo "$HOME"', '', '```', '', '    indented()', ''].join('\n')
+  // bare (no root control, as in this test process): the block keeps its one shape and carries nothing
+  const bare = renderRichText(source)
+  assert.match(bare, /<div class="doc-code"><pre class="doc-pre"><code class="language-sh">npm test\n  echo &quot;\$HOME&quot;\n\n<\/code><\/pre><\/div>/)
+  const handed = []
+  const Probe = ({ text }) => { handed.push(text); return createElement('button', { className: 'probe' }) }
+  const html = renderToStaticMarkup(createElement(CodeCopyContext.Provider, { value: Probe }, createElement(RichText, null, source)))
+  assert.equal((html.match(/<\/pre><button class="probe"><\/button><\/div>/g) || []).length, 2, 'fenced and indented blocks alike')
+  // only the block's own final newline goes; an authored blank line inside it stays
+  assert.deepEqual(handed, ['npm test\n  echo "$HOME"\n', 'indented()'])
+})
+
+test('a posted-file reference is its own token, rendered by the host or left as its name', () => {
+  const source = 'Report: [[file:report.html]] beside [[copy-control]].'
+  const bare = renderRichText(source)
+  assert.match(bare, /<span class="doc-file-ref" data-file-ref="report\.html">report\.html<\/span>/)
+  assert.doesNotMatch(bare, /data-spec-id="file:/, 'a file reference never reads as a node id')
+  assert.match(bare, /data-spec-id="copy-control"/)
+  const seen = []
+  const hosted = renderRichText(source, { renderFileRef: (name) => { seen.push(name); return createElement('a', { className: 'probe' }, name) } })
+  assert.deepEqual(seen, ['report.html'])
+  assert.match(hosted, /<a class="probe">report\.html<\/a>/)
 })

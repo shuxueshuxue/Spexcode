@@ -65,7 +65,7 @@ reconnect storm.
 dropped from ~420ms median to ~56ms on the dogfood corpus. The sources and their scopes: (1) recursive
 filesystem observation on the per-user session store ([[runtime]]) → 'sessions' — the runtime envelope and the
 originating prompt. (1b) ONE non-recursive observation of the canonical session database's directory
-([[production-cutin]]), delivering only the database's own names (the file and its rollback journal) → 'sessions'.
+([[production-cutin]]), delivering only the database's own names (the file and its `-wal`/`-shm` sidecars) → 'sessions'.
 Since the JSON cutover a lifecycle transition is a SQLite commit made by whichever process authored it: the
 backend's own routes, but far more often a HOOK's process — mark-active on every prompt and tool call, the
 stop-gate's declarations, idle — through `spex internal session-state`. The backend's in-process commit observer
@@ -75,8 +75,9 @@ signal happened to re-splice — a message sent from the dashboard left the row 
 dogfood board: 150 seconds of nothing but pings after the commit, then a full patrol rebuild that still carried
 the old row, because a full build rebases the PUBLISHED session rows rather than re-listing them; only the
 sessions splice reads the store). The leaf is one registration whatever the store holds, is held and repaired
-like every other source, and its file identity is part of [[graph-cache]]'s session revision, so a held or
-disabled leaf degrades to the patrol's cadence rather than to silence. (2) the git dir's refs
+like every other source, and the main database plus WAL sidecars form the strict file identity folded into
+[[graph-cache]]'s session revision, so a held or disabled leaf degrades to the patrol's cadence rather than to
+silence. (2) the git dir's refs
 (loose refs recursively, `packed-refs`/`HEAD`) → 'full' — a commit legitimately reshapes nodes, drift, overlays and
 code anchors at once, which is why refs stay full-scope rather than pretending to a narrower domain. (3)
 TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms HOT tier (`hotSignature`

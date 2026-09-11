@@ -9,7 +9,7 @@ import { loadConfig, loadSpecs, mainRoot, runtimeRoot, sessionStoreDir, type Con
 import { defaultHarness, harnessById, sessionIdentityEnvVars, type Harness } from './harness.js'
 import { LAUNCH_FAST_FAIL_S } from './session-liveness.js'
 import { readRecord, type SessRec } from './session-record.js'
-import { lastHumanSendVia } from './session-timeline.js'
+import { lastSendVia } from './session-timeline.js'
 import { shQuote } from './sh.js'
 
 const HARNESS = defaultHarness
@@ -50,9 +50,9 @@ export function withPeerSenderHint(text: string, sender: MsgSender | null, sshAd
   return `${text}\n\n— from ${who} on machine ${machineId}. To reply: spex session send --ssh ${sshAddress} ${sender.id} "<your reply>"`
 }
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REPLY TRANSPORT: This sender cannot read normal assistant output. Before ending this turn, make your FINAL tool call a Spex declaration carrying the COMPLETE reply in --note: use \`session ask\` when waiting for a human reply; use \`done\` or \`park\` when that is the truthful state.\n\nFor multi-line replies, preserve real LF characters. \`functions.exec\` runs a shell command through bash, so never interpolate \`JSON.stringify(note)\` into it; use stdin, a heredoc, or base64, then pass \`--note \"$note\"\`. Never use \`String.raw\` or literal backslash+n. Do not call any tool after the declaration.`
-export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
+  `${text}\n\n— SEND FROM NOTE FLOW: Normal output is not visible to the sender. Before ending this turn, make your FINAL tool call a Spex declaration carrying the COMPLETE reply in --note. Use \`session ask\` when waiting for a human reply; use \`done\` or \`park\` when that is the truthful state.\n\nFor multi-line replies, preserve real LF characters. \`functions.exec\` runs through bash, so never interpolate \`JSON.stringify(note)\` into it; use stdin, a heredoc, or base64, then pass \`--note \"$note\"\`. Never use \`String.raw\` or a literal backslash+n. Do not call any tool after the declaration.\n\nThis does not mean that all subsequent messages use note flow. When a user message does not include the note flow suffix, your normal output is visible to the sender for that turn. Distinguish the two cases carefully.`
+export const withNoteReplyContinuationHint = (text: string): string =>
+  `${text}\n\n— SEND FROM NOTE FLOW.`
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
@@ -98,6 +98,7 @@ type SessionPromptTarget = Pick<SessRec, 'session' | 'harness'>
 type SessionPromptOptions = {
   from?: string
   replyVia?: 'note'
+  noteHint?: 'full' | 'continuation'
   loadedSpecs?: CommandSpec[]
   suffix?: string
 }
@@ -107,14 +108,17 @@ export type ComposedSessionPrompt = { text: string; replyVia?: 'note' }
 // exact text handed to an adapter. Launch, ordinary input, CLI send, issue dispatch, watch greetings, and
 // merge all enter here (directly or through sendText). `replyVia` is target readability: an explicit note
 // request wins; otherwise a headless adapter defaults to note. This function alone decides and appends the
-// note/terminal inserts, so clients never own the policy or duplicate the phrase.
+// note insert, so clients never own the policy or duplicate the phrase. Pane-backed targets keep their
+// ordinary prompt text; this seam cannot observe direct terminal input and does not synthesize a terminal mode.
 export async function composeSessionPrompt(raw: string, target: SessionPromptTarget, opts: SessionPromptOptions = {}): Promise<ComposedSessionPrompt> {
   const resolved = await resolveCommandPrompt(raw, opts.loadedSpecs)
   const prompt = opts.suffix ? `${resolved}${opts.suffix}` : resolved
   const h = harnessById(target.harness || defaultHarness.id)
   const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
-  const text = replyVia === 'note' ? withNoteReplyHint(prompt)
-    : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
+  const text = replyVia === 'note'
+    ? (opts.noteHint ?? (lastSendVia(target.session) === 'note' ? 'continuation' : 'full')) === 'continuation'
+      ? withNoteReplyContinuationHint(prompt) : withNoteReplyHint(prompt)
+    : prompt
   return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
 }
 const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text

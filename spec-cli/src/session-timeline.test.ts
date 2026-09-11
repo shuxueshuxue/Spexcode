@@ -18,7 +18,7 @@ import {
   timelineStamp,
 } from './session-timeline.js'
 import { cancelSessionWatch, listSessionWatches, subscribeSessionWatch } from './sessions.js'
-import { composeSessionPrompt, withNoteReplyHint, withTerminalReplyHint } from './session-prompt.js'
+import { composeSessionPrompt, withNoteReplyHint } from './session-prompt.js'
 
 const ID = 'timeline-session'
 const PARENT = 'timeline-parent'
@@ -128,7 +128,7 @@ test('timeline display maps lifecycle and proposal once', () => {
   assert.equal(timelineDisplay({ status: 'error', proposal: null }), 'error')
 })
 
-test('reply hints are explicit and composable', () => {
+test('note reply hint is explicit', () => {
   const note = withNoteReplyHint('hello')
   assert.match(note, /REPLY TRANSPORT/)
   assert.match(note, /FINAL tool call a Spex declaration/)
@@ -139,9 +139,6 @@ test('reply hints are explicit and composable', () => {
   assert.match(note, /stdin, a heredoc, or base64/)
   assert.match(note, /never use `String\.raw` or literal backslash\+n/i)
   assert.match(note, /`JSON\.stringify\(note\)`/)
-  const terminal = withTerminalReplyHint(note)
-  assert.match(terminal, /terminal-attached client/)
-  assert.match(terminal, /hello/)
 })
 
 test('composeSessionPrompt keeps headless defaults and explicit prompt order', async () => {

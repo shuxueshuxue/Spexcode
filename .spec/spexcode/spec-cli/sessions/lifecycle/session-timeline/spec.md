@@ -166,15 +166,10 @@ text without inserts and `replyVia:"note"` whenever note is the effective channe
 so restart-safe channel history describes where a reply was actually readable rather than which caller
 happened to set a flag.
 
-**The reply-channel signal is symmetric — changing readability must not leave notes sticky.** The note insert
-declares itself per-message, and an effective note→terminal transition gets an explicit counter-insert: a
-human send whose effective channel is terminal and whose *previous human* send used note
-(`lastHumanSendVia`, derived from the durable sent log — no new state, restart-safe; agent-to-agent sends
-neither set nor clear it, they say nothing about where the human reads) is delivered wrapped in
-`withTerminalReplyHint` — "the sender reads your terminal again; reply in normal output, not in `--note`".
-Fired exactly once: the transition send itself is recorded without the note marker, so the next terminal send ships bare.
-Without the counter-signal an agent that note-replied a few times keeps note-replying from context inertia
-long after the human left the phone — the failure that made entering the phone surface feel irreversible.
+Pane-backed targets keep ordinary prompt text whenever the effective channel is terminal. This seam does not
+observe direct input typed into the agent's terminal, does not author a terminal-mode event, and does not append
+a synthetic note→terminal reset hint. A terminal client or adapter that can observe such input owns any future
+mode signal; the timeline must not infer one from a Spex send that merely omits `replyVia`.
 
 Messages enqueued by the CLI's offline send path and by descendant broadcast remain durable queue entries until
 the recipient or its backend drains them; the hook's prompt event is not a receipt path.

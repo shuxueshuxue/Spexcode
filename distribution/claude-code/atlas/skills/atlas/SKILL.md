@@ -7,13 +7,16 @@ description: "Use when the user wants pictures of the spec tree — draw the atl
 
 ## Before you start
 
-This skill draws with SpexCode's command line.
+This skill draws with SpexCode's command line and needs nothing installed or configured on this machine.
 
-- Run `spex --version`. If there is no `spex`, install it once: `npm i -g spexcode@next` (Node 22 or newer).
-- If the repository has no `.spec/` tree yet, adopt it: `spex init --harness <your harness>` (claude, zcode, codex,
-  …). Then describe the project in its root `spec.md` and grow the child nodes worth drawing — a diagram draws a
-  node's children, so the tree comes first.
-- `spex guide diagram` is the manual for the format and the loop; read it once.
+- Run SpexCode through npx: `npx -y -p spexcode@next spex <command>` (Node 22 or newer). Wherever a step below says
+  `spex …`, run it that way; a `spex` already on the PATH works the same.
+- A diagram draws one node of the repository's spec tree, the `.spec/` folder. If the repository has none, write
+  only what the drawing needs: `.spec/<project>/spec.md` describing the project, and one folder beside it per part
+  worth a box, each with its own `spec.md` — a `title:` and a `code:` line naming the file it is about in the
+  frontmatter, a sentence or two below. That is the whole setup: no `spex init`, no hooks, no agent configuration.
+  `spex guide spec` has the full file format if you need more.
+- `spex guide diagram` is the manual for the diagram format and the loop; read it once.
 
 Draw the spec tree's pictures: one `diagram.json` beside each node's `spec.md` that is worth one.
 The format, the rules and the loop for a single diagram live in `spex guide diagram` — read it before drawing.
@@ -38,3 +41,9 @@ This skill is the campaign around that loop.
    relation the body never states — goes into an issue or your report, never into the picture.
 5. **Land it.** `spex spec lint`, then commit the diagrams, together with any spec change they belong to.
 6. **Report** which nodes got which kind of diagram, which were skipped and why, and anything you filed.
+
+## Hand over the page
+
+`npx -y -p spexcode@next -p @spexcode/spec-dashboard@next spex graph --public --html spexcode-atlas.html` writes the whole tree — every body and
+every picture — as one self-contained page that opens in any browser, straight from disk. Offer it with the report;
+it is a product of the tree, not part of it, so leave it uncommitted.

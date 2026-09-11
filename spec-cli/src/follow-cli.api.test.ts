@@ -8,7 +8,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
+import { configuredSessionApplication } from './session-application.js'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -99,7 +99,6 @@ const append = (dir: string, ev: Record<string, unknown>): void =>
 
 const events = (dir: string): Array<{ kind: string; text?: string; from?: string | null }> => {
   const id = dir.split('/').at(-1)!
-  resetConfiguredSessionApplicationForTest()
   const app = configuredSessionApplication()
   if (!app?.readState(id)) return []
   const messages = app.readPendingMessages(id).flatMap((message) => {
@@ -114,9 +113,9 @@ const events = (dir: string): Array<{ kind: string; text?: string; from?: string
   })
   return messages.filter((message, index) => messages.findIndex((candidate) => candidate.text === message.text && candidate.from === message.from) === index)
 }
-async function waitFor(check: () => boolean, label: string): Promise<void> {
+async function waitFor(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
   const deadline = Date.now() + 2_000
-  while (!check()) {
+  while (!await check()) {
     if (Date.now() >= deadline) assert.fail(`timed out waiting for ${label}`)
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
@@ -164,35 +163,47 @@ test('managed watch registers once, delivers child states, and cancel stops deli
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete base[key]
   const parentEnv = { ...base, SPEXCODE_SESSION_ID: WATCHER }
   const childEnv = { ...base, SPEXCODE_SESSION_ID: ID }
+  const backendPort = await refusedPort()
+  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(backendPort)], {
+    cwd: repo,
+    env: { ...base, PORT: String(backendPort), SPEXCODE_TMUX: `spex-follow-cli-backend-${backendPort}` },
+    stdio: ['ignore', 'ignore', 'ignore'],
+  })
 
-  const installed = await runCli(['session', 'watch', ID], parentEnv, repo)
-  assert.equal(installed.code, 0, installed.stderr)
-  assert.equal(installed.stdout.trim(), `watching ${ID}`)
-  assert.equal(events(parentDir).filter((event) => event.kind === 'sent').length, 1, 'installation enqueues the current state')
+  try {
+    await waitFor(() => fetch(`http://127.0.0.1:${backendPort}/health`).then((response) => response.ok).catch(() => false), 'watch fixture backend did not become healthy')
+    const installed = await runCli(['session', 'watch', ID], parentEnv, repo)
+    assert.equal(installed.code, 0, installed.stderr)
+    assert.equal(installed.stdout.trim(), `watching ${ID}`)
+    assert.equal(events(parentDir).filter((event) => event.kind === 'sent').length, 1, 'installation enqueues the current state')
 
-  const listed = await runCli(['session', 'watch', 'list'], parentEnv, repo)
-  assert.equal(listed.code, 0, listed.stderr)
-  assert.match(listed.stdout, new RegExp(`^${ID}\\t`, 'm'))
+    const listed = await runCli(['session', 'watch', 'list'], parentEnv, repo)
+    assert.equal(listed.code, 0, listed.stderr)
+    assert.match(listed.stdout, new RegExp(`^${ID}\\t`, 'm'))
 
-  const declared = await runCli(['session', 'done', '--propose', 'merge'], childEnv, repo)
-  assert.equal(declared.code, 0, declared.stderr)
-  await waitFor(() => events(parentDir).filter((event) => event.kind === 'sent').length === 2, 'watch-delivered review')
-  const review = events(parentDir).at(-1)
-  assert.equal(review?.from, ID)
-  assert.match(review?.text || '', /review/)
+    const declared = await runCli(['session', 'done', '--propose', 'merge'], childEnv, repo)
+    assert.equal(declared.code, 0, declared.stderr)
+    await waitFor(() => events(parentDir).some((event) => event.kind === 'sent' && /review/.test(event.text || '')), 'watch-delivered review')
+    const review = events(parentDir).find((event) => event.kind === 'sent' && /review/.test(event.text || ''))
+    assert.equal(review?.from, ID)
+    assert.match(review?.text || '', /review/)
 
-  const cancelled = await runCli(['session', 'watch', 'cancel', ID], parentEnv, repo)
-  assert.equal(cancelled.code, 0, cancelled.stderr)
-  assert.equal(cancelled.stdout.trim(), 'cancelled 1 watch')
-  const asked = await runCli(['session', 'ask', '--note', 'need input'], childEnv, repo)
-  assert.equal(asked.code, 0, asked.stderr)
-  await new Promise((resolve) => setTimeout(resolve, 50))
-  assert.equal(events(parentDir).filter((event) => event.kind === 'sent').length, 2, 'cancel prevents later child delivery')
+    const cancelled = await runCli(['session', 'watch', 'cancel', ID], parentEnv, repo)
+    assert.equal(cancelled.code, 0, cancelled.stderr)
+    assert.equal(cancelled.stdout.trim(), 'cancelled 1 watch')
+    const asked = await runCli(['session', 'ask', '--note', 'need input'], childEnv, repo)
+    assert.equal(asked.code, 0, asked.stderr)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    assert.equal(events(parentDir).some((event) => event.kind === 'sent' && /asking/.test(event.text || '')), false, 'cancel prevents later child delivery')
 
-  const unmanaged = await runCli(['session', 'watch', ID], base, repo)
-  assert.equal(unmanaged.code, 0, unmanaged.stderr)
-  assert.match(unmanaged.stderr, new RegExp(`spex session wait ${ID}`))
-  assert.equal(configuredSessionApplication()!.readState(ID)?.status, 'asking')
+    const unmanaged = await runCli(['session', 'watch', ID], base, repo)
+    assert.equal(unmanaged.code, 0, unmanaged.stderr)
+    assert.match(unmanaged.stderr, new RegExp(`spex session wait ${ID}`))
+    assert.equal(configuredSessionApplication()!.readState(ID)?.status, 'asking')
+  } finally {
+    if (backend.exitCode === null) backend.kill('SIGTERM')
+    await once(backend, 'exit').catch(() => {})
+  }
 })
 
 test('CLI stop and close exit nonzero when the backend commits no target transition', async () => {

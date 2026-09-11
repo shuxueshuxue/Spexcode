@@ -10,7 +10,7 @@ const isLongQuote = (text: string): boolean => text.length > 700 || (text.match(
 // THE PERSON IS QUOTED: a bubble off to its own side, with one corner squared. The name sits on the bubble
 // when the host knows it; the time shows only in a narrow pane, where there is no ruler beside the flow.
 export function Quote({ who = null, ts = null, text, className = '' }: { who?: string | null; ts?: number | string | null; text: string; className?: string }) {
-  const { renderText, labels, suppressExpand } = useTranscriptUi()
+  const { renderText, renderCopy, labels, suppressExpand } = useTranscriptUi()
   const [open, setOpen] = useState(false)
   const clamped = !open && isLongQuote(text)
   // opening grows the bubble; without this the scroller slides by that growth and takes the reader with it
@@ -26,6 +26,8 @@ export function Quote({ who = null, ts = null, text, className = '' }: { who?: s
         <div className="tx-quote-head">
           {who && <span className="tx-quote-who">{who}</span>}
           {ts != null && <time className="tx-time">{timeOf(ts)}</time>}
+          {/* the copy control follows the time: drawn wherever this quote draws its time */}
+          {ts != null && renderCopy && <span className="tx-copy">{renderCopy(text)}</span>}
         </div>
       )}
       <div className="tx-quote-text">{renderText(text)}</div>

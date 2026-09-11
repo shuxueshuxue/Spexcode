@@ -692,14 +692,15 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     lastDay = dayKey(ts)
     rows.push(<div className="m-day" key={`d${key}`}><div className="m-day-rule" /><span className="m-day-label">{dayOf(ts)}</span></div>)
   }
-  const gutter = (ts) => <div className="m-gut"><time>{timeOf(ts)}</time></div>
+  // a quoted message's copy control lives on its time, under it in the ruler ([[copy-control]])
+  const gutter = (ts, copy = null) => <div className="m-gut">{ts ? <time>{timeOf(ts)}</time> : null}{copy}</div>
   const promptTs = s.created || detail?.created || events?.[0]?.ts
   if (detail?.prompt) {
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
       <div className="m-ev m-ev-prompt" key="prompt" data-at={atOf(promptTs)}>
-        <div className="m-quote-line"><Quote ts={promptTs} text={detail.prompt} /><CopyButton text={detail.prompt} className="m-copy" /></div>
-        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
+        <Quote ts={promptTs} text={detail.prompt} />
+        {gutter(promptTs, <CopyButton text={detail.prompt} className="m-copy" />)}
       </div>,
     )
   }
@@ -721,11 +722,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (item.kind === 'quote') {
       rows.push(
         <div className="m-ev m-ev-sent" key={i} data-at={atOf(item.ts)}>
-          <div className="m-quote-line">
-            <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
-            <CopyButton text={item.text} className="m-copy" />
-          </div>
-          {gutter(item.ts)}
+          <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+          {gutter(item.ts, <CopyButton text={item.text} className="m-copy" />)}
         </div>,
       )
     } else if (item.kind === 'say') {
@@ -741,9 +739,9 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
                 <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
                 <span className="m-ev-word">{t(`status.${item.status}`)}</span>
               </span>
+              {item.text && <CopyButton text={item.text} className="m-copy" />}
             </div>
             {item.text && <ClampedNote text={item.text} />}
-            {item.text && <CopyButton text={item.text} className="m-copy" />}
           </article>
         </div>,
       )

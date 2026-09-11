@@ -254,17 +254,20 @@ A selection's copy acknowledgement is a transient overlay owned by the conversat
 flex row or otherwise change the timeline scroller's geometry while it appears or disappears; copying is
 feedback, not conversation content.
 
-**A MESSAGE CAN BE TAKEN WHOLE.** Every row that carries authored text wears one [[copy-control]] at the
-message's bottom-right, where the reader finishes it: hung just under the corner of the agent's note, of an
-event's note, and of a quoted message's bubble — the originating prompt, a sent message — in the empty space
-between rows; each agent turn inside an opened seam or the live tail keeps it inside its text's bottom-right
-corner ([[transcript-view]]). A code block inside any of them carries its own control for just the code, in the
-block's top-right. The message's control copies the row's authored Markdown whole, so a clamped note copies all
-of it. It belongs to the row, not to the selection: it exists in every browser, answers on itself rather than
-through the selection acknowledgement above, and its press neither takes the composer's focus nor retires a
-painted selection. Like the row's time it rests out of sight and comes up with the row under the pointer or
-keyboard focus; hidden, it takes no pointer, so the space it hangs in stays the next row's. It never adds to a
-row's height, except on a touch screen, where it is simply there on its own line under the message.
+**A MESSAGE CAN BE TAKEN WHOLE.** Every row that carries authored text wears one [[copy-control]] right of its
+time, in the time's own flow, so the line's width decides whether it shares the time's line or wraps under it:
+after the status in the agent's note head (`12:45 AM · review · [copy]`), and after the time of a quoted message —
+the originating prompt, a sent message — wherever that time is drawn: in the ruler on a wide pane, where the narrow
+column usually wraps it to `07:49` / `AM [copy]`, or on the bubble itself when the pane is too narrow for the ruler.
+An event line keeps it at the end of its one line, where it cannot open a gap between the status and the note.
+Each agent turn inside an opened seam or the live tail has no time of its own and keeps its control inside its
+text's bottom-right corner ([[transcript-view]]). A code block inside any of them carries its
+own control for just the code, in the block's top-right. The message's control copies the row's authored Markdown
+whole, so a clamped note copies all of it. It belongs to the row, not to the selection: it exists in every
+browser, answers on itself rather than through the selection acknowledgement above, and its press neither takes
+the composer's focus nor retires a painted selection. Like the row's time it rests out of sight and comes up only
+with the row under the pointer or keyboard focus, and hidden it takes no pointer; where nothing can point it is simply there, in the same
+place.
 
 **A POSTED FILE IS ONE CLICK AWAY.** A `[[file:<name>]]` anywhere in this conversation's prose — a note, a quoted
 message, an agent turn in a seam or the live tail — resolves against this session's own posted list ([[files]])

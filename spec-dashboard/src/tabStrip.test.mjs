@@ -141,9 +141,17 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.doesNotMatch(sideBar, /<DockToggle|name="panel-left"/)   // the rail draws no switch of its own
   const contextToggle = shell.match(/function ContextToggle\([\s\S]*?\n}\n\nexport default function Shell/)
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
+  assert.match(contextToggle[0], /className=\{`context-toggle dock-head-act\$\{visible \? ' on' : ''\}`\}/)
   assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
+  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} open=\{contextOpen\} \/>/)
+  assert.match(shell, /<div className="context-toggle-slot">\{contextToggle\}<\/div>/)
+  assert.match(shell, /trailing=\{contextToggleReservation\}/)
+  assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)
+  assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 28px;/s)
+  assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*28px; height:\s*28px;[^}]*padding:\s*0;/s)
+  assert.match(css, /\.si-pill\s*\{[^}]*height:\s*28px;/s)
 })
 
 test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {

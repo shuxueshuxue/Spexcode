@@ -308,6 +308,70 @@ test('YATU: a dispatched probe worker receives the note-to-terminal counter-inse
   }
 })
 
+// Claude and pi pin their native id at launch and share the rendezvous transport, so the fake runtime serves both
+// harness rows; each one must reach the retry sweep through the binding its launch writes.
+for (const harness of ['claude', 'pi'] as const) test(`YATU: a Command Box message whose first handoff is lost reaches the ${harness} worker without a second send`, { timeout: 90_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-retry-'))
+  const project = join(fixture, 'project')
+  const home = join(fixture, 'home')
+  const port = await freePort()
+  const tmux = `timeline-retry-${process.pid}-${Date.now()}`
+  let backend: ChildProcess | null = null
+  const base = `http://127.0.0.1:${port}`
+  let id = ''
+  try {
+    mkdirSync(join(project, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
+      harnesses: [harness], sessions: { launchers: { fake: { harness, cmd: fakeLauncher } }, defaultLauncher: 'fake' },
+    }) + '\n')
+    git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')
+    git(project, 'add', '.'); git(project, 'commit', '-qm', 'fixture')
+    // Both attempts of the first handoff are discarded, as a displacing liveness probe does to a real delivery.
+    const env: NodeJS.ProcessEnv = {
+      ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: tmux, CLAUDE_CONFIG_DIR: join(home, 'claude'),
+      SPEXCODE_PI_AGENT_DIR: join(home, 'pi-agent'), FAKE_HARNESS_INTERVAL_MS: '1000', FAKE_HARNESS_DROP_REPLIES: '2',
+    }
+    mkdirSync(join(home, 'claude'), { recursive: true })
+    delete env.SPEXCODE_API_URL
+    delete env.SPEXCODE_SESSION_ID
+    for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'OPENCODE_SESSION_ID', 'PI_SESSION_ID']) delete env[key]
+    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'cli.ts'), 'serve', '--port', String(port)], {
+      cwd: project, env, stdio: 'ignore', detached: true,
+    })
+
+    await waitFor(() => fetch(`${base}/health`).then((r) => r.ok).catch(() => false), 'backend health', 30_000)
+    const created = await fetch(`${base}/api/sessions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'retry probe', launcher: 'fake' }),
+    })
+    const createdText = await created.text()
+    assert.equal(created.status, 201, createdText)
+    id = (JSON.parse(createdText) as { id: string }).id
+    await waitFor(() => fetch(`${base}/api/sessions/${id}`).then(async (r) => r.ok && (await r.json() as { liveness?: string }).liveness === 'online').catch(() => false), 'probe worker online', 30_000)
+    // The launch drains once more when its readiness fence passes (a 200ms poll). Let that pass see an empty queue,
+    // so the only thing left to hand the lost message over is the retry sweep this test is about.
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+
+    const sent = await fetch(`${base}/api/sessions/${id}/input`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text: 'first-handoff-lost' }),
+    })
+    assert.equal(sent.status, 200, await sent.text())
+    const capture = () => fetch(`${base}/api/sessions/${id}/capture`).then((r) => r.text())
+    await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY first-handoff-lost')), 'the owed message handed over by the retry sweep')
+    const pane = await capture()
+    assert.equal(pane.split('\n').filter((line) => line.includes('FAKE-HARNESS DROPPED first-handoff-lost')).length, 2, pane)
+
+    const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)
+    const body = await timeline.json() as { events: Array<{ kind: string; text?: string }> }
+    assert.deepEqual(body.events.filter((event) => event.kind === 'sent').map((event) => event.text), ['first-handoff-lost'])
+  } finally {
+    if (id) await fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
+    if (backend) await stop(backend)
+    spawnSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' })
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
 test('YATU: pi-headless defaults launch and CLI send replies to durable notes', { timeout: 90_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-headless-'))
   const project = join(fixture, 'project')

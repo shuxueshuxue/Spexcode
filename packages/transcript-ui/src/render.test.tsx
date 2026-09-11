@@ -222,3 +222,12 @@ test('a spoken turn carries the host copy control, handed its authored text; a t
   assert.deepEqual(copied, ['the **answer**'], 'the control is handed the source, not the rendered text')
   assert.match(html, /<div class="tx-say-text">.*<span class="tx-copy"><button data-copy="the \*\*answer\*\*"><\/button><\/span><\/div>/)
 })
+
+test('a quote carries the host copy control right after its time, and none where it draws no time', () => {
+  const withCopy = (text: string) => createElement('button', { 'data-copy': text })
+  const html = renderToStaticMarkup(createElement(TranscriptUi, { renderCopy: withCopy }, createElement(Quote, { ts: Date.parse('2026-09-10T07:49:00Z'), text: 'ship it' })))
+  assert.match(html, /<time class="tx-time">[^<]*<\/time><span class="tx-copy"><button data-copy="ship it"><\/button><\/span><\/div>/)
+  const timeless = renderToStaticMarkup(createElement(TranscriptUi, { renderCopy: withCopy }, createElement(Quote, { who: 'peer', text: 'no time' })))
+  assert.doesNotMatch(timeless, /tx-copy/, 'the control follows the time')
+  assert.doesNotMatch(renderToStaticMarkup(createElement(Quote, { ts: Date.parse('2026-09-10T07:49:00Z'), text: 'bare host' })), /tx-copy/)
+})

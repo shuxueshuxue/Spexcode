@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SpexCode Atlas</title>
+<link rel="stylesheet" href="diagram.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="empty" class="empty" hidden>
+    <p id="empty-text"></p>
+    <button id="empty-draw" type="button" class="primary">Draw the atlas</button>
+  </section>
+  <main id="atlas" class="atlas" hidden>
+    <nav class="tree-pane">
+      <div class="pane-head">
+        <span>Spec tree</span>
+        <button id="draw" type="button" title="Start an agent that extracts the spec tree and draws its pictures">Draw the atlas</button>
+      </div>
+      <div id="tree" class="tree"></div>
+      <p id="tree-note" class="muted"></p>
+      <p id="status" class="muted"></p>
+    </nav>
+    <article id="document" class="document">
+      <h1 id="title"></h1>
+      <p id="desc" class="desc"></p>
+      <p id="code" class="code"></p>
+      <figure id="diagram" class="node-diagram" hidden>
+        <div id="diagram-box" class="archify" data-detail-level="read"></div>
+        <figcaption id="diagram-note" class="note"></figcaption>
+      </figure>
+      <div id="body" class="body"></div>
+    </article>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

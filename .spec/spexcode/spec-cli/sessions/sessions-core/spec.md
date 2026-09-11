@@ -61,13 +61,16 @@ relation and its pending delivery without minting a root record, a watcher, or a
 The runtime envelope remains metadata-only for governed sessions. The `.json-migration.lock` fence blocks any
 legacy writer during the one-time import; after the marker, residue is retired and governed metadata writes omit
 `status`, `proposal`, `note`, and `parent`, while non-governed external runtime records keep their own contract.
-An active Claude session without a native harness identity may still drain through its adapter-owned rendezvous
-transport; every other binding problem stays fail-closed. No caller reads or writes lifecycle facts in JSON.
+No caller reads or writes lifecycle facts in JSON.
 
 A retired protocol address is not delivery debt — the sweep drops that impossible lookup instead of polling it
-forever — and a queue with no bound runtime is retained but not polled, since binding or resume is what makes it
-drainable. Acceptance there is still success: the caller is told `delivery: queued` after the message commits,
-never a false append failure because the post-commit drain refused an unbound runtime.
+forever — and a queue with no bound runtime is retained but not polled, since binding is what makes it drainable.
+Every adapter reaches that binding through one writer, and it records the adapter's exact native target identity
+([[harness-adapter]]): a caller-pinned adapter (Claude and pi, headless or not) is bound by every launch, which is
+idempotent for an unchanged identity, and a native-assigned adapter by its capture. There is no unbound delivery path
+beside it, so the retry sweep reaches every launched session. Acceptance there is still success: the caller is told
+`delivery: queued` after the message commits, never a false append failure because the post-commit drain refused an
+unbound runtime.
 
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is settled, its worktree is
@@ -153,11 +156,12 @@ failure: it clears the prior `error` lifecycle and its failure note, publishes t
 until a real activity hook makes it `active`, and never leaves an online worker represented as `error`. Waiting
 declarations (`asking`, `parked`, or an `awaiting` proposal) remain waiting declarations when resumed; only the
 terminal error state is reset by this explicit recovery operation.
-During the one-time JSON-to-application cutover, a legacy active record may still lack a native harness session
-identity and runtime binding. Dispatch does not strand that record behind a false `ok`: the record's adapter-owned
-rendezvous transport remains its exact legacy identity, so the canonical queue may drain through that transport and
-then dequeue the delivered message. This exception is limited to Claude records missing the harness session id;
-new records and other records with a binding problem remain fail-closed until their runtime binding is repaired.
+A backend start gives each governed, unarchived record it launched the binding its launch writes, so a session
+launched by an earlier toolchain is not left outside the retry sweep. The launch script a launch leaves in the
+session store is the witness; a record no launch here produced (an adopter's or a fixture's) keeps whatever binding
+its owner gives it, and a session that is already bound keeps its binding. The start token's one home is the record;
+a record without one gets its first token when it is bound. The pass is idempotent and reports each record it cannot
+bind.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],

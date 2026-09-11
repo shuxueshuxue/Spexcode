@@ -1424,6 +1424,7 @@ test('stop consumes one durable leaf receipt across unreadable, dead-pane, and c
   writeFileSync(join(bin, 'tmux'), `#!/bin/sh
 command=
 target=
+if [ "$1" = "-V" ]; then echo 'tmux 3.4'; exit 0; fi
 while [ "$#" -gt 0 ]; do
   case "$1" in
     list-panes|kill-session) command="$1" ;;

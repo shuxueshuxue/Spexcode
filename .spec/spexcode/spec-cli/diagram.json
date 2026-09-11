@@ -132,20 +132,10 @@
       ]
     },
     {
-      "id": "source-read",
-      "type": "security",
-      "label": "source-read",
-      "sublabel": "治理文件的字节窗口读取",
-      "sources": [
-        {
-          "path": ".spec/spexcode/spec-cli/source-read/spec.md",
-          "label": "spec"
-        },
-        {
-          "path": "spec-cli/src/source-read.ts",
-          "label": "code"
-        }
-      ],
+      "id": "read-surfaces",
+      "type": "frontend",
+      "label": "read-surfaces",
+      "sublabel": "图 · 树 · 搜索 · 打开节点与源码",
       "pos": [
         1040,
         350
@@ -229,26 +219,6 @@
       ]
     },
     {
-      "id": "graph-delivery",
-      "type": "messagebus",
-      "label": "graph-delivery",
-      "sublabel": "5 节点 · /api/graph 精简 + SSE 推送",
-      "sources": [
-        {
-          "path": ".spec/spexcode/spec-cli/graph-delivery/spec.md",
-          "label": "spec"
-        }
-      ],
-      "pos": [
-        720,
-        180
-      ],
-      "size": [
-        220,
-        60
-      ]
-    },
-    {
       "id": "mentions",
       "type": "backend",
       "label": "mentions",
@@ -304,8 +274,7 @@
       "wraps": [
         "host-gateway",
         "public-mode",
-        "listener-readiness",
-        "graph-delivery"
+        "listener-readiness"
       ]
     },
     {
@@ -321,7 +290,7 @@
       "label": "spec 真源与读路径",
       "wraps": [
         "source-of-truth",
-        "source-read"
+        "read-surfaces"
       ]
     },
     {
@@ -416,22 +385,7 @@
       "toSide": "bottom"
     },
     {
-      "from": "graph-delivery",
-      "to": "sessions",
-      "label": "2 imports",
-      "fromSide": "left",
-      "toSide": "top",
-      "labelSegment": 0
-    },
-    {
-      "from": "graph-delivery",
-      "to": "source-of-truth",
-      "label": "1 import",
-      "fromSide": "bottom",
-      "toSide": "top"
-    },
-    {
-      "from": "source-read",
+      "from": "read-surfaces",
       "to": "source-of-truth",
       "label": "2 imports"
     },

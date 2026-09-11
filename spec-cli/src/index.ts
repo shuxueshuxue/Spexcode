@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { EMPTY_PROMPT_ERROR, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, startWorktreeTrashReaper } from './sessions.js'
+import { EMPTY_PROMPT_ERROR, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, bindLaunchedRuntimes, startWorktreeTrashReaper } from './sessions.js'
 import { mergeSession, retractDiffComment, saveDiffComment, sendDiffComments, sessionDiff } from './session-review.js'
 import { sessionHost } from './session-host.js'
 import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable } from './session-record.js'
@@ -976,6 +976,7 @@ try {
 superviseBridges()   // restore visible helpers after failure; their viewer subscriptions survive replacement
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTurnFailures() // reconcile adapter-owned native failure subscriptions across backend replacement
+await bindLaunchedRuntimes()   // launched sessions from before launch-time binding get theirs, so the sweep below reaches them
 superviseDelivery()  // hand over messages an earlier pass could not ([[delivery-queue]]): the retry half of dispatch
 
 let graphWatchersClosed = false

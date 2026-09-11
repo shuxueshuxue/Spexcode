@@ -25,11 +25,12 @@ database path, positively establish local-filesystem locking capability, open th
 protocol address, and obtain the shared runtime-binding component. Neither `runtimeRoot()`, the legacy session record
 directory, nor the runtime envelope `runtime.json`, is a protocol database-path authority.
 
-The current governed registration path has a durable `harness_session_id` and Codex generation identity, but it does
-not yet receive an explicit protocol database handle or a locality verdict. Non-Codex direct registration also does
-not carry a native start token. Until those inputs are added by the owning production composition, this node provides
-the exact adapter seam and executable proof only; it does not claim that `bindHarnessSessionIdUnlocked` has cut over.
+Production binds through the backend's application composition, which resolves the explicit database path and its
+locality verdict for every canonical write, and every governed record carries its native start token. `sessions.ts`
+has one binding writer for every adapter: it binds the adapter's exact native target identity ([[harness-adapter]])
+with the record's start token. That writer is what production calls; this node keeps the leaf seam and its proof.
 
-No optional call, guessed database filename, legacy-JSON fallback, or logical-session-id-as-native-id substitution is
-allowed. Missing production inputs remain an explicit cut-in blocker rather than turning the old store into a second
-binding authority.
+No optional call, guessed database filename, or legacy-JSON fallback is allowed, and a logical session id never
+substitutes for a native id. A caller-pinned adapter is not such a substitution: its launch passed the governed id to
+the harness as the native id, which is exactly what its exact native target identity reports. A native-assigned
+adapter is bound only with the id captured from it.

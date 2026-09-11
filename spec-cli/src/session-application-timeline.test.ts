@@ -12,7 +12,8 @@ import { readTimeline } from './session-timeline.js'
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { sessionStateKit } from './session-declarations.js'
 import { rvSock, stampRvSock } from './harness.js'
-import { markHumanPromptActive, sendText } from './sessions.js'
+import { bindLaunchedRuntimes, markHumanPromptActive, sendText, sessionHasPendingDelivery } from './sessions.js'
+import { readRecord } from './session-record.js'
 import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 function selectTestStore(home: string, databasePath: string): () => void {
@@ -124,7 +125,7 @@ test('canonical lifecycle writers resolve a Codex thread alias before transition
   }
 })
 
-test('a migrated legacy Claude session still receives a prompt without a synthetic runtime binding', async () => {
+test('a Claude session launched before launch-time binding is bound at backend start and then receives a prompt', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-legacy-dispatch-'))
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
@@ -145,6 +146,13 @@ test('a migrated legacy Claude session still receives a prompt without a synthet
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
+    await bindLaunchedRuntimes()
+    const binding = app.resolveRuntime(id, 'spex-governed')
+    assert.equal(binding?.status, 'bound')
+    assert.equal(binding?.nativeSessionId, id, 'a caller-pinned adapter binds the id its launch pinned')
+    const token = readRecord(id)?.runtimeStartToken
+    assert.ok(token, 'a record from before start tokens receives one when it is bound')
+    assert.equal(binding?.nativeStartToken, token)
     const result = await sendText(id, 'legacy delivery marker')
     assert.deepEqual(result, { ok: true, delivery: 'accepted' })
     await new Promise(resolve => setTimeout(resolve, 20))
@@ -219,10 +227,12 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
+    await bindLaunchedRuntimes()
     const first = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(first, { ok: true, delivery: 'queued', replayed: false })
     assert.equal(app.readState(id)?.status, 'asking', 'a queued prompt must not claim the session is working before handoff')
     assert.equal(app.protocol.listPending(id).length, 1, 'the accepted message remains owed after transport refusal')
+    assert.equal(sessionHasPendingDelivery(id), true, 'the retry sweep owns a refused handover, not the next send')
 
     const replay = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(replay, { ok: true, delivery: 'queued', replayed: true })
@@ -274,6 +284,7 @@ test('a delivered human prompt reopens a parked session even when another prompt
   }, { text: 'already queued', from: null })
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
+    await bindLaunchedRuntimes()
     const result = await sendText(id, 'wake now')
     assert.equal(result.ok, true)
     assert.equal(app.readState(id)?.status, 'active', 'successful handoff must reopen parked even if later debt remains')

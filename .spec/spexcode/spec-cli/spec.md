@@ -184,9 +184,11 @@ mutations that commit no transition also answer with a non-2xx JSON error, so a 
 paint as a successful request on the dashboard; the lifecycle guard remains the authority on whether the
 destructive action is allowed.
 `/api/uploads` writes a pasted file to this (worker) machine's
-/tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions and
-`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions; the route layer still
-contains no harness protocol branch.
+/tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions,
+`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions, `bindLaunchedRuntimes()` to give
+launched sessions the runtime binding their launch writes ([[sessions-core]]), and then `superviseDelivery()`, the
+retry sweep that binding makes every launched session reachable by; the route layer still contains no harness
+protocol branch.
 The host ledger is equally thin: `GET /api/resources` returns [[host-resource-budget]]'s latest inventory.
 It is read-only; existing lifecycle mutations consult the adapter-owned shared-runtime guard before cleanup.
 

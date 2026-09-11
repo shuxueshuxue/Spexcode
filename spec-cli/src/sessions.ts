@@ -800,6 +800,11 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
   // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
   if (harness.ownsRendezvous) stampRvSock(id)
+  // A caller-pinned adapter's native identity is fixed by this launch, so it is bound here, before the spawn: a
+  // binding that cannot be written refuses the launch rather than leave a worker running that the caller counts as
+  // failed. A native-assigned adapter derives nothing yet and is bound by its capture instead.
+  const rec = readRecord(id)
+  if (rec) bindNativeRuntimeUnlocked(rec)
   const file = launchScript(id, tail, harness, cmd)
   await sessionHost().launch(id, launchShellCommand(file), path)
   markLaunched(id)   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
@@ -2641,6 +2646,46 @@ export function markHeadlessTurnFailure(sessionId: string, harness: string, exit
   const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
   return markTurnFailure(sessionId, `${harness} turn exited with ${outcome}`)
 }
+// @@@ bindNativeRuntimeUnlocked - the one writer of a session's spex-governed runtime binding, which is the one
+// path every delivery takes ([[delivery-queue]]). The native id is the adapter's exact native target for this
+// record ([[harness-adapter]]): a caller-pinned adapter's launch fixed it to the governed id, a native-assigned
+// adapter has it once captured, and no derivable target means nothing to bind yet. An unchanged identity is a
+// no-op, so every launch may call this. The start token's one home is the record (the launch env only carries a
+// copy of it), and a record from before start tokens gets its first one here.
+function bindNativeRuntimeUnlocked(rec: SessRec): void {
+  const nativeSessionId = harnessById(rec.harness || defaultHarness.id).exactNativeTargetId(rec)
+  if (!nativeSessionId) return
+  let nativeStartToken = rec.runtimeStartToken
+  if (!nativeStartToken) {
+    nativeStartToken = randomUUID()
+    writeRecord({ ...rec, runtimeStartToken: nativeStartToken })
+  }
+  const identity = { namespace: 'spex-governed', runtimeKind: rec.harness || defaultHarness.id, nativeSessionId, nativeStartToken }
+  const application = configuredSessionApplication()
+  const current = application.resolveRuntime(rec.session, identity.namespace)
+  if (current?.status === 'bound' && current.runtimeKind === identity.runtimeKind
+    && current.nativeSessionId === nativeSessionId && current.nativeStartToken === nativeStartToken) return
+  application.bindRuntime(rec.session, identity, current?.bindingGeneration)
+}
+
+// @@@ bindLaunchedRuntimes - a launch did not always bind a caller-pinned adapter, so a backend start gives every
+// launched working-set session the binding its launch now writes. Idempotent; a record that cannot be bound is
+// reported and left to the ordinary loud paths.
+export async function bindLaunchedRuntimes(): Promise<void> {
+  for (const id of listSessionIds()) {
+    try {
+      const seen = readRecord(id)
+      if (!seen?.governed || seen.archived || seen.status === 'queued') continue
+      await withRecordLock(id, async () => {
+        const rec = readRecord(id)
+        if (rec?.governed && !rec.archived && rec.status !== 'queued') bindNativeRuntimeUnlocked(rec)
+      })
+    } catch (error) {
+      console.error(`spex: could not bind the launched runtime of ${id}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+}
+
 function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()): void {
   const id = rec.session
   if (rec.harnessSessionId && rec.harnessSessionId !== harnessSessionId)
@@ -2660,18 +2705,10 @@ function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, ge
       registrationPrepared = true
     }
   }
-  const application = configuredSessionApplication()
-  const nativeStartToken = rec.runtimeStartToken || process.env.SPEXCODE_NATIVE_START_TOKEN?.trim()
-  if (!nativeStartToken)
-    throw new ResourceConflict(`refusing to bind runtime for ${id}: native start token is missing`)
   try {
-    writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
-    application.bindRuntime(id, {
-      namespace: 'spex-governed',
-      runtimeKind: rec.harness || defaultHarness.id,
-      nativeSessionId: harnessSessionId,
-      nativeStartToken,
-    })
+    const captured = { ...rec, harnessSessionId, coldProof: null, adapterRecovery: null }
+    writeRecord(captured)
+    bindNativeRuntimeUnlocked(captured)
   } catch (error) {
     if (codex && generationId && registrationPrepared) {
       try { bindCodexGeneration(root, id, harnessSessionId, null) }
@@ -3592,67 +3629,49 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
   }
 }
 
+// A held head stays owed and the retry sweep offers it again every second. Its reason is printed once per message
+// and reason, so owed debt is never silent and a session that keeps refusing does not flood the log.
+const heldDelivery = new Map<string, string>()
+function noteHeldDelivery(id: string, messageId: string, reason: string): void {
+  const key = `${messageId} ${reason}`
+  if (heldDelivery.get(id) === key) return
+  heldDelivery.set(id, key)
+  console.error(`spex: delivery to ${id} held at message ${messageId}: ${reason}`)
+}
+
 // @@@ drainSession - hand over what this session is owed, as ordinary prompts. Safe to call from anywhere and
 // at any time: the queue's own lock serializes concurrent passes, and an empty queue costs one existsSync.
 // The retry sweep in `serve` calls this for the sessions whose queues an earlier pass could not empty.
+// Every adapter hands over through its runtime binding, so owed debt with no binding has no runtime to go to yet.
 export async function drainSession(id: string): Promise<void> {
   const application = configuredSessionApplication()
   const rec = readRecord(id)
-    if (!rec) return
-    // An empty canonical queue is a successful no-op. Do not turn a resume with no owed prompt into a
-    // runtime-binding error; require a bound adapter only when there is a message that must be handed over.
-    if (application.readPendingMessages(id).length === 0) return
-    const h = harnessById(rec.harness || defaultHarness.id)
-    const binding = application.resolveRuntime(id, 'spex-governed')
-    if (!binding || binding.status !== 'bound') {
-      // Leaf adapters own their per-session controller and can deliver without a shared native identity.
-      // Preserve the governed transport while that identity is absent, then acknowledge the same canonical
-      // queue directly. Shared adapter runtimes (Codex) remain fail-closed until their exact binding exists.
-      const leafWithoutNativeIdentity = !rec.harnessSessionId && (
-        rec.harness === 'claude' || h.runtimeOwnership === 'leaf'
-      )
-      if (leafWithoutNativeIdentity) {
-        await withDeliveryLocks([id], async () => {
-          for (;;) {
-            const pending = application.readPendingMessages(id)
-            const msg = pending[0]
-            if (!msg) return
-            const text = canonicalMessageText(msg, rec)
-            if (h.deliveryBlockedBy) {
-              try {
-            if (h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
-              } catch { /* no pane to consult — let the adapter decide */ }
-            }
-            const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
-            if (!delivered.ok) return
-            const removed = application.dequeuePendingMessage(id, msg.messageId)
-            if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
-            if (!msg.senderSessionId) markHumanPromptActive(id)
-          }
-        })
-        return
+  if (!rec) return
+  // An empty canonical queue is a successful no-op. Do not turn a resume with no owed prompt into a
+  // runtime-binding error; require a bound adapter only when there is a message that must be handed over.
+  if (application.readPendingMessages(id).length === 0) return
+  const binding = application.resolveRuntime(id, 'spex-governed')
+  if (!binding || binding.status !== 'bound') throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
+  const h = harnessById(rec.harness || defaultHarness.id)
+  await withDeliveryLocks([id], async () => {
+    for (;;) {
+      const msg = application.readPendingMessages(id)[0]
+      if (!msg) return
+      const text = canonicalMessageText(msg, rec)
+      if (h.deliveryBlockedBy) {
+        try {
+          const blocked = h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))
+          if (blocked) { noteHeldDelivery(id, msg.messageId, blocked); return }
+        } catch { /* no pane to consult — let the adapter decide */ }
       }
-      throw new ResourceConflict(`canonical delivery for ${id} remains pending: no bound spex-governed runtime`)
+      const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
+      if (!delivered.ok) { noteHeldDelivery(id, msg.messageId, delivered.error || 'the adapter refused the handover'); return }
+      const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration, msg.messageId)
+      if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
+      heldDelivery.delete(id)
+      if (!msg.senderSessionId) markHumanPromptActive(id)
     }
-    await withDeliveryLocks([id], async () => {
-      for (;;) {
-        const pending = application.readPendingMessages(id)
-        const msg = pending[0]
-        if (!msg) return
-        const text = canonicalMessageText(msg, rec)
-        if (h.deliveryBlockedBy) {
-          try {
-                if (h.deliveryBlockedBy(await sessionHost().command(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
-          } catch { /* no pane to consult — let the adapter decide */ }
-        }
-        const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.messageId }, text)
-        if (!delivered.ok) return
-        const removed = application.dequeueForRuntime(id, 'spex-governed', binding.bindingGeneration, msg.messageId)
-        if (!removed || removed.messageId !== msg.messageId) throw new ResourceConflict(`canonical queue head changed while delivering ${id}`)
-        if (!msg.senderSessionId) markHumanPromptActive(id)
-      }
-    })
-  return
+  })
 }
 
 // `recipient` is the session this text is delivered TO; a state message speaks about its `sessionId`, the

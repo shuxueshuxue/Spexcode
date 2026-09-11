@@ -699,8 +699,9 @@ export default {
     diffLoading: 'loading diff…',
     diffEmpty: 'no branch changes',
     diffNoCommits: 'this branch has no commits of its own yet',
-    diffGroupCommitted: 'committed ({n})',
-    diffGroupUncommitted: 'not committed ({n})',
+    diffGroupCommitted: 'committed',
+    diffGroupUncommitted: 'not committed',
+    diffUnchangedLines: '{n} unchanged lines',
     diffUncommitted: 'uncommitted',
     diffUnavailable: 'branch diff unavailable — this session no longer has a diffable branch',
     diffMerged: 'merged into {base}',
@@ -890,6 +891,11 @@ export default {
   },
 
   // a `[[file:<name>]]` the session's posted list does not answer to exactly once ([[files]])
+  // git's change status words, the tooltip of each one-letter diff status mark ([[diff-marks]])
+  diffMarks: {
+    modified: 'modified', added: 'added', deleted: 'deleted', renamed: 'renamed', copied: 'copied',
+    'type-changed': 'type changed', untracked: 'untracked',
+  },
   fileRef: {
     missing: 'not among this session’s posted files',
     ambiguous: ({ count }) => `matches ${count} posted files — name more of its path`,

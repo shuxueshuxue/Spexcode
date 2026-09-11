@@ -50,8 +50,8 @@ picker lives here; the palette-swap mechanism it drives belongs to [[dashboard-s
 **The page has one control grammar.** Its title is sentence case at the page's statement size
 ([[typography]]); a section is a heading over rows separated by the divider rule; a row is a label in a
 fixed left column beside its control; and a choice among a few values (interface language, default
-session view) is a segmented control — the chosen segment lifted onto paper inside a quiet track, the rest
-plain. No control on the page draws a bordered pill of its own.
+session view) is the product's one segmented control ([[segmented-control]]) — the chosen segment lifted
+onto paper inside a quiet track, the rest plain. No control on the page draws a bordered pill of its own.
 
 Its terminal section controls the default base surface for newly unchosen pane-backed sessions and the embedded
 terminal's font size relative to the surrounding UI. Both choices are local to this browser and project, persist

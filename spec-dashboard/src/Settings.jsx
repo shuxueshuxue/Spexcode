@@ -5,6 +5,7 @@ import { ACT, displayKeysOf, keyCap } from './keymap.js'
 import { keysOf, isCustom, setBinding, resetBindings } from './bindings.js'
 import { THEMES, getTheme, applyTheme } from './theme.js'
 import { PageScroll } from './PageScroll.jsx'
+import { Segmented } from './Segmented.jsx'
 import { PROJECT_ID } from './project.js'
 import { useLaunchers } from './launch.js'
 import { loadProjectConfig, saveProjectConfig } from './projects.js'
@@ -24,8 +25,8 @@ import {
 } from './sessionSurface.js'
 
 // The page's one control grammar: a SECTION is a heading over rows, a ROW is a label beside its control,
-// and a choice among a few values is a segmented control — one selected segment, the rest quiet. The
-// segments keep the `set-lang` class every list of choices has always worn.
+// and a choice among a few values is the product's segmented control ([[segmented-control]]) — one
+// selected segment, the rest quiet.
 function Section({ title, children }) {
   return (
     <section className="set-sec">
@@ -40,19 +41,6 @@ function Row({ label, children }) {
     <div className="set-row">
       <span className="set-label">{label}</span>
       <div className="set-control">{children}</div>
-    </div>
-  )
-}
-
-function Segmented({ label, value, options, onPick }) {
-  return (
-    <div className="set-seg" role="group" aria-label={label}>
-      {options.map((option) => (
-        <button key={option.value} type="button" className={option.value === value ? 'set-lang on' : 'set-lang'}
-          aria-pressed={option.value === value} onClick={() => onPick(option.value)}>
-          {option.label}
-        </button>
-      ))}
     </div>
   )
 }

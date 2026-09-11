@@ -62,7 +62,8 @@ the payload pending until its own launch path records both the exact native iden
 were accepted as the first prompt and made durable enough to resume (for Codex, the rollout exists). That receipt
 binds the native id and consumes `launch` under the session record lock. An adapter whose native identity the launch
 itself pins (Claude and pi, headless or not) is bound by the launch, under the same lock, because the launch is where
-that identity is fixed. A crash or timeout before the receipt leaves the payload intact. Resume with no native id asks the adapter to replay those exact bytes through the same launch
+that identity is fixed; a launch whose readiness fails and leaves the record stopped releases that binding again.
+A crash or timeout before the receipt leaves the payload intact. Resume with no native id asks the adapter to replay those exact bytes through the same launch
 path; a missing payload is a loud refusal, never an empty fresh conversation and never a fallback to `prompt`.
 Once the native id exists, resume addresses it and never replays the first prompt.
 

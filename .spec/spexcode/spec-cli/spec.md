@@ -99,10 +99,10 @@ paint as a successful request on the dashboard; the lifecycle guard remains the 
 destructive action is allowed.
 `/api/uploads` writes a pasted file to this (worker) machine's
 /tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions,
-`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions, `bindLaunchedRuntimes()` to give
-launched sessions the runtime binding their launch writes ([[sessions-core]]), and then `superviseDelivery()`, the
-retry sweep that binding makes every launched session reachable by; the route layer still contains no harness
-protocol branch.
+`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions, `reconcileLaunchedRuntimes()` to
+bring launched sessions' runtime bindings in line with whether they are running ([[sessions-core]]), and then
+`superviseDelivery()`, the retry sweep those bindings scope to running sessions; the route layer still contains no
+harness protocol branch.
 The host ledger is equally thin: `GET /api/resources` returns [[host-resource-budget]]'s latest inventory.
 It is read-only; existing lifecycle mutations consult the adapter-owned shared-runtime guard before cleanup.
 

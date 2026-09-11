@@ -29,6 +29,9 @@ focus. A reading surface must leave its pointer gesture native; focus protection
 and overlays. Copying, quoting, commenting, and dispatching consume a frozen snapshot so opening an action cannot
 make the selection disappear underneath it. When no action is claimed, the browser's own context menu remains.
 
+The small `readerIsSelecting` predicate answers only whether a live native DOM selection exists. It is a click-versus-
+drag guard for clamped content, not a second selection store and not a capability probe.
+
 The terminal keeps xterm's selection service because the terminal is itself a pointer protocol; that adapter is
 the exception at the transport boundary, not a model for ordinary text. DOM and CodeMirror surfaces remain
 browser/CM-native and use the same snapshot seam. Composer drafts and carets are independent application state,

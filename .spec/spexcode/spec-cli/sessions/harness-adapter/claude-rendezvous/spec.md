@@ -47,12 +47,14 @@ half of the row (shim, contract file, artifact dirs) is the adapter seam's share
   chunk containing `{type:reply,text,mid}` followed by `{type:repaint}`. Its rendezvous daemon owns one
   connection at a time; a concurrent liveness probe can destroy a connection before parsing. `repaint-done`
   proves the preceding reply was parsed, while a close/ECONNRESET/EPIPE before it proves the whole chunk was
-  discarded and is safe to retry with the same `mid` (bounded attempts with jitter). An open connection that
+  discarded and is safe to retry with the same `mid` (bounded attempts with jitter). The displacing connection only has
+  to be accepted between the delivery's connect and its write, so every bounded attempt can be lost; the message then
+  stays owed and the retry sweep offers it again ([[delivery-queue]]). An open connection that
   reaches the generous wall without a response is treated as busy, not lost, so active turns do not become
   false failures; explicit rejection or shutdown remains loud. Claude's
   **`deliveryBlockedBy(paneText)`** predicate recognizes the sessions panel ("← for agents"), which swallows
-  injected replies. It merely suppresses that known-useless poke: the line is already delivered and the reader
-  shows it at the next boundary. Codex has no such predicate (its poke is app-server JSON-RPC; pane state is
+  injected replies. It merely suppresses that known-useless poke: the message stays owed, and the retry sweep hands
+  it over once the pane has left the panel. Codex has no such predicate (its poke is app-server JSON-RPC; pane state is
   irrelevant). 
 
 **Resume.** `--resume <id>` is appended straight to the `claude` command — the SAME conversation, the id SpexCode pinned at launch.

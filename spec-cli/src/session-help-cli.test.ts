@@ -114,7 +114,7 @@ test('Stop gate teaches human decisions and handoffs as asking', () => {
   const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   try {
     mkdirSync(store, { recursive: true })
-    writeFileSync(lib, `hp_session_id() { case "$1" in *'"session_id":"${id}"'*) printf %s '${id}' ;; esac; }\nhp_store_dir() { printf %s "$HOOK_STORE"; }\n`)
+    writeFileSync(lib, `hp_profile_hook_enabled() { return 0; }\nhp_session_id() { case "$1" in *'"session_id":"${id}"'*) printf %s '${id}' ;; esac; }\nhp_store_dir() { printf %s "$HOOK_STORE"; }\n`)
     writeFileSync(join(store, 'session.json'), `${JSON.stringify({ governed: true, status: 'active', proposal: null }, null, 2)}\n`)
     writeFileSync(fake, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\ncase "$*" in\n  *internal\\ session-hook-state*) printf '1\\tactive\\t\\n' ;;\n  *internal\\ hook-prompt\\ stop-gate*variant\\ full*) printf '%s\\n' 'task genuinely settled; no human decision, follow-up, or posted artifact awaits inspection: CLOSE-PENDING; human reply, direction, or decision, including reported finding/recommendation or handoff: ASKING' ;;\n  *internal\\ hook-prompt\\ stop-gate*variant\\ terse*) printf '%s\\n' 'close-pending; settled, no human decision/follow-up or posted artifact waiting; asking; human reply/direction/decision, including reported finding/recommendation or handoff' ;;\n  internal\\ session-state\\ asking\\ --session\\ ${id}*) exit 0 ;;\nesac\n`)
     chmodSync(fake, 0o755)

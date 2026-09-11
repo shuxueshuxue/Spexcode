@@ -2,7 +2,7 @@ import { mergeTranscriptFrame } from '@spexcode/transcript/frames'
 import { applyDeltaUnits, boardFromUnits, tagOfAsync, unitize, unitValues } from '@spexcode/spec-core/graph-delta'
 import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
-import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_ONLY, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
+import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_ONLY, PUBLIC_GRAPH_SOURCE, embeddedPublicPayload } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the single-layer expansion frontier chosen by
 // GraphView. Each depth is its own column: roots are evenly spaced around the origin, then the children of
@@ -284,14 +284,18 @@ export async function loadGraph() {
   return { board, seal: () => { holdBoard(board) } }
 }
 
+async function fetchPublicJson(source, what) {
+  const response = await fetch(source, { cache: 'no-cache' })
+  if (!response.ok) throw new Error(`${what} unavailable: ${response.status}`)
+  return response.json()
+}
+
 // The public Spec Graph is a sealed static artifact, not a narrowed live board. Keep it off apiUrl() and
 // avoid every session/review transport: a static host need only serve this one JSON document and Vite assets.
 // `no-cache` asks the browser to revalidate through the host's ETag; it avoids a stale symlink release without
 // paying the full graph/document body again when the revision is unchanged.
 export async function loadPublicGraph() {
-  const response = await fetch(PUBLIC_GRAPH_SOURCE, { cache: 'no-cache' })
-  if (!response.ok) throw new Error(`public graph unavailable: ${response.status}`)
-  const graph = await response.json()
+  const graph = embeddedPublicPayload()?.graph ?? await fetchPublicJson(PUBLIC_GRAPH_SOURCE, 'public graph')
   if (graph?.schema !== 'spexcode.public-spec-graph/v1' || !Array.isArray(graph?.nodes) || !graph?.identity) {
     throw new Error('public graph payload is invalid')
   }
@@ -299,28 +303,25 @@ export async function loadPublicGraph() {
 }
 
 export async function loadPublicGraphMetadata() {
-  const response = await fetch(PUBLIC_GRAPH_METADATA_SOURCE, { cache: 'no-cache' })
-  if (!response.ok) throw new Error(`public graph metadata unavailable: ${response.status}`)
-  const metadata = await response.json()
+  const metadata = embeddedPublicPayload()?.metadata ?? await fetchPublicJson(PUBLIC_GRAPH_METADATA_SOURCE, 'public graph metadata')
   const archive = metadata?.release?.archive
   // A repository url is OPTIONAL: a Flatcode flat's source may be a local path with no forge behind it, and
   // rejecting the whole release for a missing link would blank the panel over an absent nicety while the
-  // graph, facts, and archive it exists to present are all there. The renderer omits the link instead.
+  // graph, facts, and archive it exists to present are all there. The renderer omits the link instead. The
+  // archive is optional for the same reason: a single-file page is one file, with no sibling to download.
   if (metadata?.schema !== 'spexcode.public-spec-site/v1'
     || !Array.isArray(metadata?.about?.facts)
     || !metadata?.release?.revision
-    || !archive?.path
-    || !archive?.name) {
+    || (archive && (!archive.path || !archive.name))) {
     throw new Error('public graph metadata is invalid')
   }
   return metadata
 }
 
 export async function loadPublicSpecContent(id) {
+  const embedded = embeddedPublicPayload()
   const source = `${PUBLIC_GRAPH_DOCUMENT_SOURCE}/${encodeURIComponent(id)}.json`
-  const response = await fetch(source, { cache: 'no-cache' })
-  if (!response.ok) throw new Error(`public spec unavailable: ${response.status}`)
-  const document = await response.json()
+  const document = embedded ? embedded.documents?.[id] : await fetchPublicJson(source, 'public spec')
   if (document?.schema !== 'spexcode.public-spec-document/v1' || document.id !== id || typeof document.body !== 'string') {
     throw new Error('public spec payload is invalid')
   }

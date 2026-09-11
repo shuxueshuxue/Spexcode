@@ -10,3 +10,16 @@ export const PUBLIC_GRAPH_ONLY = env.VITE_PUBLIC_GRAPH_ONLY === '1'
 export const PUBLIC_GRAPH_SOURCE = env.VITE_PUBLIC_GRAPH_SOURCE || './public-graph.json'
 export const PUBLIC_GRAPH_DOCUMENT_SOURCE = env.VITE_PUBLIC_GRAPH_DOCUMENT_SOURCE || './specs'
 export const PUBLIC_GRAPH_METADATA_SOURCE = env.VITE_PUBLIC_GRAPH_METADATA_SOURCE || './public-graph-meta.json'
+
+// @@@ embedded payload - a single-file page (`spex graph --public --html`) carries its index, metadata and
+// documents inside itself, because the place it is opened from may be a disk path where a browser refuses to
+// fetch a sibling file. Its presence is a property of the PAGE, read once: every public reader asks this
+// first and falls through to its relative source only when the page carries nothing.
+export const PUBLIC_PAYLOAD_ELEMENT_ID = 'spexcode-public-payload'
+let embedded
+export function embeddedPublicPayload() {
+  if (embedded !== undefined) return embedded
+  const element = typeof document === 'undefined' ? null : document.getElementById(PUBLIC_PAYLOAD_ELEMENT_ID)
+  embedded = element ? JSON.parse(element.textContent) : null
+  return embedded
+}

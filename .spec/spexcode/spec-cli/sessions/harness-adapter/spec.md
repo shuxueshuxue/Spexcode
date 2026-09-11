@@ -160,7 +160,9 @@ surface:
   target identity** capability over the current record: a caller-pinned adapter derives the native conversation id
   from the governed session id even when `harness_session_id` is empty, while a native-assigned adapter derives it
   only from its captured alias and returns no identity before that alias exists. This capability says only which
-  exact native conversation the record owns. It says nothing about whether that conversation is live or whether a
+  exact native conversation the record owns, and it is the native id the governed runtime binding records, so a
+  caller-pinned adapter is bound from its launch and a native-assigned one from its capture ([[sessions-core]]).
+  It says nothing about whether that conversation is live or whether a
   local PID still belongs to it. Leaf ownership is a separate, unified lifecycle proof rather than another adapter id
   model. Before tmux mutation, one target-scoped pane read and one process snapshot must prove the launch-registered
   PID is in that governed session's pane descendant closure, with the PID's process-start token unchanged across the

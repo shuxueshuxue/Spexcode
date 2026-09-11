@@ -393,9 +393,9 @@ export interface Harness {
 }
 
 // `ok` describes only this round's immediate adapter poke: the socket write, native controller request, or
-// app-server turn request reached its channel. [[dispatch]] has already decided delivery at the timeline append,
-// so an error means only that the reader will show the line at a later turn boundary. Defined here because this
-// is the adapter result sessions.ts consumes for same-turn timing.
+// app-server turn request reached its channel. [[dispatch]] has already accepted the message at the timeline append,
+// so an error leaves it owed on the delivery queue for the retry sweep ([[delivery-queue]]). Defined here because
+// this is the adapter result sessions.ts consumes for same-turn timing.
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = {
   session: string
@@ -880,7 +880,7 @@ export const claudeHarness: Harness = {
   coldRuntime: async () => ({ ok: true }),
   // The TUI's sessions panel ("← for agents") swallows an injected reply into PANEL context and never drains it
   // (verified live: `queue-operation: enqueue` with no dequeue, no turn, daemon silent), so skip this courtesy
-  // poke and leave the timeline reader to show the message. Matched on the panel's own
+  // poke; the message stays owed until the pane leaves the panel. Matched on the panel's own
   // strings — the new-session composer placeholder, or its footer key hints together (either alone could drift
   // across claude versions; requiring the footer PAIR keeps a prose false-positive unlikely).
   deliveryBlockedBy: (paneText) =>

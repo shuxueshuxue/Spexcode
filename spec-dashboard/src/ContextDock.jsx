@@ -54,8 +54,8 @@ function Panel({ title, open, onToggle, children }) {
 }
 
 // [[context-dock]]: what surrounds the node the reader has open. The dock carries the node's issue context;
-// when open it also owns the right-edge fold switch that arrived from the strip.
-export default function ContextDock({ page, param, open = true, toggle = null }) {
+// the shell-owned right-edge switch stays mounted outside the animated panel.
+export default function ContextDock({ page, param, open = true }) {
   const t = useT()
   const { specs } = useBoard()
   const [width, onDrag, reset] = useResizable('spex.ctxWidth', 276, { min: 220, max: 460, dir: -1 })
@@ -83,7 +83,6 @@ export default function ContextDock({ page, param, open = true, toggle = null })
     <div className="ctx-head">
       <span>{t('contextDock.title')}</span>
       <span className="ctx-node-id">{node.id}</span>
-      {toggle && <span className="ctx-head-acts">{toggle}</span>}
     </div>
     {/* the two panels scroll TOGETHER inside the dock, and that scroller is what lets the dock clip its own
         width. Folding is a width movement, so the dock has to be `overflow: hidden` like the other two

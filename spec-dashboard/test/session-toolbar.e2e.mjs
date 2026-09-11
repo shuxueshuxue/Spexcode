@@ -69,8 +69,8 @@ await page.goto(`${BASE}/#/spec/spexcode`)
 // locator is a strict-mode violation the moment a second pane exists — the check is about the ACTIVE
 // document's band, so the active pane's strip is the one to wait on.
 await page.locator('.tabstrip').first().waitFor({ state: 'visible', timeout: 20000 })
-// A spec document registers no ACTIONS, so the band holds only the context toggle while its dock is closed.
-// Once opened, the same control moves into the context head's trailing door at the window's right edge.
+// A spec document registers no ACTIONS. The context toggle is one stable shell slot at the right edge;
+// the dock opening underneath it must not replace or move the pointer target.
 const specState = await page.evaluate(() => {
   // ONLY the visible band. The workspace keeps recent documents mounted and display-hidden, so the Sessions
   // document's own strip is still in the DOM with its actions on it — a bare `document.querySelector` reads
@@ -79,7 +79,7 @@ const specState = await page.evaluate(() => {
   const slot = [...document.querySelectorAll('.tabstrip-actions')].find(painted) || null
   return {
     actions: slot ? [...slot.querySelectorAll('[data-action]')].map((el) => el.dataset.action) : [],
-    trailing: Boolean(slot?.querySelector('.context-toggle')),
+    trailing: Boolean(document.querySelector('.context-toggle-slot .context-toggle')),
     hasRetiredToolbar: [...document.querySelectorAll('.si-tabbar, .si-toolbar, .si-tool')].some(painted),
   }
 })
@@ -94,24 +94,34 @@ const contextProbe = () => page.evaluate(() => {
     toggle: rect(toggle),
     height: toggle ? Math.round(toggle.getBoundingClientRect().height) : null,
     pressed: toggle?.getAttribute('aria-pressed') || null,
-    inStrip: Boolean(toggle?.closest('.tabstrip-actions')),
-    inHead: Boolean(toggle?.closest('.ctx-head-acts')),
+    inSlot: Boolean(toggle?.closest('.context-toggle-slot')),
+    tabList: rect(document.querySelector('.tabstrip-actions .tab-list-button')),
     dock: rect(document.querySelector('.context-dock')),
   }
 })
 const closedContext = await contextProbe()
 await page.locator('.context-toggle').click()
-await page.locator('.context-dock .context-toggle').waitFor({ state: 'visible', timeout: 20000 })
+await page.locator('.context-toggle[aria-pressed="true"]').waitFor({ state: 'visible', timeout: 20000 })
 await page.waitForTimeout(220)
 const openContext = await contextProbe()
-check('closed context toggle uses the strip mount', closedContext.inStrip && !closedContext.inHead && closedContext.pressed === 'false', closedContext)
-check('open context toggle moves into the dock head at the same right edge',
-  openContext.inHead && !openContext.inStrip && openContext.pressed === 'true'
-    && openContext.height === 22
+const transitionFrames = []
+await page.locator('.context-toggle[aria-pressed="true"]').click()
+await page.locator('.context-toggle[aria-pressed="false"]').waitFor({ state: 'visible', timeout: 20000 })
+await page.locator('.context-toggle[aria-pressed="false"]').click()
+for (let i = 0; i < 12; i += 1) {
+  await page.waitForTimeout(16)
+  transitionFrames.push(await contextProbe())
+}
+check('context toggle uses one stable shell slot', closedContext.inSlot && openContext.inSlot
+  && closedContext.pressed === 'false' && openContext.pressed === 'true', { closed: closedContext, open: openContext })
+check('context toggle matches Sessions control geometry and does not jump during opening',
+  openContext.pressed === 'true'
+    && closedContext.height === 28 && openContext.height === 28
+    && (closedContext.tabList?.right || 0) <= (closedContext.toggle?.left || 0)
+    && transitionFrames.every((frame) => frame.height === 28 && frame.inSlot
+      && Math.abs((frame.toggle?.right || 0) - (closedContext.toggle?.right || 0)) <= 1)
     && Math.abs((closedContext.toggle?.right || 0) - (openContext.toggle?.right || 0)) <= 1,
-  { closed: closedContext, open: openContext })
-await page.locator('.context-dock .context-toggle').click()
-await page.locator('.tabstrip-actions .context-toggle').waitFor({ state: 'visible', timeout: 20000 })
+  { closed: closedContext, open: openContext, transitionFrames })
 await page.screenshot({ path: join(OUT, 'spec-document-no-actions.png'), fullPage: true })
 
 await context.close()

@@ -75,7 +75,7 @@ test('file previews use one selectable resource tab, keep Markdown restricted, e
   assert.match(source, /preview\.phase === 'html'[\s\S]*?<FileHtmlPreview path=\{tab\.value\} html=\{preview\.text\} \/>/)
   assert.match(source, /className=\{`si-resource-file \$\{preview\.phase\}`\} data-selectable/)
   assert.doesNotMatch(source, /si-file-preview-(?:backdrop|body|head)/)
-  assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-selectable\]'/)
+  assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-reading-surface\], \[data-selectable\]'/)
   assert.match(focus, /if \(el\.closest\(SELECTABLE_PRESS_TARGETS\)\) return/)
   assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)

@@ -5,7 +5,7 @@ import { BlobMedia } from './Evidence.jsx'
 import { routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 import { useT } from './i18n/index.jsx'
-import { readerIsSelecting } from './readerSelection.js'
+import { readerIsSelecting } from './selectionController.js'
 import { CopyButton } from './CopyButton.jsx'
 import { Icon } from './icons.jsx'
 import { SessionFilesContext, fileRefAddress, filePreviewUrl, resolveFileRef } from './fileRefs.js'
@@ -60,8 +60,7 @@ const renderTimelineCopy = (text) => <CopyButton text={text} />
 export function DashboardTranscriptUi({ loadToolOutput, children }) {
   const t = useT()
   const labels = useMemo(() => ({ ...defaultLabels, loading: t('common.loading'), running: t('session.executionRunning'), more: t('mobile.more') }), [t])
-  // The conversation paints its OWN selection (a Custom Highlight, so the textarea keeps its caret), which is
-  // invisible to `window.getSelection`. A clamped block opens on a press anywhere in it, and the press that
-  // ends a drag over its words is not that request — so the surface that owns the selection answers for it.
+  // Conversation prose stays browser-native. The shared selection controller publishes its Range separately;
+  // transcript-ui only needs this predicate to avoid treating an active drag as a clamped-block click.
   return <TranscriptUi renderText={renderTimelineText} renderCopy={renderTimelineCopy} labels={labels} loadToolOutput={loadToolOutput} suppressExpand={readerIsSelecting}>{children}</TranscriptUi>
 }

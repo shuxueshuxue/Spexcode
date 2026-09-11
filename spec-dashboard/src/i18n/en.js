@@ -540,6 +540,7 @@ export default {
     expandedNote: 'versioned often · must match raw source',
     filesChanged: ({ n }) => `${n} file${n === 1 ? '' : 's'} changed`,
     loadingChange: 'loading diff…',
+    changeAt: ({ n }) => `line ${n}`,
     noChange: 'no recorded change yet — this spec is the latest ground truth.',
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',

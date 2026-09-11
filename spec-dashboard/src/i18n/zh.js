@@ -532,6 +532,7 @@ export default {
     expandedNote: '经常更新版本 · 须与原始来源一致',
     filesChanged: ({ n }) => `改动 ${n} 个文件`,
     loadingChange: '正在加载差异…',
+    changeAt: ({ n }) => `第 ${n} 行`,
     noChange: '尚无记录的改动——此规格即最新的事实依据。',
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',

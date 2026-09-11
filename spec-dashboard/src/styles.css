@@ -1399,10 +1399,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-card { padding: 7px 8px; }
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
 .pane-issues .issue-card-title { font-size: var(--type-control); }
-/* edit pane — the node's pending change, reusing the history tab's .ev-diff renderer */
+/* the node's pending change, in the popup's edit tab, as a redline of git's word diff: shared words read
+   as the prose they are, removed words struck in the history diff's
+   orange, added words in its green, and the author's own line breaks kept. */
 .edit-rev { margin: 0 0 18px; }
 .edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
 .edit-by-label { font-weight: var(--weight-semibold); }
+.edit-by-session { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink2); text-decoration: none; }
+.edit-by-session:hover { text-decoration: underline; }
+.pending-none { color: var(--muted); font-size: var(--type-body); }
+.wd { display: flex; flex-direction: column; gap: 10px; }
+.wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 10px; }
+.wd-at { font-size: var(--type-caption); color: var(--muted); margin-bottom: 4px; }
+.wd-text { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.wd-text ins { text-decoration: none; color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-radius: 2px; }
+.wd-text del { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); text-decoration: line-through; border-radius: 2px; }
+/* a replaced word: git emits the removal and the addition back to back, so they need a gap to read as two */
+.wd-text del + ins { margin-left: .3em; }
 .edit-state { margin-left: auto; font-family: var(--ui-font); font-size: var(--type-caption); }
 
 .ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }

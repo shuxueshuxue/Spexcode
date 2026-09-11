@@ -154,17 +154,22 @@ target whose resolved harness adapter declares `headless:true` defaults to `repl
 pane-backed target keeps the ordinary terminal reply. The launch prompt, the one input route (and therefore
 `spex session send`), and merge dispatch all pass through this seam. No caller appends a reply insert itself.
 
-For an effective note reply, that seam appends `withNoteReplyHint`. The insert is transport guidance only:
-the agent writes the actual declaration by executing the external `spex session <verb> --note <text>` CLI,
-and lifecycle hooks only delimit or remind the agent at turn boundaries; hooks never carry the note data.
+For an effective note reply, that seam appends the full `withNoteReplyHint` on the first note-flow delivery and
+the one-line `— SEND FROM NOTE FLOW.` suffix on a consecutive note-flow delivery. The suffix is a marker for the
+current message, not a persistent mode: a message without it is the ordinary terminal path. The insert is
+transport guidance only: the agent writes the actual declaration by executing the external
+`spex session <verb> --note <text>` CLI, and lifecycle hooks only delimit or remind the agent at turn boundaries;
+hooks never carry the note data.
 Because the declaration call is the reply transport, a simple answer awaiting the next human message gets the concrete
 `spex session ask --note "<complete reply>"` action; a genuinely done or parked turn instead puts the same complete reply
 on that truthful declaration. Printing a normal final answer alone does not deliver it, and a generic stop-gate auto-note
 does not satisfy the reply.
-The phrase has one owner here beside the other delivery inserts. The timeline records the raw conversational
-text without inserts and `replyVia:"note"` whenever note is the effective channel (absence means terminal),
-so restart-safe channel history describes where a reply was actually readable rather than which caller
-happened to set a flag.
+The phrase has one owner here beside the other delivery inserts. The first-versus-consecutive choice reads the
+durable sent history, with a consumed headless launch artifact serving as the existing proof that the full launch
+prompt already established note flow; it adds no session mode or second state. The timeline records the raw text
+without inserts and `replyVia:"note"` whenever note is the effective channel (absence means terminal), so
+restart-safe channel history describes where a reply was actually readable rather than which caller happened to
+set a flag.
 
 Pane-backed targets keep ordinary prompt text whenever the effective channel is terminal. This seam does not
 observe direct input typed into the agent's terminal, does not author a terminal-mode event, and does not append

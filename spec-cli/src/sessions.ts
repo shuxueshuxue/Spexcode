@@ -3548,7 +3548,15 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       const rec = readRecord(id)
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
       await opts.acceptGuard?.(rec)
-      const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
+      const prompt = await composeSessionPrompt(text, rec, {
+        from, replyVia: opts.replyVia,
+        // A Spex launcher record whose native identity is bound, or whose launch artifact was consumed,
+        // means the full headless launch prompt has already established note flow. Older/manual records
+        // without a launcher stay on the full hint until their timeline proves a prior note delivery.
+        noteHint: harnessById(rec.harness || defaultHarness.id).headless
+          && !!rec.launcher
+          && (rec.harnessSessionId || !existsSync(sessionArtifactPath(id, 'launch'))) ? 'continuation' : undefined,
+      })
       const idempotencyKey = opts.idempotency?.requestDigest ?? (opts.deliveryKey?.trim() || null)
       const existing = idempotencyKey
         ? application.readMessageHistory(id).find(message => message.idempotencyKey === idempotencyKey)

@@ -142,13 +142,20 @@ function strictSpecTreeRevision(wtPath: string): string {
 // strict stat contract as the `.spec` walk: ctime catches a same-size rewrite, ENOENT is a legitimate fresh
 // store, and every other read failure is loud.
 function strictFileRevision(path: string): string {
-  try {
-    const stat = statSync(path)
-    return `${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
-    throw error
+  // The protocol uses SQLite WAL mode. A writer may commit only to the `-wal` sidecar while the main
+  // database keeps its mtime, so sampling that file alone lets the patrol certify a stale session board.
+  // Include both sidecars in the same strict identity; their ctime/size catches same-size rewrites and a
+  // checkpoint transition is visible because the set of present paths changes.
+  const revisions: string[] = []
+  for (const candidate of [path, `${path}-wal`, `${path}-shm`]) {
+    try {
+      const stat = statSync(candidate)
+      revisions.push(`${candidate}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
   }
+  return revisions.sort().join('\n')
 }
 
 function sessionDatabaseRevision(): [string, string] {

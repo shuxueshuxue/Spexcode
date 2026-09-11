@@ -2544,6 +2544,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */
 .si-term-body { container-type: size; flex: 1; min-height: 0; overflow: clip; padding: 6px 10px 4px; background: var(--term-bg); }
 .si-term-body.is-conversation { padding: 0; background: var(--paper); }
+.si-term-body.is-resource { padding: 0; background: var(--paper); }
 
 /* Command Box ([[command-box]]): the layer occupies the terminal only as a click-away boundary. The box's
    bottom is fixed at 78% from the pane top (`bottom:22%`), so the shared footer never walks as lines grow. */

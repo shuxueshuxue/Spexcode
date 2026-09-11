@@ -17,7 +17,6 @@ import { conversationItems } from './conversationItems.js'
 import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
-import { writeClipboard } from './clipboard.js'
 import { CopyButton } from './CopyButton.jsx'
 import { SessionFilesContext } from './fileRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
@@ -281,7 +280,6 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const [stopping, setStopping] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const [sendNote, setSendNote] = useState(null)   // the last send's child receipt (`@new`), if any
-  const [copyStatus, setCopyStatus] = useState(null)
   const [expandedSeams, setExpandedSeams] = useState(() => new Set())
   const [transcripts, setTranscripts] = useState(() => new Map())
   const [tail, setTail] = useState(null)   // the open seam's streamed payload ([[session-transcript]]); null until the first frame
@@ -290,7 +288,6 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const inputRef = useRef(null)
   const timelineRangeRef = useRef(null)
   const timelineSurfaceId = `timeline:${s.id}`
-  const copyStatusTimerRef = useRef(null)
   // A LIVE FRAME WITHHOLDS OUTPUT BODIES: a call opened in the open seam fetches its body once, by session and
   // interval, and the seam remembers it for as long as the session is on screen — reopening never refetches.
   const outputCacheRef = useRef(new Map())    // `${from}:${toolId}` → the fetch's promise
@@ -367,7 +364,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     })
   }, [s.id, win.offset, loadingEarlier])
   useEffect(() => {
-    setEvents(null); setWin({ stamp: null, offset: 0, total: 0, priorWorking: false }); setLoadingEarlier(false); stampRef.current = null; anchorRef.current = null; setDetail(null); setCopyStatus(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); pollNowRef.current = Date.now(); pinnedRef.current = true; setQuotes([]); setMenu(null)
+    setEvents(null); setWin({ stamp: null, offset: 0, total: 0, priorWorking: false }); setLoadingEarlier(false); stampRef.current = null; anchorRef.current = null; setDetail(null); setSendNote(null); setExpandedSeams(new Set()); setTranscripts(new Map()); inflightRef.current.clear(); wantedRef.current.clear(); cachedKeyRef.current.clear(); outputCacheRef.current.clear(); outputLoadersRef.current.clear(); setTail(null); tailForRef.current = null; paintedRef.current = false; setWaited(false); pollNowRef.current = Date.now(); pinnedRef.current = true; setQuotes([]); setMenu(null)
   }, [s.id])
   useEffect(() => {
     if (!active) return undefined
@@ -560,21 +557,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     timelineRangeRef.current = null
     clearNativeSelection(scrollRef.current)
     clear(timelineSurfaceId)
-    setCopyStatus(null)
   }, [clear, timelineSurfaceId])
-
-  const copyText = useCallback(async (text) => {
-    clearTimeout(copyStatusTimerRef.current)
-    setCopyStatus(null)
-    const copied = await writeClipboard(text)
-    setCopyStatus(copied ? 'copied' : 'failed')
-    if (copied) {
-      copyStatusTimerRef.current = setTimeout(() => setCopyStatus(null), 1200)
-    }
-    return copied
-  }, [])
-
-  useEffect(() => () => clearTimeout(copyStatusTimerRef.current), [])
   useEffect(() => {
     if (!active) return undefined
     const onKeyDown = (event) => {
@@ -619,16 +602,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     }
   }, [menu, closeMenu])
 
-  // COPY LEAVES, QUOTE STAYS. Copy hands the passage to the clipboard and the reader is on their own with it;
-  // quote hands it to the composer below as the ordinary attachment every other selection surface uses
-  // ([[selection-attachment]]), so the next thing typed is a reply the agent can read the referent of. It is
-  // the same verb prose dispatch already offers a spec passage — this surface just does not have to ask who
-  // receives it, because it is already standing in the session it is quoting.
-  const copySelection = () => {
-    const range = timelineRangeRef.current
-    if (range && !range.collapsed) copyText(richTextFromRange(range, scrollRef.current))
-    closeMenu()
-  }
+  // Copying a selected passage is the browser's native Ctrl/Cmd+C path. Quote remains an explicit semantic
+  // action and uses the frozen native Range; row-level CopyButton still handles whole authored messages.
   const quoteSelection = () => {
     const range = timelineRangeRef.current
     const at = menu?.at
@@ -827,15 +802,9 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
             : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
         </div>
       </div>
-      {copyStatus && (
-        <div className={`m-copy-status ${copyStatus}`} role="status" aria-live="polite" aria-atomic="true">
-          {t(`mobile.${copyStatus === 'copied' ? 'copied' : 'copyFailed'}`)}
-        </div>
-      )}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} anchorKey={`${menu.x}:${menu.y}`} label={t('mobile.selectionMenu')}>
           <ContextMenuGroup>
-            <ContextMenuItem icon="copy" onClick={copySelection}>{t('mobile.copy')}</ContextMenuItem>
             <ContextMenuItem icon="corner-up-left" disabled={!menu.at} onClick={quoteSelection}>{t('mobile.quote')}</ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenu>

@@ -2,7 +2,8 @@
 // cannot reach main. Freshness of the generated files is `npm run lint`'s `--check`; this proves behaviour.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -76,6 +77,34 @@ test('a spec body renders escaped, with mentions linked only when they name a no
   assert.match(html, /<ul>\n<li>one<\/li>\n<li>two<\/li>\n<\/ul>/)
   assert.match(html, /<pre><code>&lt;script&gt;<\/code><\/pre>/)
   assert.doesNotMatch(html, /<script>|<b>/)
+})
+
+test('the ZCode workflow\'s lint gate runs as the command line it submits, and reads lint\'s report', () => {
+  // world.run executes a fixed argv with no shell. This runs that exact argv, taken from the script, against an
+  // npx that answers with a lint report — the one way to catch a command line that parses but never runs.
+  const src = readFileSync(join(root, 'distribution/zcode/atlas/skills/atlas/atlas.dwf.ts'), 'utf8')
+  const constant = (name) => eval(`(${new RegExp(`^const ${name} = ([^;]+);$`, 'm').exec(src)[1]})`)
+  const SPEX = constant('SPEX')
+  const GATE = eval(src.slice(src.indexOf('const GATE = [') + 'const GATE = '.length, src.indexOf('].join("\\n");') + 1)).join('\n')
+  const call = /world\.run\("node", (\[[^\]]*\])/.exec(src)
+  assert.ok(call, 'the gate runs through node')
+  const argv = eval(call[1])
+  const bin = mkdtempSync(join(tmpdir(), 'fake-npx-'))
+  try {
+    const report = { sourceFiles: ['a.py', 'b.py', 'c.py', 'd.py'], findings: [
+      { level: 'error', rule: 'mention', spec: 'root', msg: 'names no node' },
+      { level: 'warn', rule: 'coverage', file: 'd.py', msg: 'no spec governs d.py' },
+    ] }
+    writeFileSync(join(bin, 'npx'), `#!/bin/sh\n[ "$1" = "-y" ] || { echo "npx got: $*" >&2; exit 3; }\ncat <<'JSON'\n${JSON.stringify(report)}\nJSON\n`)
+    chmodSync(join(bin, 'npx'), 0o755)
+    const run = spawnSync('node', argv, { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } })
+    assert.equal(run.status, 0, run.stderr)
+    const gate = JSON.parse(run.stdout)
+    assert.deepEqual({ governed: gate.governed, coverage: gate.coverage, errorCount: gate.errorCount, uncovered: gate.uncovered }, { governed: 4, coverage: 75, errorCount: 1, uncovered: ['d.py'] })
+    assert.equal(gate.failed, undefined)
+  } finally {
+    rmSync(bin, { recursive: true, force: true })
+  }
 })
 
 test('every package names only files that exist, and the ZCode skill points at the workflow it ships', () => {

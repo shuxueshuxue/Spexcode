@@ -146,7 +146,7 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
-  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} open=\{contextOpen\} \/>/)
+  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} query=\{query\} open=\{contextOpen\} \/>/)
   assert.match(shell, /<div className="context-toggle-slot">\{contextToggle\}<\/div>/)
   assert.match(shell, /trailing=\{contextToggleReservation\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)

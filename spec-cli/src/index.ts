@@ -4,7 +4,7 @@ import { createReadStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import { installConnectionReaper } from './reaper.js'
 import { daemonRuntime } from './daemon-runtime.js'
-import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, runtimeRoot } from '@spexcode/spec-core'
+import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, specAt, loadConfig, runtimeRoot } from '@spexcode/spec-core'
 import { issuesEnabled } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, mergedIssues, promote } from './issues.js'
 import { replyIssueWithLoopIn } from './loop-in.js'
@@ -166,9 +166,18 @@ app.post('/api/specs/:id/body', async (c) => {
   }
 })
 app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.param('id'))))
-// the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched
-// lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).
-app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
+// one version of a node, by hash — only a hash from the node's own version log answers; any other string is
+// a 404 and never reaches git. `diff` is the spec.md line diff that version introduced (the history pane's
+// per-version proof-of-change, fetched lazily on expand); `version` is spec.md as it stood then.
+const noVersion = (c: any) => c.json({ error: `${c.req.param('hash')} is not a version of ${c.req.param('id')}` }, 404)
+app.get('/api/specs/:id/diff/:hash', async (c) => {
+  const diff = await specDiffAt(c.req.param('id'), c.req.param('hash'))
+  return diff ? c.json(diff) : noVersion(c)
+})
+app.get('/api/specs/:id/version/:hash', async (c) => {
+  const version = await specAt(c.req.param('id'), c.req.param('hash'))
+  return version ? c.json(version) : noVersion(c)
+})
 // [[source-read]]: a governed source file, read as a byte WINDOW. The spec tree names the files it governs
 // but the board could never open one — this is the read half of "spec and code on one screen". The policy
 // gate is `isSourceFile`, the SAME predicate the coverage walk uses, so the set of files the board can show

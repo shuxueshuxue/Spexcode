@@ -2,17 +2,19 @@
 title: context-dock
 status: active
 hue: 205
-desc: The right context dock — the routed spec node's open issues, collapsed until asked for.
+desc: The right context dock — the routed spec node's open issues and its version history, collapsed until asked for.
 code:
   - spec-dashboard/src/ContextDock.jsx
 related:
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/src/reviewPage.js
+  - spec-dashboard/src/specHistory.js
   - spec-dashboard/src/tabs.js
   - spec-dashboard/src/ReviewShell.jsx
   - packages/spec-core/src/review/reviewQuery.js
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/spec-history-dock.e2e.mjs
 ---
 # context-dock
 
@@ -25,15 +27,29 @@ the second pane is an independently held document.
 The dock exists only for `#/spec/<id>`. Other route kinds have no context projection, so they render no dock
 and no empty placeholder.
 
-**The sections are the contract**: the ruling *"它要么就是 Scenarios，要么就是 Issues"* fixed a node's context
-as what has been ASKED of it and what has been MEASURED on it, and nothing else. Nothing is measured on a
-node now, so the dock carries one section.
+**The sections are the contract.** The ruling *"它要么就是 Scenarios，要么就是 Issues"* fixed a node's context
+as facts ABOUT THE NODE ITSELF — what has been asked of it, what has been measured on it — and nothing drawn
+from the graph around it. Nothing is measured on a node now. The reader then asked for the node's own past
+beside the prose (*"在 Spec 的阅读界面上面右侧边栏里面，可以选择查看它的历史版本或者查看历史变更"*): how the
+node came to say what it says is a fact about that node in exactly the same sense, so the dock carries two
+sections.
 
 - **ISSUES** lists the node's open issues through the SAME paged review request the Issues board serves
   ([[paged-review]]) with the node qualifier applied — the panel and the list it would link to are literally
   one query text, so neither can develop its own idea of what "open" or "this node's" means. Each row is a
   real `#/issues/<id>` anchor and leads with the shared issue-state primitive its list row leads with, never
   a dock-local glyph.
+- **HISTORY** lists the node's versions newest first, from the SAME version log the popup's history pane
+  reads ([[node-popup]]; one read module, `specHistory.js`). A row names its version (`v3`), its commit
+  subject, its date and its `+N −N` in the one diff vocabulary ([[diff-marks]]), and offers the choice the
+  reader asked for as two doors into the document ([[spec-view]]): the row itself opens that version's TEXT
+  (`#/spec/<id>?version=<hash>`), and the `git-compare` door beside it opens the CHANGE that version made
+  (`?version=<hash>&surface=diff`). The newest version's text is the current document, so its text door is
+  the bare `#/spec/<id>` — which also makes the list the way back from any past version. The row the
+  document is showing wears the selected wash and marks the door it is showing through as current; the
+  pending-change face is not a version, so it marks no row. The log is re-read when the node re-versions,
+  it never shows another node's log while a new node's loads, and a failed read is shown as an error, never
+  as "no versions".
 
 **BACKLINKS is retired, and the projection that fed it went with it.** The panel listed nodes whose prose
 named this one plus nodes parented to it, and the ruling against it was about what a node's CONTEXT is: a
@@ -44,10 +60,12 @@ has open, and mixing it in made the dock answer a third question nobody had aske
 reason to keep shipping the field on every node forever. The `bodyMentions` parser stays — its real job is
 [[spec-lint]]'s mention rule, which has to resolve a `[[name]]` whether or not anything draws the edge.
 
-**Every row is a detail door on the workspace's tab semantics.** A plain click reads the issue
-in the focused tab; ctrl/⌘ opens it as its own tab ([[tab-strip]]). No row opens a second-level panel
-inside the dock: everything listed here has a real detail address, and a document with an address belongs in
-the strip rather than nested inside a sidebar.
+**Every row is a detail door on the workspace's tab semantics.** A plain click reads the issue — or the
+version — in the focused tab; ctrl/⌘ opens it as its own tab ([[tab-strip]]). No row opens a second-level
+panel inside the dock: everything listed here has a real detail address, and a document with an address
+belongs in the strip rather than nested inside a sidebar. A version is not a new document but a face of the
+node's own ([[tab-routing]]), so reading one replaces the spec tab's address instead of adding a tab, and the
+276px column never has to hold a body or a diff.
 
 **The dock starts CLOSED, and the number is the argument.** Measured at 1440 with the explorer docked:
 opening it leaves the spec prose **383px** and forces the code column down from 620 to 536; closed, the same
@@ -86,7 +104,10 @@ flipping right-dock switch would have to draw `panel-left` — a panel on the re
 "closed". A glyph that names the dock is readable in every combination; a glyph that pictures the wrong side
 is not.
 
-The component receives `{page, param}` from `Shell`; it never reads the global address. Its API context and
-state context remain separate by using the existing board/workspace hooks rather than introducing a mixed
-context. A failed issues request is shown as an explicit panel error; it is not silently rendered as an
-empty list.
+The component receives `{page, param, query}` from `Shell`; it never reads the global address. The query
+selects nothing in the dock — the dock is the same for every face of the node — it only says which version
+row the document is showing. Its API context and state context remain separate by using the existing
+board/workspace hooks rather than introducing a mixed context. A failed issues or history request is shown
+as an explicit panel error; it is not silently rendered as an empty list. The history read lives in its own
+light module rather than in the popup's component file, because the dock mounts with the shell and must not
+pull the prose renderer into the shell's chunk.

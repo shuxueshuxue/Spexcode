@@ -9,8 +9,10 @@ related:
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/NodeDiagram.jsx
   - spec-dashboard/src/SourceView.jsx
+  - spec-dashboard/src/specHistory.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/spec-change-face.e2e.mjs
+  - spec-dashboard/test/spec-history-dock.e2e.mjs
 ---
 # spec-view
 
@@ -68,6 +70,23 @@ and there is no toggle leading back to an empty page. When the overlay dissolves
 was discarded, the face says there is no pending change, and the toggle stays until the reader leaves, so
 the reader is never left on a page with no way back.
 
+**A node also has a past, read one version at a time.** `#/spec/<id>?version=<hash>` reads spec.md as that
+version left it, and `?version=<hash>&surface=diff` reads the change that version made — so `surface=diff`
+always means "the change" of whatever revision the address names: the pending change on top of the current
+body when no version is named, the version's own change when one is. Both are faces of the one spec tab
+([[tab-routing]]), and their door is the context dock's history panel ([[context-dock]]), which lists every
+version with both choices. The version face keeps the document's shape: that version's own title and
+description (a node's desc can be rewritten, and the old one belongs to the old text), a property row naming
+the version (`v1`, with "version 1 of 3" on hover), its short hash, date and editing session, a segmented
+**Text | Changes** switch, and a link back to the current version, then the commit subject, then the body or
+the change. The change is the popup history pane's own line diff ([[node-popup]] renders the same
+component), so the two surfaces cannot show one version's change differently. The tab row's `git-compare`
+action is the same face switch here, always present, and pressed on the change. A past body carries NO line
+provenance and NO selection layer: its line numbers address a file that no longer holds those lines, so
+nothing can select-and-send or select-and-edit it ([[prose-selection]], [[prose-dispatch]]). The backend
+answers only a hash from this node's own version log ([[source-of-truth]]); anything else is shown as a
+refusal in the document, with the way back, never as a blank page.
+
 **The prose pane carries a selection layer.** Selecting a passage of the prose is enough to act on it —
 send it to a session, or edit it in place and commit ([[prose-dispatch]]). That layer is mounted inside the
 prose column and is made entirely of z-layers: the document's geometry with a selection is exactly its
@@ -93,3 +112,10 @@ to `?surface=diff` in the same single tab. There, the words the worktree inserte
 none of the words its re-wrap only moved to another line are. The tab row's `git-compare` action is pressed,
 and it leads back to the prose. A node the worktree adds opens straight on its change and has no toggle. The
 popup's edit tab renders the same redline.
+
+**Version-face acceptance** (`spec-history-dock.e2e.mjs`, a fixture node with three committed versions over an
+isolated backend). The dock lists v3, v2, v1 with their commit subjects, v3 current. v1's row opens v1's own
+words and desc in the same single tab, with no line stamps, and the dock marks v1. v2's change door opens the
+line diff v2 introduced, and the dock lights that door. The segmented switch and the tab-row action both move
+between v2's text and its change. "Back to current" restores the bare address and its current, stamped
+body. Another node's commit named as a version is refused in the document.

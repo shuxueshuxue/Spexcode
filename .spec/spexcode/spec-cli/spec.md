@@ -10,6 +10,7 @@ related:
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/guidance-catalog.ts
   - spec-cli/src/edit-diff.api.test.ts
+  - spec-cli/src/spec-version.api.test.ts
 ---
 # spec-cli
 
@@ -66,8 +67,10 @@ dashboard's single source, identical to `spex graph --json`) and its push compan
 instead of a tight poll. `/api/graph` stays a **conditional-request** endpoint: it `ETag`s the body so a
 reload that finds nothing changed costs a bodyless `304`, not the whole transfer — a standard HTTP capability,
 not a special case (the cost saved is the wire; how often the board is built is [[graph-cache]]'s). `/api/specs` (live via `loadSpecs`),
-`/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
-line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
+`/api/specs/:id/history` + `/api/specs/:id/diff/:hash` + `/api/specs/:id/version/:hash` (a node's timeline,
+the spec.md line-diff one of its versions introduced, and spec.md as that version left it — the two
+per-version reads answer only a hash from the node's own log and 404 anything else, [[source-of-truth]]),
+`/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
 (a node's in-flight working-tree delta vs its fork point as git's porcelain word diff, reviewable from the
 board, including a **brand-new, still-untracked node** as an all-additions diff so a just-created

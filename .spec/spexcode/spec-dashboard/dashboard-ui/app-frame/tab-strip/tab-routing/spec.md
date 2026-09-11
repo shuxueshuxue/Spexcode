@@ -21,8 +21,10 @@ Tab identity is the canonical object address. Session terminal, conversation, an
 identity; a published resource is a separate file-class identity. Evals, Issues, and Settings details share one
 resident page identity, while their selected detail remains in the URL. A spec node is not such a detail: it is a
 document, addressed by its own id exactly as a file is addressed by its path, so a gesture can open a second spec
-beside the one being read. A spec's pending-change face (`?surface=diff`, [[spec-view]]) is a face of that
-document, the way a session's diff face is, so the query stays out of its identity. Browsing the graph still holds one Spec tab, by the same focused-same-kind replacement
+beside the one being read. A spec's pending-change face (`?surface=diff`) and its past-version faces
+(`?version=<hash>`, with or without `surface=diff`, [[spec-view]]) are faces of that document, the way a
+session's diff face is, so the query stays out of its identity: reading an old version replaces the address in
+the same tab rather than minting one. Browsing the graph still holds one Spec tab, by the same focused-same-kind replacement
 every document gets, not by collapsing two specs into one identity. Graph, bare Sessions, New Session, and empty
 workspace routes are not documents and never enter the strip.
 

@@ -13,9 +13,11 @@ export class DashboardAssetError extends Error {
 }
 
 const PACKAGE = '@spexcode/spec-dashboard'
-const INSTALL = `npm install ${PACKAGE}`
+// The dashboard resolves from where spex itself is installed, so it must sit beside spex: a global spex finds
+// only a global dashboard, a project-local spex only a project-local one.
+const INSTALL = `npm install -g ${PACKAGE} (without -g when spex is a project dependency)`
 
-function dashboardRoot(): string {
+export function dashboardRoot(): string {
   try {
     return dirname(createRequire(import.meta.url).resolve(`${PACKAGE}/package.json`))
   } catch {

@@ -35,11 +35,11 @@ when its manifest adds no third-party dependency; a version-only bump or a scrip
 an edge arrived in is git's answer rather than this body's — `git log -S'<package>' -- '**/package.json'` reads it
 back, and the recent/history tabs show it in place.
 
-The CLI's live no-predecessor exceptions: `@hono/node-ws` and `node-pty` carry the terminal WebSocket/PTY
-transport, whose predecessor was in-tree code and not a package edge; `@spexcode/archify` is the vendored diagram
-renderer, owner [[archify]], held to the CLI's exact rendered bytes by
-`packages/archify/test/library.test.mjs`. The dashboard's own exceptions and their boundary checks belong to
-[[spec-dashboard]].
+The CLI's live no-predecessor exception: `@spexcode/archify` is the vendored diagram renderer, owner [[archify]],
+held to the CLI's exact rendered bytes by `packages/archify/test/library.test.mjs`. The daemon's server runtime
+(Hono, its node server and WebSocket, `node-pty`) is not a CLI edge at all: it ships with the dashboard package and
+the server loads it through that package ([[packaging]]). The dashboard's own exceptions, the daemon runtime's
+among them, and their boundary checks belong to [[spec-dashboard]].
 
 ## expanded spec
 

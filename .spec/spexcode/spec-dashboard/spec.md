@@ -43,6 +43,11 @@ the same way: nodes had no diagrams, so nothing is replaced, and the dashboard t
 the generated diagram stylesheet and the focus/id module ([[node-diagram]]) — while the renderer stays in the
 backend; the dependency test holds that line. `@spexcode/spec-core` is the
 browser-safe shared authority, while `@spexcode/spec-cli` is retained only for its public `ranker` export.
+The package's runtime `dependencies` are exactly the daemon runtime the CLI's server loads through it
+([[packaging]]): `hono`, `@hono/node-server`, `@hono/node-ws` and `node-pty`, re-exported from `daemon.mjs`, with
+`node-pty` alone in `daemon-pty.mjs` so only the terminal helper loads the native addon. Everything the bundled app
+imports stays a devDependency. `@hono/node-ws` and `node-pty` carry the terminal WebSocket/PTY transport, whose
+predecessor was in-tree code and not a package edge, so they arrive under the no-predecessor exception.
 The desktop Electron dependency is deliberately outside the root workspaces in `spec-desktop/package.json`, so
 users who do not run the optional shell do not ingest its runtime. A dependency may be added without a removal
 only under one of these measured exceptions; otherwise the owning feature must remove its superseded edge in the

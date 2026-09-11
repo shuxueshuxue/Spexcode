@@ -87,7 +87,9 @@ test('Settings exposes the default surface as a segmented preference', () => {
   assert.match(settings, /setDefaultSessionSurface/)
   // the preference is one of the page's segmented controls, named by its row label
   assert.match(settings, /<Segmented label=\{t\('settings\.defaultSessionSurface'\)\} value=\{defaultSessionSurface\}/)
-  assert.match(settings, /className="set-seg" role="group"/)
+  // …and that control is the product's one segmented control, not a page-local copy of it
+  assert.match(settings, /import \{ Segmented \} from '\.\/Segmented\.jsx'/)
+  assert.doesNotMatch(settings, /function Segmented/)
   assert.match(settings, /SESSION_SURFACE_TERMINAL/)
   assert.match(settings, /SESSION_SURFACE_CONVERSATION/)
 })

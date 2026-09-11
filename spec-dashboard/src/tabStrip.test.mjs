@@ -149,7 +149,7 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.match(shell, /<div className="context-toggle-slot">\{contextToggle\}<\/div>/)
   assert.match(shell, /trailing=\{contextToggleReservation\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)
-  assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 28px;/s)
+  assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 32px;[^}]*width:\s*32px;/s)
   assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*28px; height:\s*28px;[^}]*padding:\s*0;/s)
   assert.match(css, /\.si-pill\s*\{[^}]*height:\s*28px;/s)
 })

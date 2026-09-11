@@ -660,7 +660,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
                 trailing={contextToggleReservation} />}
               <Content page={page} param={param} query={query} inactive={inactive} />
             </div>
-            <ContextDock page={page} param={param} open={contextOpen} />
+            <ContextDock page={page} param={param} query={query} open={contextOpen} />
             {contextToggle && <div className="context-toggle-slot">{contextToggle}</div>}
           </div>
           <ShellStatus />

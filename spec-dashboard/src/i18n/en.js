@@ -52,6 +52,15 @@ export default {
     pendingChanges: ({ n }) => `${n} pending change${n === 1 ? '' : 's'}`,
     changeOpen: 'show the pending change',
     changeClose: 'leave the pending change, back to the spec',
+    // a past version read in the document ([[spec-view]]'s version face)
+    versionOf: 'version {n} of {total}',
+    versionFace: 'show this version as',
+    versionText: 'Text',
+    versionChange: 'Changes',
+    versionShowText: "show this version's text",
+    versionShowChange: 'show what this version changed',
+    versionBack: 'back to current (v{n})',
+    versionMissing: 'This version could not be opened: {error}',
   },
   fileView: { none: 'no file selected' },
   fileTree: {
@@ -96,6 +105,12 @@ export default {
     close: 'hide context dock',
     loadingIssues: 'loading issues…',
     noIssues: 'no open issues',
+    history: 'History',
+    loadingHistory: 'loading history…',
+    noHistory: 'no versions yet',
+    versionCurrent: 'v{n} — the current document',
+    versionText: 'read v{n}',
+    versionChange: 'what v{n} changed',
   },
   empty: {
     title: 'Nothing open',

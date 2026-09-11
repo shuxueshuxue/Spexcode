@@ -6,7 +6,7 @@ import { Avatar } from './avatar.jsx'
 import { overlaySessions, sessionDisplayState, sessionHandle } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
-import { fetchNodeFiles, specUrl } from './data.js'
+import { fetchNodeFiles } from './data.js'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
@@ -24,9 +24,11 @@ import { useReviewPage } from './reviewPage.js'
 import ProseActions from './ProseActions.jsx'
 import NodeDiagram from './NodeDiagram.jsx'
 import { useSpecContent } from './specContent.js'
+import { useHistory, useVersionDiff } from './specHistory.js'
 import 'katex/dist/katex.min.css'
 
 export { useSpecContent } from './specContent.js'
+export { useHistory } from './specHistory.js'
 
 export const PANES = [
   { key: 'spec',    label: 'spec' },
@@ -94,10 +96,10 @@ function PartCard({ kind, title, owner, ownerLabel, note, children }) {
 // A part is a slice of the body with its heading removed, so its blocks must be numbered against the WHOLE
 // body or a manual edit would put lines back in the wrong place ([[prose-selection]]). `locatePart` places
 // the slice and verifies the placement; an unplaceable part renders exactly as before, just unstamped.
-function TwoPart({ parts, body }) {
+function TwoPart({ parts, body, stamped }) {
   const t = useT()
-  const rawAt = locatePart(body, parts.rawSource)
-  const expandedAt = locatePart(body, parts.expandedSpec)
+  const rawAt = stamped ? locatePart(body, parts.rawSource) : null
+  const expandedAt = stamped ? locatePart(body, parts.expandedSpec) : null
   return (
     <div className="spec-parts">
       <PartCard kind="raw" title={t('nodeView.rawTitle')} owner="human" ownerLabel={t('nodeView.rawOwner')} note={t('nodeView.rawNote')}>
@@ -108,6 +110,13 @@ function TwoPart({ parts, body }) {
       </PartCard>
     </div>
   )
+}
+
+// A body as the reader sees it: the two labelled parts when authored that way, else the flat body. Only the
+// CURRENT body is `stamped` with line provenance — a past version's line numbers address a file that no longer
+// holds those lines, so its prose carries none and nothing can select-and-edit it ([[prose-selection]]).
+export function ProseBody({ body, parts, stamped = true }) {
+  return parts ? <TwoPart parts={parts} body={body} stamped={stamped} /> : <SpecBody body={body} lineBase={stamped ? 1 : 0} />
 }
 
 // The `code:` list is a row of file doors. The claim stays in the spec prose, while the bytes live at the
@@ -206,45 +215,10 @@ function SpecReading({ node, graphOnly, content }) {
         // resolves content to `{body:'',parts:null}` (not null), so it lands on the empty body, never a spinner
         // that never stops. parts come from the backend (`/content`); null → a legacy one-blob body renders whole.
         if (content === null && node.body == null) return <div className="pane-loading"><span className="spinner" aria-label={t('common.loading')} /></div>
-        const body = node.body ?? content?.body ?? ''
-        const parts = node.parts ?? content?.parts ?? null
-        return parts ? <TwoPart parts={parts} body={body} /> : <SpecBody body={body} lineBase={1} />
+        return <ProseBody body={node.body ?? content?.body ?? ''} parts={node.parts ?? content?.parts ?? null} />
       })()}
     </>
   )
-}
-
-// the node's version log from git (/api/specs/:id/history), newest first. `enabled` gates the fetch to the
-// history tab actually showing (every popup open otherwise fires it for a tab most opens never visit); rows
-// persist across tab switches, so only the FIRST visit loads — returns stay instant, same as the other panes.
-export function useHistory(id, enabled = true) {
-  const [rows, setRows] = useState(null)
-  useEffect(() => {
-    if (!enabled) return
-    let on = true
-    fetch(specUrl(id, 'history')).then((r) => r.json()).then((d) => { if (on) setRows(d) }).catch(() => on && setRows([]))
-    return () => { on = false }
-  }, [id, enabled])
-  return rows
-}
-
-// one version's spec.md line-diff (/api/specs/:id/diff/:hash), fetched lazily on expand (`enabled` gates it);
-// memoised per (id,hash) since a commit's diff is immutable, so re-expanding reads the cache, no refetch/flash.
-const versionDiffCache = new Map()
-function useVersionDiff(id, hash, enabled) {
-  const key = `${id}/${hash}`
-  const [diff, setDiff] = useState(() => versionDiffCache.get(key) ?? null)
-  useEffect(() => {
-    if (!enabled) return
-    const cached = versionDiffCache.get(key)
-    if (cached) { setDiff(cached); return }
-    let on = true
-    fetch(specUrl(id, 'diff', hash)).then((r) => r.json())
-      .then((d) => { versionDiffCache.set(key, d); if (on) setDiff(d) })
-      .catch(() => on && setDiff({ patch: '' }))
-    return () => { on = false }
-  }, [id, hash, enabled, key])
-  return diff
 }
 
 // git unified patch → renderable lines. Skip everything before the first `@@` wholesale (file-header metadata),
@@ -269,6 +243,7 @@ function parseDiff(patch) {
 function DiffEvidence({ diff }) {
   const t = useT()
   if (diff == null) return <figcaption className="ev-note">{t('nodeView.loadingChange')}</figcaption>
+  if (diff.error) return <figcaption className="ev-note ev-error">{diff.error}</figcaption>
   const lines = diff.patch ? parseDiff(diff.patch) : []
   if (!lines.length) return <figcaption className="ev-note">{t('nodeView.noChange')}</figcaption>
   return (
@@ -345,15 +320,17 @@ function ChronoPane({ items, itemKey, classes, rowClass, renderHeader, renderEvi
   )
 }
 
-// every version's diff fetches lazily when its row opens (memoised by hash; see useVersionDiff)
-function HistoryEvidence({ node, r }) {
-  const fetched = useVersionDiff(node.id, r.hash, true)
-  return <DiffEvidence diff={fetched} />
+// the change one version made to a node's spec.md, fetched when it mounts (memoised by hash; see
+// useVersionDiff). The history pane's expanded row and the spec document's version face both render THIS, so
+// the two surfaces cannot show one version's change differently.
+export function VersionDiff({ id, hash }) {
+  return <DiffEvidence diff={useVersionDiff(id, hash, true)} />
 }
 
 export function HistoryPane({ node, rows }) {
   const t = useT()
   if (!rows) return <div className="pane-hist empty">{t('nodeView.loadingHistory')}</div>
+  if (rows.error) return <div className="pane-hist empty ev-error">{rows.error}</div>
   if (!rows.length) return <div className="pane-hist empty">{t('common.noVersions')}</div>
   return (
     <ChronoPane
@@ -374,7 +351,7 @@ export function HistoryPane({ node, rows }) {
           <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>
         </>
       )}
-      renderEvidence={(r, i) => <HistoryEvidence node={node} r={r} latest={i === 0} />}
+      renderEvidence={(r) => <VersionDiff id={node.id} hash={r.hash} />}
     />
   )
 }

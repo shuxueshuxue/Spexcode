@@ -90,8 +90,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
   closed** — the shell reads the preference, so the default belongs here rather than inside the dock that
   would be arguing for its own existence. It is closed because opening it costs the spec prose 383px of 575
   at 1440: a question about the document does not get to spend the document's width until it is asked. The
-  toggle rides the tab strip's trailing cluster and the choice persists, so this decides only what an
-  unopinionated window looks like.
+  toggle lives at the window's right edge and the choice persists: while closed it rides the tab strip's
+  trailing cluster; once open it rides the context head's far-right door at the same edge, so opening and
+  folding back are one stationary-pointer gesture.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content. It is a full-window flow row after the app row, so rail and
   optional dock stop at its top edge and the view/context row gets the rest of the height. The bar consumes
@@ -111,7 +112,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
 
 A control belongs to the region whose question it answers, and to exactly one owner there — the dock's
   projection is named in its header, while the permanently mounted rail's mirrored panel control owns dock
-  open/closed and exposes `aria-pressed`. The dock itself is content-only and has no second collapse door.
+  open/closed and exposes `aria-pressed`. The context dock's switch is the one document-owned exception: it
+  is in the tab strip while the dock is closed, and in the context header while open, with one right-edge
+  position so the same pointer can open and close it. The dock itself has no second collapse door.
 
 **Each region gets ONE band, and a band is a row that earns its place.** [[ui-state-model]] states the
 budget and measures it; the shell's obligation is to have no spacer that stands in for a band it does not
@@ -119,8 +122,9 @@ draw. The tab strip is the top band itself, not a wrapper holding it: on every s
 renders unconditionally and names the routed place when no document is held, so the row is either a working
 set or an answer to where the reader is, and never 29 empty pixels; the Sessions document lays the same strip
 out inside the surface it owns, beside its forest ([[session-console]]). A control that belongs to the current DOCUMENT — the context
-dock's toggle — rides the strip's trailing cluster beside the document actions rather than opening a
-region of its own.
+dock's toggle — rides the strip's trailing cluster beside the document actions while the dock is closed.
+When the dock is open, the same control is mounted in the context head's trailing cluster at the window's
+right edge; it does not create another band or move the pointer's target.
 
 **The window says where it is.** The shell is the only component that reads the address, so it is the only
 one that can name the place, and it writes `<place> · <project>` into the document title on every route.

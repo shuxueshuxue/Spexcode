@@ -24,8 +24,9 @@ const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
-  assert.match(source, /onContextMenu=\{\(e\) => \{[\s\S]*?e\.preventDefault\(\)[\s\S]*?setMenu\(null\)/)
-  assert.match(source, /onSessionContextMenu\(\{ x: e\.clientX, y: e\.clientY, session \}\)/)
+  assert.match(source, /onContextMenu=\{\(e\) => \{\s*if \(isClosing\) return\s*e\.preventDefault\(\)\s*setMenu\(\{ x: e\.clientX, y: e\.clientY, tab, key \}\)\s*\}\}/)
+  // every tab gets the same tab menu; a session's lifecycle verbs stay on its row, never on the strip
+  assert.doesNotMatch(source, /onSessionContextMenu/)
   assert.doesNotMatch(source, /onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); closeOthers\(tab\)/)
 })
 

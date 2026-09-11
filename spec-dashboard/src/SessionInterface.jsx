@@ -1244,8 +1244,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       />}
       <div className="si-document">
         {route && <TabStrip specs={specs} sessions={sessions} route={route}
-          leading={!forestOpen ? <DockToggle variant="strip" /> : null}
-          onSessionContextMenu={(next) => { setResourceMenu(false); setCtxMenu(next) }} />}
+          leading={!forestOpen ? <DockToggle variant="strip" /> : null} />}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through

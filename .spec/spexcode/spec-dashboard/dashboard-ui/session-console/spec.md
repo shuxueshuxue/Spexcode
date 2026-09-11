@@ -152,7 +152,7 @@ on the session; the console registers them only while its own pane is the READ d
 workspace keeps hidden documents mounted and an action left behind would describe a document nobody has
 open.
 
-The session document renders no internal toolbar. Its menu, resource picker, diff door, Command Box,
+The session document renders no internal toolbar. Its resource picker, diff door, Command Box,
 relaunch, and selected-resource actions register with the shell's [[document-actions]] slot at the tab row's
 right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness. The resource picker
 is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
@@ -160,11 +160,11 @@ Surface choice is address state (`?surface=…`) controlled by two compact icon 
 one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
 `git-compare` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
 base face and leaves the session tab alone. Both are omitted when the session has only one available face (headless,
-offline, or archived). The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
-to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
-is the right-click on a finding-dock session row ([[dock-modes]]) — one menu, two ways in, the slot for the
-session you are reading and the dock for any other. Other document kinds register nothing, so their tab-row edge
-is blank.
+offline, or archived). The slot does not carry the session's own **lifecycle menu** (rename, select, tmux
+attach, lock-on-graph, resume, quarantine, close). That menu opens from a right-click on the session's ROW —
+in the forest beside this document, or in the finding dock's session list on any other page ([[dock-modes]]):
+one menu, and its doors are the places that list sessions. Other document kinds register nothing, so their
+tab-row edge is blank.
 
 **The console cancels the native context menu nowhere.** It once cancelled it for the whole panel, which was
 survivable while a session list filled most of that panel and did own a right-click menu of its own; with the
@@ -261,6 +261,9 @@ through the workspace's one dock open/closed state — the console keeps no fold
 folded the document column takes the full width. Folding is the frame's one shared movement ([[dock-modes]]):
 the sidebar outlives the closed state by a single panel duration and slides out before it unmounts, the same
 way the left dock and the right context dock do. It is the same gesture on the same panel, so it cannot be a
-second timer with its own idea of how long a fold takes. A session tab's right-click enters the same session context menu
-as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
-`session-menu` document-action button is absent.
+second timer with its own idea of how long a fold takes. The strip in this column is the SAME workspace strip
+the shell draws everywhere else, so a session tab's right-click opens the ordinary tab menu — close, close
+others, send to split pane ([[tab-layout]]) — exactly as it does in the shell's strip and exactly as any other
+tab in this strip does. A tab is the workspace's handle on an address, not the session: routing the session's
+lifecycle menu through it made one tab answer differently depending on which strip drew it, and took the tab's
+own verbs away. The lifecycle menu stays on the session row, and there is no `session-menu` document-action button.

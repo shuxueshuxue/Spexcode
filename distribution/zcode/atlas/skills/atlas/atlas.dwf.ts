@@ -55,7 +55,7 @@ interface Gate {
   failed?: string;
 }
 interface Pick {
-  /** The spec node id to draw. */
+  /** Exactly one node id from the list you were given — a folder name, with nothing added to it. */
   id: string;
   /** The kind of picture its body calls for. */
   kind: "architecture" | "workflow" | "sequence" | "dataflow" | "lifecycle";
@@ -205,19 +205,34 @@ log(firstCommit.exitCode === 0 ? "Committed the spec tree" : "Nothing new to com
 
 phase("Choose the nodes worth a picture");
 const specs = await files.glob(".spec/**/spec.md");
+// A node's id is its folder's name; a pick that names anything else would send a cartographer after nothing.
+const known = new Set(specs.map((path) => path.split("/").slice(-2, -1).join("")));
+const unknownIds = (c: Choice) => c.picks.map((pick) => pick.id).filter((id) => !known.has(id));
 const planner = agent("Atlas planner", { tools: "readonly" });
-const choice = await planner.ask<Choice>(
+let choice = await planner.ask<Choice>(
   "Choose which nodes of this SpexCode spec tree deserve a diagram. A node whose body explains how its children fit " +
     "together gets an architecture diagram of those children; a node whose body is a process, a protocol, a data " +
     "path or a lifecycle gets that kind instead. Skip leaves with nothing to show and nodes that already have a " +
     "diagram.json beside their spec.md. Always include the root node. A node's id is its folder's name. The nodes:\n" +
     specs.join("\n"),
 );
-log(`Drawing ${choice.picks.length} pictures, skipping ${choice.skipped.length} nodes`);
+if (unknownIds(choice).length) {
+  choice = await planner.ask<Choice>(
+    `These picks name no node: ${unknownIds(choice).join(", ")}. A pick's id is exactly one folder name from the ` +
+      "list, with nothing added to it. Give the whole choice again.",
+  );
+}
+const drawnIds = new Set<string>();
+const picks = choice.picks.filter((pick) => known.has(pick.id) && !drawnIds.has(pick.id) && Boolean(drawnIds.add(pick.id)));
+const skipped = [
+  ...choice.skipped,
+  ...unknownIds(choice).map((id) => ({ id, why: "the planner named a node that does not exist, twice" })),
+];
+log(`Drawing ${picks.length} pictures, skipping ${skipped.length} nodes`);
 
 phase("Draw each picture and check it until it passes");
 const drawn = await Promise.all(
-  choice.picks.map(async (pick) => {
+  picks.map(async (pick) => {
     const cartographer = agent(`Cartographer: ${pick.id}`, CARTOGRAPHER);
     await cartographer.ask(`Draw node ${pick.id} as a ${pick.kind} diagram. Why this node: ${pick.why}`);
     let check = await world.run("npx", [...SPEX, "diagram", "check", pick.id], { timeoutMs: NPX_TIMEOUT });
@@ -273,7 +288,7 @@ await artifact.markdown(
     ...drawn.map((d) => `- ${d.id} (${d.kind}): ${d.passed ? "check passes" : "check still fails"}`),
     "",
     "## Skipped",
-    ...choice.skipped.map((s) => `- ${s.id}: ${s.why}`),
+    ...skipped.map((s) => `- ${s.id}: ${s.why}`),
     "",
     "## Claims the code does not bear out",
     ...(claims.length ? claims.map((c) => `- ${c.node} (${c.status}): ${c.claim} — ${c.evidence}`) : ["- none found"]),

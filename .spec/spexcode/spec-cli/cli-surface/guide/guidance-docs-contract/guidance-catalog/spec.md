@@ -13,7 +13,7 @@ related:
   - spec-cli/src/guide.ts
   - spec-cli/src/index.ts
   - spec-cli/src/guidance-catalog.test.ts
-  - .spec/spexcode/spec-cli/guide/guidance-docs-contract/spec.md
+  - .spec/spexcode/spec-cli/cli-surface/guide/guidance-docs-contract/spec.md
 ---
 # guidance-catalog
 

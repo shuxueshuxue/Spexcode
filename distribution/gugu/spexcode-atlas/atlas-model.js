@@ -2,12 +2,12 @@
 // page, so the whole reading is testable without a host. A node is a folder under .spec/ holding a spec.md; its id
 // is the folder's name; the tree is the folder tree. This is a reader, not SpexCode's assembly — no drift, no lint.
 
-export const SPEC_ROOT = '.spec'
+const SPEC_ROOT = '.spec'
 // SpexCode's own seeded machinery (skills, hooks) lives here in an adopted repository; it is not the project.
 const MACHINERY = '.plugins'
 
 // The frontmatter subset spec files use: `key: value` scalars and `key:` followed by `  - item` lists.
-export function parseSpec(text) {
+function parseSpec(text) {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text)
   if (!match) return { fm: {}, body: text }
   const fm = {}
@@ -30,7 +30,7 @@ const unquote = (value) => {
 
 // files: [{ path, text }] for every `.spec/**/spec.md`; diagrams: the set of `.spec/**/diagram.json` paths.
 // Returns the nodes by id plus the roots, children in folder-name order.
-export function buildTree(files, diagrams = new Set()) {
+function buildTree(files, diagrams = new Set()) {
   const byPath = new Map()
   for (const { path, text } of files) {
     const dir = path.slice(0, -'/spec.md'.length)
@@ -80,7 +80,7 @@ function inline(text, known) {
 
 // The body markdown spec files are written in: headings, paragraphs, lists, block quotes, fenced code, and inline
 // code, emphasis, links and [[node]] mentions. Everything is escaped first; nothing in a body becomes markup of its own.
-export function renderMarkdown(markdown, known = () => false) {
+function renderMarkdown(markdown, known = () => false) {
   const out = []
   const lines = markdown.split(/\r?\n/)
   let paragraph = []
@@ -123,3 +123,5 @@ export function renderMarkdown(markdown, known = () => false) {
   flush()
   return out.join('\n')
 }
+
+globalThis.SpexCodeAtlasModel = { SPEC_ROOT, parseSpec, buildTree, renderMarkdown }

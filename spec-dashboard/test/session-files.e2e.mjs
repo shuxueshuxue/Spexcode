@@ -84,6 +84,25 @@ const service = await new Promise((done, fail) => {
   server.listen(0, '127.0.0.1', () => done({ server, url: `http://127.0.0.1:${server.address().port}/` }))
 })
 
+// every animation frame for a short while: how much of the drawer shows below its slot line, and where that line
+// is. `presses` are button presses made from inside the page at exact times, so an interruption lands mid-motion.
+const sampleDrawer = (page, ms = 600, presses = []) => page.evaluate(([duration, times]) => new Promise((done) => {
+  const frames = []
+  const start = performance.now()
+  for (const at of times) setTimeout(() => document.querySelector('.si-rp-fab').click(), at)
+  const tick = () => {
+    const drawer = document.querySelector('.si-rp-drawer')
+    const t = performance.now() - start
+    if (drawer) {
+      const rect = drawer.getBoundingClientRect()
+      const inset = parseFloat(getComputedStyle(drawer).clipPath.match(/inset\(([-\d.]+)/)?.[1] || '0') / 100 * rect.height
+      frames.push({ t: Math.round(t), shown: Math.round(rect.bottom - rect.top - inset), slot: Math.round(rect.top + inset), closing: drawer.classList.contains('closing') })
+    } else frames.push({ t: Math.round(t), gone: true })
+    if (t < duration) requestAnimationFrame(tick); else done(frames)
+  }
+  requestAnimationFrame(tick)
+}), [ms, presses])
+
 const checks = []
 const check = (name, ok, detail = null) => {
   checks.push({ name, ok: !!ok, detail })
@@ -136,25 +155,26 @@ try {
   check('the button carries the published count', true, total)
   await page.screenshot({ path: join(OUT, 'picker-closed.png') })
 
-  // freeze the drawer's opening to show it sliding out of its slot
-  const pause = await page.addStyleTag({ content: '.si-rp-drawer { animation-play-state: paused !important; }' })
+  // slow the drawer's opening right down, then pin it at fixed points to show it sliding out of its slot
+  const slow = await page.addStyleTag({ content: '.si-rp-drawer { transition-duration: 60s !important; }' })
   await fab.click()
   const drawer = page.locator('.si-rp-drawer')
   await drawer.waitFor({ state: 'attached' })
   const frames = []
   for (const progress of [0.25, 0.5, 0.75]) {
     const visible = await drawer.evaluate((element, p) => {
-      const animation = element.getAnimations()[0]
-      animation.currentTime = p * Number(animation.effect.getTiming().duration)
+      for (const animation of element.getAnimations()) { animation.pause(); animation.currentTime = p * 60_000 }
       const rect = element.getBoundingClientRect()
-      return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), transform: getComputedStyle(element).transform }
+      const inset = parseFloat(getComputedStyle(element).clipPath.match(/inset\(([-\d.]+)/)?.[1] || '0') / 100 * rect.height
+      return { top: Math.round(rect.top), visibleTop: Math.round(rect.top + inset), bottom: Math.round(rect.bottom) }
     }, progress)
     frames.push({ progress, ...visible })
     await page.screenshot({ path: join(OUT, `picker-drawer-${Math.round(progress * 100)}.png`), clip: { x: 960, y: 36, width: 480, height: 620 } })
   }
-  check('the drawer slides down while it opens', frames[0].top < frames[1].top && frames[1].top < frames[2].top, frames)
+  check('the drawer slides down out of a fixed slot while it opens',
+    frames[0].bottom < frames[1].bottom && frames[1].bottom < frames[2].bottom && new Set(frames.map((frame) => frame.visibleTop)).size === 1, frames)
   await drawer.evaluate((element) => element.getAnimations().forEach((animation) => animation.finish()))
-  await pause.evaluate((style) => style.remove())
+  await slow.evaluate((style) => style.remove())
   check('opening puts focus in the search field', await page.evaluate(() => document.activeElement?.closest('.si-rp-search') != null))
 
   const chips = await page.locator('.si-rp-chip').evaluateAll((elements) => elements.map((element) => element.dataset.filter))
@@ -228,6 +248,26 @@ try {
   check('an upload\'s tab wears the name the human gave it', (await activeTab.textContent()) === 'mockup.png')
   await page.screenshot({ path: join(OUT, 'picker-upload-tab.png') })
 
+  const drawn = (frames) => frames.filter((frame) => !frame.gone)
+  await drawer.waitFor({ state: 'detached' })
+  await fab.click()
+  await drawer.waitFor({ state: 'visible' })
+  await page.waitForTimeout(400)
+  const closeRun = sampleDrawer(page)
+  await page.keyboard.press('Escape')
+  const closeFrames = drawn(await closeRun)
+  const lastShown = closeFrames.at(-1)
+  check('the drawer is back in its slot before it leaves the page',
+    lastShown.closing && lastShown.shown <= 2 && new Set(closeFrames.map((frame) => frame.slot)).size === 1, closeFrames.slice(-4))
+  await drawer.waitFor({ state: 'detached' })
+  const interruptFrames = drawn(await sampleDrawer(page, 700, [0, 90]))
+  const opened = interruptFrames.filter((frame) => !frame.closing)
+  const reversal = interruptFrames.findIndex((frame) => frame.closing)
+  check('a close during the opening reverses from where the drawer is',
+    reversal > 0 && interruptFrames[reversal].shown <= Math.max(...opened.map((frame) => frame.shown)) + 40 && interruptFrames.at(-1).shown <= 2,
+    { peak: Math.max(...opened.map((frame) => frame.shown)), firstClosing: interruptFrames[reversal]?.shown, last: interruptFrames.at(-1)?.shown })
+  await drawer.waitFor({ state: 'detached' })
+
   await page.goto(`${BASE}/#/sessions/${SESSION}?surface=diff`, { waitUntil: 'domcontentloaded' })
   await page.locator('.diff-toolbar').waitFor({ state: 'visible', timeout: 20_000 })
   const covered = await page.evaluate(() => {
@@ -253,6 +293,7 @@ try {
   writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, checks, frames }, null, 2) + '\n')
   assert.ok(checks.every((item) => item.ok), `failed: ${checks.filter((item) => !item.ok).map((item) => item.name).join('; ')}`)
 } finally {
+  await page.screenshot({ path: join(OUT, 'last.png') }).catch(() => {})
   for (const path of posted) { try { cli('files', 'retract', path) } catch {} }
   try { cli('web', 'retract', service.url) } catch {}
   await browser.close()

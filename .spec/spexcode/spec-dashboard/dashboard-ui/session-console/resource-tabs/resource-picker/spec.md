@@ -41,8 +41,11 @@ a control, while plain content beneath it (terminal text, a posted page) is simp
 
 **The drawer.** The drawer hangs from the button's right edge, and its opening is a drawer being pulled: the
 panel slides down out of a straight slot line just below the button, clipped there while it travels, and slides
-back into it on close. The motion has its own duration token because it travels the panel's height, which a
-6px rise does not; reduced motion drops it to an instant open and close. The drawer is `--raised` paper on the
+back into it on close. The motion is a transition, not a one-way keyframe, so a close that interrupts the opening
+reverses from wherever the drawer is instead of jumping to fully open first, and the close is shorter than the
+unmount linger, so the drawer is fully back in its slot before it leaves the page. The motion has its own
+duration token because it travels the panel's height, which a 6px rise does not; reduced motion drops it to an
+instant open and close. The drawer is `--raised` paper on the
 one `--shadow`, sized to its content up to a viewport-bounded height, with the list scrolling inside.
 
 **What it lists.** Every file and web service the session has published ([[files]], [[web]]) — including those

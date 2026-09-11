@@ -2580,17 +2580,16 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--shadow);
   font-family: var(--ui-font);
-  animation: rp-drawer-open var(--dur-drawer) cubic-bezier(.2, .8, .25, 1) backwards;
+  /* the side and bottom insets reach past the shadow, so only the slot edge ever cuts */
+  clip-path: inset(0 -24px -40px -24px);
+  /* transitions, not keyframes: a close that interrupts the opening reverses from where the drawer is */
+  transition: transform var(--dur-drawer) cubic-bezier(.2, .8, .25, 1), clip-path var(--dur-drawer) cubic-bezier(.2, .8, .25, 1);
 }
-.si-rp-drawer.closing { pointer-events: none; animation: rp-drawer-close var(--dur-drawer) cubic-bezier(.5, 0, .75, 0) forwards; }
-/* the side and bottom insets reach past the shadow, so only the slot edge ever cuts */
-@keyframes rp-drawer-open {
-  from { transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px); }
-  to { transform: none; clip-path: inset(0 -24px -40px -24px); }
-}
-@keyframes rp-drawer-close {
-  from { transform: none; clip-path: inset(0 -24px -40px -24px); }
-  to { transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px); }
+@starting-style { .si-rp-drawer { transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px); } }
+/* shorter than the unmount linger, so the drawer is fully back in its slot before it leaves the tree */
+.si-rp-drawer.closing {
+  pointer-events: none; transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px);
+  transition-duration: calc(var(--dur-drawer) * .75); transition-timing-function: cubic-bezier(.4, 0, .9, .5);
 }
 .si-rp-head { padding: var(--space-5) var(--space-6) var(--space-3); color: var(--ink2); font-size: var(--type-control); font-weight: var(--weight-semibold); }
 .si-rp-search {
@@ -2657,7 +2656,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-rp-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-7) var(--space-6); color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); text-align: center; }
 .si-rp-empty strong { color: var(--ink); font-size: var(--type-control); font-weight: var(--weight-medium); }
 .si-rp-empty svg { margin-bottom: var(--space-2); opacity: .6; }
-@media (prefers-reduced-motion: reduce) { .si-rp-drawer, .si-rp-drawer.closing { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .si-rp-drawer, .si-rp-drawer.closing { transition: none; } }
 
 .si-actions { flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
 .si-file-text { width: 100%; min-height: 100%; box-sizing: border-box; display: block; margin: 0; padding: 12px; color: var(--ink); font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }

@@ -383,10 +383,11 @@ for (const harness of ['claude', 'codex'] as const) {
 function sessionListenRig(behaviour: 'fail-dequeue' | 'garbage-body') {
   const dir = mkdtempSync(join(tmpdir(), `spex-session-listen-${behaviour}-`))
   const cli = join(dir, 'spex-session')
-  const body = behaviour === 'fail-dequeue'
-    ? '[ "$1" = dequeue ] && exit 1\nexit 0\n'
-    : `[ "$1" = dequeue ] && { printf '%s\\n' '{"messageId":"m-42","bodyBase64":"!!!not-base64!!!"}'; exit 0; }\nexit 0\n`
-  writeFileSync(cli, `#!/usr/bin/env bash\n${body}`)
+  const calls = join(dir, 'calls')
+  // Message receipt moved to the backend/caller in the canonical cutover. Keep the old failure vectors as
+  // names for the two regression stories, but prove the current contract: UserPromptSubmit never invokes
+  // dequeue, so neither a broken reader nor an invalid body can consume the person's prompt.
+  writeFileSync(cli, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit 0\n`)
   chmodSync(cli, 0o755)
   const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'session-listen', 'session-listen.sh')
   const run = spawnSync('bash', [hook], {
@@ -394,27 +395,23 @@ function sessionListenRig(behaviour: 'fail-dequeue' | 'garbage-body') {
     encoding: 'utf8',
     env: { ...process.env, SPEX_SESSION_DATABASE_PATH: join(dir, 'db'), SPEX_SESSION_CLI: cli, SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'), SPEXCODE_HARNESS: 'claude' },
   })
+  const invoked = existsSync(calls) ? readFileSync(calls, 'utf8') : ''
   rmSync(dir, { recursive: true, force: true })
-  return run
+  return { ...run, invoked }
 }
 
 test('session-listen: a queue it cannot read does not cost the person their prompt', () => {
   const run = sessionListenRig('fail-dequeue')
   assert.equal(run.status, 0, run.stderr)
-  const emitted = JSON.parse(run.stdout)
-  assert.equal(emitted.hookSpecificOutput.hookEventName, 'UserPromptSubmit')
-  assert.match(emitted.hookSpecificOutput.additionalContext, /Nothing was consumed/)
+  assert.equal(run.stdout, '', 'the registration-only hook has no prompt-bound output')
+  assert.equal(run.invoked, '', 'UserPromptSubmit never invokes the dequeue CLI')
 })
 
 test('session-listen: a message it cannot deliver is reported with what it takes to recover it', () => {
   const run = sessionListenRig('garbage-body')
   assert.equal(run.status, 0, run.stderr)
-  const emitted = JSON.parse(run.stdout)
-  const context = emitted.hookSpecificOutput.additionalContext
-  // the message has already left the at-most-once queue, so the notice IS the recovery path
-  assert.match(context, /messageId=m-42/)
-  assert.match(context, /bodyBase64=!!!not-base64!!!/)
-  assert.match(run.stderr, /messageId=m-42/)
+  assert.equal(run.stdout, '', 'the registration-only hook has no prompt-bound output')
+  assert.equal(run.invoked, '', 'UserPromptSubmit never invokes dequeue, so no message can be consumed')
 })
 
 // THE GATE MUST SURVIVE ITS OWN TEXT FAILING TO LOAD. Rendering goes through the CLI, and a failure there

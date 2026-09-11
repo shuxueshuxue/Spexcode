@@ -182,12 +182,12 @@ test('session reparent rewrites parent/watch through live backend and only falls
       'the former parent\'s overlapping manual watch must survive reparent')
     await waitFor(async () => timelineText(sessionDir(home, newParent, project)).length > newParentTimelineAtHandoff.length,
       'the new parent must receive a later non-working child transition')
-    assert.match(timelineText(sessionDir(home, oldParent, project)), /"proposal":"merge"/)
+    assert.match(timelineText(sessionDir(home, oldParent, project)), /review/)
     assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
     const newParentTimeline = timelineText(sessionDir(home, newParent, project))
     assert.match(newParentTimeline, new RegExp(childA))
     assert.match(newParentTimeline, new RegExp(childB))
-    assert.match(newParentTimeline, /"proposal":"merge"/)
+    assert.match(newParentTimeline, /review/)
 
     writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'new-parent-command', text: 'stale continue', from: newParent }]) + '\n')
     const detached = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {

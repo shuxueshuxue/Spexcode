@@ -49,6 +49,18 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
   const seed = openProjectSessionApplication({ databasePath, locality: () => {} })
   for (const id of ['parent', 'child', 'parent2', 'watch1', 'watch2', 'batch', 'batchw', 'pub', 'pubw', 'a', 'aw', 'b', 'bw']) seed.createSession({ sessionId: id })
   seed.transitionSession('child', { parentSessionId: 'parent' }); seed.close()
+  // The owning backend discovers governed watcher records from the runtime store before it reconciles
+  // canonical event cursors. The old direct-recipient route needed no envelope, but the current cutover
+  // contract does, so keep this HTTP fixture shaped like a real adopted project.
+  const runtimeSessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
+  for (const id of ['parent', 'child', 'parent2', 'watch1', 'watch2', 'batch', 'batchw', 'pub', 'pubw', 'a', 'aw', 'b', 'bw']) {
+    const dir = join(runtimeSessions, id)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'runtime.json'), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: project, branch: 'main', title: id, name: '',
+      harness: 'claude', harness_session_id: '', stopped: false, archived: false,
+    })}\n`)
+  }
   let backend: ChildProcess | null = null
   let backendLog = ''
   const indexPath = join(process.cwd(), 'src/index.ts')
@@ -72,6 +84,15 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
   const base = `http://127.0.0.1:${port}`
   const request = async (path: string, init?: RequestInit): Promise<any> => { const response = await fetch(base + path, init); const text = await response.text(); if (!response.ok) throw new Error(`${response.status}: ${text}`); return text ? JSON.parse(text) : null }
   const post = (path: string, body: unknown) => request(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const dequeueWhenReady = async (path: string): Promise<any> => {
+    const deadline = Date.now() + 5_000
+    for (;;) {
+      const message = await post(path, { namespace: 'spex-governed' })
+      if (message) return message
+      if (Date.now() >= deadline) throw new Error(`timed out waiting for a queued message at ${path}`)
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
   const results: Array<{ name: string; passed: boolean; error?: string }> = []
   const story = async (name: string, body: () => Promise<void>) => { try { await body(); results.push({ name, passed: true }) } catch (error) { results.push({ name, passed: false, error: error instanceof Error ? error.message : String(error) }) } }
   try {
@@ -82,7 +103,7 @@ test('YATU cutover matrix: ten distinct stories through the backend HTTP and mig
     await story('state-transition-replay', async () => { await post('/api/session-runtime/child/state', { status: 'active' }); await post('/api/session-runtime/child/state', { status: 'awaiting' }); assert.equal((await request('/api/session-runtime/child/replay')).status, 'awaiting') })
     await story('restart', async () => { await stop(backend!); start(); await waitForBackend('restart'); assert.equal((await request('/api/session-runtime/child/replay')).status, 'awaiting') })
     await story('generation-fencing', async () => { const first = await post('/api/session-runtime/watch1/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'w1', nativeStartToken: 'one' }); await post('/api/session-runtime/watch1/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'w1', nativeStartToken: 'two', expectedGeneration: first.bindingGeneration }); await assert.rejects(() => post('/api/session-runtime/watch1/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'w1', nativeStartToken: 'three', expectedGeneration: first.bindingGeneration })) })
-    await story('ordered-batch-delivery', async () => { await post('/api/session-runtime/batch/watch', { watcherSessionId: 'batchw' }); await post('/api/session-runtime/batch/state', { status: 'active' }); await post('/api/session-runtime/batch/state', { status: 'awaiting' }); await post('/api/session-runtime/batchw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'batchw', nativeStartToken: 'one' }); const one = await post('/api/session-runtime/batchw/dequeue', { namespace: 'spex-governed' }); const two = await post('/api/session-runtime/batchw/dequeue', { namespace: 'spex-governed' }); assert.ok(one.enqueueSeq < two.enqueueSeq) })
+    await story('ordered-batch-delivery', async () => { await post('/api/session-runtime/batch/watch', { watcherSessionId: 'batchw' }); await post('/api/session-runtime/batch/state', { status: 'active' }); await post('/api/session-runtime/batch/state', { status: 'awaiting' }); await post('/api/session-runtime/batchw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'batchw', nativeStartToken: 'one' }); const one = await dequeueWhenReady('/api/session-runtime/batchw/dequeue'); const two = await dequeueWhenReady('/api/session-runtime/batchw/dequeue'); assert.ok(one.enqueueSeq < two.enqueueSeq) })
     await story('publish-before-after-watch', async () => { await post('/api/session-runtime/pub/publish', { kind: 'before', body: 'before' }); await post('/api/session-runtime/pub/watch', { watcherSessionId: 'pubw' }); await post('/api/session-runtime/pub/publish', { kind: 'after', body: 'after' }); await post('/api/session-runtime/pubw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'pubw', nativeStartToken: 'one' }); const message = await post('/api/session-runtime/pubw/dequeue', { namespace: 'spex-governed' }); assert.equal(message.kind, 'after') })
     await story('independent-session-pairs', async () => { await post('/api/session-runtime/a/watch', { watcherSessionId: 'aw' }); await post('/api/session-runtime/b/watch', { watcherSessionId: 'bw' }); await post('/api/session-runtime/a/publish', { kind: 'pair-a', body: 'a' }); await post('/api/session-runtime/aw/bind', { namespace: 'spex-governed', runtimeKind: 'yatu', nativeSessionId: 'aw', nativeStartToken: 'one' }); const message = await post('/api/session-runtime/aw/dequeue', { namespace: 'spex-governed' }); assert.equal(message.kind, 'pair-a') })
     await story('one-time-migration-marker', async () => {

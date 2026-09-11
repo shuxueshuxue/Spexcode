@@ -72,10 +72,10 @@ the gesture is still visible. Because the fold animates width, the dock clips it
 panels therefore scroll together inside it — the alternative to that scroller is not "no scroller", it is a
 long issue list clipped out of reach. The resize grip stays outside the scroller so it cannot scroll away
 from the edge it drags.
-The open/close control belongs to the document area and stays at the window's right edge: while the dock is
-closed it lives in the tab strip's trailing cluster beside the tabs, and while the dock is open it is mounted
-in the context head's trailing cluster. Both mounts use the same `22px` head-door target and the same `6px` right
-inset, so opening and closing keep the pointer over the control even as the dock animates. The
+The open/close control belongs to the document area and stays at the window's right edge: one shell-owned slot
+paints it over the tab strip while the dock is closed and over the context head while the dock is open. The
+same `28px` target stays mounted through the dock's width animation, with the same `4px` right inset, so
+opening and closing keep the pointer over the control without a replacement flash. The
 workspace-shell rule says a control belongs to the region whose question it answers, and context is neither
 the left finding rail nor ambient status, so this document-level control is the least surprising owner while
 remaining reachable in both states. Both dock switches speak ONE vocabulary — the shared mirrored panel pair

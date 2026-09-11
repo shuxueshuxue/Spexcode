@@ -371,8 +371,13 @@ body {
 .app-shell { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .app { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; }
 .app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
-.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.context-toggle-slot {
+  position: absolute; top: var(--space-2); right: var(--space-2); z-index: 6;
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+}
+.context-toggle-reservation { flex: 0 0 28px; width: 28px; height: 28px; }
 .context-toggle {
   color: var(--muted);
 }
@@ -382,9 +387,8 @@ body {
 .context-dock { flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0; max-width: 640px; overflow: hidden; background: var(--ground); border-left: 1px solid var(--edge); }
 .ctx-body { flex: 1; min-height: 0; overflow: auto; }
 .ctx-resize { position: absolute; top: 0; left: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
-.ctx-head { flex: 0 0 var(--line-top); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-3) 0 var(--space-5); color: var(--muted); font-size: var(--type-meta); border-bottom: 1px solid var(--edge); }
+.ctx-head { flex: 0 0 var(--line-top); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-5); color: var(--muted); font-size: var(--type-meta); border-bottom: 1px solid var(--edge); }
 .ctx-node-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
-.ctx-head-acts { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .ctx-panel { flex: 0 0 auto; border-bottom: 1px solid var(--edge); }
 .ctx-panel-head { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-5); color: var(--ink2); background: transparent; border: 0; font: inherit; font-size: var(--type-meta); font-weight: var(--weight-medium); text-align: left; cursor: pointer; }
 .ctx-panel-head:hover { background: var(--wash-hover); }
@@ -427,8 +431,8 @@ body {
 .sb-stale::before { content: '~'; position: absolute; left: 0; top: 0; }
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
-  width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
+  appearance: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
 /* a door with nothing behind it stays in place, quieter: the head keeps one shape ([[dock-modes]]) */

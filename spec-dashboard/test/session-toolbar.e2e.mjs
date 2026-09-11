@@ -117,7 +117,7 @@ check('context toggle uses one stable shell slot', closedContext.inSlot && openC
 check('context toggle matches Sessions control geometry and does not jump during opening',
   openContext.pressed === 'true'
     && closedContext.height === 28 && openContext.height === 28
-    && (closedContext.tabList?.right || 0) <= (closedContext.toggle?.left || 0)
+    && (closedContext.toggle?.left || 0) - (closedContext.tabList?.right || 0) >= 8
     && transitionFrames.every((frame) => frame.height === 28 && frame.inSlot
       && Math.abs((frame.toggle?.right || 0) - (closedContext.toggle?.right || 0)) <= 1)
     && Math.abs((closedContext.toggle?.right || 0) - (openContext.toggle?.right || 0)) <= 1,

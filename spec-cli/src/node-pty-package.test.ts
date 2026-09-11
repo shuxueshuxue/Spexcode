@@ -4,8 +4,9 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 
-const require = createRequire(import.meta.url)
-const nodePtyRoot = dirname(require.resolve('node-pty/package.json'))
+// node-pty is the dashboard package's dependency (the daemon runtime's home), so resolve it from there
+const dashboard = createRequire(import.meta.url).resolve('@spexcode/spec-dashboard/package.json')
+const nodePtyRoot = dirname(createRequire(dashboard).resolve('node-pty/package.json'))
 
 test('node-pty publishes executable Darwin spawn helpers', () => {
   for (const arch of ['arm64', 'x64']) {

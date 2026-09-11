@@ -24,6 +24,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    (each a dir with a spec.md + a \`code:\` list of the files it governs).
 
 3. Run this repo's backend — it reads .spec + git from cwd and registers in this user's host registry
+     npm i -g @spexcode/spec-dashboard           # once, beside spex: the UI and the server runtime serve needs
      spex serve                                  # http://localhost:8787  (--port <n> for another endpoint)
    Run one \`spex serve\` from every project you want online. Give each additional backend a free
    --port; the port only binds that backend and is never paired with a dashboard process.

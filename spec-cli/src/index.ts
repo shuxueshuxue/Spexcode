@@ -1,13 +1,9 @@
-import { serve } from '@hono/node-server'
 import type { Server as HttpServer, ServerResponse as HttpServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import { installConnectionReaper } from './reaper.js'
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { etag } from 'hono/etag'
-import { createNodeWebSocket } from '@hono/node-ws'
+import { daemonRuntime } from './daemon-runtime.js'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, runtimeRoot } from '@spexcode/spec-core'
 import { issuesEnabled } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, mergedIssues, promote } from './issues.js'
@@ -47,7 +43,7 @@ import { reparentRequest, SessionReparentRequestError } from './session-reparent
 import { buildGuidanceCatalog } from './guidance-catalog.js'
 import { configuredSessionApplication, setSessionApplicationCommitObserver } from './session-application.js'
 import { editSpecBody, readSpecBodyEdit, SpecBodyEditError } from './spec-body-edit.js'
-
+const { serve, Hono, cors, etag, createNodeWebSocket } = await daemonRuntime()
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.

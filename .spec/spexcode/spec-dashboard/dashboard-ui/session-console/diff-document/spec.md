@@ -73,7 +73,8 @@ tree. A file row ends in its tally and status letter, in one column. Each scope 
 grammar ([[dock-modes]]): the file count in its pod, the scope's name, and the scope's summed tally, with the
 uncommitted scope in the attention hue. A heading stays pinned while its own rows scroll under it. The toolbar
 carries the whole review's size (how many files, and the summed tally of every listed row), because that is the
-first number a reviewer asks for. The panel is a resizable pane ([[resizable-panes]]), clamped so the editor
+first number a reviewer asks for; its controls stay one group at the row's end, so a long branch name wraps them
+to the next line together rather than splitting them. The panel is a resizable pane ([[resizable-panes]]), clamped so the editor
 keeps at least half the width, and it stacks above the editor on a narrow screen.
 
 The second scope is the session's uncommitted work: the tracked edits and untracked additions its worktree holds

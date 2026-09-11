@@ -3673,7 +3673,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-refs strong { font-weight:var(--weight-medium); }
 /* the review's size, the number a reader asks for first: how many files, how many lines each way */
 .diff-summary { display:inline-flex; align-items:center; gap:8px; color:var(--muted); white-space:nowrap; }
-.diff-toolbar-spacer { flex:1; }
+.diff-controls { display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-left:auto; }
 /* the toolbar's density for the shared segmented control — the grammar stays the control's own */
 .diff-toolbar .seg-option { height:22px; padding:0 var(--space-4); font-size:var(--type-meta); }
 .diff-unsent { color:var(--yellow); }

@@ -321,12 +321,14 @@ export default function DiffDocument({ sessionId }) {
     <header className="diff-toolbar">
       <span className="diff-refs"><Icon name="git-merge" size={14} /><strong>{state.data.branch}</strong><span>→</span><strong>{state.data.baseRef}</strong></span>
       {entries.length > 0 && <span className="diff-summary">{t('nodeView.filesChanged', { n: total.files })}<DiffStat additions={total.additions} deletions={total.deletions} /></span>}
-      <span className="diff-toolbar-spacer" />
-      <Segmented label={t('session.diffMode')} value={mode} onPick={setMode}
-        options={[{ value: 'split', label: t('session.diffSplit') }, { value: 'unified', label: t('session.diffUnified') }]} />
-      <SegmentedToggle pressed={wrap} onToggle={() => setWrap((value) => !value)}>{t('session.diffWrap')}</SegmentedToggle>
-      {unsent > 0 && <span className="diff-unsent">{t('session.diffUnsent', { n: unsent })}</span>}
-      <IconButton icon="send" size={14} className={unsent ? 'icon-btn primary' : 'icon-btn'} label={t('session.diffSend')} disabled={!unsent} onClick={send} />
+      {/* the controls are one group: a long branch name wraps them to the next line together, at the end */}
+      <span className="diff-controls">
+        <Segmented label={t('session.diffMode')} value={mode} onPick={setMode}
+          options={[{ value: 'split', label: t('session.diffSplit') }, { value: 'unified', label: t('session.diffUnified') }]} />
+        <SegmentedToggle pressed={wrap} onToggle={() => setWrap((value) => !value)}>{t('session.diffWrap')}</SegmentedToggle>
+        {unsent > 0 && <span className="diff-unsent">{t('session.diffUnsent', { n: unsent })}</span>}
+        <IconButton icon="send" size={14} className={unsent ? 'icon-btn primary' : 'icon-btn'} label={t('session.diffSend')} disabled={!unsent} onClick={send} />
+      </span>
     </header>
     {/* The object ids are the proof the header's names are only a label for; they stay complete and
         selectable, on their own quiet line rather than eating the control row's width. */}

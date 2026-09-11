@@ -88,7 +88,7 @@ test('the ZCode workflow\'s lint gate runs as the command line it submits, and r
   const GATE = eval(src.slice(src.indexOf('const GATE = [') + 'const GATE = '.length, src.indexOf('].join("\\n");') + 1)).join('\n')
   const call = /world\.run\("node", (\[[^\]]*\])/.exec(src)
   assert.ok(call, 'the gate runs through node')
-  const argv = eval(call[1])
+  const argv = new Function('SPEX', 'GATE', `return ${call[1]}`)(SPEX, GATE)
   const bin = mkdtempSync(join(tmpdir(), 'fake-npx-'))
   try {
     const report = { sourceFiles: ['a.py', 'b.py', 'c.py', 'd.py'], findings: [

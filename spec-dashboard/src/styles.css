@@ -84,6 +84,9 @@
      (a card or dialog — scale from .96). Every overlay spends one of these; a third keyframe is a dialect. */
   --dur-rise: 120ms;
   --dur-pop: 160ms;
+  /* A DRAWER is the one float that travels its own height — pulled down out of the control it hangs from —
+     so it takes longer than a 6px rise and has its own word ([[resource-picker]]). */
+  --dur-drawer: 240ms;
   /* GEOMETRY. One corner radius for every box that is not a circle, and one spacing ladder. New rules
      spend these; a hand-written pixel here is a value nobody can re-tune. */
   --radius: 6px;
@@ -2534,7 +2537,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   opacity: .75;
 }
 /* The resizable terminal pane, not the viewport, determines the terminal's breakpoint. */
-.si-session-wrap { container-type: inline-size; }
+/* the corner [[resource-picker]] floats in: a face that draws controls along its top edge ends short of it */
+.si-session-wrap { container-type: inline-size; --si-corner-reserve: 92px; }
 .si-tab {
   appearance: none; min-width: 0; height: 32px; display: inline-flex; align-items: center; gap: 6px;
   background: transparent; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
@@ -2543,23 +2547,119 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 }
 .si-tab.on { color: var(--ink); border-bottom-color: var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .si-tab svg { flex: none; }
-/* Unlike the flat tab actions above, this focus ring sits OUTSIDE the box: inset on a 20px circle it would
-   crowd the glyph. 20 + offset + ring = 26px, still contained by the 32px bar. */
-.si-resource-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
-.si-resource-menu-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 6px 7px; color: var(--ink2); background: transparent; border: 0; border-radius: var(--radius); font-family: var(--ui-font); font-size: var(--type-control); text-align: left; cursor: pointer; }
-.si-resource-menu-row:hover, .si-resource-menu-row:focus-visible { color: var(--blue); background: var(--wash-hover); }
-.si-resource-menu-row:disabled { color: var(--muted); cursor: not-allowed; }
-.si-resource-menu-row:disabled:hover { color: var(--muted); background: transparent; }
-.si-resource-menu-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.si-resource-menu-empty { display: block; padding: 7px; color: var(--muted); font-family: var(--ui-font); font-size: var(--type-control); }
+/* [[resource-picker]] — the floating door to a session's posted files and services. It rides the session
+   document's top-right corner over whichever face is showing, and its drawer slides down out of it: the
+   drawer's top edge is the slot, so the panel is clipped there while it travels and never paints above it. */
+.si-rp {
+  position: absolute; top: var(--space-5); right: var(--space-6); z-index: 30;
+  display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-4);
+  pointer-events: none;
+}
+.si-rp > * { pointer-events: auto; }
+.si-rp-fab {
+  appearance: none; height: 32px; min-width: 32px; padding: 0 var(--space-5) 0 var(--space-4);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3);
+  color: var(--ink); background: color-mix(in srgb, var(--raised) 88%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--edge); border-radius: var(--radius-full); box-shadow: var(--shadow);
+  font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--leading-none); cursor: pointer;
+  transition: color var(--dur-rise) ease, background-color var(--dur-rise) ease, border-color var(--dur-rise) ease, transform var(--dur-rise) ease;
+}
+.si-rp-fab.empty { width: 32px; padding: 0; color: var(--muted); }
+.si-rp-fab:hover { color: var(--ink2); background: var(--raised); border-color: var(--line); }
+.si-rp-fab:active { transform: scale(.96); }
+.si-rp-fab.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--raised)); border-color: color-mix(in srgb, var(--blue) 45%, var(--edge)); }
+.si-rp-count {
+  min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; display: inline-grid; place-items: center;
+  color: var(--ink); background: var(--wash-active); border-radius: var(--radius-full);
+  font-size: var(--type-caption); font-variant-numeric: tabular-nums;
+}
+.si-rp-fab.on .si-rp-count { color: var(--blue); background: color-mix(in srgb, var(--blue) 18%, transparent); }
+.si-rp-drawer {
+  width: min(400px, calc(100cqi - 32px)); max-height: min(560px, calc(100vh - 140px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+  font-family: var(--ui-font);
+  animation: rp-drawer-open var(--dur-drawer) cubic-bezier(.2, .8, .25, 1) backwards;
+}
+.si-rp-drawer.closing { pointer-events: none; animation: rp-drawer-close var(--dur-drawer) cubic-bezier(.5, 0, .75, 0) forwards; }
+/* the side and bottom insets reach past the shadow, so only the slot edge ever cuts */
+@keyframes rp-drawer-open {
+  from { transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px); }
+  to { transform: none; clip-path: inset(0 -24px -40px -24px); }
+}
+@keyframes rp-drawer-close {
+  from { transform: none; clip-path: inset(0 -24px -40px -24px); }
+  to { transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px); }
+}
+.si-rp-head { padding: var(--space-5) var(--space-6) var(--space-3); color: var(--ink2); font-size: var(--type-control); font-weight: var(--weight-semibold); }
+.si-rp-search {
+  height: 32px; margin: var(--space-2) var(--space-5) var(--space-4); padding: 0 var(--space-2) 0 var(--space-4);
+  display: flex; align-items: center; gap: var(--space-3); color: var(--muted);
+  background: var(--field-bg); border: 1px solid var(--edge); border-radius: var(--radius);
+  transition: border-color var(--dur-rise) ease;
+}
+.si-rp-search:focus-within { border-color: color-mix(in srgb, var(--blue) 60%, var(--edge)); }
+.si-rp-search input {
+  flex: 1; min-width: 0; height: 100%; padding: 0; color: var(--ink); background: transparent; border: 0; outline: none;
+  font-family: var(--ui-font); font-size: var(--type-control);
+}
+.si-rp-search input::placeholder { color: var(--muted); }
+.si-rp-search input:focus-visible { box-shadow: none; }
+.si-rp-clear { width: 24px; height: 24px; display: grid; place-items: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer; }
+.si-rp-clear:hover { color: var(--ink2); background: var(--wash-hover); }
+.si-rp-chips { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0 var(--space-5) var(--space-5); }
+.si-rp-chip {
+  appearance: none; height: 24px; display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--space-4);
+  color: var(--muted); background: transparent; border: 1px solid var(--edge); border-radius: var(--radius-full);
+  font-family: var(--ui-font); font-size: var(--type-meta); cursor: pointer;
+  transition: color var(--dur-rise) ease, background-color var(--dur-rise) ease, border-color var(--dur-rise) ease;
+}
+.si-rp-chip:hover { color: var(--ink); background: var(--wash-hover); }
+.si-rp-chip.on { color: var(--blue); background: var(--wash-selected); border-color: color-mix(in srgb, var(--blue) 40%, transparent); }
+.si-rp-chip.is-uploaded.on { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+.si-rp-chip-count { font-size: var(--type-caption); font-variant-numeric: tabular-nums; opacity: .7; }
+.si-rp-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-3); border-top: var(--divider-rule); }
+.si-rp-row { display: flex; align-items: center; border-radius: var(--radius); }
+.si-rp-row.cursor { background: var(--wash-hover); }
+.si-rp-open {
+  appearance: none; flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-5);
+  padding: var(--space-3) var(--space-4); color: inherit; background: transparent; border: 0; border-radius: var(--radius);
+  font-family: var(--ui-font); text-align: left; cursor: pointer;
+}
+.si-rp-mark {
+  --tone: var(--muted);
+  flex: none; width: 32px; height: 32px; display: grid; place-items: center;
+  color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); border-radius: var(--radius);
+}
+.si-rp-mark.tone-orange { --tone: var(--orange); }
+.si-rp-mark.tone-red { --tone: var(--red); }
+.si-rp-mark.tone-blue { --tone: var(--blue); }
+.si-rp-mark.tone-magenta { --tone: var(--magenta); }
+.si-rp-mark.tone-yellow { --tone: var(--yellow); }
+.si-rp-mark.tone-green { --tone: var(--green); }
+.si-rp-mark.tone-cyan { --tone: var(--cyan); }
+.si-rp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.si-rp-name { overflow: hidden; color: var(--ink2); font-size: var(--type-control); line-height: var(--leading-tight); text-overflow: ellipsis; white-space: nowrap; }
+.si-rp-meta { min-width: 0; display: flex; align-items: center; gap: var(--space-3); overflow: hidden; color: var(--muted); font-size: var(--type-caption); line-height: var(--line-badge); white-space: nowrap; }
+.si-rp-folder, .si-rp-meta time { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.si-rp-folder::before, .si-rp-meta time::before { content: '·'; margin-right: var(--space-3); }
+.si-rp-tag {
+  flex: none; height: 16px; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px;
+  color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-radius: var(--radius-full);
+}
+.si-rp-state { flex: none; display: inline-flex; align-items: center; gap: 5px; color: var(--blue); font-size: var(--type-caption); }
+.si-rp-state::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.si-rp-tools { flex: none; display: flex; gap: 2px; padding-right: var(--space-2); opacity: 0; transition: opacity var(--dur-rise) ease; }
+.si-rp-row.cursor .si-rp-tools, .si-rp-row:focus-within .si-rp-tools { opacity: 1; }
+.si-rp-tool { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer; }
+.si-rp-tool:hover { color: var(--ink2); background: var(--wash-active); }
+.si-rp-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-7) var(--space-6); color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); text-align: center; }
+.si-rp-empty strong { color: var(--ink); font-size: var(--type-control); font-weight: var(--weight-medium); }
+.si-rp-empty svg { margin-bottom: var(--space-2); opacity: .6; }
+@media (prefers-reduced-motion: reduce) { .si-rp-drawer, .si-rp-drawer.closing { animation: none; } }
 
 .si-actions { flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
-.si-files { position: relative; display: flex; align-items: center; padding: 0; }
-.si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: max-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius); box-shadow: var(--shadow); }
-.si-files-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, 26px); align-items: center; gap: 2px; }
-.si-files-name { appearance: none; width: 100%; min-width: 0; max-width: min(280px, calc(100vw - 130px)); overflow: hidden; padding: 6px 7px; color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; border: 0; border-radius: var(--radius); cursor: pointer; }
-.si-files-name:hover, .si-files-name:focus-visible, .si-files-download:hover, .si-files-download:focus-visible, .si-files-copy:hover, .si-files-copy:focus-visible { color: var(--blue); background: var(--wash-hover); }
-.si-files-download, .si-files-copy { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer; }
 .si-file-text { width: 100%; min-height: 100%; box-sizing: border-box; display: block; margin: 0; padding: 12px; color: var(--ink); font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .si-file-markdown { box-sizing: border-box; min-height: 100%; padding: 14px 16px; color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed); cursor: text; }
 .si-file-html { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
@@ -2624,7 +2724,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-action-outcome.delivered { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
 .si-action-outcome.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
 .si-command-tools .si-action-outcome { margin-left: auto; }
-.si-action-outcome-float { position: absolute; top: 12px; right: 12px; z-index: 2; max-width: min(360px, calc(100% - 24px)); pointer-events: none; }
+.si-action-outcome-float { position: absolute; top: 12px; right: 60px; z-index: 2; max-width: min(360px, calc(100% - 24px)); pointer-events: none; }
 /* the New tab's explicit launch control ([[new-session-tab]]): the ONLY submit on a launch composer, so it
    reads as the primary action rather than a muted composer tool. Same send glyph and blue fill the Command
    Box's send carries, at the composer row's end. */
@@ -3668,7 +3768,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    spending the height the diff itself needed, and vertical space is the scarcest thing on a review surface. */
 .diff-document { display:flex; flex-direction:column; min-height:0; height:100%; overflow:hidden; background:var(--paper); color:var(--ink); }
 .si-term-body:has(.diff-document) { background:var(--paper); }
-.diff-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:4px 8px 4px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:4px calc(8px + var(--si-corner-reserve, 0px)) 4px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
 .diff-refs { display:inline-flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
 .diff-refs strong { font-weight:var(--weight-medium); }
 /* the review's size, the number a reader asks for first: how many files, how many lines each way */

@@ -49,8 +49,9 @@ The graph is built **once per change, not once per poll — and only as much of 
   read, a watcher-driven rebuild alike — first compares one compact board-input revision: the served checkout's
   HEAD, `.spec` tree and config; the main branch tip; exact session records and originating prompt artifacts
   together with the canonical session database's file identity (mtime, ctime, size — the lifecycle those
-  envelopes no longer carry lives there, any process may commit to it, and journal_mode=delete rewrites the file
-  in place on every commit; it is folded while any session record exists, because with none no row derives from
+  envelopes no longer carry lives there, any process may commit to it, and SQLite WAL commits may change the
+  `-wal`/`-shm` sidecars without changing the main file, so the strict identity samples the main file and both
+  sidecars; it is folded while any session record exists, because with none no row derives from
   the store and the store's own birth — the first canonical access inside a build initializes it — is not an
   input that moved during that build); each non-archived governed worktree's HEAD and `.spec` tree; and the
   whole issue-store stamp. That list IS this cache's answer to "is this a board input?", and a

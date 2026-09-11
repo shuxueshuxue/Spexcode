@@ -23,14 +23,18 @@ is a kill-then-respawn, so it must be impossible against an agent that is alive.
 Offline is reachable on purpose, not only by a crash. **`stop`** is the human-only *soft stop* — the inverse
 of `resume`: it kills only the adapter-registered **session-owned leaf** plus that session's tmux + rendezvous
 socket, but **leaves every project-shared control plane untouched** ([[host-resource-budget]]) and leaves the
-worktree, branch, transcript, and global record, then writes only that record's `stopped` liveness marker, so the session reads `offline`
+worktree, branch, transcript, and global record, releases the runtime binding its launch wrote (so the retry sweep
+no longer polls it, and a message sent while it is stopped waits in its queue), then writes only that record's
+`stopped` liveness marker, so the session reads `offline`
 and the relaunch panel offers to `--resume` the same conversation. That durable marker also fences launch
 admission: no automatic queue drain, supervisor restart, or idempotent replay may launch a stopped row, including
 a prepared row whose lifecycle is still `queued`. The lifecycle fields the agent last authored
 survive the stop untouched — whereas a proven-owner `close` removes the worktree AND sweeps the global record dir. **`resume`**
 is the inverse
 of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
-conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action) and
+conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action; the
+relaunch binds the runtime again, which is what hands over the messages owed while it was stopped, and a relaunch
+that does not become ready restores the stopped record and releases that binding again) and
 clears `stopped` as it restores the runtime and settles the **resting** lifecycle under the SAME active-only
 guard `idle` uses — a resumed agent that was `active` (working), or was prepared as `queued` before this explicit
 launch, is now just sitting at its prompt → `idle`; a successful readiness publication can never retain `queued`

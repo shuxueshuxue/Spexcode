@@ -614,6 +614,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId)
     || resourceCatalog.find((tab) => tab.id === activeResourceId)
     || null
+  // A direct file reference writes the resource address without first passing through the picker. The
+  // catalog already knows that resource during this render, so include it immediately while the warm-tab
+  // ledger catches up in the effects below; otherwise the terminal well is left as the only painted layer.
+  const renderResourceTabs = activeResource && !resourceTabs.some((tab) => tab.id === activeResource.id)
+    ? [...resourceTabs, activeResource]
+    : resourceTabs
   const resourceOptions = resourceCatalog.filter((option) => !openTabs.some((tab) =>
     tab.page === 'sessions' && tab.param === active && tab.query?.surface === resourceSurface(option.id)))
 
@@ -1378,7 +1384,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   )
                 })}
                 {diffSurface && <DiffDocument sessionId={active} />}
-                {resourceTabs.map((tab) => {
+                {renderResourceTabs.map((tab) => {
                   const shown = activeResource?.id === tab.id
                   return (
                     <div key={tab.id} className="si-resource-layer" style={{

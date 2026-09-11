@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildPublicGraphArtifact, PUBLIC_GRAPH_PAYLOAD_NAME, PUBLIC_GRAPH_SCHEMA, publicGraphJson } from './public-graph.js'
+import { buildPublicGraphArtifact, PUBLIC_GRAPH_PAYLOAD_NAME, PUBLIC_GRAPH_SCHEMA, PUBLIC_PAYLOAD_ELEMENT_ID, publicGraphHtml, publicGraphJson, type PublicGraphArtifact } from './public-graph.js'
 
 test('public graph is deterministic, relocatable, and has no live control-plane projection', async () => {
   const first = await buildPublicGraphArtifact()
@@ -24,4 +24,22 @@ test('public graph is deterministic, relocatable, and has no live control-plane 
   }
   assert.ok(first.documents.every((document) => typeof document.body === 'string' && Object.hasOwn(document, 'parts')))
   assert.equal(JSON.stringify(graph).includes(process.cwd()), false)
+})
+
+test('a single-file page carries its whole payload inside itself, and no spec text can close the element early', () => {
+  const artifact = {
+    graph: { schema: PUBLIC_GRAPH_SCHEMA, payloadName: PUBLIC_GRAPH_PAYLOAD_NAME, revision: 'a'.repeat(40), sourceRoot: '.', identity: { title: 'demo', icon: 'x' }, nodes: [] },
+    documents: [{ schema: 'spexcode.public-spec-document/v1', revision: 'a'.repeat(40), id: 'root', body: 'a body that says </script><script>alert(1)</script>', parts: [], diagram: null }],
+  } as unknown as PublicGraphArtifact
+  const shell = '<!doctype html><html><head><title>t</title></head><body><div id="root"></div></body></html>'
+  const page = publicGraphHtml(shell, artifact)
+  const match = page.match(new RegExp(`<script type="application/json" id="${PUBLIC_PAYLOAD_ELEMENT_ID}">([^<]*)</script>\\n</head>`))
+  assert.ok(match, 'the payload element sits in the head, and its text holds no raw <')
+  const payload = JSON.parse(match[1])
+  assert.equal(payload.documents.root.body, artifact.documents[0].body)
+  assert.equal(payload.graph.revision, artifact.graph.revision)
+  assert.equal(payload.metadata.schema, 'spexcode.public-spec-site/v1')
+  assert.equal(payload.metadata.release.archive, undefined, 'one file has no archive beside it')
+  assert.equal(page.replace(match[0], '</head>'), shell, 'the shell is otherwise untouched')
+  assert.throws(() => publicGraphHtml('<html></html>', artifact), /no <\/head>/)
 })

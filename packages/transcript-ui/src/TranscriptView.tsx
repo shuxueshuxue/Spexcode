@@ -12,9 +12,9 @@ type Disclosure = { openIds: ReadonlySet<string>; onToggle: (id: string) => void
 
 // the agent IS the page: full measure, no bubble, no tint
 export function TurnBody({ turn, openIds, onToggle, live, fold = true }: { turn: AnyTurn; live: boolean; fold?: boolean } & Disclosure) {
-  const { renderText } = useTranscriptUi()
+  const { renderText, renderCopy } = useTranscriptUi()
   return <div className="tx-say">
-    {turn.text && <div className="tx-say-text">{renderText(turn.text)}</div>}
+    {turn.text && <div className="tx-say-text">{renderText(turn.text)}{renderCopy && <span className="tx-copy">{renderCopy(turn.text)}</span>}</div>}
     <ToolRun tools={turn.tools} openIds={openIds} onToggle={onToggle} live={live} fold={fold} />
   </div>
 }

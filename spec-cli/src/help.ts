@@ -21,7 +21,7 @@ export type CliProfile = Readonly<{
   hooks: ReadonlySet<string>
 }>
 
-const REPO_COMMANDS = ['spec', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
+const REPO_COMMANDS = ['spec', 'diagram', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
 const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
 const REPO_HOOKS = new Set(['spec-first', 'spec-of-file', 'comment-altitude'])
 
@@ -190,7 +190,7 @@ const ENTRIES: Record<string, Entry> = {
   // ── project verbs (implicit object = this project) ────────────────────────
   graph: {
     line: 'graph                 list the assembled spec nodes: bare = readable tree · --json = full payload · --public = static graph snapshot',
-    body: `Usage: spex graph [--focus <id>] [--depth N] [--json] | spex graph --public [--out <path>] [--content-dir <path>]
+    body: `Usage: spex graph [--focus <id>] [--depth N] [--json] | spex graph --public [--out <path>] [--content-dir <path>] [--html <file>]
 
 The normal assembled view is merged spec tree + worktree overlay + sessions. Bare it renders the
 status-coloured tree (coloured when stdout is a tty; NO_COLOR respected), one line per node: id,
@@ -201,7 +201,9 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
                 food; with --focus/--depth it is that filtered subtree as nested objects instead
   --public      deterministic read-only Spec Graph payload; excludes sessions, issues, and write state
   --out <path>  write the public graph index to a file instead of stdout (only with --public)
-  --content-dir <path>  write one read-only spec document per node for a static host (only with --public)`,
+  --content-dir <path>  write one read-only spec document per node for a static host (only with --public)
+  --html <file>  write the whole public graph as ONE self-contained page: the read-only dashboard with the
+                index and every node document inside it, so it opens straight from disk (only with --public)`,
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },
   init: {
@@ -470,6 +472,20 @@ verb — edit the JSON; \`spex doctor\` reports its state).
 ${MENTION_NOTE}`,
     see: 'spex evidence put (stash evidence bytes)',
   },
+  diagram: {
+    line: 'diagram <verb>        a node\'s picture of its level: scaffold · check',
+    body: `Usage: spex diagram scaffold <node> [--type architecture|workflow|sequence|dataflow|lifecycle] [--force]
+       spex diagram check <node> [--html <file>] [--json]
+
+scaffold writes <node folder>/diagram.json to start from. For architecture (the default) it draws one box per
+direct child, with the child's id, spec and governed file already filled in and the revision pinned to HEAD; for
+the other kinds it writes archify's example of that kind to rewrite. It never replaces a file without --force.
+
+check draws the node's diagram.json the way the dashboard does, runs archify's final-artifact check and the two
+tree rules the commit gate enforces, and prints every problem with archify's suggested fix. It exits non-zero
+until everything passes. --html writes the full viewer page for a visual pass; --json prints the whole verdict.`,
+    see: 'spex guide diagram (the format and the loop) · spex spec search (find the node) · spex spec lint',
+  },
   evidence: {
     line: 'evidence put|get      content-addressed bytes: put stashes & prints the hash, get reads back',
     body: `Usage: spex evidence put <file|->
@@ -487,11 +503,12 @@ path. Bytes go to stdout by default (pipe-friendly); -o writes a file.`,
 
   // ── help & guide ──────────────────────────────────────────────────────────
   guide: {
-    line: 'guide [topic]         the manuals: setup workflow · spec format · evidence handoff · .spec/spexcode.json · footprint',
+    line: 'guide [topic]         the manuals: setup workflow · spec format · evidence handoff · .spec/spexcode.json · footprint · diagram',
     body: `Usage: spex guide            the human setup workflow (install once, adopt a repo, serve)
        spex guide spec       the spec.md file format + every lint rule
        spex guide settings   every .spec/spexcode.json / .spec/spexcode.local.json field, and which file it belongs in
        spex guide footprint  the footprint model: never-tracked artifacts, exclude + content filter, anchors
+       spex guide diagram    a node's diagram.json: the five kinds, the rules, the scaffold → check loop
 
 guide is the SKILL layer — workflows and formats. Command usage lives here in help
 (\`spex help <cmd>\`); guide carries what the commands assume you know.`,
@@ -647,7 +664,7 @@ export function overviewHelp(): string {
   const visible = (name: string) => profileAllowsCommand(profile, name)
   const projectLines = ['graph', 'init', 'materialize', 'doctor', 'uninstall', 'serve', 'dashboard', 'open', 'guidance']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
-  const nounLines = ['spec', 'session', 'peer', 'issue', 'evidence', 'flat']
+  const nounLines = ['spec', 'diagram', 'session', 'peer', 'issue', 'evidence', 'flat']
     .filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   const manualLines = ['guide'].filter(visible).map((name) => `  ${ENTRIES[name].line}`)
   return `spex — SpexCode CLI (spec↔code graph${full ? ' + worktree session state machine' : ''})
@@ -671,6 +688,6 @@ ${full ? `  ${SEL_NOTE.split('\n').join('\n  ')}\n  ${JSON_NOTE.split('\n').join
   ${ROUTING_NOTE.split('\n').join('\n  ')}
 ${full ? `  ${MENTION_NOTE.split('\n').join('\n  ')}` : ''}
 
-Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide settings · guide footprint.
+Concepts & best practice live in the guide: spex guide (setup) · guide spec · guide settings · guide footprint · guide diagram.
 Machine plumbing (hook/launch-script callees) lives under \`spex internal\` — not part of your vocabulary.`
 }

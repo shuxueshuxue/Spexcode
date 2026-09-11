@@ -108,7 +108,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--candidate', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--html', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--candidate', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
 const EXPLICIT_BACKEND_ROUTE_FLAGS = ['api', 'port', 'password', 'insecure'] as const
 const EXPLICIT_BACKEND_VALUE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
   .filter((name) => VALUE_FLAGS.has(`--${name}`))
@@ -569,14 +569,21 @@ if (cmd === 'serve') {
     const depthRaw = flag('depth')
     const out = flag('out')
     const contentDir = flag('content-dir')
+    const html = flag('html')
     if (focusRaw !== undefined || depthRaw !== undefined) { console.error('spex graph --public: --focus and --depth are not supported'); process.exit(2) }
-    const { buildPublicGraphArtifact, publicGraphJson } = await import('./public-graph.js')
+    const { buildPublicGraphArtifact, publicGraphJson, publicGraphHtml } = await import('./public-graph.js')
     const artifact = await buildPublicGraphArtifact()
     const payload = publicGraphJson(artifact.graph)
+    if (html) {
+      const { ensureDashboardArtifact } = await import('./dashboard-assets.js')
+      const shell = readFileSync(`${ensureDashboardArtifact('dist-public-single')}/index.html`, 'utf8')
+      writeFileSync(html, publicGraphHtml(shell, artifact))
+      console.log(html)
+    }
     if (out) {
       writeFileSync(out, payload)
       console.log(out)
-    } else {
+    } else if (!html) {
       process.stdout.write(payload)
     }
     if (contentDir) {
@@ -588,6 +595,7 @@ if (cmd === 'serve') {
     await flushExit(0)
   }
   if (flag('content-dir') !== undefined) { console.error('spex graph: --content-dir requires --public'); process.exit(2) }
+  if (flag('html') !== undefined) { console.error('spex graph: --html requires --public'); process.exit(2) }
   const { buildBoard } = await import('./graphSnapshot.js')
   const focusRaw = flag('focus')
   const depthRaw = flag('depth')
@@ -776,6 +784,13 @@ if (cmd === 'serve') {
   // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
+} else if (cmd === 'diagram') {
+  if (process.argv[3] === undefined) {
+    console.log((await import('./help.js')).commandHelp('diagram'))
+  } else {
+    const { runDiagram } = await import('./diagram-cli.js')
+    await flushExit(await runDiagram(process.argv.slice(3)))
+  }
 } else if (cmd === 'evidence') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
@@ -996,6 +1011,7 @@ if (cmd === 'serve') {
     } else if (verb === 'add') {
       const result = files.addSessionFile(id, path!, withSessionRecordLockSync)
       console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
+      console.log(`point at it as ${result.reference}`)
     } else if (verb === 'retract') {
       const result = files.retractSessionFile(id, path!, withSessionRecordLockSync)
       if (!result.removed) { console.error(`spex session files retract: path is not posted: ${result.path}`); process.exit(2) }

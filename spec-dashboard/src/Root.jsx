@@ -5,6 +5,9 @@ import { DocumentActionProvider } from './documentActions.jsx'
 import { useT } from './i18n/index.jsx'
 import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { BackendStatusFrame } from './BackendStatus.jsx'
+import { SelectionProvider } from './selectionController.js'
+import { CodeCopyContext } from './clipboard.js'
+import { CodeCopy } from './CopyButton.jsx'
 
 const App = lazy(() => import('./App.jsx'))
 function RootContent() {
@@ -15,21 +18,21 @@ function RootContent() {
   // App can normalize it back to the graph.
   if (PUBLIC_GRAPH_ONLY) {
     return (
-      <TransientNoticeProvider><StatusBarProvider><DocumentActionProvider>
+      <TransientNoticeProvider><StatusBarProvider><DocumentActionProvider><SelectionProvider>
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}><App /></Suspense>
-      </DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
+      </SelectionProvider></DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
     )
   }
 
   return (
-    <TransientNoticeProvider><StatusBarProvider><DocumentActionProvider>
+    <TransientNoticeProvider><StatusBarProvider><DocumentActionProvider><SelectionProvider>
       <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
         <App />
       </Suspense>
-    </DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
+      </SelectionProvider></DocumentActionProvider></StatusBarProvider></TransientNoticeProvider>
   )
 }
 
 export default function Root() {
-  return <BackendStatusFrame><RootContent /></BackendStatusFrame>
+  return <BackendStatusFrame><CodeCopyContext.Provider value={CodeCopy}><RootContent /></CodeCopyContext.Provider></BackendStatusFrame>
 }

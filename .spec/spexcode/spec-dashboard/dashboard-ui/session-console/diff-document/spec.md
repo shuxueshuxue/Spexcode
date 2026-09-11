@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/diffTree.js
   - spec-dashboard/src/diffTree.test.mjs
+  - spec-dashboard/test/diff-scroll-survives-refresh.e2e.mjs
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/session-diff.api.test.ts
@@ -48,6 +49,11 @@ them as an accordion below the open diff was a second navigation of the same lis
 itself needs. So the panel owns selection and the pane owns the file, whose header stays put while its hunks scroll,
 because the thing a reader loses inside a long hunk is which file they are in.
 
+The open file's reading position belongs to that file surface. A live graph refresh or another parent render is not
+a file change, so it keeps the mounted CodeMirror view and its scroll position; only selecting another file or
+changing an editor setting may replace that view. This matters on the live session board, where unrelated session
+state continues to arrive while a reviewer is reading a long diff.
+
 The panel is a DIRECTORY TREE rather than a list of paths, because in this repository a path is a bad label twice
 over: the tail is the only part that differs, so truncating it makes thirty rows read alike, and the leaf carries
 no information either, since the spec graph names every node's file `spec.md`. A tree factors the shared prefix out
@@ -66,8 +72,10 @@ main checkout once that directory is gone, but the working tree must not: a land
 whoever is working in the main checkout as its own uncommitted changes. When the directory is gone the endpoint
 says the working tree is unreadable, and the document shows the branch alone rather than claiming a clean tree.
 
-A reader can click a changed line to author a comment. Comments live in the session record as `{filePath,
-lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending
+The diff body is ordinary browser-selectable text: the reader can drag across it and use the native copy/paste
+path without the session chrome or a line click stealing the gesture. The line-number gutter is the one explicit
+comment door, so authoring a comment never competes with selecting words from the source. Comments live in the
+session record as `{filePath, lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending
 un-sent comments formats them as one review message and uses the existing session input/send path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
 Sent comments remain inline in the diff with their delivery marker. A reload after saving or sending a comment is

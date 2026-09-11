@@ -13,6 +13,7 @@ related:
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/guidance-catalog.ts
+  - spec-cli/src/edit-diff.api.test.ts
 ---
 # spec-cli
 
@@ -29,38 +30,20 @@ One of the SpexCode packages (with spec-core, the session package stack, spec-fo
 the CLI where they belong, not under the dashboard. It publishes compiled JavaScript; TypeScript remains
 development source rather than a consumer runtime requirement.
 
-## Dependency arrival and subtraction ledger
+## Dependency arrival and subtraction
 
-This is the cross-package history for the dependency rule: when a package edge arrived, this table names the
-predecessor it replaced or records why no package edge existed. Workspace package extractions are included because
-they are dependency arrivals for the published composition even when their manifest has no third-party dependency.
-Version-only release bumps and script-only edits are intentionally omitted. `No package predecessor` means the
-feature had no prior package edge; it is an explicit exception, not an unexamined omission.
+A new package edge is not free. Every arrival must either name the predecessor it replaces and remove that
+predecessor in the same change, or carry a measured **No package predecessor** exception with an owner node and an
+executable boundary check. Extracting a workspace package counts as an arrival for the published composition even
+when its manifest adds no third-party dependency; a version-only bump or a script-only edit does not. Which commit
+an edge arrived in is git's answer rather than this body's — `git log -S'<package>' -- '**/package.json'` reads it
+back, and the recent/history tabs show it in place.
 
-| Commit | Arrival | Predecessor or same-change subtraction |
-| --- | --- | --- |
-| `2a5560b11` | `spec-cli` added `@hono/node-ws` and `node-pty` for the first terminal WebSocket/PTY transport. | **No package predecessor:** the backend had no terminal transport dependency; the old boundary was in-tree code, not a package edge. |
-| `f19ce3af2` | Dashboard added `@xterm/addon-canvas` and `@xterm/addon-webgl` as optional xterm renderers. | **No package predecessor:** xterm's built-in renderer remained the fallback; these were optional acceleration edges, not a second terminal implementation. |
-| `59f51a6b0` | Dashboard removed `@xterm/addon-canvas`. | Same-change subtraction: the code-split shell no longer imported or registered the canvas addon. |
-| `bbd00164a` | Dashboard removed `@xterm/addon-webgl` while moving xterm to 6.0 and fit to 0.11. | Same-change subtraction/version replacement: WebGL registration was removed with the old renderer path; the xterm core upgrade is the retained edge. |
-| `0962fb0e0` | Dashboard added `markdown-it` and `katex` for RichText. | **No package predecessor:** the prior prose and math boundaries were local renderers, not replaceable package edges. |
-| `7e90b791d` | Extracted `@spexcode/l0` as the workspace core package. | Source ownership moved out of `spec-cli/src` (anchors, git/layout, graph, identity, resilience, specs, review snapshot, root-LRU); Git renames prove no duplicate implementation remained. |
-| `023e91b4c` | Renamed `@spexcode/l0` to `@spexcode/spec-core`. | Same-change replacement: package name and path were renamed; `@spexcode/l0` did not remain as a second edge. |
-| `dff2d31c7` | Made `@spexcode/spec-core` importable and packable outside the monorepo. | The internal-only source package became the published boundary; no second core implementation was added. |
-| `2f8d5fb71` | `spec-core` added `@vscode/tree-sitter-wasm` for asynchronous syntax anchors. | Same-change replacement: the prior regex extractor in `packages/spec-core/src/anchors.ts` was replaced by the Tree-sitter extractor. |
-| `3d0e60e6b` | Formalized `spec-cli` edges to `@spexcode/spec-core` and `@spexcode/spec-forge` and exposed package exports. | Same-change subtraction: dashboard/CLI relative imports were replaced by public package edges; no parallel relative implementation remained. |
-| `377c832f4` | Extracted the first session protocol package. | Historical extraction; the package was later retired after the application cutover. |
-| `b1c36fb04` | Added `@spexcode/session-application` and `@spexcode/session-selflaunch` to `spec-cli`. | Same-change extraction: application composition and self-launch adapter implementations moved out of the CLI; the old copies were removed. |
-| `0443c68df` | Removed the retired `@spexcode/session-core` workspace edge. | Same-change subtraction: root build, launcher source closure, release plan, CI, lint roots and lockfile no longer build or ship the legacy package. |
-| `ef95e779e` | Extracted `@spexcode/transcript` and added it to `spec-cli` and the dashboard (`./frames`). | Same-change extraction: `spec-cli/src/transcript-reader.ts` and the dashboard's frame merge moved into the package and the old copies were removed; the SSE route and the dashboard import the one protocol. |
-| `24dd8c9d4` | Extracted `@spexcode/transcript-ui` and added it to the dashboard. | Same-change extraction: the dashboard's `Transcript.jsx` grammar, `LiveTail.jsx` and `toolVocabulary.js` moved into the package (with their CSS) and the old copies were removed; `Transcript.jsx` keeps only the binding. |
-| `777feea1b` | Extracted `@spexcode/terminal-ui` and added it to the dashboard. | Same-change extraction: the dashboard's `SessionTerm.jsx` host moved into the package with its xterm patch and token stylesheet; the dashboard file keeps only transport, font, and i18n binding. |
-| `bf14545a1` | `spec-cli` added `@spexcode/archify`, the vendored diagram renderer. | **No package predecessor:** spec nodes carried no diagrams; the prototype drew them with an out-of-tree archify checkout run by hand, not a package edge. Owner [[archify]]; boundary check: `packages/archify/test/library.test.mjs` holds the in-process render to the CLI's exact bytes. |
-| `8044c100f` | Dashboard added `@spexcode/archify` for its browser half (`./browser`, `./diagram.css`). | **No package predecessor:** nodes had no diagrams to show. Owner [[node-diagram]]; boundary check: `spec-dashboard/src/dependencyBoundary.test.mjs` fails if a dashboard source imports the renderer itself. |
-
-The table is an immutable-history ledger, not permission to add a dependency without a review. A future edge must
-either name its same-change subtraction here or add a measured **No package predecessor** exception with an owner and
-an executable boundary check.
+The CLI's live no-predecessor exceptions: `@hono/node-ws` and `node-pty` carry the terminal WebSocket/PTY
+transport, whose predecessor was in-tree code and not a package edge; `@spexcode/archify` is the vendored diagram
+renderer, owner [[archify]], held to the CLI's exact rendered bytes by
+`packages/archify/test/library.test.mjs`. The dashboard's own exceptions and their boundary checks belong to
+[[spec-dashboard]].
 
 ## expanded spec
 
@@ -173,9 +156,9 @@ not a special case (the board is still rebuilt each request; the cost saved is t
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
-(a node's in-flight working-tree delta vs its fork point, reviewable from the
-board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
-node shows its body not nothing), `/api/source` (one **byte window** of a governed source file, gated by the
+(a node's in-flight working-tree delta vs its fork point as git's porcelain word diff, reviewable from the
+board, including a **brand-new, still-untracked node** as an all-additions diff so a just-created
+uncommitted node shows its body instead of nothing), `/api/source` (one **byte window** of a governed source file, gated by the
 same policy predicate the coverage walk uses — [[source-read]] owns the contract; the route only resolves the
 root, compiles the policy, and maps a refusal onto its status), `/api/settings` (the resolved
 [[portable-layout]]), and `/api/plugins` + `/api/slash-commands` (the
@@ -202,9 +185,11 @@ mutations that commit no transition also answer with a non-2xx JSON error, so a 
 paint as a successful request on the dashboard; the lifecycle guard remains the authority on whether the
 destructive action is allowed.
 `/api/uploads` writes a pasted file to this (worker) machine's
-/tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions and
-`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions; the route layer still
-contains no harness protocol branch.
+/tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions,
+`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions, `reconcileLaunchedRuntimes()` to
+bring launched sessions' runtime bindings in line with whether they are running ([[sessions-core]]), and then
+`superviseDelivery()`, the retry sweep those bindings scope to running sessions; the route layer still contains no
+harness protocol branch.
 The host ledger is equally thin: `GET /api/resources` returns [[host-resource-budget]]'s latest inventory.
 It is read-only; existing lifecycle mutations consult the adapter-owned shared-runtime guard before cleanup.
 

@@ -6,6 +6,8 @@ import { getTerminalFontSize, subscribeTerminalFontSize } from './terminalFont.j
 import { useT } from './i18n/index.jsx'
 import { useBoard } from './workspace.jsx'
 import { MENTION_RE } from './mentions.jsx'
+import { FILE_REF_RE, fileRefAddress, resolveFileRef } from './fileRefs.js'
+import { addressHash, navigateAddress } from './address.js'
 import { navigate, routeHash } from './route.js'
 import { newTabAnchor } from './tabs.js'
 
@@ -54,9 +56,25 @@ export const findSpecLinks = (specs) => (line) => {
   return hits
 }
 
+// The same narrowness for a posted file ([[files]]): only a `[[file:<name>]]` this session's list answers to
+// exactly once becomes a link. Its link text carries the resolved path behind a `file:` prefix, which a node id
+// can never contain, so one activation handler tells the two doors apart.
+const FILE_LINK = 'file:'
+export const findFileLinks = (files) => (line) => {
+  const hits = []
+  for (const match of line.matchAll(FILE_REF_RE)) {
+    const { path } = resolveFileRef(match[1], files)
+    if (path) hits.push({ start: match.index, end: match.index + match[0].length, text: `${FILE_LINK}${path}` })
+  }
+  return hits
+}
+
 export default function SessionTerm({ sessionId, active = true, focused = active, writable = true, resumeRequired = false, focusRequest = 0 }) {
   const t = useT()
-  const { specs = [] } = useBoard()
+  const { specs = [], sessions = [] } = useBoard()
+  const files = sessions.find((row) => row.id === sessionId)?.files || []
+  const findSpec = findSpecLinks(specs)
+  const findFile = findFileLinks(files)
   // Same navigation contract as the transcript's anchors: an ordinary activation lands in the resident
   // Spec tab, a hold gesture opens a second document ([[tab-strip]]).
   const openNode = (id, event) => {
@@ -64,9 +82,16 @@ export default function SessionTerm({ sessionId, active = true, focused = active
     if (newTabAnchor(event, href)) return
     navigate('spec', id)
   }
+  // a posted file opens where the conversation's reference opens it: its resource tab, by ordinary navigation
+  const openLink = (value, event) => {
+    if (!value.startsWith(FILE_LINK)) { openNode(value, event); return }
+    const address = fileRefAddress(sessionId, value.slice(FILE_LINK.length))
+    if (newTabAnchor(event, addressHash(address))) return
+    navigateAddress(address)
+  }
   return <SessionTerminal
-    findLinks={findSpecLinks(specs)}
-    onOpenLink={openNode}
+    findLinks={(line) => [...findSpec(line), ...findFile(line)]}
+    onOpenLink={openLink}
     sessionId={sessionId}
     transport={dashboardTransport()}
     active={active}

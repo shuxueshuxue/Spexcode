@@ -38,6 +38,8 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.doesNotMatch(source, /\bnavigate\s*\(/)
   assert.doesNotMatch(source, /requestTab|openNewTab/)
   assert.match(source, /const activeResourceId = sessionActive \? requestedResourceId : null/)
+  assert.match(source, /const renderResourceTabs = activeResource && !resourceTabs\.some\(\(tab\) => tab\.id === activeResource\.id\)/)
+  assert.match(source, /\{renderResourceTabs\.map\(\(tab\) => \{/)
   assert.doesNotMatch(source, /role=\{activeResource \? 'dialog'/)
   assert.match(source, /setUnreadResources\(\(unread\) => new Set\(\[\.\.\.unread, \.\.\.added\.map\(\(tab\) => tab\.id\)\]\)\)/)
   assert.doesNotMatch(source, /const selected = admitted\.find\(\(tab\) => tab\.sessionId === active\)/)
@@ -73,10 +75,11 @@ test('file previews use one selectable resource tab, keep Markdown restricted, e
   assert.match(source, /preview\.phase === 'html'[\s\S]*?<FileHtmlPreview path=\{tab\.value\} html=\{preview\.text\} \/>/)
   assert.match(source, /className=\{`si-resource-file \$\{preview\.phase\}`\} data-selectable/)
   assert.doesNotMatch(source, /si-file-preview-(?:backdrop|body|head)/)
-  assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-selectable\]'/)
+  assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-reading-surface\], \[data-selectable\]'/)
   assert.match(focus, /if \(el\.closest\(SELECTABLE_PRESS_TARGETS\)\) return/)
   assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)
+  assert.match(css, /\.si-term-body\.is-resource\s*\{[^}]*background:\s*var\(--paper\);/s)
   assert.match(css, /\.si-file-html\s*\{[^}]*height:\s*100%;[^}]*border:\s*0;/s)
   // the three pop-overs float on the ONE shared elevation ([[typography]]'s --shadow), not three
   // hand-written drops that can drift apart into three different ideas of "above".

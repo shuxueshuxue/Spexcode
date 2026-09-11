@@ -1,11 +1,13 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const RELEASE_PACKAGES = Object.freeze([
+  { id: 'archify', dir: 'packages/archify', name: '@spexcode/archify', build: [['run', 'build']] },
   { id: 'transcript', dir: 'packages/transcript', name: '@spexcode/transcript', build: [['run', 'build']] },
   { id: 'transcript-ui', dir: 'packages/transcript-ui', name: '@spexcode/transcript-ui', build: [['run', 'build']] },
   { id: 'session-protocol', dir: 'packages/session-protocol', name: '@spexcode/session-protocol', build: [['run', 'build']] },
@@ -15,7 +17,6 @@ export const RELEASE_PACKAGES = Object.freeze([
   { id: 'session-application', dir: 'packages/session-application', name: '@spexcode/session-application', build: [['run', 'build']] },
   { id: 'session-selflaunch', dir: 'packages/session-selflaunch', name: '@spexcode/session-selflaunch', build: [['run', 'build']] },
   { id: 'core', dir: 'packages/spec-core', name: '@spexcode/spec-core', build: [['run', 'build']] },
-  { id: 'archify', dir: 'packages/archify', name: '@spexcode/archify', build: [['run', 'build']] },
   { id: 'dashboard', dir: 'spec-dashboard', name: '@spexcode/spec-dashboard', build: [['run', 'prepack']] },
   { id: 'forge', dir: 'spec-forge', name: '@spexcode/spec-forge', build: [['run', 'build']] },
   { id: 'cli', dir: 'spec-cli', name: '@spexcode/spec-cli', build: [['run', 'build']] },
@@ -143,6 +144,57 @@ function preflight(plan) {
   }
 }
 
+// @@@ root bundle - npm packs a bundled dependency only when it is a real directory, and in the workspace every
+// @spexcode package is a symlink, so a root packed in place ships a metapackage with an empty bundle (0.7.0-next.17
+// went out that way: four files, no CLI). The root is therefore packed from a staging copy whose node_modules holds
+// real installs of the CLI's release-internal closure, installed from the tarballs of this very release — no
+// registry round-trip for a sibling published seconds earlier. The rehearsal stages it too and refuses a root whose
+// tarball does not carry the CLI, so the check catches what the in-place pack silently dropped.
+export function bundleClosure(entries, rootName = 'spexcode') {
+  const byName = new Map(entries.map((entry) => [entry.name, entry]))
+  const root = byName.get(rootName)
+  const bundled = root?.manifest.bundleDependencies ?? root?.manifest.bundledDependencies ?? []
+  const closure = new Set()
+  const visit = (name) => {
+    if (closure.has(name) || !byName.has(name)) return
+    closure.add(name)
+    for (const dep of Object.keys(byName.get(name).manifest.dependencies ?? {})) visit(dep)
+  }
+  for (const name of bundled) visit(name)
+  return entries.filter((entry) => closure.has(entry.name))
+}
+
+export function stageRoot(plan) {
+  const rootEntry = plan.entries.find((entry) => entry.id === 'root')
+  const closure = bundleClosure(plan.entries)
+  if (!closure.length) fail('the root bundles no release package; nothing to stage')
+  const tarballs = mkdtempSync(join(tmpdir(), 'spexcode-release-tarballs-'))
+  const stage = mkdtempSync(join(tmpdir(), 'spexcode-release-root-'))
+  const files = []
+  for (const entry of closure) {
+    const result = npm(['pack', '--ignore-scripts', '--json', '--pack-destination', tarballs], { cwd: dirname(entry.path), stdio: 'pipe' })
+    if (result.status !== 0) fail(`${entry.name} pack for the root bundle failed: ${(result.stderr || result.stdout).trim()}`)
+    files.push(join(tarballs, JSON.parse(result.stdout)[0].filename))
+  }
+  const { scripts: _scripts, devDependencies: _dev, ...manifest } = rootEntry.manifest
+  writeFileSync(join(stage, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  for (const path of [...(manifest.files ?? []), 'README.md', 'LICENSE']) {
+    if (existsSync(join(root, path))) cpSync(join(root, path), join(stage, path), { recursive: true })
+  }
+  const install = npm(['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--no-save', ...files], { cwd: stage, stdio: 'pipe' })
+  if (install.status !== 0) fail(`installing the root bundle failed: ${(install.stderr || install.stdout).trim()}`)
+  const packed = npm(['pack', '--dry-run', '--ignore-scripts', '--json'], { cwd: stage, stdio: 'pipe' })
+  if (packed.status !== 0) fail(`root tarball preflight failed: ${(packed.stderr || packed.stdout).trim()}`)
+  const [row] = JSON.parse(packed.stdout)
+  const missing = closure.filter((entry) => !row.files.some((file) => file.path === `node_modules/${entry.name}/package.json`))
+  if (row.name !== rootEntry.name || row.version !== plan.version || missing.length) {
+    fail(`the root tarball does not carry its bundle${missing.length ? ` (missing ${missing.map((entry) => entry.name).join(', ')})` : ''}`)
+  }
+  rmSync(tarballs, { recursive: true, force: true })
+  console.log(`[release] root bundle staged: ${row.files.length} files, ${closure.map((entry) => entry.id).join(', ')}`)
+  return stage
+}
+
 function published(name, version) {
   const result = npm(['view', `${name}@${version}`, 'version', '--json'], { stdio: 'pipe' })
   if (result.status === 0) return true
@@ -151,14 +203,17 @@ function published(name, version) {
   fail(`registry lookup for ${name}@${version} failed: ${output.trim()}`)
 }
 
-function publish(plan) {
+function publish(plan, rootStage) {
   const state = registryState(plan.entries, published)
   requireAbsentRegistry(state, plan.version)
   const tag = distTagFor(plan.version)
   for (const entry of plan.entries) {
     console.log(`[release] publishing ${entry.name}@${plan.version} (dist-tag ${tag})`)
-    const result = npm(['publish', '--access', 'public', '--tag', tag], {
-      cwd: dirname(entry.path),
+    // The root publishes from its staged copy (already built, its bundle installed); every other package from its
+    // own directory, through its guarded publish scripts.
+    const staged = entry.id === 'root'
+    const result = npm(['publish', '--access', 'public', '--tag', tag, ...(staged ? ['--ignore-scripts'] : [])], {
+      cwd: staged ? rootStage : dirname(entry.path),
       env: { ...process.env, SPEX_RELEASE_PUBLISH: plan.version },
     })
     if (result.status !== 0) fail(`${entry.name}@${plan.version} publish failed; registry state is now partial and requires human review`)
@@ -186,8 +241,10 @@ function main() {
   const plan = releasePlan()
   if (mode === 'publish') assertMainAndClean()
   preflight(plan)
+  const rootStage = stageRoot(plan)
   console.log(`[release] ${mode === 'publish' ? 'publishing' : 'checked'} ${plan.version}: ${plan.entries.map((entry) => entry.id).join(' -> ')}`)
-  if (mode === 'publish') publish(plan)
+  if (mode === 'publish') publish(plan, rootStage)
+  rmSync(rootStage, { recursive: true, force: true })
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

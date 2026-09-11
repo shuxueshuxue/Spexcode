@@ -22,7 +22,9 @@ launcher on `PATH`, then the runner uses only the public HTTP/WebSocket session 
 
 The fake launcher emits a fixed-rate, marker-bearing stream on its real PTY and binds the same per-session
 rendezvous socket path the claude adapter expects. It accepts a line-JSON `reply` poke and answers a small `ping`
-message for deterministic control probes. The
+message for deterministic control probes. A delivery test may set `FAKE_HARNESS_DROP_REPLIES=N`: the first N reply
+chunks are printed as `FAKE-HARNESS DROPPED` and their connection is closed unparsed, which is what Claude's
+one-connection rendezvous does to a delivery a newer connection displaced ([[claude-rendezvous]]). The
 runner proves the complete user-shaped chain: `POST /api/sessions` creates the record, the board derives
 `online` from the live rendezvous listener, `/api/sessions/:id/socket` completes HTTP `101`, the PTY bridge carries
 the fake stream and a rendezvous-delivered control marker, and `POST /api/sessions/:id/close` removes the tmux

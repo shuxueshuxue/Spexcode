@@ -46,7 +46,12 @@ export default {
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
-  specView: { missing: '没有这个节点：{id}' },
+  specView: {
+    missing: '没有这个节点：{id}',
+    pendingChanges: ({ n }) => `${n} 处进行中的改动`,
+    changeOpen: '查看进行中的改动',
+    changeClose: '离开改动，回到规格正文',
+  },
   fileView: { none: '未选择文件' },
   fileTree: {
     aria: '项目文件树',
@@ -532,6 +537,7 @@ export default {
     expandedNote: '经常更新版本 · 须与原始来源一致',
     filesChanged: ({ n }) => `改动 ${n} 个文件`,
     loadingChange: '正在加载差异…',
+    changeAt: ({ n }) => `第 ${n} 行`,
     noChange: '尚无记录的改动——此规格即最新的事实依据。',
     diffLabel: '规格行差异',
     loadingHistory: '正在加载历史…',
@@ -862,5 +868,17 @@ export default {
     copyFailed: '复制失败 —— 选区已保留',
     sendFailed: '未送达 —— agent 可能已离线',
     offlineHint: 'agent 已离线 —— 需要重新拉起后消息才能送达',
+  },
+
+  clipboard: {
+    copyCode: '复制代码',
+    copyMessage: '复制消息',
+    copied: '已复制',
+    failed: '复制失败',
+  },
+
+  fileRef: {
+    missing: '这个 session 没有登记这个文件',
+    ambiguous: ({ count }) => `匹配到 ${count} 个已登记的文件——多写一段路径`,
   },
 }

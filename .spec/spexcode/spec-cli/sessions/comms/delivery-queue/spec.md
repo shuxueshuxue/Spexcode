@@ -72,7 +72,9 @@ one missing debt rather than mistaking the durable receipt for completed deliver
 each entry in order composes the prompt through the one seam ([[session-timeline]]) and hands it to the
 resolved adapter. A confirmed insert removes that entry; an insert the adapter refuses, cannot reach, or that
 throws ENDS the pass with the entry still queued, and everything behind it stays behind it — order is a
-property of a conversation, so a message is never skipped to deliver a later one.
+property of a conversation, so a message is never skipped to deliver a later one. A pass that ends on a held
+head logs the adapter's reason once per message and reason, so owed debt is never silent and a retried refusal
+does not repeat.
 
 The lock spans the insert deliberately, and it is NOT the record lock: the record lock cannot span an adapter
 call (a native turn runs lifecycle hooks that re-enter the record writer, which is a deadlock), while nothing
@@ -107,9 +109,13 @@ peer message after reparent, but a command it had already queued cannot cross th
 **Any process may drain; one process is expected to.** A pass costs nothing when the queue is empty, so
 `sendText` runs one immediately in whatever process accepted the message — that is what puts the text in a
 live agent's current turn instead of at the next sweep tick. The retry belongs to the `spex serve` that owns the project root:
-it watches its sessions' queues and drains what an earlier pass could not, so a message owed to an agent whose
-harness was busy, restarting, or gone is delivered when it can be, rather than waiting for that agent to
-happen to take a turn. Neither is privileged — the lock, not the process, is the guarantee.
+it watches the queues of its bound sessions, which is every running session whatever its adapter
+([[sessions-core]]), and drains what an earlier pass could not. So a message owed to an agent whose harness was
+busy or restarting, or whose handover a concurrent connection displaced ([[claude-rendezvous]]), is delivered when
+it can be, rather than waiting for that agent to happen to take a turn or for the next message to arrive. A stopped
+or closed session holds no binding, so its debt is kept but not polled: retrying a runtime that is not there would
+be work that grows with every such session and delivers nothing, and the resume that binds it hands the debt over.
+Neither is privileged — the lock, not the process, is the guarantee.
 
 **Delivery has exactly one shape: an ordinary prompt.** The agent receives a message the same way it receives
 anything else a human types, through the harness adapter's control channel. There is no second injection path

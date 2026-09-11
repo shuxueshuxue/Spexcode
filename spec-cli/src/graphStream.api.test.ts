@@ -89,7 +89,7 @@ function fakeTmuxDir(fixture: string): string {
   const bin = join(fixture, 'bin')
   mkdirSync(bin, { recursive: true })
   const tmux = join(bin, 'tmux')
-  writeFileSync(tmux, '#!/bin/sh\nkill -9 $$\n')
+  writeFileSync(tmux, '#!/bin/sh\nif [ "$1" = "-V" ]; then echo "tmux 3.4"; exit 0; fi\nkill -9 $$\n')
   chmodSync(tmux, 0o755)
   return bin
 }

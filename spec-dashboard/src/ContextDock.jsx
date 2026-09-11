@@ -53,7 +53,8 @@ function Panel({ title, open, onToggle, children }) {
   </section>
 }
 
-// [[context-dock]]: what surrounds the node the reader has open. The dock carries the node's issue context.
+// [[context-dock]]: what surrounds the node the reader has open. The dock carries the node's issue context;
+// the shell-owned right-edge switch stays mounted outside the animated panel.
 export default function ContextDock({ page, param, open = true }) {
   const t = useT()
   const { specs } = useBoard()
@@ -79,7 +80,10 @@ export default function ContextDock({ page, param, open = true }) {
     data-fold={arrival || undefined}
     aria-hidden={closing ? 'true' : undefined} aria-label={t('contextDock.title')}>
     <div className="ctx-resize" onMouseDown={onDrag} onDoubleClick={reset} role="separator" aria-orientation="vertical" />
-    <div className="ctx-head"><span>{t('contextDock.title')}</span><span className="ctx-node-id">{node.id}</span></div>
+    <div className="ctx-head">
+      <span>{t('contextDock.title')}</span>
+      <span className="ctx-node-id">{node.id}</span>
+    </div>
     {/* the two panels scroll TOGETHER inside the dock, and that scroller is what lets the dock clip its own
         width. Folding is a width movement, so the dock has to be `overflow: hidden` like the other two
         sidebars; without an inner scroller that clipping would make a long issue list unreachable instead

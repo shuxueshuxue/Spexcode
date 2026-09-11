@@ -40,7 +40,20 @@
 
 /* THE AGENT IS THE PAGE: full measure, no bubble, no tint. */
 .tx-say { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.tx-say-text { max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+.tx-say-text { position: relative; max-width: 100%; color: var(--tx-ink); font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
+/* the host's copy control (`renderCopy`) shows while what it copies is pointed at or holds focus, and takes no
+   pointer while hidden. A spoken turn has no time, so it sits in the text's bottom-right corner, where a
+   paragraph's last line is usually short — inside the text rather than under it, because under it is often the
+   turn's first tool call, whose chevron sits at the far right. Where nothing can point it is always there, so a
+   turn's drops to its own line instead of covering words. */
+.tx-copy { display: flex; opacity: 0; pointer-events: none; transition: opacity var(--tx-dur-rise) ease; }
+.tx-copy:focus-within { opacity: 1; pointer-events: auto; }
+.tx-say-text > .tx-copy { position: absolute; bottom: 0; right: 0; z-index: 1; }
+.tx-say-text:hover > .tx-copy { opacity: 1; pointer-events: auto; }
+@media (hover: none) {
+  .tx-copy { opacity: 1; pointer-events: auto; }
+  .tx-say-text > .tx-copy { position: static; justify-content: flex-end; margin-top: var(--tx-space-2); }
+}
 .tx-prose > p { margin: 0; }
 .tx-prose > p + p { margin-top: .75em; }
 
@@ -52,7 +65,11 @@
   border-radius: calc(var(--tx-radius) * 2); border-top-right-radius: 2px;
 }
 .tx-quote-nested { max-width: 88%; }
-.tx-quote-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--tx-ui-font); }
+.tx-quote-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 3px; font-family: var(--tx-ui-font); }
+/* a quote's copy control follows its time — right after it, wrapping with the line — so it is drawn exactly where
+   the quote draws its time (a narrow pane); a host with a ruler puts its own beside the ruler's time */
+.tx-quote-head > .tx-copy { display: none; align-self: center; margin: -4px 0 -4px -6px; }
+.tx-quote:hover .tx-quote-head > .tx-copy { opacity: 1; pointer-events: auto; }
 .tx-quote-who { font-size: var(--tx-type-caption); font-weight: var(--tx-weight-semibold); color: var(--tx-blue); }
 .tx-time { display: none; margin-left: auto; flex: none; font-family: var(--tx-ui-font); font-size: var(--tx-type-caption); color: var(--tx-muted); font-variant-numeric: tabular-nums; }
 .tx-quote-text { font-size: var(--tx-type-prose); line-height: var(--tx-leading-body); overflow-wrap: anywhere; }
@@ -144,4 +161,5 @@
 @container (max-width: 560px) {
   .tx-quote { max-width: 88%; }
   .tx-time { display: inline; }
+  .tx-quote-head > .tx-copy { display: flex; }
 }

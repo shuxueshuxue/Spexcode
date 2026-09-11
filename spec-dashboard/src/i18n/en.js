@@ -47,7 +47,12 @@ export default {
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
-  specView: { missing: 'no such node: {id}' },
+  specView: {
+    missing: 'no such node: {id}',
+    pendingChanges: ({ n }) => `${n} pending change${n === 1 ? '' : 's'}`,
+    changeOpen: 'show the pending change',
+    changeClose: 'leave the pending change, back to the spec',
+  },
   fileView: { none: 'no file selected' },
   fileTree: {
     aria: 'project file tree',
@@ -540,6 +545,7 @@ export default {
     expandedNote: 'versioned often · must match raw source',
     filesChanged: ({ n }) => `${n} file${n === 1 ? '' : 's'} changed`,
     loadingChange: 'loading diff…',
+    changeAt: ({ n }) => `line ${n}`,
     noChange: 'no recorded change yet — this spec is the latest ground truth.',
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',
@@ -873,5 +879,19 @@ export default {
     copyFailed: 'copy failed — selection kept',
     sendFailed: 'not delivered — the agent may be offline',
     offlineHint: 'agent offline — messages cannot be delivered until it is relaunched',
+  },
+
+  // the one copy control ([[copy-control]]): its name at rest, then the answer it gives on the button
+  clipboard: {
+    copyCode: 'copy code',
+    copyMessage: 'copy message',
+    copied: 'copied',
+    failed: 'copy failed',
+  },
+
+  // a `[[file:<name>]]` the session's posted list does not answer to exactly once ([[files]])
+  fileRef: {
+    missing: 'not among this session’s posted files',
+    ambiguous: ({ count }) => `matches ${count} posted files — name more of its path`,
   },
 }

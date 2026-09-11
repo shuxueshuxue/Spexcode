@@ -18,6 +18,7 @@ import SessionPicker from './SessionPicker.jsx'
 import { navigate } from './route.js'
 import { copyAddress, specAddress } from './address.js'
 import { markNewTab } from './tabs.js'
+import { useSelectionController } from './selectionController.js'
 
 // [[prose-dispatch]]: what a reader can DO with a passage of spec prose they just selected.
 //
@@ -78,6 +79,7 @@ function defaultTarget(live) {
 export default function ProseActions({ node, hostRef, codeSelection = null, onCodeSelectionClear, openSend = false }) {
   const t = useT()
   const { sessions = [], specs = [] } = useBoard()
+  const { publish, clear: clearSnapshot } = useSelectionController()
   const { launchers, launcher, pickLauncher } = useLaunchers()
   const { notify } = useTransientNotice()
   const content = useSpecContent(node?.id, node?.version)
@@ -97,6 +99,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const activeCodeSelection = codeSelection || (menuOpen ? codeSelectionRef.current : null)
+  const surfaceId = `prose:${node?.id || 'unknown'}`
 
   const live = sessions.filter((s) => sessionFooterState(s) === 'live')
   // Closing the card also retires the action group that opened it. Keeping menuOpen true would make the
@@ -136,15 +139,23 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     const read = () => {
       if (frozen.current) return
       const sel = document.getSelection()
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setHit(null); setMenuOpen(false); hitRef.current = null; return }
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setHit(null); setMenuOpen(false); hitRef.current = null; clearSnapshot(surfaceId); return }
       const range = sel.getRangeAt(0)
       if (!host.contains(range.commonAncestorContainer)) return    // a selection elsewhere is not ours to clear
       const lines = stampedRange(range, host)
-      if (!lines) { setHit(null); setMenuOpen(false); hitRef.current = null; return }
+      if (!lines) { setHit(null); setMenuOpen(false); hitRef.current = null; clearSnapshot(surfaceId); return }
       const rect = range.getBoundingClientRect()
       const next = { lines, x: rect.left, y: rect.top }
       setHit(next)
       hitRef.current = next
+      publish({
+        surfaceId,
+        kind: 'dom',
+        text: range.toString(),
+        semantic: { node: node?.id, path: node?.path, startLine: lines.startLine, endLine: lines.endLine },
+        visualRect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+        source: range.cloneRange(),
+      })
       // Selecting with the primary button only records the range. The native context menu is the
       // deliberate gesture that opens the action group.
       setMenuOpen(false)
@@ -156,7 +167,7 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
     host.addEventListener('mouseup', later)
     host.addEventListener('keyup', later)
     return () => { host.removeEventListener('mouseup', later); host.removeEventListener('keyup', later) }
-  }, [hostRef])
+  }, [hostRef, surfaceId, node?.id, node?.path, publish, clearSnapshot])
 
   // the right-click face of the same group — same items, anchored at the pointer instead of the passage.
   useEffect(() => {
@@ -203,10 +214,21 @@ export default function ProseActions({ node, hostRef, codeSelection = null, onCo
       const next = { lines, x: event.clientX, y: event.clientY + 18 }
       setHit(next)
       hitRef.current = next
+      const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null
+      if (range && domLines) publish({
+        surfaceId,
+        kind: 'dom',
+        text: range.toString(),
+        semantic: { node: node?.id, path: node?.path, startLine: lines.startLine, endLine: lines.endLine },
+        visualRect: { x: event.clientX, y: event.clientY, width: 0, height: 0 },
+        source: range.cloneRange(),
+      })
     }
     host.addEventListener('contextmenu', onMenu, true)
     return () => host.removeEventListener('contextmenu', onMenu, true)
-  }, [hostRef, codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text])
+  }, [hostRef, codeSelection?.path, codeSelection?.startLine, codeSelection?.endLine, codeSelection?.text, surfaceId, node?.id, node?.path, publish])
+
+  useEffect(() => () => clearSnapshot(surfaceId), [surfaceId, clearSnapshot])
 
   // the send card layers its own Escape (menu → address → card); the editor and the bare group are one layer.
   useEscLayer(panel?.kind === 'manual', dismiss)

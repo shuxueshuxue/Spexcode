@@ -118,7 +118,7 @@ try {
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US', permissions: ['clipboard-read', 'clipboard-write'] })
   await context.addInitScript(() => {
     localStorage.removeItem('spexcode.tabs.root')
     window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
@@ -250,6 +250,27 @@ try {
     scene: 'the mount order survives eviction: layers leave from the front and arrive at the end, never reordering',
     walk, peakMounted: peak, inversions,
     pass: peak <= CONVERSATION_LIMIT && inversions.length === 0,
+  })
+
+  // 5 — native reader gesture: the conversation text is a browser selection, not an app-painted shadow.
+  await visit(A)
+  const nativeTarget = page.locator('.m-ev-sent:visible .rich-text').filter({ hasText: `${A} message` }).first()
+  const nativeBox = await nativeTarget.boundingBox()
+  assert.ok(nativeBox, 'native selection fixture has a visible message')
+  await nativeTarget.selectText()
+  const nativeSelected = await page.evaluate(() => ({
+    text: window.getSelection()?.toString() || '',
+    custom: !!window.CSS?.highlights?.has('timeline-sel'),
+  }))
+  await page.keyboard.press('Control+c')
+  const nativeCopied = await page.evaluate(() => navigator.clipboard.readText())
+  await page.keyboard.press('Escape')
+  const nativeCleared = await page.evaluate(() => window.getSelection()?.toString() || '')
+  scenes.push({
+    scene: 'conversation drag/copy uses native selection and preserves no Custom Highlight',
+    selected: nativeSelected.text.length, copied: nativeCopied === nativeSelected.text,
+    custom: nativeSelected.custom, cleared: nativeCleared === '',
+    pass: nativeSelected.text.length > 0 && nativeCopied === nativeSelected.text && !nativeSelected.custom && nativeCleared === '',
   })
 
   const kept = scenes.filter((scene) => scene.pass).length

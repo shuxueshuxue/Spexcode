@@ -22,9 +22,13 @@ const workspace = text('workspace.jsx')
 const specTreeState = text('specTreeState.js')
 
 test('a published tree runs the workspace shell over static input, opening only the doors it has data for', () => {
-  assert.match(data, /fetch\(PUBLIC_GRAPH_SOURCE, \{ cache: 'no-cache' \}\)/)
   assert.match(data, /fetch\(source, \{ cache: 'no-cache' \}\)/)
-  assert.match(data, /fetch\(PUBLIC_GRAPH_METADATA_SOURCE, \{ cache: 'no-cache' \}\)/)
+  // Every public reader asks the page's own embedded payload first ([[public-spec-graph]]'s single-file page)
+  // and falls through to its relative static source only when the page carries none.
+  assert.match(data, /embeddedPublicPayload\(\)\?\.graph \?\? await fetchPublicJson\(PUBLIC_GRAPH_SOURCE, /)
+  assert.match(data, /embeddedPublicPayload\(\)\?\.metadata \?\? await fetchPublicJson\(PUBLIC_GRAPH_METADATA_SOURCE, /)
+  assert.match(data, /embedded \? embedded\.documents\?\.\[id\] : await fetchPublicJson\(source, /)
+  assert.match(publicMode, /document\.getElementById\(PUBLIC_PAYLOAD_ELEMENT_ID\)/)
   assert.match(data, /spexcode\.public-spec-document\/v1/)
   assert.match(data, /schema !== 'spexcode\.public-spec-graph\/v1'/)
   assert.match(app, /if \(PUBLIC_GRAPH_ONLY\) return undefined\s*\n\s*let live = true/)

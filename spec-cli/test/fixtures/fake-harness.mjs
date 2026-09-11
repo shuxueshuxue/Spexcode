@@ -7,6 +7,9 @@ const socketPath = (process.env.CLAUDE_BG_RENDEZVOUS_SOCK || '').trim()
 const sessionId = (process.env.SPEXCODE_SESSION_ID || '').trim() || 'unknown'
 const intervalMs = Math.max(20, Number.parseInt(process.env.FAKE_HARNESS_INTERVAL_MS || '120', 10) || 120)
 const capturePath = (process.env.FAKE_HARNESS_CAPTURE || '').trim()
+// Claude's rendezvous keeps one connection and discards a chunk whose connection a newer one displaced. A delivery
+// fixture opts into that loss for its first N reply chunks; production launchers never set the variable.
+let dropReplies = Math.max(0, Number.parseInt(process.env.FAKE_HARNESS_DROP_REPLIES || '0', 10) || 0)
 
 if (!socketPath) {
   console.error('fake-harness: CLAUDE_BG_RENDEZVOUS_SOCK is required')
@@ -40,6 +43,12 @@ const server = createServer((connection) => {
       let message
       try { message = JSON.parse(line) } catch { continue }
       if (message?.type === 'reply' && typeof message.text === 'string') {
+        if (dropReplies > 0) {
+          dropReplies--
+          write(`FAKE-HARNESS DROPPED ${compact(message.text)}`)
+          connection.destroy()
+          return
+        }
         write(`FAKE-HARNESS REPLY ${compact(message.text)}`)
       } else if (message?.type === 'ping') {
         connection.write(JSON.stringify({ type: 'pong' }) + '\n')

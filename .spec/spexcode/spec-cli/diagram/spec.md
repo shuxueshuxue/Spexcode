@@ -59,9 +59,9 @@ no renderer in the bundle. A click focuses a box: its neighbours stay lit, every
 it touches keep a pulse flowing from source to target. A double-click on a box whose id is one of this node's
 children opens that child.
 
-**Who draws it.** A person, or a cartographer agent handed the level's context — the node's body, its
-children's excerpts, the relations folded between their subtrees — and told to choose the type on that
-evidence, keep every card line grounded, and repair from archify's receipts until the validator is green.
-What the agent learns about the spec while drawing (a claim the code does not bear out, a stale count) is
-filed as an issue, not stored with the picture. The writer (`spex atlas`, which fills a node's folder from a
-level's context) is the next step after the lint findings.
+**Who draws it.** A person, or an agent — one that needs nothing but the command surface: `spex guide diagram`
+for the format, `spex diagram scaffold` to start from a file already right about the tree, and `spex diagram
+check` to repair from archify's receipts until it passes ([[diagram-cli]]). The author chooses the kind from what
+the node's body spends its words on, keeps every card line grounded, and puts no self-moving numbers on the
+picture — node counts, drift, import counts — since nothing re-checks them. What an author learns about the spec
+while drawing (a claim the code does not bear out) is filed as an issue, not stored with the picture.

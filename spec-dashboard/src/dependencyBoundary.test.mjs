@@ -45,20 +45,22 @@ test('new renderer dependencies carry an explicit no-predecessor exemption', () 
   }
 })
 
-test('cross-package arrivals carry an immutable predecessor ledger', () => {
-  assert.match(specCliSpec, /## Dependency arrival and subtraction ledger/)
-  for (const commit of [
-    '2a5560b11', 'f19ce3af2', '59f51a6b0', 'bbd00164a', '0962fb0e0',
-    '7e90b791d', '023e91b4c', 'dff2d31c7', '2f8d5fb71', '3d0e60e6b',
-    '377c832f4', 'b1c36fb04', 'bf14545a1', '8044c100f',
-  ]) assert.match(specCliSpec, new RegExp('`' + commit + '`'), `arrival ledger omitted ${commit}`)
-  for (const edge of [
-    '@hono/node-ws', 'node-pty', '@spexcode/spec-core',
-    '@spexcode/spec-forge', '@spexcode/session-application',
-    '@spexcode/session-selflaunch', '@vscode/tree-sitter-wasm', '@spexcode/archify',
-  ]) assert.ok(specCliSpec.includes(`\`${edge}\``), `arrival ledger omitted ${edge}`)
+test('the CLI spec carries the subtraction rule and owns its no-predecessor exceptions', () => {
+  assert.match(specCliSpec, /## Dependency arrival and subtraction/)
   assert.match(specCliSpec, /No package predecessor/)
-  assert.match(specCliSpec, /Same-change subtraction/)
+  for (const edge of ['@spexcode/spec-core', '@spexcode/spec-forge', '@spexcode/session-application', '@spexcode/session-selflaunch', '@spexcode/transcript'])
+    assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits its declared edge ${edge}`)
+  for (const edge of ['@hono/node-ws', 'node-pty', '@spexcode/archify'])
+    assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits no-predecessor exception ${edge}`)
+  assert.match(specCliSpec, /\[\[archify\]\]/, 'the archify exception lost its owner node')
+  assert.match(specCliSpec, /packages\/archify\/test\/library\.test\.mjs/, 'the archify exception lost its boundary check')
+})
+
+// The rule, not a per-commit ledger: git answers when an edge arrived, the body answers what justifies it.
+// A dependency history written as a table slips past lint's living rule, which only knows "## vN" headings.
+test('no dependency spec body carries a per-commit ledger', () => {
+  for (const [name, body] of [['spec-cli', specCliSpec], ['spec-dashboard', dashboardSpec]])
+    assert.ok(!/^\| `?[0-9a-f]{7,40}`?[ )]/m.test(body), `${name}'s body grew a commit ledger again`)
 })
 
 test('optional desktop runtime is outside root workspaces', () => {

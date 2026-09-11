@@ -1217,6 +1217,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .stat-status.st-pending { color: var(--muted);  } .stat-status.st-pending .stat-dot { background: var(--muted); }
 .stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--ink2); background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; }
 .stat-chip.stat-drift { color: var(--yellow); font-weight: var(--weight-medium); background: color-mix(in srgb, var(--yellow) 12%, transparent); }
+/* the pending-change toggle ([[spec-view]]): tinted like the `active` status it explains, pressed while the
+   document shows its change face */
+.stat-change { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: var(--type-meta); color: var(--orange); background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; cursor: pointer; }
+.stat-change:hover:not(:disabled) { background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.stat-change[aria-pressed="true"] { background: color-mix(in srgb, var(--orange) 14%, transparent); border-color: color-mix(in srgb, var(--orange) 35%, transparent); }
+.stat-change:disabled { cursor: default; }
 .stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
 .stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1407,10 +1413,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-card { padding: 7px 8px; }
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
 .pane-issues .issue-card-title { font-size: var(--type-control); }
-/* edit pane — the node's pending change, reusing the history tab's .ev-diff renderer */
+/* the node's pending change — the popup's edit tab and the spec document's change face — as a redline of
+   git's word diff: shared words read as the prose they are, removed words struck in the history diff's
+   orange, added words in its green, and the author's own line breaks kept. */
 .edit-rev { margin: 0 0 18px; }
 .edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
 .edit-by-label { font-weight: var(--weight-semibold); }
+.edit-by-session { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink2); text-decoration: none; }
+.edit-by-session:hover { text-decoration: underline; }
+.pending-none { color: var(--muted); font-size: var(--type-body); }
+.wd { display: flex; flex-direction: column; gap: 10px; }
+.wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 10px; }
+.wd-at { font-size: var(--type-caption); color: var(--muted); margin-bottom: 4px; }
+.wd-text { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.wd-text ins { text-decoration: none; color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-radius: 2px; }
+.wd-text del { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); text-decoration: line-through; border-radius: 2px; }
+/* a replaced word: git emits the removal and the addition back to back, so they need a gap to read as two */
+.wd-text del + ins { margin-left: .3em; }
 .edit-state { margin-left: auto; font-family: var(--ui-font); font-size: var(--type-caption); }
 
 .ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }

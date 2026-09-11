@@ -67,9 +67,18 @@ result still lands on the canonical Issues detail route. An **edit** tab makes a
 node's in-flight change reviewable from the board: it exists **only** while the node has a pending overlay,
 and when it does it **leads** (first tab, editing-session count on its face), so a node mid-change — a
 freshly-added ghost most of all, otherwise near-empty on spec/history — opens with its change front-and-
-centre. It lazily fetches the unified diff of the node's spec.md in the editing worktree vs the fork point
-(`/api/edit`), rendered with the history tab's diff view and **memoised** the same way — re-opening shows the
-last diff at once, not a reload — but **revalidated** each open, since a pending change is live.
+centre. It lazily fetches the change to the node's spec.md in the editing worktree against the fork point
+(`/api/edit`). The change is git's own word diff, and the pane renders it as a **redline**: words both sides
+share are plain, removed words are struck through, added words are tinted, and each hunk is a block labelled
+with its starting line. A spec body is hard-wrapped prose, so a line diff reports every re-wrapped line of a
+touched paragraph as removed and re-added, and the reader has to hunt for the few words that actually moved.
+A word diff ignores re-wrapping and marks only those words. Git computes the diff; the dashboard runs no diff
+algorithm of its own. Each worktree's section opens with the shared op mark, the owning session (a link into
+it when the board has a live row for it, otherwise the branch name), and whether the change is committed.
+This pane is also the spec document's change face ([[spec-view]]), so the popup and the document render one
+change pane. It is **memoised** like the history tab (re-opening shows the last change at once instead of
+reloading) and **revalidated** on every open, since a pending change is live. The history tab keeps its line
+diff.
 
 `panesFor(node)` is the single source of which tabs exist and their order — both the tab bar and App's
 keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. The tab CAPTIONS are

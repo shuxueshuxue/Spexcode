@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { filterMenuGroups } from '@spexcode/spec-core/review'
 import { BlobMedia } from './Evidence.jsx'
+import { Avatar } from './avatar.jsx'
+import { overlaySessions, sessionDisplayState, sessionHandle } from './session.js'
 import { useT } from './i18n/index.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { fetchNodeFiles, specUrl } from './data.js'
@@ -161,7 +163,9 @@ function NodeAttachments({ nodeId, enabled }) {
   )
 }
 
-export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
+// `stat` joins the property row (the document's pending-change toggle, [[spec-view]]); `children`, when given,
+// stand in for everything under that row — the document's change face keeps the node's head and swaps the rest.
+export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY, stat = null, children = null }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -175,8 +179,18 @@ export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
         </span>
         <span className="stat-chip" data-tip={t('nodeView.versionLabel')}>v{node.version || 0}</span>
         {node.drift > 0 && <span className="stat-chip stat-drift" data-tip={driftTitle}>⚠{node.drift}</span>}
+        {stat}
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
+      {children ?? <SpecReading node={node} graphOnly={graphOnly} content={content} />}
+    </div>
+  )
+}
+
+function SpecReading({ node, graphOnly, content }) {
+  const t = useT()
+  return (
+    <>
       {node.code?.length > 0 ? (
         <GovernedFiles files={node.code} count={node.code.length} />
       ) : (
@@ -195,7 +209,7 @@ export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
         const parts = node.parts ?? content?.parts ?? null
         return parts ? <TwoPart parts={parts} body={body} /> : <SpecBody body={body} lineBase={1} />
       })()}
-    </div>
+    </>
   )
 }
 
@@ -406,9 +420,9 @@ export function IssuesPane({ node, filter = {}, onFilter = () => {} }) {
   )
 }
 
-// the node's pending change diff (/api/edit, editing worktree vs fork point), fetched lazily when the edit tab opens.
-// Memoised per (source,path) but revalidated each open (cache seeds the paint, a background fetch refreshes it) since
-// the change is live; a failed revalidate keeps the last good diff.
+// the node's pending change (/api/edit, editing worktree vs fork point) as git's porcelain word diff, fetched lazily
+// when the change pane opens. Memoised per (source,path) but revalidated each open (cache seeds the paint, a
+// background fetch refreshes it) since the change is live; a failed revalidate keeps the last good diff.
 const editDiffCache = new Map()
 function useEditDiff(source, path, enabled) {
   const key = `${source}\t${path}`
@@ -421,31 +435,88 @@ function useEditDiff(source, path, enabled) {
     fetch(apiUrl(`/api/edit?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`))
       .then((r) => r.json())
       .then((d) => { editDiffCache.set(key, d); if (on) setDiff(d) })
-      .catch(() => on && setDiff((prev) => prev ?? { patch: '' }))
+      .catch(() => on && setDiff((prev) => prev ?? { wordDiff: '' }))
     return () => { on = false }
   }, [source, path, enabled, key])
   return diff
 }
 
-function EditOverlay({ node, ov }) {
+// git's `--word-diff=porcelain` → hunks of runs. Each line's first byte says what the rest is: ' ' shared,
+// '+' added, '-' removed, '~' a line break. Everything before the first `@@` is file header; `\` is git's
+// no-newline note and names no run.
+const WORD_RUN = { ' ': 'ctx', '+': 'add', '-': 'del', '~': 'nl' }
+function parseWordDiff(text) {
+  const hunks = []
+  for (const line of String(text || '').split('\n')) {
+    const at = /^@@ -\d+(?:,\d+)? \+(\d+)/.exec(line)
+    if (at) { hunks.push({ line: Number(at[1]), runs: [] }); continue }
+    const kind = WORD_RUN[line[0]]
+    if (!hunks.length || !kind) continue
+    hunks[hunks.length - 1].runs.push({ kind, text: kind === 'nl' ? '\n' : line.slice(1) })
+  }
+  for (const hunk of hunks) while (hunk.runs.at(-1)?.kind === 'nl') hunk.runs.pop()
+  return hunks
+}
+
+// the redline: shared words plain, removed words struck, added words tinted, one block per hunk under its line.
+// Re-wrapping is invisible here because git compared words, not lines.
+function WordDiff({ diff }) {
+  const t = useT()
+  if (diff == null) return <div className="ev-note">{t('nodeView.loadingChange')}</div>
+  const hunks = parseWordDiff(diff.wordDiff)
+  if (!hunks.length) return <div className="ev-note">{t('nodeView.noChange')}</div>
+  return (
+    <div className="wd">
+      {hunks.map((hunk, i) => (
+        <div key={i} className="wd-hunk">
+          <div className="wd-at">{t('nodeView.changeAt', { n: hunk.line })}</div>
+          <p className="wd-text">
+            {hunk.runs.map((run, j) => run.kind === 'add' ? <ins key={j}>{run.text}</ins>
+              : run.kind === 'del' ? <del key={j}>{run.text}</del> : run.text)}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EditOverlay({ node, ov, sessions }) {
   const t = useT()
   const diff = useEditDiff(ov.source, node.path, true)
+  // the worktree's session through the ONE node→session join ([[node-menu]]); the branch when it has no live row
+  const [session] = overlaySessions({ overlays: [ov] }, sessions)
+  const sessionHref = session && routeHash('sessions', session.id)
   return (
     <figure className="edit-rev">
       <figcaption className="edit-by">
-        <span className={`ov-mark ov-${ov.op}`}>{GLYPH[ov.op] || '•'}</span>
-        <span className="edit-by-label">{ov.label}</span>
+        <span className={`ov-mark ov-${ov.op}`} data-tip={t(`legend.opRows.${ov.op}`)}>{GLYPH[ov.op] || '•'}</span>
+        {session ? (
+          <a className="edit-by-label edit-by-session" href={sessionHref} onClick={(event) => newTabAnchor(event, sessionHref)}>
+            <Avatar seed={session.id} status={sessionDisplayState(session).status} size={15} />
+            {sessionHandle(session)}
+          </a>
+        ) : <span className="edit-by-label">{ov.label}</span>}
         <span className="edit-state">{ov.committed ? t('nodeView.editCommitted') : t('nodeView.editDirty')}</span>
       </figcaption>
-      <DiffEvidence diff={diff} />
+      <WordDiff diff={diff} />
     </figure>
   )
 }
-export function EditPane({ node }) {
+
+// every worktree's pending change to this node, one section each — the popup's edit tab and the spec document's
+// change face ([[spec-view]]) render this same list, so the two can never show a change differently.
+export function PendingChanges({ node, sessions = [] }) {
   const t = useT()
   const overlays = node.overlays || []
-  if (!overlays.length) return <div className="pane-edit empty">{t('nodeView.noEdit')}</div>
-  return <div className="pane-edit">{overlays.map((ov, i) => <EditOverlay key={i} node={node} ov={ov} />)}</div>
+  if (!overlays.length) return <div className="pending-none">{t('nodeView.noEdit')}</div>
+  return overlays.map((ov) => <EditOverlay key={ov.source} node={node} ov={ov} sessions={sessions} />)
+}
+export function EditPane({ node, sessions = [] }) {
+  return (
+    <div className={node.overlays?.length ? 'pane-edit' : 'pane-edit empty'}>
+      <PendingChanges node={node} sessions={sessions} />
+    </div>
+  )
 }
 
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
@@ -501,7 +572,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [], 
           )}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
-          {active === 'edit' && <EditPane node={node} />}
+          {active === 'edit' && <EditPane node={node} sessions={sessions} />}
         </div>
       </div>
     </div>

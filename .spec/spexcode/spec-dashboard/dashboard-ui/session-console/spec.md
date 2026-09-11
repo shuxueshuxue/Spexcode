@@ -141,8 +141,9 @@ screen; the store decides only what a bare address means.
 Published files and web services open as resource tabs beside the session document ([[resource-tabs]]).
 
 The shell tab row owns the
-session document's action slot ([[document-actions]]); this document registers its menu, resource-picker,
-diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
+session document's action slot ([[document-actions]]); this document registers its diff-door and other session
+actions there. It does not render a second chrome band under the tabs. The one exception is the door to
+what the session has published: [[resource-picker]] floats over the document's own top-right corner instead. The shell's
 top [[tab-strip]] names the session object with its headline and status dot, with no face suffix.
 Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
@@ -152,10 +153,10 @@ on the session; the console registers them only while its own pane is the READ d
 workspace keeps hidden documents mounted and an action left behind would describe a document nobody has
 open.
 
-The session document renders no internal toolbar. Its resource picker, diff door, Command Box,
-relaunch, and selected-resource actions register with the shell's [[document-actions]] slot at the tab row's
-right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness. The resource picker
-is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
+The session document renders no internal toolbar. Its diff door, Command Box, relaunch, and selected-resource
+actions register with the shell's [[document-actions]] slot at the tab row's right edge. The slot keeps one compact
+icon-button geometry across themes, locales, lifecycle and liveness. The floating [[resource-picker]] is the one
+posted-files/web-services entry point; with nothing posted it opens onto an empty state.
 Surface choice is address state (`?surface=…`) controlled by two compact icon buttons in the document-actions slot:
 one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
 `git-compare` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
@@ -215,14 +216,14 @@ cancel affordance — so one failed item never collapses a batch into a generic 
 Which layer a session mounts — a warm, always-connected terminal for a live pane, the Conversation for everything
 else — and how hidden layers keep their place are [[terminal-io]]'s and [[conversation]]'s.
 
-The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
-selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. The base surface is selected by its route address and the document-actions slot exposes one compact
+The shell's document-actions slot renders the session's registered icon actions. What the session has
+published ([[files]], [[web]]) is listed by the floating [[resource-picker]], whose rows show names and keep full
+paths behind their copy tool. The base surface is selected by its route address and the document-actions slot exposes one compact
 terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `git-compare` icon
 enters or leaves the diff URL with `aria-pressed`; it returns to the remembered base face and is visually distinct from
 the diff action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
-right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
-singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
+right edge uses one shared icon gap and one outer padding. Picking a posted file opens or selects its
+singleton resource tab; the row's download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live on the terminal
 surface; Conversation owns the same command-shaped footer, so its toolbar opener remains visible but
 disabled and cannot create a second input overlay. The

@@ -7,20 +7,14 @@ import { routeHash } from './route.js'
 import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
-import { isResourceSurface, resourceSurfaceKey, resourceTabKey } from './sessionSurface.js'
+import { isResourceSurface, resourceSurfaceKey } from './sessionSurface.js'
+import { resourceCatalog } from './resourceCatalog.js'
 import { useDocumentActions, useDocumentNames } from './documentActions.jsx'
 import { pendingSessionFor } from './launch.js'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
 import { iconFor, isResident } from './viewCatalog.js'
 import { PROJECT_ID, projectHref } from './project.js'
-
-const resourceLabel = (url) => {
-  try {
-    const parsed = new URL(url)
-    return `${parsed.hostname.replace(/^\[|\]$/g, '')}:${parsed.port}${parsed.pathname === '/' ? '' : parsed.pathname}`
-  } catch { return url }
-}
 
 const tabWindowAddress = (tab) => {
   const hash = routeHash(tab.page, tab.param, tab.query)
@@ -58,10 +52,7 @@ function label(tab, { specs, sessions, t }) {
     const requestedSurface = tab.query?.surface
     if (isResourceSurface(requestedSurface)) {
       const key = resourceSurfaceKey(requestedSurface)
-      const resource = [
-        ...(s?.files || []).map((path) => ({ id: resourceTabKey(s.id, 'file', path), label: path.split('/').filter(Boolean).pop() || path })),
-        ...(s?.web || []).map((web) => ({ id: resourceTabKey(s.id, 'web', web.key), label: resourceLabel(web.url) })),
-      ].find((item) => item.id === key)
+      const resource = resourceCatalog(s).find((item) => item.id === key)
       return resource?.label || key
     }
     return title

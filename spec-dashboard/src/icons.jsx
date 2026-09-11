@@ -9,6 +9,9 @@
 
 // each def: node (the shapes), vb (viewBox, default 24), sw (per-icon strokeWidth, default 1.8),
 // and optional fill/stroke overrides (defaults: none/currentColor).
+// Lucide's file family shares one folded sheet; each type mark adds its own figure on top.
+const SHEET = <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></>
+
 const ICONS = {
   // ——— Lucide-derived 24×24 ———
   plus: { node: <><path d="M5 12h14" /><path d="M12 5v14" /></> },
@@ -37,6 +40,14 @@ const ICONS = {
   send: { node: <><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>, sw: 2 },
   download: { node: <><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></> },
   copy: { node: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></> },
+  file: { node: SHEET },
+  'file-text': { node: <>{SHEET}<path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></> },
+  'file-code': { node: <>{SHEET}<path d="M10 12.5 8 15l2 2.5" /><path d="m14 12.5 2 2.5-2 2.5" /></> },
+  'file-image': { node: <>{SHEET}<circle cx="10" cy="12" r="2" /><path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22" /></> },
+  'file-json': { node: <>{SHEET}<path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1" /><path d="M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1" /></> },
+  'file-spreadsheet': { node: <>{SHEET}<path d="M8 13h2" /><path d="M14 13h2" /><path d="M8 17h2" /><path d="M14 17h2" /></> },
+  'file-video': { node: <>{SHEET}<path d="m10 11 5 3-5 3v-6Z" /></> },
+  'file-archive': { node: <><path d="M10 12v-1" /><path d="M10 18v-2" /><path d="M10 7V6" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M15.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 .274 1.01" /><circle cx="10" cy="20" r="2" /></> },
   'folder-open': { node: <><path d="M6 14.5 8.5 6H21l-2.5 8.5a2 2 0 0 1-1.9 1.5H7.9A2 2 0 0 1 6 14.5Z" /><path d="M3 6h5l2-2h4" /><path d="M3 6v12a2 2 0 0 0 2 2h12" /></> },
   globe: { node: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3c2.5 2.5 3.8 5.5 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3Z" /></> },
   eye: { node: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></> },

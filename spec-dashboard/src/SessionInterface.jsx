@@ -40,6 +40,8 @@ import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
 import TabStrip from './TabStrip.jsx'
+import ResourcePicker from './ResourcePicker.jsx'
+import { fileName, resourceCatalog, webName } from './resourceCatalog.js'
 import DockToggle from './DockToggle.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
@@ -211,7 +213,6 @@ function ActionOutcome({ outcome }) {
   return <div className={`si-action-outcome ${outcome.phase}`} role={role}>{outcome.message}</div>
 }
 
-const fileName = (path) => path.split('/').filter(Boolean).pop() || path
 const isMarkdownFile = (path) => /\.(?:md|markdown)$/i.test(path)
 function FileTextPreview({ path, text }) {
   return isMarkdownFile(path)
@@ -221,28 +222,7 @@ function FileTextPreview({ path, text }) {
 function FileHtmlPreview({ path, html }) {
   return <iframe className="si-file-html" srcDoc={html} title={fileName(path)} />
 }
-const webName = (url) => {
-  try {
-    const parsed = new URL(url)
-    return `${parsed.hostname.replace(/^\[|\]$/g, '')}:${parsed.port}${parsed.pathname === '/' ? '' : parsed.pathname}`
-  } catch { return url }
-}
 const webProxyUrl = (sessionId, key) => `${PROJECT_BASE}/web/${encodeURIComponent(sessionId)}/${encodeURIComponent(key)}/`
-
-function ResourceMenu({ options, onOpen }) {
-  const t = useT()
-  return (
-    <div className="document-action-menu" role="menu" aria-label={t('session.resourceMenuLabel')}
-      onMouseDown={(event) => event.stopPropagation()}>
-      {options.length ? options.map((tab) => (
-        <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem" onClick={() => onOpen(tab)}>
-          <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
-          <span>{tab.label}</span>
-        </button>
-      )) : <span className="si-resource-menu-empty">{t('session.resourceMenuEmpty')}</span>}
-    </div>
-  )
-}
 
 function RegisteredDocumentAction({ document, action }) {
   useDocumentAction(document, action)
@@ -602,17 +582,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const commandAvailable = !conversationSurface && uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
   const footerState = sessionFooterState(selSession)
-  const resourceCatalog = selSession ? [
-    ...(selSession.files || []).map((path) => ({
-      id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
-    })),
-    ...(selSession.web || []).map((web) => ({
-      id: resourceTabKey(active, 'web', web.key), sessionId: active, kind: 'web', key: web.key, value: web.url, label: webName(web.url), revision: 0,
-    })),
-  ] : []
+  const catalog = useMemo(() => resourceCatalog(selSession), [selSession])
   const activeResourceId = sessionActive ? requestedResourceId : null
   const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId)
-    || resourceCatalog.find((tab) => tab.id === activeResourceId)
+    || catalog.find((tab) => tab.id === activeResourceId)
     || null
   // A direct file reference writes the resource address without first passing through the picker. The
   // catalog already knows that resource during this render, so include it immediately while the warm-tab
@@ -620,8 +593,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const renderResourceTabs = activeResource && !resourceTabs.some((tab) => tab.id === activeResource.id)
     ? [...resourceTabs, activeResource]
     : resourceTabs
-  const resourceOptions = resourceCatalog.filter((option) => !openTabs.some((tab) =>
-    tab.page === 'sessions' && tab.param === active && tab.query?.surface === resourceSurface(option.id)))
+  const openResourceTabIds = useMemo(() => new Set(openTabs
+    .filter((tab) => tab.page === 'sessions' && tab.param === active && isResourceSurface(tab.query?.surface))
+    .map((tab) => resourceSurfaceKey(tab.query.surface))), [openTabs, active])
 
   const activateResource = () => {
     setResourceFocusRequest((request) => request + 1)
@@ -724,20 +698,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     onClick: () => openResource(unreadTabs[0]),
   } : null)
 
-  useEscLayer(resourceMenu, () => setResourceMenu(false))
-  // Outside-press dismissal, the shape the project chip already uses. It listens for MOUSEDOWN rather than
-  // click because the press that opens the menu has already happened by the time this effect binds, so the
-  // opening gesture can never close what it just opened. The toggle keeps its own press: routing it here
-  // too would close and reopen in one click.
-  useEffect(() => {
-    if (!resourceMenu) return undefined
-    const onDown = (event) => {
-      if (event.target?.closest?.('.document-action-menu, [data-action="resource-picker"]')) return
-      setResourceMenu(false)
-    }
-    window.addEventListener('mousedown', onDown, true)
-    return () => window.removeEventListener('mousedown', onDown, true)
-  }, [resourceMenu])
   // Esc leaves the diff overlay for the session's own base address, the same exit a resource surface has.
   // Diff is never a base surface, so the address it returns to is the bare one.
   useEscLayer(diffSurface, () => scope.open({ page: 'sessions', param: active, query: null }, { replace: true }))
@@ -1083,13 +1043,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     ? getSessionBaseSurface(active)
     : activeBaseSurface
   const documentActions = sessionActive ? [
-    {
-      id: 'resource-picker', icon: 'folder-open', label: t('session.addResourceTab'), priority: 100,
-      pressed: resourceMenu, haspopup: true,
-      onClick: () => setResourceMenu((open) => { if (!open) setCtxMenu(null); return !open }),
-      menuKey: resourceMenu ? resourceOptions.map((option) => option.id).join(',') : '',
-      menu: resourceMenu ? <ResourceMenu options={resourceOptions} onOpen={openResource} /> : null,
-    },
     ...(!activeResource && surfaceChoices.length > 1 ? [
       {
         id: 'surface-switcher', icon: baseSurface === SESSION_SURFACE_TERMINAL ? 'message-square' : 'terminal',
@@ -1324,6 +1277,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             }}
           >
               <SessionDocumentActions document={documentKey} actions={documentActions} />
+              {/* the posted-resource door floats over the document's top-right corner ([[resource-picker]]) */}
+              {sessionActive && (
+                <ResourcePicker entries={catalog} openIds={openResourceTabIds} open={resourceMenu}
+                  onOpenChange={(next) => { if (next) setCtxMenu(null); setResourceMenu(next) }}
+                  onPick={openResource}
+                  onDownload={(entry) => { void downloadFile(entry.sessionId, entry.value) }}
+                  onCopy={(entry) => { void copyFilePath(entry.value) }} />
+              )}
               <div
                 className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${diffSurface ? ' is-diff' : ''}${activeResource ? ' is-resource' : ''}`}
                 id={activeResource ? `si-resource-panel-${activeResource.id}` : `si-${activeBaseSurface}-panel-${active}`}

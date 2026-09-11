@@ -529,15 +529,17 @@ makes merge readiness report a dirty tree and pressures generated evidence into 
 run \`spex session files ls\`: a target that disappeared or became unreadable is printed as \`INVALID\` and must be
 recreated or retracted; a valid path prints normally.
 
-The session page's top-right files icon is grey while the list is empty. Once live, it opens the posted list;
-choosing a path previews its current bytes in a tab beside the session, while the adjacent download tool
-downloads it through the backend at that moment. Previews are limited to 16 MiB: text, Markdown, HTML (rendered
+In the dashboard, a floating button in the session page's top-right corner opens the posted list, filterable by
+type and searchable by name; choosing a path previews its current bytes in a tab beside the session, while the
+row's download tool downloads it through the backend at that moment. Previews are limited to 16 MiB: text, Markdown, HTML (rendered
 as a live page), and PNG/JPEG/GIF/WebP; other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
 marked invalid by the CLI; preview/download reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
 list.
 
 This is the reverse of a dashboard attachment: [[file-attach]] sends human bytes to an agent. Files publishes
-an agent-owned path for a human to download.`
+an agent-owned path for a human to download. A file the human attaches to a prompt they send you is posted to
+this same list when the prompt arrives, and the dashboard marks it as theirs, so \`ls\` shows what they gave you
+beside what you handed back.`
 
 const WEB = `spex guide web — hand a running local web service to the human
 

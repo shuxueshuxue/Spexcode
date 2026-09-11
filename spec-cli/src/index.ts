@@ -19,7 +19,7 @@ import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, reconcileLaunchedRuntimes, startWorktreeTrashReaper } from './sessions.js'
 import { mergeSession, retractDiffComment, saveDiffComment, sendDiffComments, sessionDiff } from './session-review.js'
 import { sessionHost } from './session-host.js'
-import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable } from './session-record.js'
+import { quarantineCorruptRecord, restoreQuarantinedRecord, SessionRecordUnusable, withRecordLock } from './session-record.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionTranscript, readSessionTranscriptTool, sessionTranscriptStream } from './session-transcript.js'
 import { defaultHarness, HARNESSES, launcherList, launcherDefault } from './harness.js'
@@ -28,7 +28,7 @@ import { codexHarness } from './codex-harness.js'
 import { ensureCodexGenerationLedger, reclaimDrainingCodexGenerations } from './codex-runtime-generations.js'
 import { readBlobByHash, putBlob } from '@spexcode/spec-core'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
-import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
+import { listSessionFiles, openSessionFile, postSentUploads, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { readSourceSlice, SourceReadError, SOURCE_SLICE_MAX_BYTES } from './source-read.js'
 import { listSourceDir } from './source-list.js'
 import { loadConfig as loadLintConfig } from './lint.js'
@@ -476,6 +476,16 @@ app.delete('/api/uploads/:id', (c) => {
   }
 })
 
+// [[files]]: a prompt that reaches a session holding a completed upload's path posts that upload to the
+// session's list. The prompt is already accepted when this runs, so the post neither holds the response on
+// the record lock nor turns a delivered prompt into a failure; a failed post is logged.
+function postUploadsSentTo(id: string, text: unknown): void {
+  if (typeof text !== 'string') return
+  void postSentUploads(id, text, withRecordLock)
+    .then((added) => { if (added.length) notifyBoardChanged('sessions') })
+    .catch((error) => console.error(`spex: could not post the uploads sent to ${id}: ${error instanceof Error ? error.message : String(error)}`))
+}
+
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all') === '1' || c.req.query('all') === 'true')))
@@ -495,6 +505,7 @@ app.post('/api/sessions', async (c) => {
   try {
     const body = await c.req.json().catch(() => null)
     const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal, onPublished: projectCreatedSession })
+    if (result.status === 201) postUploadsSentTo(result.session.id, body?.prompt)
     // The durable row is now public. Nudge the cheap session projection explicitly so a dashboard does not
     // wait for the best-effort store watcher; any held candidate worktree event remains a separate full claim.
     // The durable row is already committed. Defer the projection nudge until this handler has returned so a
@@ -832,6 +843,7 @@ app.post('/api/sessions/:id/input', async (c) => {
     const r = await sendText(c.req.param('id'), text, typeof body?.from === 'string' ? body.from : undefined, {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
     })
+    if (r.ok) postUploadsSentTo(c.req.param('id'), text)
     return c.json(r, r.ok ? 200 : 502)
   }
   if (body?.kind === 'command') {
@@ -849,6 +861,7 @@ app.post('/api/sessions/:id/input', async (c) => {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
     })
     if (!r.ok) return c.json(r, 502)
+    postUploadsSentTo(id, text)
     // Start the first handoff without holding the HTTP response on native readiness. The queue remains the
     // acceptance boundary; only a successful dequeue is allowed to publish human activity.
     // A deferred drain is an asynchronous handoff, not proof that a prompt was delivered. Only the

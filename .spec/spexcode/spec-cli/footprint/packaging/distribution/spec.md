@@ -40,8 +40,10 @@ own plugin tree (that is `.plugins`), and none of it is loaded by SpexCode.
 
 - `claude-code/atlas` — a Claude Code plugin: `.claude-plugin/plugin.json` and `skills/atlas/SKILL.md`.
 - `zcode/atlas` — a ZCode plugin: `.zcode-plugin/plugin.json`, the same skill with a section for ZCode, and the
-  dynamic workflow that section runs ([[zcode-atlas-workflow]]). ZCode also reads Claude Code's format, but its
-  package says something Claude Code's does not, so it is its own.
+  dynamic workflow that section runs ([[zcode-atlas-workflow]]). A ZCode build without the `CreateWorkflow` tool
+  (dynamic workflows are not in every release yet) gets the same job turn by turn from the skill's own steps, and
+  the agent says which path it took. ZCode also reads Claude Code's format, but its package says something Claude
+  Code's does not, so it is its own.
 - `gugu/spexcode-atlas` — a gugu tab extension: a manifest, a page, and the tab that shows the workspace's spec
   tree with each node's diagram and starts an agent on the atlas ([[gugu-atlas-tab]]). gugu extends its interface,
   not its agents, so its package is a page rather than a skill.

@@ -56,11 +56,22 @@ export function treeDirKeys(children, prefix = '') {
   return keys
 }
 
-// The sticky header names the file the reader is IN, so it spends the width on the leaf and lets the
-// directories in front of it be the part that gives: dimmed, and dropped from the FRONT when the room runs
-// out, since a path's tail is what identifies it. The full path stays on the element's tooltip either way.
+// A path label spends its width on the leaf and lets the directories in front of it be the part that gives
+// ([[diff-marks]]'s PathLabel): dimmed, and dropped from the FRONT when the room runs out, since a path's tail
+// is what identifies it. The full path stays on the element's tooltip either way.
 export function splitPath(path) {
   const segments = String(path || '').split('/')
   const name = segments.pop() || ''
-  return { dir: segments.join('/'), name, dirSegments: segments }
+  return { dir: segments.join('/'), name }
+}
+
+/** The tally a scope heading and the toolbar print: how many files, and their summed line counts. */
+export function diffTotals(files) {
+  let additions = 0
+  let deletions = 0
+  for (const file of files || []) {
+    additions += Number(file.additions) || 0
+    deletions += Number(file.deletions) || 0
+  }
+  return { files: (files || []).length, additions, deletions }
 }

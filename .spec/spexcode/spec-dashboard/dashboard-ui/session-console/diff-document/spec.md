@@ -11,6 +11,9 @@ related:
   - spec-dashboard/src/diffTree.js
   - spec-dashboard/src/diffTree.test.mjs
   - spec-dashboard/test/diff-scroll-survives-refresh.e2e.mjs
+  - spec-dashboard/test/diff-review-chrome.e2e.mjs
+  - spec-dashboard/src/DiffMarks.jsx
+  - spec-dashboard/src/Segmented.jsx
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/session-diff.api.test.ts
@@ -27,9 +30,9 @@ this session changed — in two scopes the reader never has to reconcile by hand
 the recorded fork base (or the source-of-truth branch for legacy records) through one backend diff endpoint. The
 endpoint identifies the merge-base and returns per-file unified patches in bounded byte windows; a file selector
 names the scope and the path, so one file loads without loading the whole tree. The browser renders each patch
-read-only with CodeMirror's virtualized merge editor. Each file has a panel entry with its status and
-addition/deletion counts under its scope's heading, and the reader can switch between a synchronized split view and
-a unified view. Both views use old/new line numbers, collapse long unchanged stretches, highlight changed words, and
+read-only with CodeMirror's virtualized merge editor. Each file has a panel entry with git's status letter and its
+addition/deletion tally ([[diff-marks]]) under its scope's heading, and the reader can switch between a synchronized
+split view and a unified view. Both views use old/new line numbers, collapse long unchanged stretches, highlight changed words, and
 syntax-highlight source (including deleted fragments in unified mode). A wrap toggle and previous/next hunk controls
 stay inside the same file surface. The endpoint remains the bounded unified-patch transport; the browser projects
 each loaded hunk into old/new editor documents instead of creating a second transport or eagerly fetching every file.
@@ -38,8 +41,8 @@ Both split panes belong inside the editor's own width. The merge editor already 
 shrinkable columns, so the document adds only the divider between them: any rule that makes the merge view an
 intrinsic-width or flex box sizes the pair to the widest line and carries the new side outside the scroll container,
 where a reader sees the old text alone and reads it as a diff that did not render. A changed line is tinted in the
-document's own red and green rather than the editor library's near-transparent default, because which lines moved
-must be legible at a glance on this surface's background. The endpoint pays for a wide context window per hunk and
+dashboard's diff pair ([[diff-marks]]) rather than the editor library's near-transparent, light-only default,
+because which lines moved must be legible at a glance on this surface's background in every theme. The endpoint pays for a wide context window per hunk and
 the viewer keeps it: it folds only runs longer than a dozen lines and leaves ten on each side of a change, because
 a reader judging a change needs the code it sits in, and collapsing to a three-line margin throws away what was
 already fetched.
@@ -63,6 +66,16 @@ header's directories, a collapsed chain — it gives at the FRONT, never at the 
 on the row's tooltip. Two changed files never render the same label. Each directory row is the way to reopen one
 branch, and a fresh diff load still starts fully expanded so the review opens with every changed path in view.
 
+**The panel is the product's own sidebar, and it says how big the review is.** Its rows are the explorer's rows
+([[file-tree]]) on the explorer's ground: an inset band that washes under the pointer and when selected, never an
+element's own chrome, because a file listed in a bordered grey box reads as a control rather than a place in a
+tree. A file row ends in its tally and status letter, in one column. Each scope is headed in the sidebars' zone
+grammar ([[dock-modes]]): the file count in its pod, the scope's name, and the scope's summed tally, with the
+uncommitted scope in the attention hue. A heading stays pinned while its own rows scroll under it. The toolbar
+carries the whole review's size (how many files, and the summed tally of every listed row), because that is the
+first number a reviewer asks for. The panel is a resizable pane ([[resizable-panes]]), clamped so the editor
+keeps at least half the width, and it stacks above the editor on a narrow screen.
+
 The second scope is the session's uncommitted work: the tracked edits and untracked additions its worktree holds
 but has not committed. It is enumerated from one porcelain status plus one numstat however dirty the tree is, and
 read-only — nothing stages, and nothing else may touch the index a live agent is working in, so an untracked file's
@@ -72,9 +85,12 @@ main checkout once that directory is gone, but the working tree must not: a land
 whoever is working in the main checkout as its own uncommitted changes. When the directory is gone the endpoint
 says the working tree is unreadable, and the document shows the branch alone rather than claiming a clean tree.
 
-A reader can click a changed line to author a comment. Comments live in the session record as `{filePath,
-lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears `sentAt`; sending
-un-sent comments formats them as one review message and uses the existing session input/send path. The send
+A reader can click a changed line to author a comment. The comment is written in the product's composer shell
+([[composer]]), floated like the prose send card and naming the file and line it will attach to: Enter saves,
+Shift+Enter breaks the line, and Escape closes the card before anything behind it. Comments live in the session
+record as `{filePath, lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears
+`sentAt`; sending un-sent comments formats them as one review message and uses the existing session input/send
+path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
 Sent comments remain inline in the diff with their delivery marker. A reload after saving or sending a comment is
 not a navigation: the open file stays selected while it still exists, so the reader lands beside the comment they
@@ -115,6 +131,11 @@ a second navigation or transport mechanism. The document-actions slot owns a com
 `aria-pressed`; entering or leaving it replaces the URL while the tab remains `#/sessions/<id>`, and leaving returns to
 the remembered Terminal or Conversation base face. Terminal and conversation remain the other two session faces.
 
-The reader opens in unified mode with line wrapping enabled. The CodeMirror editor and merge containers inherit the
-application's paper, ink, and divider tokens so their loading surface, gutters, and surrounding frame follow the
-selected dashboard theme.
+The reader opens in unified mode with line wrapping enabled. Split or unified is chosen with the product's
+segmented control ([[segmented-control]]), and wrapping is the same segment standing alone. Wrapping governs
+both split panes as well as the unified view, since a line cut off at the pane edge hides the change it holds.
+The CodeMirror editor and merge containers inherit the application's paper, ink, and divider tokens so their
+loading surface, gutters, and surrounding frame follow the selected dashboard theme, and every colour the merge
+package would otherwise paint from its own light defaults is restated in those tokens: the change bars in the
+gutter, the line and word tints, and the band a folded run collapses into. That band's words are in the
+reader's language. The file header's hunk steppers are icon buttons from the one icon vocabulary.

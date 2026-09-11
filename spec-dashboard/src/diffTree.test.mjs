@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildDiffTree, treeDirKeys, splitPath } from './diffTree.js'
+import { buildDiffTree, diffTotals, treeDirKeys, splitPath } from './diffTree.js'
 
 const file = (path, extra = {}) => ({ path, status: 'modified', additions: 1, deletions: 0, ...extra })
 
@@ -57,11 +57,19 @@ test('every directory row has a key, so the panel can open the whole tree by def
 })
 
 test('splitPath keeps the leaf whole and hands the directories back as the part that may give', () => {
-  assert.deepEqual(splitPath('.spec/spexcode/spec-cli/spec.md'),
-    { dir: '.spec/spexcode/spec-cli', name: 'spec.md', dirSegments: ['.spec', 'spexcode', 'spec-cli'] })
-  // the segments come back as a list because the header lays them out in a reversed flex row: it is the
-  // FRONT of the path that gets clipped, and that cannot be expressed on one text run
-  assert.deepEqual(splitPath('README.md'), { dir: '', name: 'README.md', dirSegments: [] })
+  assert.deepEqual(splitPath('.spec/spexcode/spec-cli/spec.md'), { dir: '.spec/spexcode/spec-cli', name: 'spec.md' })
+  assert.deepEqual(splitPath('README.md'), { dir: '', name: 'README.md' })
+})
+
+// The toolbar and each scope heading print a total, and it is the sum of the rows listed under it — a
+// binary file's zero counts are part of the file tally without inventing lines.
+test('diffTotals counts the listed files and sums their line counts', () => {
+  assert.deepEqual(diffTotals([
+    file('a.ts', { additions: 3, deletions: 1 }),
+    file('b.png', { additions: 0, deletions: 0 }),
+    file('c.ts', { additions: 10, deletions: 4 }),
+  ]), { files: 3, additions: 13, deletions: 5 })
+  assert.deepEqual(diffTotals([]), { files: 0, additions: 0, deletions: 0 })
 })
 
 test('an empty list is an empty tree rather than a phantom root row', () => {

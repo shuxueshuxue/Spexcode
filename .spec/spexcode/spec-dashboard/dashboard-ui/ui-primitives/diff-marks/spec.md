@@ -13,6 +13,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js
   - spec-dashboard/src/i18n/zh.js
+  - spec-dashboard/test/diff-review-chrome.e2e.mjs
 ---
 # diff-marks
 

@@ -146,14 +146,24 @@ test('a Claude session launched before launch-time binding is bound at backend s
   const adopted = 'adopted-claude-session'
   mkdirSync(sessionStoreDir(adopted), { recursive: true })
   writeFileSync(sessionRecordPath(adopted), JSON.stringify({ session_id: adopted, governed: true, worktree_path: process.cwd(), branch: 'main', harness: 'claude', harness_session_id: '', stopped: false, archived: false }) + '\n')
+  // a launched session the cutover already bound (with its own token, and none on the record) keeps that binding
+  const migrated = 'migrated-bound-session'
+  mkdirSync(sessionStoreDir(migrated), { recursive: true })
+  writeFileSync(sessionRecordPath(migrated), JSON.stringify({ session_id: migrated, governed: true, worktree_path: process.cwd(), branch: 'main', harness: 'codex', harness_session_id: 'migrated-thread', stopped: false, archived: false }) + '\n')
+  writeFileSync(sessionArtifactPath(migrated, 'launch.sh'), '')
   const app = configuredSessionApplication()
   app.createSession({ sessionId: id, status: 'active' })
   app.createSession({ sessionId: adopted, status: 'active' })
+  app.createSession({ sessionId: migrated, status: 'active' })
+  app.bindRuntime(migrated, { namespace: 'spex-governed', runtimeKind: 'codex', nativeSessionId: 'migrated-thread', nativeStartToken: 'migration-token' })
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     await bindLaunchedRuntimes()
     assert.equal(app.resolveRuntime(adopted, 'spex-governed'), null, 'a record no launch here produced is not bound')
+    const kept = app.resolveRuntime(migrated, 'spex-governed')
+    assert.deepEqual([kept?.nativeStartToken, kept?.bindingGeneration], ['migration-token', 1], 'an existing binding is left as it is')
+    assert.equal(readRecord(migrated)?.runtimeStartToken, null, 'no token is minted for a session that is already bound')
     const binding = app.resolveRuntime(id, 'spex-governed')
     assert.equal(binding?.status, 'bound')
     assert.equal(binding?.nativeSessionId, id, 'a caller-pinned adapter binds the id its launch pinned')

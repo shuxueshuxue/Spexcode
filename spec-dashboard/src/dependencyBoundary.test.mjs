@@ -28,7 +28,13 @@ test('direct dashboard dependencies have a live owner or explicit boundary', () 
   ]
   for (const name of requiredImports) assert.ok(names.includes(name), `manifest lost required edge ${name}`)
   for (const name of requiredImports) assert.ok(source.includes(name), `dependency has no live importer: ${name}`)
-  assert.equal(manifest.dependencies, undefined, 'dashboard runtime dependencies stay in devDependencies for the bundled app')
+  // the bundled app's own imports stay devDependencies; the package's runtime dependencies are exactly the daemon
+  // runtime it carries for `spex serve`, each re-exported by one of its daemon entries ([[packaging]])
+  const daemon = ['@hono/node-server', '@hono/node-ws', 'hono', 'node-pty']
+  assert.deepEqual(Object.keys(manifest.dependencies ?? {}).sort(), daemon, 'runtime dependencies are exactly the daemon runtime')
+  const entries = ['daemon.mjs', 'daemon-pty.mjs'].map((name) => readFileSync(join(root, name), 'utf8')).join('\n')
+  for (const name of daemon) assert.ok(entries.includes(`from '${name}`), `daemon runtime dependency has no daemon entry: ${name}`)
+  for (const name of ['daemon.mjs', 'daemon-pty.mjs']) assert.ok(manifest.files.includes(name), `${name} ships in the package`)
 })
 
 // The diagram is drawn by the backend; the dashboard takes only archify's browser half — its stylesheet and the
@@ -50,8 +56,9 @@ test('the CLI spec carries the subtraction rule and owns its no-predecessor exce
   assert.match(specCliSpec, /No package predecessor/)
   for (const edge of ['@spexcode/spec-core', '@spexcode/spec-forge', '@spexcode/session-application', '@spexcode/session-selflaunch', '@spexcode/transcript'])
     assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits its declared edge ${edge}`)
-  for (const edge of ['@hono/node-ws', 'node-pty', '@spexcode/archify'])
-    assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits no-predecessor exception ${edge}`)
+  assert.ok(specCliSpec.includes('`@spexcode/archify`'), 'CLI spec omits no-predecessor exception @spexcode/archify')
+  for (const edge of ['@hono/node-ws', 'node-pty'])
+    assert.ok(dashboardSpec.includes(`\`${edge}\``), `the dashboard spec omits the daemon runtime's no-predecessor exception ${edge}`)
   assert.match(specCliSpec, /\[\[archify\]\]/, 'the archify exception lost its owner node')
   assert.match(specCliSpec, /packages\/archify\/test\/library\.test\.mjs/, 'the archify exception lost its boundary check')
 })

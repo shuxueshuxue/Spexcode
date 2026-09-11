@@ -14,6 +14,11 @@ related:
   - spec-cli/src/cli.ts
   - spec-cli/bin/spex.mjs
   - spec-cli/src/node-pty-package.test.ts
+  - spec-cli/src/daemon-runtime.ts
+  - spec-cli/src/daemon-runtime.test.ts
+  - spec-dashboard/package.json
+  - spec-dashboard/daemon.mjs
+  - spec-dashboard/daemon-pty.mjs
 ---
 # packaging
 
@@ -40,13 +45,19 @@ to `dist` with NodeNext resolution and declarations; tests remain development-on
 compiled JavaScript through the declared package dependency, never a source-relative import or consumer-side
 TypeScript build. The `release-build-*` children record only their package-specific config and output delta.
 
-**L0 is the adoption floor, not a daemon fallback.** `spex spec lint`, `spex graph`, `spex materialize`,
-`spex init`, and `spex guide` need only Node and the compiled default CLI closure, so a clean install
-after `npm install --omit=optional` can start and use the spec/code asset without Hono or a native addon.
-`hono`, `@hono/node-server`, `@hono/node-ws`, and `node-pty` belong to the optional daemon tier only. A
-`spex serve` or `spex dashboard` without any required daemon package refuses before importing daemon code:
-it names the missing packages and prints the exact `npm install ...` repair command. It never substitutes a
-reduced server, hides the command, or leaks a module-resolution stack trace. The stricter CI-like install
+**L0 is the adoption floor, and the dashboard package is the daemon tier.** `spex spec lint`, `spex graph`,
+`spex materialize`, `spex init`, and `spex guide` need only Node and the compiled default CLI closure, so
+`npm i -g spexcode` (or an `npx` run) carries no HTTP server and no native addon. `hono`, `@hono/node-server`,
+`@hono/node-ws`, and `node-pty` are the dashboard package's runtime dependencies, since whoever runs `spex serve`
+or `spex dashboard` installs that package for the UI anyway. Declaring them as optional dependencies of the root
+would not keep them out: npm installs optional dependencies by default, so every install would carry the server
+runtime and the PTY prebuilds for every platform. The server loads them through the dashboard's `daemon.mjs`, and
+the terminal helper alone loads `node-pty` through its `daemon-pty.mjs`; importing through those files resolves
+each dependency from the dashboard's own tree in every install layout, where a bare import from the CLI would
+miss a sibling global package's nested dependencies. A `spex serve` or `spex dashboard` without the dashboard
+package, or with one too old to carry the daemon entry, refuses before importing daemon code: it names the
+package and prints the repair, installed beside spex (`-g` for a global spex). It never substitutes a reduced
+server, hides the command, or leaks a module-resolution stack trace. The stricter CI-like install
 that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repair, so its probe explicitly
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.

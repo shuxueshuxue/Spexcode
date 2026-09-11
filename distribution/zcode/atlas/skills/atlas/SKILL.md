@@ -1,6 +1,6 @@
 ---
 name: atlas
-description: "Use when the user wants the atlas of a repository or its spec tree — read the codebase into a SpexCode spec tree, draw its architecture diagrams and hand over a browsable page (提取 .spec、画架构图、做成可浏览网页), draw the atlas, 画规格图, give node X a diagram, diagram this subtree. For a whole repository it runs one dynamic workflow; for a node or subtree it draws with spex diagram scaffold and check until each passes."
+description: "Use when the user wants the atlas of a repository or its spec tree — read the codebase into a SpexCode spec tree, draw its architecture diagrams and hand over a browsable page (提取 .spec、画架构图、做成可浏览网页), draw the atlas, 画规格图, give node X a diagram, diagram this subtree. For a whole repository it runs one dynamic workflow (turn by turn where ZCode has no CreateWorkflow); for a node or subtree it draws with spex diagram scaffold and check until each passes."
 ---
 
 # atlas
@@ -37,6 +37,11 @@ When the job is a whole repository — read it into a spec tree, draw its pictur
 
 A repository that already has a `.spec/` tree keeps it: the workflow skips the survey and starts at the gate. For
 one node or one subtree the steps below are enough; the workflow is for the whole job.
+
+If this ZCode has no `CreateWorkflow` tool (dynamic workflows ship in newer builds), do the same job turn by turn
+with the steps below: the setup above for a repository without `.spec/`, `spex spec lint` until it reports no
+errors, then each picture worth drawing, checked until it passes. Tell the user this is the turn-by-turn path; a
+ZCode build with dynamic workflows runs the same job in parallel.
 
 Draw the spec tree's pictures: one `diagram.json` beside each node's `spec.md` that is worth one.
 The format, the rules and the loop for a single diagram live in `spex guide diagram` — read it before drawing.

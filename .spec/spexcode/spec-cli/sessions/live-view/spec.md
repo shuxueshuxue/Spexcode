@@ -102,6 +102,7 @@ The helper's stdout is raw terminal output and its stdin is a small resize/navig
 Closing the parent pipe kills the helper and its PTY, including on backend restart. UTF-8 locale is explicit
 at the tmux boundary so wide characters are not replaced by host-locale fallbacks.
 
+The helper loads `node-pty` from the dashboard package's `daemon-pty.mjs`, the daemon runtime's home ([[packaging]]).
 Before its first native spawn, the helper resolves the exact addon `node-pty` loaded and checks for
 `spawn-helper` beside that addon. When that native helper exists but lacks execute bits, SpexCode adds them
 idempotently before calling `pty.spawn`; it never guesses a platform/architecture directory. This runtime

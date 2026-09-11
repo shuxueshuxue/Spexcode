@@ -1,4 +1,4 @@
-import { streamSSE } from 'hono/streaming'
+import { daemonRuntime } from './daemon-runtime.js'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, existsSync, type Dirent, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
@@ -8,6 +8,7 @@ import { listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { hotSignature, warmSignature } from './session-liveness.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard, boardIdentity, readBoard, type Board } from './graphCache.js'
 import { diffFromPosition, positionOf, type Position } from '@spexcode/spec-core'
+const { streamSSE } = await daemonRuntime()
 
 type Scope = 'sessions' | 'full'
 type Notify = () => void

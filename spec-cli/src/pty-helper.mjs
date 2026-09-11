@@ -1,6 +1,13 @@
-import * as pty from 'node-pty'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ensureExecutableIfPresent, nodePtySpawnHelperPath } from './pty-native-helper.mjs'
+
+// node-pty ships with the dashboard package, the daemon runtime's home ([[packaging]]); spex serve refuses before
+// this helper can run without it. daemon-pty.mjs resolves node-pty from the dashboard's own tree.
+const dashboard = dirname(createRequire(import.meta.url).resolve('@spexcode/spec-dashboard/package.json'))
+const pty = await import(pathToFileURL(join(dashboard, 'daemon-pty.mjs')).href)
 
 const [id, colsArg, rowsArg] = process.argv.slice(2)
 const cols = Number(colsArg)

@@ -95,12 +95,13 @@ agent name you already use is skipped and reported, never overwritten.
 When you want the live board (the graph and sessions), start the runtime:
 
 ```sh
-npm i -g @spexcode/spec-dashboard # install the optional UI package once
+npm i -g @spexcode/spec-dashboard # once: the UI and the server runtime spex serve needs
 spex serve       # this project's backend — prints its URL
 spex dashboard   # the machine's one gateway — every project behind one URL
 ```
 
-The dashboard is a separate package so writing-only installs do not carry frontend build output. One `spex dashboard`
+The dashboard is a separate package so writing-only installs carry neither the frontend build nor the server
+runtime (an HTTP server and a native PTY addon). One `spex dashboard`
 per machine is enough: every project you serve shows up behind it, and its
 `/projects` page manages them from the browser.
 [Getting started](https://spexcode.net/getting-started/) walks the rest of the setup.

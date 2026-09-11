@@ -1,8 +1,9 @@
-import { streamSSE } from 'hono/streaming'
+import { daemonRuntime } from './daemon-runtime.js'
 import type { Context } from 'hono'
 import { readAliasedRawRecord } from '@spexcode/spec-core'
 import { defaultHarness, harnessById, resolveLauncher, type Harness } from './harness.js'
 import { TranscriptReadError, openFrameStream, type TranscriptReader } from '@spexcode/transcript'
+const { streamSSE } = await daemonRuntime()
 
 // The session-addressed face of [[transcript-reader]]: one resolver from a governed session to its adapter and
 // native thread, one bounded GET for a closed interval, and one SSE for the OPEN interval — the stretch the

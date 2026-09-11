@@ -6,7 +6,19 @@
     ".": "./dist/index.html",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "dist-public", "dist-public-single"],
+  "files": [
+    "dist",
+    "dist-public",
+    "dist-public-single",
+    "daemon.mjs",
+    "daemon-pty.mjs"
+  ],
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/node-ws": "^1.0.4",
+    "hono": "^4.6.14",
+    "node-pty": "1.2.0-beta.14"
+  },
   "publishConfig": {
     "access": "public"
   },

@@ -241,9 +241,10 @@ native menu nowhere by default ([[session-console]]). A selected passage may pub
 the shared snapshot, but the browser menu remains the default when no action is explicitly claimed. The action
 surface clones the native Range before it opens, so its copy/quote verbs cannot lose the passage underneath them.
 
-**COPY LEAVES, QUOTE STAYS.** Copy hands the passage to the clipboard and the reader is on their own with
-it. Quote hands it to the composer directly below as the shared removable attachment every other selection
-surface uses ([[selection-attachment]]), and it rides out as one ordinary message with the ordinary
+**NATIVE COPY LEAVES, QUOTE STAYS.** Copying a selected passage is the browser's ordinary Ctrl/Cmd+C path;
+the conversation does not replace it with a second clipboard seam. Quote hands the frozen snapshot to the
+composer directly below as the shared removable attachment every other selection surface uses
+([[selection-attachment]]), and it rides out as one ordinary message with the ordinary
 [[code-selection]] token appended — never a second field, a second route, or a reply channel of its own. Its
 point is not decoration: the agent receives the passage verbatim in its own prompt, so "why this" has a
 referent it cannot mistake, which is the thing a reader loses in a long turn. It is the same verb

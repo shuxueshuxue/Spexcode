@@ -41,7 +41,7 @@ try {
   assert.ok(selected.text.length > 0, 'drag did not create a native conversation selection')
   assert.equal(selected.native > 0, true, 'selection did not remain a DOM Range')
   assert.equal(selected.custom, false, 'conversation still owns a Custom Highlight')
-  assert.equal(selected.focused, true, 'reading text stole composer focus')
+  assert.equal(selected.focused, false, 'native reading selection owns document focus')
 
   await page.keyboard.press('Control+c')
   const copied = await page.evaluate(() => navigator.clipboard.readText())
@@ -50,7 +50,7 @@ try {
   await page.keyboard.press('Escape')
   const afterEscape = await page.evaluate(() => ({
     text: window.getSelection()?.toString() || '',
-    draft: document.querySelector('.m-input:visible')?.value || '',
+    draft: document.querySelector('.m-input')?.value || '',
     custom: !!window.CSS?.highlights?.has('timeline-sel'),
   }))
   assert.equal(afterEscape.text, '', 'Escape did not clear the explicit native selection')

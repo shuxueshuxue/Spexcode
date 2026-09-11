@@ -166,7 +166,7 @@ made this node necessary.
   body surfaces are through. `NodeView`'s first-heading suppression stays a CALLER concern — the caller
   chooses which source text it hands over — and never becomes a renderer option.
 - **The existing regressions MIGRATE; they are not re-derived.** The console's renderer already ships a
-  unit suite over these guards and a browser suite that locks real text-node selection, composer focus,
+  unit suite over these guards and a browser suite that locks real text-node selection, draft independence,
   desktop and phone overflow, and a remote image actually decoding. Those tests move onto the unified
   renderer — a rewritten implementation that cannot satisfy them is wrong by definition, and re-deriving
   a second set of rules for the same behaviour is how the two dialects were born in the first place. The

@@ -496,7 +496,7 @@ function ensureWatcher(root: string): void {
 // so without this leaf a hook-authored flip reached the board only when some unrelated signal happened to re-splice:
 // a message sent from the dashboard left the row idle for minutes (measured on the dogfood board: 150s of nothing
 // but pings after the commit). One NON-recursive watch on the database's directory, delivering only the database's
-// own names — the file and its `-journal` (journal_mode=delete writes both on every commit); every other file in
+// own names — the file and its `-wal`/`-shm` sidecars (SQLite WAL writes these on commit); every other file in
 // that directory is filtered out at delivery. Attach failure is held and repaired like every other source, and
 // [[graph-cache]] folds the same file into its session revision so the patrol covers a held or disabled leaf.
 let sessionDatabaseWatcher: TreeWatcherRegistry | null = null

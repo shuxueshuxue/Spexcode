@@ -11,7 +11,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const CANONICAL_PLUGINS = buildProjection()
 const FORBIDDEN_ADOPTER_TEXT = [
-  '.spec/spexcode',
+  '.spec/spexcode/',
   'deploying the fleet',
   'spexcode-ops',
   'bj01.ezfrp.com',

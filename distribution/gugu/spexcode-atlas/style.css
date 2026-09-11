@@ -1,4 +1,6 @@
 :root { color-scheme: light dark; }
+/* author display rules below must not un-hide what the page hides */
+[hidden] { display: none !important; }
 * { box-sizing: border-box; }
 body {
   margin: 0; height: 100vh; overflow: hidden;

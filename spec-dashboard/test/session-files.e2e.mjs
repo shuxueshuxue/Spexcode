@@ -95,8 +95,8 @@ const sampleDrawer = (page, ms = 600, presses = []) => page.evaluate(([duration,
     const t = performance.now() - start
     if (drawer) {
       const rect = drawer.getBoundingClientRect()
-      const inset = parseFloat(getComputedStyle(drawer).clipPath.match(/inset\(([-\d.]+)/)?.[1] || '0') / 100 * rect.height
-      frames.push({ t: Math.round(t), shown: Math.round(rect.bottom - rect.top - inset), slot: Math.round(rect.top + inset), closing: drawer.classList.contains('closing') })
+      const slot = drawer.parentElement.getBoundingClientRect().top
+      frames.push({ t: Math.round(t), shown: Math.round(Math.max(0, rect.bottom - Math.max(rect.top, slot))), slot: Math.round(slot), closing: drawer.classList.contains('closing') })
     } else frames.push({ t: Math.round(t), gone: true })
     if (t < duration) requestAnimationFrame(tick); else done(frames)
   }
@@ -165,14 +165,17 @@ try {
     const visible = await drawer.evaluate((element, p) => {
       for (const animation of element.getAnimations()) { animation.pause(); animation.currentTime = p * 60_000 }
       const rect = element.getBoundingClientRect()
-      const inset = parseFloat(getComputedStyle(element).clipPath.match(/inset\(([-\d.]+)/)?.[1] || '0') / 100 * rect.height
-      return { top: Math.round(rect.top), visibleTop: Math.round(rect.top + inset), bottom: Math.round(rect.bottom) }
+      const slot = element.parentElement
+      return {
+        top: Math.round(rect.top), visibleTop: Math.round(Math.max(rect.top, slot.getBoundingClientRect().top)), bottom: Math.round(rect.bottom),
+        slotClips: getComputedStyle(slot).overflow === 'hidden' && slot.getAnimations().length === 0 && getComputedStyle(slot).transform === 'none',
+      }
     }, progress)
     frames.push({ progress, ...visible })
     await page.screenshot({ path: join(OUT, `picker-drawer-${Math.round(progress * 100)}.png`), clip: { x: 960, y: 36, width: 480, height: 620 } })
   }
-  check('the drawer slides down out of a fixed slot while it opens',
-    frames[0].bottom < frames[1].bottom && frames[1].bottom < frames[2].bottom && new Set(frames.map((frame) => frame.visibleTop)).size === 1, frames)
+  check('the drawer slides down out of a still, clipping slot while it opens',
+    frames[0].bottom < frames[1].bottom && frames[1].bottom < frames[2].bottom && new Set(frames.map((frame) => frame.visibleTop)).size === 1 && frames.every((frame) => frame.slotClips), frames)
   await drawer.evaluate((element) => element.getAnimations().forEach((animation) => animation.finish()))
   await slow.evaluate((style) => style.remove())
   check('opening puts focus in the search field', await page.evaluate(() => document.activeElement?.closest('.si-rp-search') != null))

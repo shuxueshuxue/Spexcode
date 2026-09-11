@@ -2548,14 +2548,18 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-tab.on { color: var(--ink); border-bottom-color: var(--blue); background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .si-tab svg { flex: none; }
 /* [[resource-picker]] — the floating door to a session's posted files and services. It rides the session
-   document's top-right corner over whichever face is showing, and its drawer slides down out of it: the
-   drawer's top edge is the slot, so the panel is clipped there while it travels and never paints above it. */
+   document's top-right corner over whichever face is showing, and its drawer slides down out of it. */
 .si-rp {
   position: absolute; top: var(--space-5); right: var(--space-6); z-index: 30;
   display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-4);
   pointer-events: none;
 }
-.si-rp > * { pointer-events: auto; }
+.si-rp-fab, .si-rp-drawer { pointer-events: auto; }
+/* @@@drawer-slot - the drawer is cut at the slot line by a STILL box that clips, never by its own clip-path.
+   A moving drawer clipping itself kept transform on the compositor and clip-path on the main thread, so a busy
+   page (a pick opening a tab) let the two drift and painted the drawer above the slot. The padding gives the
+   shadow room on the three open sides; the negative margin keeps it out of the layout. */
+.si-rp-slot { overflow: hidden; padding: 0 24px 40px; margin: 0 -24px -40px; }
 .si-rp-fab {
   appearance: none; height: 32px; min-width: 32px; padding: 0 var(--space-5) 0 var(--space-4);
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3);
@@ -2580,15 +2584,13 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--raised); border: 1px solid var(--edge); border-radius: var(--radius-lg); box-shadow: var(--shadow);
   font-family: var(--ui-font);
-  /* the side and bottom insets reach past the shadow, so only the slot edge ever cuts */
-  clip-path: inset(0 -24px -40px -24px);
-  /* transitions, not keyframes: a close that interrupts the opening reverses from where the drawer is */
-  transition: transform var(--dur-drawer) cubic-bezier(.2, .8, .25, 1), clip-path var(--dur-drawer) cubic-bezier(.2, .8, .25, 1);
+  /* a transition, not a keyframe: a close that interrupts the opening reverses from where the drawer is */
+  transition: transform var(--dur-drawer) cubic-bezier(.2, .8, .25, 1);
 }
-@starting-style { .si-rp-drawer { transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px); } }
+@starting-style { .si-rp-drawer { transform: translateY(-100%); } }
 /* shorter than the unmount linger, so the drawer is fully back in its slot before it leaves the tree */
 .si-rp-drawer.closing {
-  pointer-events: none; transform: translateY(-100%); clip-path: inset(100% -24px -40px -24px);
+  pointer-events: none; transform: translateY(-100%);
   transition-duration: calc(var(--dur-drawer) * .75); transition-timing-function: cubic-bezier(.4, 0, .9, .5);
 }
 .si-rp-head { padding: var(--space-5) var(--space-6) var(--space-3); color: var(--ink2); font-size: var(--type-control); font-weight: var(--weight-semibold); }

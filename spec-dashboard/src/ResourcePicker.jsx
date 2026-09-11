@@ -102,6 +102,7 @@ export default function ResourcePicker({ entries, openIds, open, onOpenChange, o
         {entries.length > 0 && <span className="si-rp-count">{entries.length}</span>}
       </button>
       {mounted && (
+        <div className="si-rp-slot">
         <div className={`si-rp-drawer${closing ? ' closing' : ''}`} role="dialog" aria-label={t('session.resourceMenuLabel')}
           data-focus-overlay>
           <header className="si-rp-head">{t('session.resourcePickerTitle')}</header>
@@ -164,6 +165,7 @@ export default function ResourcePicker({ entries, openIds, open, onOpenChange, o
             )}
             {entries.length > 0 && !rows.length && <div className="si-rp-empty"><strong>{t('session.resourceNoMatch')}</strong></div>}
           </div>
+        </div>
         </div>
       )}
     </div>

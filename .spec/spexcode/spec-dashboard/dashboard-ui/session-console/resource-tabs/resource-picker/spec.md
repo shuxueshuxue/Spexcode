@@ -40,8 +40,10 @@ own controls along its top edge — the diff face's toolbar — ends short of th
 a control, while plain content beneath it (terminal text, a posted page) is simply overlaid.
 
 **The drawer.** The drawer hangs from the button's right edge, and its opening is a drawer being pulled: the
-panel slides down out of a straight slot line just below the button, clipped there while it travels, and slides
-back into it on close. The motion is a transition, not a one-way keyframe, so a close that interrupts the opening
+panel slides down out of a straight slot line just below the button, cut there while it travels, and slides back
+into it on close. The cut is made by a still box around the drawer, never by the moving drawer clipping itself:
+a moving clip and a moving panel are updated by different threads, and while the page is busy — a pick opening
+its tab — they drift apart and the drawer paints above the slot. The motion is a transition, not a one-way keyframe, so a close that interrupts the opening
 reverses from wherever the drawer is instead of jumping to fully open first, and the close is shorter than the
 unmount linger, so the drawer is fully back in its slot before it leaves the page. The motion has its own
 duration token because it travels the panel's height, which a 6px rise does not; reduced motion drops it to an

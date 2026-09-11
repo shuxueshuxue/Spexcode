@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/diffTree.js
   - spec-dashboard/src/diffTree.test.mjs
+  - spec-dashboard/test/diff-scroll-survives-refresh.e2e.mjs
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/session-diff.api.test.ts
@@ -47,6 +48,11 @@ already fetched.
 them as an accordion below the open diff was a second navigation of the same list that spent the height the diff
 itself needs. So the panel owns selection and the pane owns the file, whose header stays put while its hunks scroll,
 because the thing a reader loses inside a long hunk is which file they are in.
+
+The open file's reading position belongs to that file surface. A live graph refresh or another parent render is not
+a file change, so it keeps the mounted CodeMirror view and its scroll position; only selecting another file or
+changing an editor setting may replace that view. This matters on the live session board, where unrelated session
+state continues to arrive while a reviewer is reading a long diff.
 
 The panel is a DIRECTORY TREE rather than a list of paths, because in this repository a path is a bad label twice
 over: the tail is the only part that differs, so truncating it makes thirty rows read alike, and the leaf carries

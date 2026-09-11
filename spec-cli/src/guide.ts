@@ -18,6 +18,8 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    --harness is required and has no default — the explicit choice of which harness(es) materialize
    delivers into. The example lists every built-in; drop the ones you don't use (any one id or
    comma-separated subset is valid).
+   Only the spec skeleton, with no hooks and no agent wiring: \`spex init --pure\`; the same
+   \`spex init --harness …\` later adopts that tree as it is.
    Works on any git repo. Edit .spec/project/spec.md to describe it, then grow child nodes
    (each a dir with a spec.md + a \`code:\` list of the files it governs).
 
@@ -427,6 +429,9 @@ behavior, decided per KIND (and, for a contract file, by its live CONTENT).
                   deliberately NO way to say "untrack the spec" in this schema.
   (no delivery)   \`spex init --harness none\` ("harnesses": []) adopts the spec tree, the lint and the git
                   hooks and writes NOTHING into any agent's config — the L0-only footprint.
+  (spec only)     \`spex init --pure\` plants .spec/spexcode.json (lint) and the root spec.md and nothing else:
+                  no .plugins, no git hooks, no agent config, no file outside .spec. A later
+                  \`spex init --harness <id>\` adopts that tree as it is.
   machine facts   .spec/spexcode.local.json, the hook shims, plugin bundles — NEVER tracked; always in the
                   per-clone exclude. A shim is a machine fact only while it is WHOLLY OURS: where the harness
                   discovers its hooks in a file that is ALSO your project config (.claude/settings.json,

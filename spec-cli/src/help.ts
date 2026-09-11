@@ -207,8 +207,9 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },
   init: {
-    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  --harness <ids> [--preset name]',
+    line: 'init [dir]            adopt SpexCode on a repo: seed .spec + hooks + materialize  --harness <ids> [--preset name] | --pure',
     body: `Usage: spex init [dir=cwd] --harness <id[,id]|plugin:<folder>> [--preset default]
+       spex init [dir=cwd] --pure
 
 Scaffolds adoption in one shot: seeds a starter .spec tree (project root + .plugins plugins), plants
 .spec/spexcode.json, installs the git hooks, and materializes the harness artifacts (contract block +
@@ -220,7 +221,11 @@ hooks in your own config (.claude/settings.json, …) only SpexCode's entries ar
 skill/agent name you already use is skipped and reported rather than overwritten.
 --preset picks the .plugins plugin tier (cumulative).
 Footprint is fixed: materialized artifacts are never tracked — hidden via the per-clone .git/info/exclude, with
-a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).`,
+a tracked/mixed CLAUDE.md/AGENTS.md covered by the clean/smudge filter (see spex guide footprint).
+--pure plants the spec skeleton and nothing else: .spec/spexcode.json (its lint section) and the root
+.spec/project/spec.md. No .plugins, no git hooks, no agent config, no file outside .spec; an existing tree is
+left as it is. A later \`spex init --harness <id>\` adopts that tree (or any tree that arrived without the
+machinery) as it is: no node is rewritten, .plugins goes into its root, and the config gains what it lacks.`,
     see: 'spex guide (the full setup workflow) · spex uninstall (the inverse) · spex spec lint (adoption TODO)',
   },
   materialize: {

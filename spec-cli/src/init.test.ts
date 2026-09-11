@@ -376,3 +376,124 @@ test('re-init refreshes managed Spex hooks, preserves a custom commit-msg, and n
   assert.equal(argv.length, 1, `custom hook should run once at Git commit, got: ${argv.join(', ')}`)
   assert.doesNotMatch(argv[0], /spexcode-probe/)
 })
+
+// [[spex-init]] --pure: the spec skeleton and nothing else, and the later adoption of such a tree as it is.
+const PURE_ROOT = join(SRC, '..', 'templates', 'pure', 'project', 'spec.md')
+const TEMPLATE_LINT = JSON.parse(readFileSync(templateConfigPath, 'utf8')).lint
+
+function filesUnder(dir: string, base = dir): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    if (e.name === '.git') return []
+    const path = join(dir, e.name)
+    return e.isDirectory() ? filesUnder(path, base) : [path.slice(base.length + 1)]
+  }).sort()
+}
+
+function gitFootprint(proj: string) {
+  const git = join(proj, '.git')
+  const read = (path: string) => existsSync(path) ? readFileSync(path, 'utf8') : null
+  return {
+    hooks: readdirSync(join(git, 'hooks')).filter((name) => !name.endsWith('.sample')).sort(),
+    config: read(join(git, 'config')),
+    exclude: read(join(git, 'info', 'exclude')),
+    attributes: read(join(git, 'info', 'attributes')),
+    spexcodeDir: existsSync(join(git, 'spexcode')),
+  }
+}
+
+function createSessionWithDefaultLauncher(proj: string, home: string, env: NodeJS.ProcessEnv, refusedPort: number) {
+  // the liveness snapshot times out, so the real create path leaves the session queued instead of starting a CLI
+  const fakeBin = mkdtempSync(join(tmpdir(), 'spex-init-bin-'))
+  writeFileSync(join(fakeBin, 'tmux'), '#!/usr/bin/env node\nsetTimeout(() => {}, 10000)\n')
+  chmodSync(join(fakeBin, 'tmux'), 0o755)
+  return spawnSync(process.execPath, [TSX, CLI, 'session', 'new', 'default launcher probe'], {
+    cwd: proj,
+    env: {
+      ...env,
+      SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
+      PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+      SPEXCODE_API_URL: `http://127.0.0.1:${refusedPort}`,
+      SPEXCODE_TMUX: `pure-init-${process.pid}`,
+    },
+    encoding: 'utf8',
+    timeout: 20000,
+  })
+}
+
+test('--pure plants the spec skeleton and nothing else: no .plugins, nothing in .git, nothing outside .spec', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, home, g, spex } = freshRepo()
+  const before = gitFootprint(proj)
+  const out = spex('init', '.', '--pure')
+
+  assert.deepEqual(filesUnder(proj), ['.spec/project/spec.md', '.spec/spexcode.json', 'README.md'], 'exactly the root node and the config')
+  assert.deepEqual(JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8')), { lint: TEMPLATE_LINT }, 'the config holds only the lint section')
+  assert.equal(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), readFileSync(PURE_ROOT, 'utf8'), 'the root comes from the pure template')
+  assert.doesNotMatch(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), /\.plugins/, 'the pure root does not describe machinery it lacks')
+  assert.deepEqual(gitFootprint(proj), before, 'no hook, no filter, no exclude or attributes entry, no .git/spexcode')
+  assert.deepEqual(readdirSync(home), [], 'no global store')
+  assert.match(out, /planted \.spec\/project\/spec\.md, \.spec\/spexcode\.json/)
+  assert.match(out, /spex init --harness <id>/, 'the output names the later full adoption')
+
+  g('add', '.spec'); g('commit', '-qm', 'spec skeleton')
+  assert.equal(g('log', '-1', '--format=%s').trim(), 'spec skeleton', 'an ordinary commit on main still works: no main-guard was installed')
+})
+
+test('--pure refuses --harness and --preset before writing anything, and leaves an existing tree alone', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env } = freshRepo()
+  for (const extra of [['--harness', 'claude'], ['--preset', 'default']]) {
+    const res = spawnSync(process.execPath, [TSX, CLI, 'init', '.', '--pure', ...extra], { cwd: proj, env, encoding: 'utf8' })
+    assert.notEqual(res.status, 0, `--pure ${extra[0]} is refused`)
+    assert.match(res.stderr, /--pure plants only the spec skeleton/)
+    assert.ok(!existsSync(join(proj, '.spec')), 'nothing was written')
+  }
+
+  mkdirSync(join(proj, '.spec', 'app'), { recursive: true })
+  writeFileSync(join(proj, '.spec', 'app', 'spec.md'), '---\ntitle: app\n---\n# app\n')
+  const res = spawnSync(process.execPath, [TSX, CLI, 'init', '.', '--pure'], { cwd: proj, env, encoding: 'utf8' })
+  assert.equal(res.status, 0)
+  assert.match(res.stdout, /adds nothing to an existing tree/)
+  assert.deepEqual(filesUnder(proj), ['.spec/app/spec.md', 'README.md'], 'an existing tree gets no config and no root')
+})
+
+test('a pure tree grown by hand is adopted as it is by a later init, and its sessions can start', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { proj, home, env, g, spex } = freshRepo()
+  spex('init', '.', '--pure')
+  mkdirSync(join(proj, '.spec', 'project', 'api'), { recursive: true })
+  writeFileSync(join(proj, '.spec', 'project', 'api', 'spec.md'), '---\ntitle: api\n---\n# api\nThe HTTP surface.\n')
+  const lint = { ...TEMPLATE_LINT, sourceExcludeGlobs: ['vendor/**'] }
+  writeFileSync(join(proj, '.spec', 'spexcode.json'), JSON.stringify({ lint }, null, 2) + '\n')
+  g('add', '.spec'); g('commit', '-qm', 'spec tree grown before adoption')
+  const root = readFileSync(join(proj, '.spec/project/spec.md'), 'utf8')
+  const api = readFileSync(join(proj, '.spec/project/api/spec.md'), 'utf8')
+
+  const out = spex('init', '.', '--harness', 'codex')
+  assert.match(out, /adopting the existing spec tree under 'project' \(2 spec node\(s\)\) as it is/)
+  assert.doesNotMatch(out, /skipping spec scaffold/, 'adoption is not reported as an obstacle')
+  assert.equal(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), root, 'the root node is untouched')
+  assert.equal(readFileSync(join(proj, '.spec/project/api/spec.md'), 'utf8'), api, 'the grown node is untouched')
+  assert.ok(existsSync(join(proj, '.spec/project/.plugins/core/spec.md')), 'the machinery went into the existing root')
+
+  const cfg = JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8'))
+  assert.deepEqual(cfg.lint, lint, 'the reader-edited lint section stays')
+  assert.deepEqual(cfg.harnesses, ['codex'])
+  assert.equal(cfg.mainBranch, 'main')
+  assert.deepEqual(cfg.sessions.launchers, { codex: SEEDED_LAUNCHERS.codex }, 'the missing launcher pool is filled for the selection only')
+  assert.equal(cfg.sessions.defaultLauncher, 'codex')
+
+  const res = createSessionWithDefaultLauncher(proj, home, env, await freePort())
+  assert.equal(res.status, 0, res.stderr)
+  const created = JSON.parse(res.stdout)
+  assert.equal(created.status, 'queued')
+  assert.equal(created.launcher, 'codex', 'a no-choice session starts from the filled default')
+})
+
+test('re-init fills no launcher when the local overlay already configures them', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, spex } = freshRepo()
+  spex('init', '.', '--pure')
+  const local = { sessions: { launchers: { mine: { harness: 'claude', cmd: 'my-claude' } }, defaultLauncher: 'mine' } }
+  writeFileSync(join(proj, '.spec', 'spexcode.local.json'), JSON.stringify(local, null, 2) + '\n')
+  spex('init', '.', '--harness', 'claude')
+  const cfg = JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8'))
+  assert.equal(cfg.sessions, undefined, 'the committed config gains no launcher pool')
+  assert.deepEqual(JSON.parse(readFileSync(join(proj, '.spec/spexcode.local.json'), 'utf8')), local, 'the overlay is untouched')
+})

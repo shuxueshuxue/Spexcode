@@ -79,6 +79,8 @@ spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-head
 That's the whole adoption. The example lists all the built-in harnesses; remove the ones you don't
 use (`--harness` is required and takes any one id or comma-separated subset). Want the spec asset and
 nothing wired into an agent? `--harness none` adopts L0 alone and writes nothing into any agent's config.
+Only the spec skeleton, with no git hooks either? `spex init --pure` plants `.spec/spexcode.json` and the root
+spec and nothing else; a later `spex init --harness …` adopts that tree as it is.
 `spex init` works on any existing git repo and does three things: it seeds a root
 `.spec/project/spec.md` plus a starter `.spec/spexcode.json`, installs the git hooks, and **materializes**
 the workflow rules into the files your agent already reads (`CLAUDE.md`, `AGENTS.md`): read the

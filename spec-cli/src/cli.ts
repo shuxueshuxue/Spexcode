@@ -775,9 +775,9 @@ if (cmd === 'serve') {
   }
 } else if (cmd === 'init') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
-  // into <targetDir> (default cwd). spex init [targetDir] --harness <ids> [--preset <tier>]
+  // into <targetDir> (default cwd). spex init [targetDir] --harness <ids> [--preset <tier>] | --pure
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0], flag('preset'), flag('harness'))
+  await specInit(positionals(3)[0], flag('preset'), flag('harness'), has('pure'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
   // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.plugins data or their own

@@ -72,15 +72,19 @@ the gesture is still visible. Because the fold animates width, the dock clips it
 panels therefore scroll together inside it — the alternative to that scroller is not "no scroller", it is a
 long issue list clipped out of reach. The resize grip stays outside the scroller so it cannot scroll away
 from the edge it drags.
-The open/close control lives in the document-area top bar beside the tabs: the workspace-shell rule says a
-control belongs to the region whose question it answers, and context is neither the left finding rail nor
-ambient status, so a document-level context control is the least surprising owner while still remaining
-reachable when the dock is closed. Both dock switches speak ONE vocabulary — the shared mirrored panel pair — because they are the same kind of
-control: a dock's open/closed state. The rail's switch flips the pair as the LEFT dock's layout state; this
-one holds `panel-right` fixed and carries its state in `aria-pressed` and the active tint. The asymmetry is
-forced by the glyphs themselves: the pair has no empty-frame member, so a flipping right-dock switch would
-have to draw `panel-left` — a panel on the region it does not own — to mean "closed". A glyph that names the
-dock is readable in every combination; a glyph that pictures the wrong side is not.
+The open/close control belongs to the document area and stays at the window's right edge: while the dock is
+closed it lives in the tab strip's trailing cluster beside the tabs, and while the dock is open it is mounted
+in the context head's trailing cluster. Both mounts use the same `22px` head-door target and the same `6px` right
+inset, so opening and closing keep the pointer over the control even as the dock animates. The
+workspace-shell rule says a control belongs to the region whose question it answers, and context is neither
+the left finding rail nor ambient status, so this document-level control is the least surprising owner while
+remaining reachable in both states. Both dock switches speak ONE vocabulary — the shared mirrored panel pair
+— because they are the same kind of control: a dock's open/closed state. The rail's switch flips the pair as
+the LEFT dock's layout state; this one holds `panel-right` fixed and carries its state in `aria-pressed` and
+the active tint. The asymmetry is forced by the glyphs themselves: the pair has no empty-frame member, so a
+flipping right-dock switch would have to draw `panel-left` — a panel on the region it does not own — to mean
+"closed". A glyph that names the dock is readable in every combination; a glyph that pictures the wrong side
+is not.
 
 The component receives `{page, param}` from `Shell`; it never reads the global address. Its API context and
 state context remain separate by using the existing board/workspace hooks rather than introducing a mixed

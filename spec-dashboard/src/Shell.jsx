@@ -452,7 +452,7 @@ function Content({ page, param, query, inactive = false }) {
 function ContextToggle({ visible, onToggle }) {
   const t = useT()
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')
-  return <button type="button" className={`context-toggle${visible ? ' on' : ''}`} onClick={onToggle}
+  return <button type="button" className={`context-toggle dock-head-act${visible ? ' on' : ''}`} onClick={onToggle}
     aria-pressed={visible} aria-label={label} data-tip={label}>
     <Icon name={visible ? 'panel-right-close' : 'panel-right-open'} size={14} />
   </button>
@@ -488,8 +488,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // width out of the one column that was already scarce (the code column gives up 84px too). Closed, the
   // same document reads at 575px. Context is a question the reader ASKS about the node they are reading; it
   // is not the reading itself, so it does not get to spend the reading's width until it is asked for. The
-  // toggle is one click away in the strip and the choice persists, so a reader who wants it always open has
-  // it always open — what changed is only what an unopinionated window looks like ([[context-dock]]).
+  // toggle is one click away at the window's right edge and the choice persists. While closed it rides the
+  // strip; once open it moves into the dock's own head at that same edge, so the reader can fold it back
+  // without chasing a button that moved with the document column ([[context-dock]]).
   const [contextOpen, setContextOpen] = useState(() => {
     try { return localStorage.getItem('spexcode.ctxOpen') === '1' } catch { return false }
   })
@@ -498,6 +499,13 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     try { localStorage.setItem('spexcode.ctxOpen', next ? '1' : '0') } catch {}
     return next
   })
+  // A stale/deleted node still needs a reachable close/open door. Keep the strip mount as the fallback
+  // until the context panel has a node to describe; otherwise a remembered open preference could strand
+  // the reader with no visible way to close it.
+  const contextDockCanRender = page === 'spec' && !!param && !!specs?.some((item) => item.id === param)
+  const contextToggleInDock = contextOpen && contextDockCanRender
+  const contextToggle = page === 'spec'
+    ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null
 
   // THE DOCK FOLLOWS THE FOCUSED TAB. The projection is derived from what the reader is holding, not
   // chosen once and left behind: moving to a session tab brings the session list, moving to a node or a
@@ -644,15 +652,17 @@ export default function Shell({ routeOverride = null, inactive = false }) {
             <div className="app-main">
               {/* the strip IS the band — it used to be wrapped in a spacer that stood in for it on every route
                   without an open document, which is one band wearing two names. The context toggle is a control
-                  on the current document, so it rides the strip's own trailing cluster. */}
+                  on the current document: closed, it rides the strip's trailing cluster; open, the dock owns
+                  the same control at its far-right head edge so the pointer can stay put. */}
               {/* the fold switch stands at the strip's left edge only while the sidebar it folds is closed;
                   open, it rides that sidebar's own head row (DockToggle). A route with no sidebar has no switch. */}
               {page !== 'sessions' && <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
                 leading={foldable && !dock ? <DockToggle variant="strip" /> : null}
-                trailing={page === 'spec' ? <ContextToggle visible={contextOpen} onToggle={toggleContext} /> : null} />}
+                trailing={!contextToggleInDock ? contextToggle : null} />}
               <Content page={page} param={param} query={query} inactive={inactive} />
             </div>
-            <ContextDock page={page} param={param} open={contextOpen} onToggle={toggleContext} />
+            <ContextDock page={page} param={param} open={contextOpen}
+              toggle={contextToggleInDock ? contextToggle : null} />
           </div>
           <ShellStatus />
           <BoardStatus specs={specs} sessions={sessions} page={page} />

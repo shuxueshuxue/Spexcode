@@ -85,7 +85,8 @@ whole shell hangs off, re-derived from what the product is rather than from what
   empty workspace (`#/empty`) and names the ways back in through the explorer/palette. The graph remains an
   addressable legacy view, never a substitute for the reader's close gesture.
 - **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
-  [[context-dock]]: a spec node's scenarios and open issues. Context is about the current document, which is
+  [[context-dock]]: a spec node's open issues and its version history, handed the routed query only so it can
+  mark which version the document shows. Context is about the current document, which is
   why it is not a finding surface and not a tab. **The frame owns its resting state, and that state is
   closed** — the shell reads the preference, so the default belongs here rather than inside the dock that
   would be arguing for its own existence. It is closed because opening it costs the spec prose 383px of 575

@@ -108,14 +108,18 @@ const GATE = [
   "console.log(JSON.stringify({ governed, coverage: governed ? Math.round(((governed - uncovered.length) / governed) * 100) : 0, errors: errors.slice(0, 60), errorCount: errors.length, uncovered: uncovered.slice(0, 200), uncoveredCount: uncovered.length }))",
 ].join("\n");
 
+const tail = (text: string) => text.slice(-4000);
+// A gate that cannot read lint decides nothing, and no repair round can fix that, so the run stops and says why.
 async function readGate(): Promise<Gate> {
   await world.run("git", ["add", "--", ".spec"]);
-  const run = await world.run("node", ["-e", GATE, ...SPEX, "spec", "lint", "--json"], { timeoutMs: NPX_TIMEOUT });
+  // `--` ends node's own options; without it node takes npx's `-y` for one of its flags and runs nothing.
+  const run = await world.run("node", ["-e", GATE, "--", ...SPEX, "spec", "lint", "--json"], { timeoutMs: NPX_TIMEOUT });
+  if (run.exitCode !== 0 || !run.stdout.trim()) throw new Error(`The spec gate did not run:\n${tail(run.stderr || run.stdout)}`);
   const gate: Gate = JSON.parse(run.stdout);
+  if (gate.failed) throw new Error(`spex spec lint produced no report:\n${gate.failed}`);
   return gate;
 }
 const passed = (gate: Gate) => gate.errorCount === 0 && gate.governed > 0 && gate.coverage >= COVERAGE_FLOOR;
-const tail = (text: string) => text.slice(-4000);
 
 const WRITER =
   "You write SpexCode spec nodes. A node is a folder under .spec/ holding a spec.md: YAML frontmatter with title, " +
@@ -188,7 +192,6 @@ for (let round = 1; round <= REPAIR_ROUNDS && !passed(gate); round++) {
   log(`Repair round ${round}: ${gate.errorCount} lint errors, ${gate.coverage}% of ${gate.governed} source files covered`);
   await repairer.ask(
     "The spec tree does not pass SpexCode's gate yet.\n" +
-      (gate.failed ? `Lint did not produce a report:\n${gate.failed}\n` : "") +
       `Lint errors (${gate.errorCount}):\n${gate.errors.join("\n") || "none"}\n` +
       `Source files no spec covers (${gate.uncoveredCount}):\n${gate.uncovered.join("\n") || "none"}\n` +
       "Fix every error and cover every listed file — in an existing node's related: list when it belongs to that " +

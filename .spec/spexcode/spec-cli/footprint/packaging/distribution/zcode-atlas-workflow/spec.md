@@ -36,14 +36,18 @@ to set the language and the phase names to the user's and change nothing else ([
 **The script decides; subagents write.** Every check is a `world.run` whose exit code or output the script branches
 on, never a subagent's claim that it passed. The lint reading is computed where it is produced — a small Node
 program runs lint and prints only the counts and the first findings — because the workflow runtime rejects a
-command's output over 256 KB and a large repository's full lint report would exceed it. Commits name `.spec` as
-their only path, so the user's other work in progress is never swept into them.
+command's output over 256 KB and a large repository's full lint report would exceed it. A gate that cannot read
+lint decides nothing, and no repair round can change that, so the run stops there and says why instead of looping
+on an empty reading. Commits name `.spec` as their only path, so the user's other work in progress is never swept
+into them.
 
 **Nothing installed.** Every SpexCode command runs through npx; the page command adds the dashboard package
 ([[release-artifacts]]). The page is left uncommitted: it is a product of the tree, not part of it.
 
 **Proof.** ZCode's own workflow analyzer (`analyzeWorkflowScript`, the check `CreateWorkflow` runs before asking
-the user) accepts the script with no diagnostics. The end-to-end proof is a headless ZCode run from the
+the user) accepts the script with no diagnostics. A script that compiles can still carry a command line that never
+runs — the first real run found `node -e <program> -y …` handing npx's `-y` to node — so `npm run
+test:distribution` runs the gate's exact argv, taken from the script, against a stand-in npx. The end-to-end proof is a headless ZCode run from the
 dynamic-workflow branch — headless auto-approves `CreateWorkflow` and waits for the run to settle — on a real
 repository with no `.spec/`, measured by what lands: a spec tree that passes lint, diagrams that pass their
 check, and a page that opens from disk.

@@ -3651,7 +3651,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-editor .cm-editor, .diff-editor .cm-mergeView, .diff-editor .cm-mergeViewEditors,
 .diff-editor .cm-mergeViewEditor, .diff-editor .cm-scroller { background:var(--paper) !important; color:var(--ink); }
 .diff-editor .cm-mergeViewEditor { border-color:var(--line); }
-.diff-editor .cm-line { cursor:pointer; }
+.diff-editor .cm-line { cursor:text; }
+.diff-editor .cm-lineNumbers .cm-gutterElement { cursor:pointer; }
 .diff-editor-split, .diff-editor-unified { min-height:0; overflow:auto; }
 /* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each
    .cm-mergeViewEditor is an equal, overflow-hidden column. Only the divider is ours. Do NOT make

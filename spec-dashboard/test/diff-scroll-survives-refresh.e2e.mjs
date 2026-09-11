@@ -86,7 +86,7 @@ try {
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US', permissions: ['clipboard-read', 'clipboard-write'] })
   await context.addInitScript(() => {
     localStorage.removeItem('spexcode.tabs.root')
     const streams = []
@@ -123,6 +123,34 @@ try {
   await page.goto(`http://127.0.0.1:${uiPort}/#/sessions/${sessionId}?surface=diff`, { waitUntil: 'domcontentloaded' })
   const editor = page.locator('.diff-editor .cm-scroller')
   await editor.waitFor({ state: 'visible', timeout: 30_000 })
+  const content = page.locator('.diff-editor .cm-content').first()
+  const contentBox = await content.boundingBox()
+  const lineHeight = await content.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight))
+  assert.ok(contentBox && Number.isFinite(lineHeight), 'the diff content exposes native selection geometry')
+  await page.mouse.move(contentBox.x + 8, contentBox.y + lineHeight * 2.5)
+  await page.mouse.down()
+  await page.mouse.move(contentBox.x + 180, contentBox.y + lineHeight * 8.5, { steps: 8 })
+  await page.mouse.up()
+  const selected = await page.evaluate(() => window.getSelection()?.toString() || '')
+  assert.ok(selected.includes('old version line 3'), `the diff body must keep browser selection, got ${JSON.stringify(selected)}`)
+  await page.keyboard.press('Control+c')
+  const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''))
+  assert.equal(copied, selected, 'native copy must receive exactly the selected diff text')
+  await page.evaluate(() => {
+    const input = document.createElement('textarea')
+    input.id = 'paste-audit'
+    document.body.appendChild(input)
+    input.focus()
+  })
+  await page.keyboard.press('Control+v')
+  const pasted = await page.locator('#paste-audit').inputValue()
+  assert.equal(pasted, selected, 'native paste must accept the copied diff text in an ordinary input')
+  await page.locator('#paste-audit').evaluate((input) => input.remove())
+  const commentGutter = page.locator('.diff-editor .cm-lineNumbers .cm-gutterElement:visible').first()
+  await commentGutter.click()
+  await page.locator('.diff-comment-compose').waitFor({ state: 'visible', timeout: 10_000 })
+  const commentOpened = true
+  await page.locator('.diff-comment-compose button').first().click()
   await editor.hover()
   await page.mouse.wheel(0, 1800)
   await page.waitForTimeout(250)
@@ -148,7 +176,10 @@ try {
     return { sameNode: tagged === owner, top: Math.round(owner.scrollTop), max: owner.scrollHeight - owner.clientHeight }
   })
   await page.screenshot({ path: join(out, 'after-refresh.png') })
-  const report = { dashboardRoot, graphReads, before, after, errors }
+  const report = {
+    dashboardRoot, graphReads, before, after, errors,
+    nativeSelection: { chars: selected.length, copied: copied === selected, pasted: pasted === selected, commentOpened },
+  }
   writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
   assert.deepEqual(errors, [], 'the browser reports no product errors')

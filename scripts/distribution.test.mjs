@@ -7,11 +7,15 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import * as bundled from '../distribution/gugu/spexcode-atlas/archify.js'
 import * as archify from '../packages/archify/index.mjs'
-import { buildTree, parseSpec, renderMarkdown } from '../distribution/gugu/spexcode-atlas/atlas-model.js'
+import * as bundled from '../distribution/gugu/spexcode-atlas/archify.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const model = new Function(
+  'globalThis',
+  `${readFileSync(join(root, 'distribution/gugu/spexcode-atlas/atlas-model.js'), 'utf8')}\nreturn globalThis.SpexCodeAtlasModel`,
+)(globalThis)
+const { buildTree, parseSpec, renderMarkdown } = model
 
 function diagramFiles(dir, found = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -42,7 +46,7 @@ test('the bundle loads and draws where Node\'s globals do not exist', () => {
   const probe = `
     const ir = ${JSON.stringify(readFileSync(join(root, 'packages/archify/examples/web-app.architecture.json'), 'utf8'))}
     for (const name of ['process', 'Buffer', 'require', 'module', 'exports', '__dirname', '__filename', 'global']) delete globalThis[name]
-    const { renderDiagram } = await import(${JSON.stringify(pathToFileURL(join(root, 'distribution/gugu/spexcode-atlas/archify.js')).href)})
+    const { renderDiagram } = await import(${JSON.stringify(pathToFileURL(join(root, 'distribution/gugu/spexcode-atlas/archify.mjs')).href)})
     const parts = await renderDiagram('architecture', JSON.parse(ir), { evidence: false })
     console.log(parts.svg.includes('<svg ') && parts.svg.includes('data-node-id') ? 'drawn' : 'no svg')`
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8' })

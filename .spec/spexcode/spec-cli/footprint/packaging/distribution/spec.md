@@ -13,7 +13,7 @@ related:
   - distribution/zcode/atlas/skills/atlas/SKILL.md
   - distribution/gugu/spexcode-atlas/manifest.json
   - distribution/gugu/spexcode-atlas/prompt.js
-  - distribution/gugu/spexcode-atlas/archify.js
+  - distribution/gugu/spexcode-atlas/archify.mjs
   - distribution/gugu/spexcode-atlas/focus.js
   - distribution/gugu/spexcode-atlas/diagram.css
   - distribution/penguin/use-spexcode/plugin.json
@@ -66,9 +66,11 @@ the init templates, so each package says what adopters are seeded; it adds only 
 SpexCode needs first and the line that hands over the page. Versions follow the repository's version, and while
 that is a prerelease every command names npm's `next` tag, the only tag carrying these verbs. The gugu tab's
 copies of archify — the renderer bundled for a browser, the focus module, the stylesheet — are generated from
-`packages/archify` with a pinned esbuild, so they stay byte-for-byte what the dashboard draws. `npm run lint`
-fails while any generated file is stale. The ZCode workflow and the gugu tab's own page are written by hand and
-the generator never touches them.
+`packages/archify` with a pinned esbuild, so they stay byte-for-byte what the dashboard draws. gugu's shelf parses
+each `.js` file as a classic script, so the generated focus helper and prompt expose globals. Archify keeps its
+top-level-await ESM bundle as `archify.mjs`; the classic tab page loads it with a local dynamic import. The tab
+loads those helpers in order. `npm run lint` fails while any generated file is stale. The ZCode workflow and the
+gugu tab's own page are written by hand and the generator never touches them.
 
 **Proof is each host's own code.** `npm run test:distribution` renders every archify example and every committed
 diagram through the gugu bundle and requires the same SVG the renderer gives, reads a folder tree through the

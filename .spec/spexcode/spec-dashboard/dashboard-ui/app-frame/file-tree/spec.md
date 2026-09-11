@@ -82,6 +82,13 @@ whose code has moved on without it. Settled nodes wear nothing.
 **Files keep the colours their chips have in the popup** in the projection that lists them ([[disk-tree]]),
 so a file looks the same wherever it is listed rather than teaching the reader two vocabularies for one thing.
 
+**A row is the band, whatever element it is.** A row is a `div`, an anchor, or a button depending on what
+pressing it does: a node row holds two buttons, a disk file is an anchor, and a changed file in the session
+diff's panel ([[diff-document]]) is a button that selects. The row rule clears the element's own chrome once,
+so every projection that borrows these rows gets the band and nothing else. When the rule was written only
+for the directory buttons, the diff panel's file buttons kept the browser's border and grey face, and every
+changed file read as boxed.
+
 **A row opens a DOCUMENT, not a modal.** A node row opens its [[spec-view]]. The dock used to open a layer
 over the frame, because the frame had no content area to open anything into — that limitation is gone with
 [[workspace-shell]], and with it the layer. Clicking here and clicking a tab now reach the same place by the

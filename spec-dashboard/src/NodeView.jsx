@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { filterMenuGroups } from '@spexcode/spec-core/review'
 import { BlobMedia } from './Evidence.jsx'
+import { DiffStat } from './DiffMarks.jsx'
 import { Avatar } from './avatar.jsx'
 import { overlaySessions, sessionDisplayState, sessionHandle } from './session.js'
 import { useT } from './i18n/index.jsx'
@@ -248,11 +249,13 @@ function useVersionDiff(id, hash, enabled) {
 
 // git unified patch → renderable lines. Skip everything before the first `@@` wholesale (file-header metadata),
 // so an extended header line isn't mis-read as content; in the hunk body slice the ` `/`+`/`-` marker; `\` is git's no-newline note.
+// A hunk keeps only the line it starts at on the new side — the label the redline gives its hunks too.
 function parseDiff(patch) {
   const out = []
   let inBody = false
   for (const line of patch.split('\n')) {
-    if (line.startsWith('@@')) { inBody = true; out.push({ t: 'hunk', s: line }); continue }
+    const at = /^@@ -\d+(?:,\d+)? \+(\d+)/.exec(line)
+    if (at) { inBody = true; out.push({ t: 'hunk', n: Number(at[1]) }); continue }
     if (!inBody || line.startsWith('\\')) continue
     if (line.startsWith('+')) out.push({ t: 'add', s: line.slice(1) })
     else if (line.startsWith('-')) out.push({ t: 'del', s: line.slice(1) })
@@ -271,7 +274,7 @@ function DiffEvidence({ diff }) {
   return (
     <>
       <figcaption className="ev-difflabel">{t('nodeView.diffLabel')}</figcaption>
-      <pre className="ev-diff">{lines.map((l, i) => <div key={i} className={`dl dl-${l.t}`}>{l.s || ' '}</div>)}</pre>
+      <pre className="ev-diff">{lines.map((l, i) => <div key={i} className={`dl dl-${l.t}`}>{l.t === 'hunk' ? t('nodeView.changeAt', { n: l.n }) : l.s || ' '}</div>)}</pre>
     </>
   )
 }
@@ -365,10 +368,7 @@ export function HistoryPane({ node, rows }) {
             <span className="rec-v">v{rows.length - i}</span>
             <code className="rec-hash">{r.hash.slice(0, 7)}</code>
             <span className="rec-date">{(r.date || '').slice(0, 10)}</span>
-            <span className="rec-diff">
-              <b className="rec-add">+{r.additions ?? 0}</b>
-              <b className="rec-del">−{r.deletions ?? 0}</b>
-            </span>
+            <span className="rec-diff"><DiffStat additions={r.additions ?? 0} deletions={r.deletions ?? 0} /></span>
           </div>
           <div className="rec-msg">{r.reason}</div>
           <div className="rec-sub">{t('nodeView.filesChanged', { n: r.files ?? 0 })} · {r.session || t('common.idle')}</div>

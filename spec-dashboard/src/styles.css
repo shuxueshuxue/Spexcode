@@ -124,6 +124,16 @@
   --wash-selected: color-mix(in srgb, var(--blue) 14%, transparent);
   --focus-ring: inset 0 0 0 2px color-mix(in srgb, var(--blue) 55%, transparent);
   --field-bg: var(--paper);
+  /* THE DIFF PAIR ([[diff-marks]]). What a change added and what it removed read in one hue pair on every
+     surface that shows one — the session diff, a spec's redline, a version's line diff, every +N −N tally —
+     so no surface picks its own red. A LINE tint says which rows moved; the stronger WORD tint marks the
+     characters that did. Derived here, so every preset inherits the pair from its own palette. */
+  --diff-add: var(--green);
+  --diff-del: var(--red);
+  --diff-add-line: color-mix(in srgb, var(--diff-add) 15%, transparent);
+  --diff-del-line: color-mix(in srgb, var(--diff-del) 15%, transparent);
+  --diff-add-word: color-mix(in srgb, var(--diff-add) 34%, transparent);
+  --diff-del-word: color-mix(in srgb, var(--diff-del) 34%, transparent);
   /* the browser's own chrome (scrollbars, native pickers) follows the preset's side of the light/dark line */
   color-scheme: dark;
 }
@@ -460,11 +470,15 @@ body.is-session-dragging .dock-archive-door:hover {
   color: var(--blue); background: transparent; border: 0; border-top: var(--divider-rule); font: inherit; text-align: left; cursor: pointer;
 }
 .ft-graph-entry:hover { color: var(--ink2); background: var(--wash-hover); }
+/* A row is a div, an anchor, or a button depending on what pressing it does, and it wears the same band
+   whichever it is: the element's own chrome (a button's border and face) is cleared here, once, so no
+   projection can list its files in bordered grey boxes because its rows happened to be buttons. */
 .ft-row {
   display: flex; align-items: center; gap: 4px; width: calc(100% - var(--space-4) * 2); margin: 0 var(--space-4);
-  padding: var(--space-2) 10px; border-radius: var(--radius);
+  padding: var(--space-2) 10px; border: 0; border-radius: var(--radius); background: transparent; text-align: left;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-session-row); color: var(--ink);
 }
+button.ft-row { cursor: pointer; }
 /* ONE SIDEBAR GRAMMAR. A tree row is drawn exactly as a session row is (`.si-item`, [[session-console]]): an
    inset rounded band on the panel ground, body ink at rest, heading ink and the hover wash under the pointer,
    the selected wash plus the medium weight when it is the address. The two docks are one product's two
@@ -496,7 +510,7 @@ body.is-session-dragging .dock-archive-door:hover {
 .ft-mark-active { background: var(--orange); }
 .ft-mark-drift { background: var(--yellow); }
 /* the disk projection's rows: a directory only discloses (whole row is the hinge), a file is an anchor */
-.ft-dir { cursor: pointer; background: none; border: 0; text-align: left; }
+.ft-dir { cursor: pointer; }
 .ft-code .ft-label, .ft-code { color: var(--blue); text-decoration: none; }
 .ft-code:hover { color: var(--ink2); }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
@@ -504,11 +518,11 @@ body.is-session-dragging .dock-archive-door:hover {
    grab strip with no feedback at all while [[resizable-panes]]'s divider lit under the pointer — two
    dividers with two answers to the same question. One answer now: the seam thickens into the accent under
    the pointer and while dragging, and shows nothing at rest, so a resting window gains no visible handle. */
-.ft-resize::after, .ctx-resize::after {
+.ft-resize::after, .ctx-resize::after, .diff-panel-resize::after {
   content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent;
 }
-.ft-resize:hover::after, .ctx-resize:hover::after,
-body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
+.ft-resize:hover::after, .ctx-resize:hover::after, .diff-panel-resize:hover::after,
+body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after, body.is-resizing .diff-panel-resize::after {
   background: color-mix(in srgb, var(--blue) 55%, transparent);
 }
 
@@ -1346,9 +1360,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .rec-v { color: var(--ink2); font-weight: var(--weight-semibold); }
 .rec-hash { color: var(--muted); font-size: var(--type-meta); }
 .rec-date { color: var(--muted); }
-.rec-diff { margin-left: auto; display: flex; gap: 8px; font-size: var(--type-control); }
-.rec-add { color: var(--green); }
-.rec-del { color: var(--orange); }
+.rec-diff { margin-left: auto; font-size: var(--type-control); }
 .rec-msg { color: var(--ink2); font-size: var(--type-body); margin-top: 5px; word-break: break-word; }
 .rec-sub { color: var(--muted); font-size: var(--type-meta); margin-top: 3px; }
 .rec-msg.muted { color: var(--muted); }
@@ -1356,13 +1368,18 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* an expanded item's proof: the version's spec.md line diff */
 .rec-evidence { margin: 12px 0 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
 .ev-note { font-size: var(--type-meta); color: var(--muted); text-align: center; margin-top: 12px; }
-/* the version's spec.md line diff — its proof-of-change. */
+/* the version's spec.md line diff — its proof-of-change. It speaks the session diff's language
+   ([[diff-marks]]): a moved line is tinted in the diff pair and carries the change bar at its edge, the
+   context around it recedes, and each hunk is named by the line it starts at, like the redline's. */
 .ev-difflabel { font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
-.ev-diff { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 0; overflow-x: auto; }
+/* the one frame a change excerpt sits in, whether it is a line diff or a redline hunk */
+.ev-diff, .wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); }
+.ev-diff { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); padding: 8px 0; overflow-x: auto; }
 .ev-diff .dl { padding: 0 12px; white-space: pre; }
-.dl-hunk { color: var(--blue); opacity: .75; }
-.dl-add { color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
-.dl-del { color: var(--orange); background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.ev-diff .dl-hunk { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
+.ev-diff .dl-hunk:not(:first-child) { margin-top: 6px; }
+.dl-add { color: var(--ink2); background: var(--diff-add-line); box-shadow: inset 3px 0 0 var(--diff-add); }
+.dl-del { color: var(--ink2); background: var(--diff-del-line); box-shadow: inset 3px 0 0 var(--diff-del); }
 .dl-ctx { color: var(--muted); }
 
 /* pane: history — the full version log */
@@ -1414,8 +1431,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
 .pane-issues .issue-card-title { font-size: var(--type-control); }
 /* the node's pending change — the popup's edit tab and the spec document's change face — as a redline of
-   git's word diff: shared words read as the prose they are, removed words struck in the history diff's
-   orange, added words in its green, and the author's own line breaks kept. */
+   git's word diff: shared words read as the prose they are, removed words struck through and added words
+   marked in the diff pair's word tint (the same mark a changed word wears in the session diff), and the
+   author's own line breaks kept. */
 .edit-rev { margin: 0 0 18px; }
 .edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
 .edit-by-label { font-weight: var(--weight-semibold); }
@@ -1423,11 +1441,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .edit-by-session:hover { text-decoration: underline; }
 .pending-none { color: var(--muted); font-size: var(--type-body); }
 .wd { display: flex; flex-direction: column; gap: 10px; }
-.wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 10px; }
+.wd-hunk { padding: 8px 12px 10px; }
 .wd-at { font-size: var(--type-caption); color: var(--muted); margin-bottom: 4px; }
 .wd-text { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
-.wd-text ins { text-decoration: none; color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-radius: 2px; }
-.wd-text del { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); text-decoration: line-through; border-radius: 2px; }
+.wd-text ins { text-decoration: none; color: var(--ink2); background: var(--diff-add-word); border-radius: 2px; }
+.wd-text del { color: var(--ink2); background: var(--diff-del-word); text-decoration: line-through; text-decoration-color: var(--diff-del); border-radius: 2px; }
 /* a replaced word: git emits the removal and the addition back to back, so they need a gap to read as two */
 .wd-text del + ins { margin-left: .3em; }
 .edit-state { margin-left: auto; font-family: var(--ui-font); font-size: var(--type-caption); }
@@ -1670,13 +1688,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .set-row { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; align-items: center; gap: var(--space-6); padding: var(--space-3) 0; }
 .set-label { color: var(--ink); font-size: var(--type-control); }
 .set-control { min-width: 0; display: flex; align-items: center; }
-.set-seg { display: inline-flex; padding: var(--space-1); gap: var(--space-1); background: var(--panel2); border-radius: var(--radius); }
-.set-lang {
-  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink); cursor: pointer;
+/* THE SEGMENTED CONTROL ([[segmented-control]]): one trough, the chosen segment lifted onto paper, the rest
+   quiet. Settings and the diff document both choose with it; a host tunes density from its own container. */
+.seg { display: inline-flex; flex: none; padding: var(--space-1); gap: var(--space-1); background: var(--panel2); border-radius: var(--radius); }
+.seg-option {
+  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink); cursor: pointer; white-space: nowrap;
   border: 0; border-radius: var(--radius); height: 26px; padding: 0 var(--space-5); background: transparent;
 }
-.set-lang:hover { color: var(--ink2); }
-.set-lang.on { color: var(--ink2); background: var(--paper); font-weight: var(--weight-medium); box-shadow: 0 0 0 1px var(--edge); }
+.seg-option:hover { color: var(--ink2); }
+.seg-option.on { color: var(--ink2); background: var(--paper); font-weight: var(--weight-medium); box-shadow: 0 0 0 1px var(--edge); }
 .set-hint { display: block; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
 /* the theme picker shows each preset as itself: ground under paper, an ink line and an accent line */
 .set-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-4); }
@@ -3382,7 +3402,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .proj-err { color: var(--red); font-size: var(--type-meta); margin-top: 4px; }
 .proj-dim { color: var(--muted); font-size: var(--type-meta); }
 
-/* the shared compact action button (rows, forms, header) — .set-lang's density, semantic accents */
+/* the shared compact action button (rows, forms, header) — .seg-option's density, semantic accents */
 .proj-act {
   display: inline-flex; align-items: center; gap: 5px; text-decoration: none; box-sizing: border-box;
   font-family: var(--ui-font); font-size: var(--type-meta); color: var(--ink); cursor: pointer; white-space: nowrap;
@@ -3626,83 +3646,71 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }
 }
+/* THE DIFF MARKS ([[diff-marks]]) — the tally, the status letter, and the path label every change surface
+   draws with. Their hues are the diff pair; muted is spent only on what is not the change itself. */
+.diffstat { display: inline-flex; flex: none; gap: 0.6ch; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.diffstat-add { color: var(--diff-add); }
+.diffstat-del { color: var(--diff-del); }
+/* one fixed cell, so a column of rows lines its letters up */
+.diff-status { flex: none; width: 1.4ch; text-align: center; font-family: var(--mono); font-weight: var(--weight-semibold); color: var(--muted); }
+.diff-status.is-added, .diff-status.is-untracked { color: var(--diff-add); }
+.diff-status.is-deleted { color: var(--diff-del); }
+.diff-status.is-renamed, .diff-status.is-copied { color: var(--blue); }
+/* the directory run gives first and at its FRONT (an RTL box, so the browser's ellipsis lands on the left;
+   the <bdi> inside keeps the characters in order); the leaf gives only once the directories are gone, and
+   then at its tail. */
+.path-label { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
+.path-dir { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; color: var(--muted); }
+.path-leaf { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
 /* branch diff document ([[diff-document]]) — the panel is a tree and the reader is in ONE file at a time.
    The complaint this layout answers: an accordion of every changed file duplicated the panel's job while
    spending the height the diff itself needed, and vertical space is the scarcest thing on a review surface. */
 .diff-document { display:flex; flex-direction:column; min-height:0; height:100%; overflow:hidden; background:var(--paper); color:var(--ink); }
 .si-term-body:has(.diff-document) { background:var(--paper); }
-.diff-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; padding:5px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
+.diff-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:4px 8px 4px 12px; border-bottom:1px solid var(--line); background:var(--paper); font-size:var(--type-meta); }
 .diff-refs { display:inline-flex; align-items:center; gap:6px; min-width:0; overflow-wrap:anywhere; }
 .diff-refs strong { font-weight:var(--weight-medium); }
+/* the review's size, the number a reader asks for first: how many files, how many lines each way */
+.diff-summary { display:inline-flex; align-items:center; gap:8px; color:var(--muted); white-space:nowrap; }
+.diff-controls { display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-left:auto; }
+/* the toolbar's density for the shared segmented control — the grammar stays the control's own */
+.diff-toolbar .seg-option { height:22px; padding:0 var(--space-4); font-size:var(--type-meta); }
 .diff-unsent { color:var(--yellow); }
 .diff-oids { flex:0 0 auto; padding:3px 12px 4px; border-bottom:1px solid var(--line); color:var(--muted); font-size:var(--type-caption); overflow-wrap:anywhere; white-space:normal; user-select:text; }
-.diff-toolbar-spacer { flex:1; }
 
-/* two panes that both scroll on their own; only the editor inside gets to be tall */
-.diff-review-body { display:grid; grid-template-columns:minmax(220px, 300px) minmax(0, 1fr); flex:1; min-height:0; }
-.diff-file-panel { border-right:1px solid var(--line); overflow:auto; padding-bottom:8px; background:color-mix(in srgb, var(--line) 10%, var(--paper)); }
-.diff-file-group { position:sticky; top:0; z-index:1; padding:6px 10px 4px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 22%, var(--paper)); color:var(--muted); font-size:var(--type-caption); }
-.diff-tree-file { justify-content:flex-start; }
+/* two panes that both scroll on their own; only the editor inside gets to be tall. The panel is the
+   explorer's sibling: the same ground, rows, and zone heads, and a width the reader can drag. */
+.diff-review-body { position:relative; display:grid; grid-template-columns:min(var(--diff-panel), 50%) minmax(0, 1fr); flex:1; min-height:0; }
+.diff-file-panel { min-width:0; border-right:1px solid var(--line); overflow:auto; padding-bottom:8px; background:var(--panel); }
+.diff-panel-resize { position:absolute; top:0; bottom:0; left:calc(min(var(--diff-panel), 50%) - 3px); width:6px; cursor:col-resize; z-index:2; }
+/* each scope's head stays pinned while its own rows scroll under it, then yields to the next scope's */
+.diff-zone { position:sticky; top:0; z-index:1; background:var(--panel); }
+.diff-zone-working { --zh: var(--yellow); }
+.diff-zone .diffstat { font-weight:var(--weight-regular); }
 .diff-tree-file .ft-label { flex:1; }
-.diff-tree-stat, .diff-file-stat { flex:0 0 auto; padding-right:8px; font-size:var(--type-caption); white-space:nowrap; }
-.diff-add { color:var(--green); }
-.diff-del { color:var(--red); }
+.diff-tree-file .diffstat { font-size:var(--type-caption); }
 .diff-files { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
 
 /* the file header stays put while the diff scrolls — inside a long hunk the one thing a reader loses is
-   which file they are in. The leaf name keeps its width; the directories in front of it are what give. */
+   which file they are in. The path takes the row; the tally, the status, and the steppers close it. */
 .diff-file { display:flex; flex-direction:column; min-height:0; flex:1; }
-.diff-file-head { display:flex; align-items:center; gap:10px; padding:6px 12px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 20%, var(--paper)); font-size:var(--type-meta); }
-.diff-file-name { display:flex; align-items:baseline; gap:0; min-width:0; }
-/* the reversed flex row PathHead builds: laid out from the right, so what spills past the left edge — the
-   front of the path — is what gets clipped. See the comment on PathHead for why CSS bidi cannot do this. */
-.path-head { display:flex; flex-direction:row-reverse; justify-content:flex-start; flex:0 1 auto; min-width:0; overflow:hidden; color:var(--muted); }
-.path-head > span { flex:0 0 auto; white-space:nowrap; }
-/* the marker sits at the visual FRONT, which in a reversed row is the last box laid out */
-.path-head.is-clipped::after { content:'…'; position:sticky; left:0; flex:0 0 auto; order:1; padding-right:1px; background:inherit; }
-.path-head.is-clipped { position:relative; }
-.diff-file-name > .path-head { color:var(--muted); }
-.diff-file-panel .ft-label { display:flex; min-width:0; overflow:hidden; }
-/* the leaf never gives way to the path in front of it, but a single very long name still clips —
-   at its tail, which is the only end a filename can lose. */
-.path-leaf { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.diff-file-name strong { flex:0 0 auto; font-weight:var(--weight-medium); }
-.diff-file-status { color:var(--muted); }
-.diff-file-status.is-untracked { color:var(--green); }
-.diff-file-status.is-deleted { color:var(--red); }
-.diff-file-scope { padding:0 6px; border:1px solid var(--line); border-radius:var(--radius); color:var(--muted); font-size:var(--type-caption); }
-.diff-hunk-tools { display:inline-flex; gap:4px; }
+.diff-file-head { display:flex; align-items:center; gap:10px; min-height:32px; padding:0 6px 0 12px; border-bottom:1px solid var(--line); background:var(--panel); font-size:var(--type-meta); }
+.diff-file-head > .path-label { flex:1 1 auto; }
+.diff-file-head .path-leaf { color:var(--ink2); font-weight:var(--weight-medium); }
+.diff-file-scope { flex:none; padding:0 6px; border:1px solid currentColor; border-radius:var(--radius); color:var(--yellow); font-size:var(--type-caption); line-height:var(--line-badge); opacity:.85; }
+.diff-hunk-tools { display:inline-flex; flex:none; gap:2px; }
 
-/* the editor is the payload: it takes every pixel the two chrome rows leave */
+/* the editor is the payload: it takes every pixel the two chrome rows leave. Its colours are CodeMirror
+   theme rules in DiffDocument.jsx, spent from the same tokens as everything here. @codemirror/merge lays the
+   two split panes out itself: .cm-mergeViewEditors is the flex row and each .cm-mergeViewEditor an equal,
+   overflow-hidden column. Only the divider is ours. Do NOT make .cm-mergeView a flex container or give it an
+   intrinsic min-width — either one sizes the row to its widest line and pushes the new side outside this
+   scroll container, which reads as "the diff did not render". */
 .diff-editor { flex:1; min-height:0; overflow:auto; }
-.diff-editor .cm-editor, .diff-editor .cm-mergeView, .diff-editor .cm-mergeViewEditors,
-.diff-editor .cm-mergeViewEditor, .diff-editor .cm-scroller { background:var(--paper) !important; color:var(--ink); }
-.diff-editor .cm-mergeViewEditor { border-color:var(--line); }
-.diff-editor .cm-line { cursor:text; }
-.diff-editor .cm-lineNumbers .cm-gutterElement { cursor:pointer; }
-.diff-editor-split, .diff-editor-unified { min-height:0; overflow:auto; }
-/* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each
-   .cm-mergeViewEditor is an equal, overflow-hidden column. Only the divider is ours. Do NOT make
-   .cm-mergeView a flex container or give it an intrinsic min-width — either one sizes the row to its widest
-   line and pushes the new side outside this scroll container, which reads as "the diff did not render". */
-.diff-editor-split .cm-mergeViewEditor + .cm-mergeViewEditor { border-left:1px solid var(--line); }
-.diff-editor-unified.is-wrap .cm-line { white-space:pre-wrap; overflow-wrap:anywhere; }
-/* the package tints a changed line at 8% alpha, which does not survive this paper — restate it in the
-   dashboard's own red/green so the reader sees WHICH lines moved without hunting for the underline. */
-.diff-editor .cm-merge-a .cm-changedLine, .diff-editor .cm-deletedChunk { background:color-mix(in srgb, var(--red) 16%, transparent); }
-.diff-editor .cm-merge-b .cm-changedLine, .diff-editor .cm-inlineChangedLine { background:color-mix(in srgb, var(--green) 16%, transparent); }
-.diff-editor .cm-insertedLine { background:color-mix(in srgb, var(--green) 22%, transparent); }
-.diff-editor .cm-deletedLine, .diff-editor .cm-deletedChunk .cm-deletedText { background:color-mix(in srgb, var(--red) 22%, transparent); }
-.diff-editor .cm-line:hover { background:color-mix(in srgb, var(--blue) 14%, transparent); }
+.diff-editor .cm-mergeViewEditor + .cm-mergeViewEditor { border-left:1px solid var(--line); }
 
-/* the control cluster: one button vocabulary for the toolbar, the mode pair, and the hunk steppers */
-.diff-hunk-tools button, .diff-mode button, .diff-toolbar > button { border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); color:var(--ink2); font:inherit; font-size:var(--type-caption); cursor:pointer; padding:1px 7px; }
-.diff-hunk-tools button:hover, .diff-mode button:hover, .diff-toolbar > button:hover, .diff-mode button[aria-pressed="true"], .diff-toolbar > button[aria-pressed="true"] { background:color-mix(in srgb, var(--blue) 14%, var(--paper)); color:var(--ink); }
-.diff-mode { display:inline-flex; gap:0; }
-.diff-mode button + button { border-left:0; border-radius:0 var(--radius) var(--radius) 0; }
-.diff-mode button:first-child { border-radius:var(--radius) 0 0 var(--radius); }
-
-.diff-comment { display:flex; align-items:flex-start; gap:10px; padding:6px 12px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
+.diff-comment { display:flex; align-items:center; gap:10px; padding:4px 8px 4px 12px; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--yellow) 10%, var(--paper)); font-size:var(--type-meta); }
 .diff-comment.sent { opacity:.7; }
 .diff-comment-line { flex:0 0 auto; color:var(--blue); white-space:nowrap; }
 .diff-comment-body { flex:1; min-width:0; overflow-wrap:anywhere; }
@@ -3711,16 +3719,21 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-state.diff-merged { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
 .diff-state.diff-merged strong { color:var(--ink2); font-weight:var(--weight-medium); }
 .diff-comments { flex:0 0 auto; max-height:30%; overflow:auto; border-top:1px solid var(--line); }
-.diff-scope-note { flex:0 0 auto; border-bottom:1px solid var(--line); background:color-mix(in srgb, var(--line) 14%, var(--paper)); }
+.diff-scope-note { flex:0 0 auto; border-bottom:1px solid var(--line); background:var(--panel); }
 .diff-scope-note .diff-state { padding:8px 12px; }
 @media (max-width: 720px) {
   .diff-review-body { grid-template-columns:1fr; grid-template-rows:minmax(0, 34%) minmax(0, 1fr); }
   .diff-file-panel { border-right:0; border-bottom:1px solid var(--line); }
-  .diff-editor-split .cm-mergeViewEditors { min-width:760px; }
+  .diff-panel-resize { display:none; }
+  .diff-editor .cm-mergeViewEditors { min-width:760px; }
 }
-.diff-comment-compose { position:fixed; right:24px; bottom:24px; z-index:5; display:grid; gap:8px; width:min(420px, calc(100vw - 32px)); padding:12px; border:1px solid var(--line); background:var(--raised); box-shadow: var(--shadow); }
-.diff-comment-compose textarea { min-height:80px; resize:vertical; font:inherit; background:var(--paper); color:var(--ink); border:1px solid var(--line); padding:7px; }
-.diff-comment-compose > div { display:flex; justify-content:flex-end; gap:8px; }
+/* the line-comment card is the product's composer shell floated like the prose send card; only its place
+   and width are its own */
+.diff-comment-compose { right:24px; bottom:24px; width:min(440px, calc(100vw - 32px)); padding:8px 10px 7px; }
+.diff-compose-where { display:flex; align-items:baseline; gap:8px; min-width:0; margin-bottom:6px; color:var(--muted); font-size:var(--type-caption); }
+.diff-compose-where .path-leaf { color:var(--ink2); }
+.diff-compose-lines { flex:none; color:var(--blue); font-variant-numeric:tabular-nums; }
+.diff-comment-compose .pa-foot { margin-top:6px; }
 
 /* prose selection layer ([[prose-dispatch]]) — an action group that follows the passage, the send card
    beside the pointer, and the in-place editor. All three are fixed z-layers: the reading column never

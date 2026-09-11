@@ -124,6 +124,16 @@
   --wash-selected: color-mix(in srgb, var(--blue) 14%, transparent);
   --focus-ring: inset 0 0 0 2px color-mix(in srgb, var(--blue) 55%, transparent);
   --field-bg: var(--paper);
+  /* THE DIFF PAIR ([[diff-marks]]). What a change added and what it removed read in one hue pair on every
+     surface that shows one — the session diff, a spec's redline, a version's line diff, every +N −N tally —
+     so no surface picks its own red. A LINE tint says which rows moved; the stronger WORD tint marks the
+     characters that did. Derived here, so every preset inherits the pair from its own palette. */
+  --diff-add: var(--green);
+  --diff-del: var(--red);
+  --diff-add-line: color-mix(in srgb, var(--diff-add) 15%, transparent);
+  --diff-del-line: color-mix(in srgb, var(--diff-del) 15%, transparent);
+  --diff-add-word: color-mix(in srgb, var(--diff-add) 34%, transparent);
+  --diff-del-word: color-mix(in srgb, var(--diff-del) 34%, transparent);
   /* the browser's own chrome (scrollbars, native pickers) follows the preset's side of the light/dark line */
   color-scheme: dark;
 }
@@ -3625,6 +3635,23 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .proj-path { flex-basis: 100%; order: 5; }
   .proj-actions { margin-left: 0; order: 6; }
 }
+/* THE DIFF MARKS ([[diff-marks]]) — the tally, the status letter, and the path label every change surface
+   draws with. Their hues are the diff pair; muted is spent only on what is not the change itself. */
+.diffstat { display: inline-flex; flex: none; gap: 0.6ch; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.diffstat-add { color: var(--diff-add); }
+.diffstat-del { color: var(--diff-del); }
+/* one fixed cell, so a column of rows lines its letters up */
+.diff-status { flex: none; width: 1.4ch; text-align: center; font-family: var(--mono); font-weight: var(--weight-semibold); color: var(--muted); }
+.diff-status.is-added, .diff-status.is-untracked { color: var(--diff-add); }
+.diff-status.is-deleted { color: var(--diff-del); }
+.diff-status.is-renamed, .diff-status.is-copied { color: var(--blue); }
+/* the directory run gives first and at its FRONT (an RTL box, so the browser's ellipsis lands on the left;
+   the <bdi> inside keeps the characters in order); the leaf gives only once the directories are gone, and
+   then at its tail. */
+.path-label { display: flex; min-width: 0; overflow: hidden; white-space: nowrap; }
+.path-dir { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; color: var(--muted); }
+.path-leaf { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
 /* branch diff document ([[diff-document]]) — the panel is a tree and the reader is in ONE file at a time.
    The complaint this layout answers: an accordion of every changed file duplicated the panel's job while
    spending the height the diff itself needed, and vertical space is the scarcest thing on a review surface. */

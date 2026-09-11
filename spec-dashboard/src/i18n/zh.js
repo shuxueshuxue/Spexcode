@@ -877,6 +877,11 @@ export default {
     failed: '复制失败',
   },
 
+  // git 的改动状态词，作为每个单字母 diff 状态标记的提示（[[diff-marks]]）
+  diffMarks: {
+    modified: '修改', added: '新增', deleted: '删除', renamed: '重命名', copied: '复制',
+    'type-changed': '类型变更', untracked: '未跟踪',
+  },
   fileRef: {
     missing: '这个 session 没有登记这个文件',
     ambiguous: ({ count }) => `匹配到 ${count} 个已登记的文件——多写一段路径`,

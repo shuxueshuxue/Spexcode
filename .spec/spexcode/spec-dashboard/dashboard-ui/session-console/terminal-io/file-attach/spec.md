@@ -9,6 +9,8 @@ code:
   - spec-cli/src/uploads.ts#appendUpload
   - spec-cli/src/uploads.ts#completeUpload
   - spec-cli/src/uploads.ts#safeName
+  - spec-cli/src/uploads.ts#completedUpload
+  - spec-cli/src/uploads.ts#uploadPathsIn
 related:
   - spec-cli/src/uploads.api.test.ts
   - spec-dashboard/src/useAttachQueue.jsx
@@ -52,6 +54,12 @@ under a collision-proof, path-safe name, and its **absolute path** is what gets 
 the caret, padded so it never glues to a neighbouring word. The human types around it; the agent reads it.
 That is the entire contract — "send the file over, hand me the path" — with no transport leaking into the
 prompt text.
+
+The completed name — `<time>-<transfer id>-<safe name>`, directly in the sink — is also the upload's only
+identity, so the backend recognises a completed upload by reading that name back: where it sits says it came
+through this stream, and the name says when and what the human called it. [[files]] reads it to post an upload
+to the session a prompt carrying it reached, and to show the human their own name for it; no second record of
+uploads exists.
 
 ## one resumable stream
 

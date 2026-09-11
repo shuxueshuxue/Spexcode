@@ -187,3 +187,98 @@ test('public session files CLI stores a live path and the backend authorizes onl
     rmSync(fixture, { recursive: true, force: true })
   }
 })
+
+test('a prompt that carries a completed upload posts it to the receiving session as the human\'s own file', { timeout: 120_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-sent-uploads-'))
+  const project = join(fixture, 'project')
+  const home = join(fixture, 'home')
+  const port = await freePort()
+  const base = `http://127.0.0.1:${port}`
+  const json = { 'content-type': 'application/json' }
+  mkdirSync(join(project, '.spec', 'project'), { recursive: true })
+  writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
+    harnesses: ['claude'],
+    sessions: { launchers: { fake: { harness: 'claude', cmd: join(packageRoot, 'test', 'fixtures', 'fake-claude') } }, defaultLauncher: 'fake' },
+  }) + '\n')
+  writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n\nfixture project\n')
+  git(project, 'init', '-q', '-b', 'main')
+  git(project, 'config', 'user.email', 'uploads@example.test')
+  git(project, 'config', 'user.name', 'uploads')
+  git(project, 'add', '.')
+  git(project, 'commit', '-qm', 'fixture')
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_TMUX: `spex-sent-uploads-${process.pid}-${Date.now()}`, FAKE_HARNESS_INTERVAL_MS: '80' }
+  delete env.SPEXCODE_API_URL
+  delete env.SPEXCODE_SESSION_ID
+  let log = ''
+  const backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
+    cwd: project, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  backend.stdout?.on('data', (chunk) => { log += String(chunk) })
+  backend.stderr?.on('data', (chunk) => { log += String(chunk) })
+  const uploaded: string[] = []
+  let session: string | null = null
+  const upload = async (name: string, bytes: string): Promise<string> => {
+    const created = await fetch(`${base}/api/uploads`, { method: 'POST', headers: json, body: JSON.stringify({ name, size: Buffer.byteLength(bytes) }) })
+    assert.equal(created.status, 201, await created.clone().text())
+    const { id } = await created.json() as { id: string }
+    const chunk = await fetch(`${base}/api/uploads/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/offset+octet-stream', 'upload-offset': '0' }, body: bytes })
+    assert.equal(chunk.status, 200, await chunk.clone().text())
+    const completed = await fetch(`${base}/api/uploads/${id}/complete`, { method: 'POST' })
+    assert.equal(completed.status, 201, await completed.clone().text())
+    const { path } = await completed.json() as { path: string }
+    uploaded.push(path)
+    return path
+  }
+  try {
+    await waitForHealth(base, backend, () => log)
+    const before = Date.now()
+    const shot = await upload('screen shot.png', 'png bytes')
+    const create = await fetch(`${base}/api/sessions`, { method: 'POST', headers: json, body: JSON.stringify({ prompt: `fix the layout in ${shot} please`, launcher: 'fake' }) })
+    assert.equal(create.status, 201, await create.clone().text())
+    session = (await create.json() as { id: string }).id
+    const postedFiles = async (count: number): Promise<string[]> => {
+      const deadline = Date.now() + 15_000
+      for (;;) {
+        const { files } = await fetch(`${base}/api/sessions/${session}/files`).then((response) => response.json()) as { files: string[] }
+        if (files.length >= count || Date.now() > deadline) return files
+        await new Promise((done) => setTimeout(done, 50))
+      }
+    }
+    assert.deepEqual(await postedFiles(1), [shot])
+    const row = await fetch(`${base}/api/sessions/${session}`).then((response) => response.json()) as { uploadedFiles: { path: string; name: string; uploadedAt: number }[] }
+    assert.equal(row.uploadedFiles.length, 1)
+    assert.deepEqual({ path: row.uploadedFiles[0].path, name: row.uploadedFiles[0].name }, { path: shot, name: 'screen_shot.png' })
+    assert.ok(row.uploadedFiles[0].uploadedAt >= before - 1000 && row.uploadedFiles[0].uploadedAt <= Date.now(), 'the upload time is read back from the completed name')
+
+    // a Command Box send: a second upload at the end of a sentence posts; the already-posted one is not
+    // duplicated; a vanished upload and an ordinary host path are left alone
+    const buildLog = await upload('build.log', 'log line\n')
+    const vanished = join(dirname(shot), `${Date.now().toString(36)}-00000000-0000-4000-8000-000000000000-gone.txt`)
+    const sent = await fetch(`${base}/api/sessions/${session}/input`, {
+      method: 'POST', headers: json, body: JSON.stringify({ kind: 'command', text: `also see ${buildLog}. then ${shot}, ${vanished} and /etc/hosts` }),
+    })
+    assert.equal(sent.status, 200, await sent.clone().text())
+    assert.deepEqual(await postedFiles(2), [shot, buildLog])
+    const graph = await fetch(`${base}/api/graph`).then((response) => response.json()) as { sessions: { id: string; uploadedFiles?: { path: string }[] }[] }
+    assert.deepEqual(graph.sessions.find((candidate) => candidate.id === session)?.uploadedFiles?.map((file) => file.path), [shot, buildLog])
+    const download = await fetch(`${base}/api/sessions/${session}/files/download?path=${encodeURIComponent(buildLog)}`)
+    assert.deepEqual({ status: download.status, body: await download.text() }, { status: 200, body: 'log line\n' })
+
+    // an agent's own posted path is listed but is not the human's upload
+    const agentFile = join(fixture, 'report.html')
+    writeFileSync(agentFile, '<h1>report</h1>\n')
+    const agentPost = await runCli(project, { ...env, SPEXCODE_SESSION_ID: session }, 'session', 'files', 'add', agentFile)
+    assert.equal(agentPost.code, 0, agentPost.err)
+    const mixed = await fetch(`${base}/api/sessions/${session}`).then((response) => response.json()) as { files: string[]; uploadedFiles: { path: string }[] }
+    assert.deepEqual(mixed.files, [shot, buildLog, agentFile])
+    assert.deepEqual(mixed.uploadedFiles.map((file) => file.path), [shot, buildLog])
+  } finally {
+    if (session) await fetch(`${base}/api/sessions/${session}/close`, { method: 'POST' }).catch(() => {})
+    if (backend.pid && backend.exitCode === null) {
+      try { process.kill(-backend.pid, 'SIGTERM') } catch { backend.kill('SIGTERM') }
+      await new Promise<void>((done) => backend.once('close', () => done()))
+    }
+    for (const path of uploaded) rmSync(path, { force: true })
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})

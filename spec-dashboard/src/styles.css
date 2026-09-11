@@ -387,7 +387,10 @@ body {
   position: absolute; top: var(--space-2); right: var(--space-2); z-index: 6;
   width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
 }
-.context-toggle-reservation { flex: 0 0 28px; width: 28px; height: 28px; }
+.context-toggle-reservation {
+  flex: 0 0 32px; width: 32px; height: 28px;
+  /* reserve the 28px control plus a 4px visual gap from the tab-list door */
+}
 .context-toggle {
   color: var(--muted);
 }

@@ -85,12 +85,14 @@ main checkout once that directory is gone, but the working tree must not: a land
 whoever is working in the main checkout as its own uncommitted changes. When the directory is gone the endpoint
 says the working tree is unreadable, and the document shows the branch alone rather than claiming a clean tree.
 
-A reader can click a changed line to author a comment. The comment is written in the product's composer shell
-([[composer]]), floated like the prose send card and naming the file and line it will attach to: Enter saves,
-Shift+Enter breaks the line, and Escape closes the card before anything behind it. Comments live in the session
-record as `{filePath, lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or editing a comment always clears
-`sentAt`; sending un-sent comments formats them as one review message and uses the existing session input/send
-path. The send
+The diff body is ordinary browser-selectable text: the reader can drag across it and use the native copy/paste
+path without the session chrome or a line click stealing the gesture. The line-number gutter is the one explicit
+comment door, so authoring a comment never competes with selecting words from the source. The comment is written
+in the product's composer shell ([[composer]]), floated like the prose send card and naming the file and line it
+will attach to: Enter saves, Shift+Enter breaks the line, and Escape closes the card before anything behind it.
+Comments live in the session record as `{filePath, lineStart, lineEnd, body, diffIdentity, sentAt}`. Saving or
+editing a comment always clears `sentAt`; sending un-sent comments formats them as one review message and uses the
+existing session input/send path. The send
 operation marks the exact comments sent under the record lock, so an edited comment is never silently re-sent.
 Sent comments remain inline in the diff with their delivery marker. A reload after saving or sending a comment is
 not a navigation: the open file stays selected while it still exists, so the reader lands beside the comment they

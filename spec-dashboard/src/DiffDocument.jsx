@@ -36,9 +36,9 @@ const THEME = EditorView.theme({
   '.cm-content': { fontFamily: 'var(--mono)', padding: '8px 0' },
   '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.55', overflow: 'auto' },
   '.cm-gutters': { backgroundColor: 'var(--paper)', color: 'var(--muted)', border: 'none' },
-  '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px', opacity: '.7' },
-  '.cm-line': { cursor: 'pointer' },
-  '.cm-line:hover': { backgroundColor: 'var(--wash-hover)' },
+  '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px', opacity: '.7', cursor: 'pointer' },
+  '.cm-lineNumbers .cm-gutterElement:hover': { color: 'var(--ink2)', opacity: '1' },
+  '.cm-line': { cursor: 'text' },
   '&.cm-merge-a .cm-changedLine, .cm-deletedChunk': { backgroundColor: 'var(--diff-del-line)' },
   '&.cm-merge-b .cm-changedLine, .cm-inlineChangedLine': { backgroundColor: 'var(--diff-add-line)' },
   '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText, &.cm-merge-b .cm-deletedText': { background: 'var(--diff-del-word)' },
@@ -82,12 +82,24 @@ export function parseUnifiedPatch(patch) {
   return { oldText: oldLines.join('\n'), newText: newLines.join('\n'), oldNumbers, newNumbers }
 }
 
-function numberedLines(numbers) {
-  return lineNumbers({ formatNumber: (line) => numbers[line - 1] ? String(numbers[line - 1]) : '' })
+function numberedLines(numbers, onComment) {
+  return lineNumbers({
+    formatNumber: (line) => numbers[line - 1] ? String(numbers[line - 1]) : '',
+    domEventHandlers: {
+      mousedown: (view, line, event) => {
+        if (event.button !== 0) return false
+        const lineNo = view.state.doc.lineAt(line.from).number
+        const target = numbers[lineNo - 1]
+        if (!target) return false
+        onComment(target, target)
+        return true
+      },
+    },
+  })
 }
 
-function readOnlyExtensions(numbers, lang, wrap, unchanged) {
-  return [EditorState.readOnly.of(true), EditorView.editable.of(false), numberedLines(numbers), syntaxHighlighting(HIGHLIGHT), lang,
+function readOnlyExtensions(numbers, lang, wrap, unchanged, onComment) {
+  return [EditorState.readOnly.of(true), EditorView.editable.of(false), numberedLines(numbers, onComment), syntaxHighlighting(HIGHLIGHT), lang,
     wrap ? EditorView.lineWrapping : [], EditorState.phrases.of({ '$ unchanged lines': unchanged }), THEME]
 }
 
@@ -100,6 +112,8 @@ const firstEntry = (data) => (data?.files || []).length ? { scope: 'branch', fil
 
 function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onComment, onEdit, onRetract, onView, onNext, onPrevious }) {
   const t = useT(); const host = useRef(null); const mounted = useRef(null)
+  const onCommentRef = useRef(onComment)
+  onCommentRef.current = onComment
   const [patch, setPatch] = useState(file.patch || '')
   const parsed = useMemo(() => parseUnifiedPatch(patch), [patch])
   // the fold band's words are CodeMirror's phrase; `$` is where it puts the count
@@ -123,8 +137,8 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
       if (!live || !host.current) return
       if (mode === 'split') {
         const merge = new MergeView({
-          a: { doc: parsed.oldText, extensions: readOnlyExtensions(parsed.oldNumbers, lang, wrap, unchanged) },
-          b: { doc: parsed.newText, extensions: readOnlyExtensions(parsed.newNumbers, lang, wrap, unchanged) },
+          a: { doc: parsed.oldText, extensions: readOnlyExtensions(parsed.oldNumbers, lang, wrap, unchanged, (start, end) => onCommentRef.current(start, end)) },
+          b: { doc: parsed.newText, extensions: readOnlyExtensions(parsed.newNumbers, lang, wrap, unchanged, (start, end) => onCommentRef.current(start, end)) },
           parent: host.current,
           orientation: 'a-b', highlightChanges: true, gutter: true,
           // The endpoint already pays for 40 lines of context per hunk; collapsing to three of them threw
@@ -139,7 +153,7 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
           parent: host.current,
           state: EditorState.create({
             doc: parsed.newText,
-            extensions: [...readOnlyExtensions(parsed.newNumbers, lang, wrap, unchanged), unifiedMergeView({
+            extensions: [...readOnlyExtensions(parsed.newNumbers, lang, wrap, unchanged, (start, end) => onCommentRef.current(start, end)), unifiedMergeView({
               original: parsed.oldText, highlightChanges: true, syntaxHighlightDeletions: true,
               mergeControls: false, collapseUnchanged: { margin: 10, minSize: 12 },
               diffConfig: { scanLimit: 5000, timeout: 100 },
@@ -152,17 +166,6 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
     mount()
     return () => { live = false; mounted.current?.destroy(); mounted.current = null; onView(file.path, null) }
   }, [file.path, mode, open, parsed, onView, patch, wrap, unchanged])
-
-  const chooseLine = (event) => {
-    if (event.button !== 0) return
-    const line = event.target.closest?.('.cm-line'); if (!line || !host.current?.contains(line)) return
-    const editor = line.closest('.cm-editor'); const view = mode === 'split' ? (editor === mounted.current?.a?.dom ? mounted.current.a : mounted.current?.b) : mounted.current
-    if (!view) return
-    const lineNo = view.state.doc.lineAt(view.posAtDOM(line, 0)).number
-    const numbers = mode === 'split' && view === mounted.current.a ? parsed.oldNumbers : parsed.newNumbers
-    const target = numbers[lineNo - 1]
-    if (target) onComment(target, target)
-  }
 
   // The header STAYS while the diff scrolls, because the one thing a reader loses inside a long hunk is
   // which file they are in. Its path spends the row's width; the tally, the status, and the hunk steppers
@@ -178,7 +181,7 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
         <IconButton icon="chevron-down" size={14} className="icon-btn" label={t('session.diffNext')} onClick={onNext} />
       </span>
     </header>
-    <div className="diff-editor" ref={host} onMouseDown={chooseLine} />
+    <div className="diff-editor" ref={host} data-reading-surface />
     {comments.length > 0 && <div className="diff-comments">{comments.map((comment) => <div key={comment.id} className={`diff-comment${comment.sentAt ? ' sent' : ''}`}>
       <span className="diff-comment-line">L{comment.lineStart}{comment.lineEnd !== comment.lineStart ? `-L${comment.lineEnd}` : ''}</span>
       <span className="diff-comment-body">{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}

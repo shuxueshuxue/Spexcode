@@ -230,8 +230,9 @@ try {
   assert.ok(panelAfter >= panelBefore + 100, `the seam must widen the panel: ${panelBefore} -> ${panelAfter}`)
   assert.equal(Number(stored), Math.round(panelAfter))
 
-  // A LINE COMMENT is written in the shared composer shell, and Escape peels it
-  await page.locator('.cm-merge-b .cm-line').nth(2).click()
+  // A LINE COMMENT opens from the line-number gutter (the body stays selectable text), is written in the
+  // shared composer shell, and Escape peels it
+  await page.locator('.cm-merge-b .cm-lineNumbers .cm-gutterElement', { hasText: /^\d+$/ }).nth(2).click()
   const composer = page.locator('.diff-comment-compose')
   await composer.waitFor({ state: 'visible', timeout: 5_000 })
   const shell = await composer.evaluate((element) => ({

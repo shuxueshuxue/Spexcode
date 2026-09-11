@@ -19,7 +19,6 @@ related:
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
   - spec-dashboard/test/timeline-load-earlier-position.e2e.mjs
-  - spec-dashboard/src/readerSelection.js
   - spec-dashboard/src/CopyButton.jsx
   - spec-dashboard/src/clipboard.js
 ---
@@ -228,24 +227,19 @@ the live tail while collapsed, the whole interval while expanded ([[message-stre
 instant the native thread changes rather than on the next poll; what is on screen stays until the next frame
 lands (no loading flash), a frame that carries an error shows the unavailable line in place, and the seam's
 start is the subscription's identity, so a later message that opens a new seam opens a new stream. A collapsed
-CLOSED seam reads nothing; an expanded closed seam fetches its interval once and keeps it. The timeline body is selectable text:
-Conversation chrome does not cancel its pointer press, and rich prose/code preserves authored newlines and
-indentation through browser copy. Selection support must not rely on an overlay, `user-select: none`, or an
-accidental editable surface. The timeline's own selection is a browser-painted highlight over a Range, never a
-document Selection, so the composer caret survives it — and because the cancelled press that keeps that caret
-also cancels the browser's click-to-collapse, every press the timeline owns retires BOTH the highlight and any
-document Selection lying in the timeline (one the browser made on a fourth quick click, or on a drag begun on a
-control). No selection outlives the next click; a press outside selectable text still counts as the timeline's.
+CLOSED seam reads nothing; an expanded closed seam fetches its interval once and keeps it. The timeline body is a
+`data-reading-surface`: its text is ordinary browser-selectable content, and rich prose/code preserves authored
+newlines and indentation through browser copy. Selection is the native DOM Range, published through
+[[selection-controller]]; it is never replaced by a Custom Highlight or a pointer driver. The composer draft and
+caret are independent state, so selecting text does not require cancelling the browser press or keeping the
+composer focused. A clamped block expands on a real click, while a drag remains a text selection; no click-to-
+expand handler may claim a drag. A selected passage's quote/copy verbs consume a frozen snapshot, and without an
+explicit action the browser's own context menu remains.
 
 **A SELECTED PASSAGE HAS VERBS, AND THE RIGHT-CLICK IS HOW YOU REACH THEM.** The console suppresses the
-native menu nowhere by default ([[session-console]]), and the one sanctioned exception is a surface that has
-a menu to put in its place — which is true here only while a passage is actually selected. With nothing
-selected the press stays the browser's, so copy, search and inspect over ordinary conversation text are
-untouched; the moment there IS a selection the timeline owns the press, because the timeline's selection is
-a painted Highlight rather than a document Selection and the native menu could never have acted on it
-anyway. This menu is what gives that selection its verbs. "No selection outlives the next click" is about
-the primary button — the press that begins a selection — so the passage is still there when the menu opens
-over it.
+native menu nowhere by default ([[session-console]]). A selected passage may publish a small action surface from
+the shared snapshot, but the browser menu remains the default when no action is explicitly claimed. The action
+surface clones the native Range before it opens, so its copy/quote verbs cannot lose the passage underneath them.
 
 **COPY LEAVES, QUOTE STAYS.** Copy hands the passage to the clipboard and the reader is on their own with
 it. Quote hands it to the composer directly below as the shared removable attachment every other selection

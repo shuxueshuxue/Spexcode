@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { deflateSync } from 'node:zlib'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -109,6 +109,7 @@ const check = (name, ok, detail = null) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail == null ? '' : ` - ${JSON.stringify(detail)}`}`)
 }
 const posted = []
+let sentUpload = null
 const { chromium } = await import(pathToFileURL(PW).href)
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true })
@@ -145,6 +146,7 @@ try {
   await draft.type(' match this mockup')
   await draft.press('Enter')
   const sent = await waitFor(async () => (await board())?.uploadedFiles?.find((file) => file.name === 'mockup.png'), 'the sent upload posted to the session')
+  sentUpload = sent.path
   check('a sent upload is posted to the session and projected as the human\'s', sent.path.endsWith('-mockup.png') && (await board()).files.includes(sent.path), sent)
 
   const total = await waitFor(async () => {
@@ -298,6 +300,8 @@ try {
 } finally {
   await page.screenshot({ path: join(OUT, 'last.png') }).catch(() => {})
   for (const path of posted) { try { cli('files', 'retract', path) } catch {} }
+  // the upload lives in the backend's sink; on the same host the run removes its own bytes too
+  if (sentUpload) { try { cli('files', 'retract', sentUpload) } catch {} rmSync(sentUpload, { force: true }) }
   try { cli('web', 'retract', service.url) } catch {}
   await browser.close()
   await new Promise((done) => service.server.close(done))

@@ -101,3 +101,31 @@ export async function buildPublicGraph(): Promise<PublicGraph> {
 export function publicGraphJson(graph: PublicGraph): string {
   return `${JSON.stringify(graph, null, 2)}\n`
 }
+
+export const PUBLIC_PAYLOAD_ELEMENT_ID = 'spexcode-public-payload' as const
+
+// One self-contained page: the public shell built as a single file, with the index, every node document and
+// the About panel's record written into it. A browser opening a file from disk refuses to fetch the file beside
+// it, so a page that has to survive being handed around as one file — a workflow artifact, an attachment —
+// carries its payload instead of pointing at it ([[public-spec-graph]]).
+export function publicGraphHtml(shell: string, artifact: PublicGraphArtifact): string {
+  const { graph, documents } = artifact
+  const payload = {
+    graph,
+    documents: Object.fromEntries(documents.map((document) => [document.id, document])),
+    metadata: {
+      schema: 'spexcode.public-spec-site/v1',
+      publication: { id: graph.identity.title },
+      about: {
+        title: 'About this page',
+        summary: 'A static, read-only view of this repository\'s specification graph, written into one file by `spex graph --public --html`. It carries committed spec intent and relationships only; sessions, issues, evaluations, settings, and write routes are absent.',
+        facts: [{ label: 'Project', value: graph.identity.title }],
+      },
+      release: { revision: graph.revision },
+    },
+  }
+  // `<` never appears raw inside the element, so no string in any spec body can close it early.
+  const element = `<script type="application/json" id="${PUBLIC_PAYLOAD_ELEMENT_ID}">${JSON.stringify(payload).replace(/</g, '\\u003c')}</script>`
+  if (!shell.includes('</head>')) throw new Error('public graph page: the single-file shell has no </head>')
+  return shell.replace('</head>', () => `${element}\n</head>`)
+}

@@ -24,6 +24,12 @@ resource never replaces the session document's main face; closing it returns to 
 warm terminal/PTY. It used to overlay the session page and force a tab hunt to get back, which is exactly the
 "把我的终端和 conversation 页直接覆盖掉了…太诡异了" regression this boundary prevents. The dock's sessions
 projection remains a free return to any session.
+
+A direct resource address from conversation prose is still a user navigation, not a two-step state handoff. The
+resource catalog entry named by that address must be a render candidate immediately, so the first committed
+resource face shows its own paper-backed loading state while the warm-tab ledger catches up. No intermediate
+resource render may expose the terminal's dark ground; the terminal remains mounted and merely inactive.
+
 The resource tab is an ordinary file-class tab: it lands beside the session because the session tab is of another
 kind, and like every tab it is replaced only while it is the focused tab and a same-kind address arrives.
 The dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.

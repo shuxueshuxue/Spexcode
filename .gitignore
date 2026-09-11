@@ -2,6 +2,7 @@
 node_modules
 dist/
 spec-dashboard/dist-public/
+spec-dashboard/dist-public-single/
 .vite/
 # the published `spexcode` package (repo root) ships spec-dashboard/dist — covered by the `dist/` rule
 # above. It's a prepublishOnly build artifact (publish-time only), never committed (see .../spec-cli/packaging).

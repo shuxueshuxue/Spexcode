@@ -6,7 +6,7 @@
     ".": "./dist/index.html",
     "./package.json": "./package.json"
   },
-  "files": ["dist", "dist-public"],
+  "files": ["dist", "dist-public", "dist-public-single"],
   "publishConfig": {
     "access": "public"
   },
@@ -19,7 +19,8 @@
     "prebuild": "node scripts/patch-xterm-sync-resize.mjs",
     "build": "vite build --base ./",
     "build:public": "VITE_PUBLIC_GRAPH_ONLY=1 vite build --outDir dist-public --base ./",
-    "prepack": "npm run build && npm run build:public",
+    "build:public-single": "VITE_PUBLIC_GRAPH_ONLY=1 vite build --config vite.config.single.mjs --outDir dist-public-single --base ./",
+    "prepack": "npm run build && npm run build:public && npm run build:public-single",
     "prepublishOnly": "node ../scripts/release-publish.mjs --from-package-publish",
     "preview": "vite preview"
   },

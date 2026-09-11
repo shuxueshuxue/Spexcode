@@ -28,6 +28,9 @@ related:
   - spec-dashboard/src/workspace.jsx
   - spec-dashboard/src/specTreeState.js
   - spec-dashboard/vite.config.js
+  - spec-dashboard/vite.config.single.mjs
+  - spec-dashboard/package.json
+  - spec-cli/src/help.ts
   - spec-cli/src/public-graph.test.ts
   - spec-dashboard/src/publicGraphMode.test.mjs
   - spec-dashboard/test/public-graph-static.e2e.mjs
@@ -56,6 +59,16 @@ rendered spec body/parts and its `diagram` — the node's diagram already drawn 
 be, or `null` when the node carries none ([[diagram]]) — so a published tree shows the picture with no backend
 and no renderer. Runtime sessions, overlays, issue summaries, and write affordances never
 enter either payload. The same command without `--out` writes identical index bytes to stdout.
+
+**One file, when one file is all that can travel.** `spex graph --public --html <file>` writes the whole
+publication as a single self-contained page: the graph-only shell built as one file (`npm run
+build:public-single` — every chunk, stylesheet and font inside `index.html`), with the index, every node
+document and the About panel's record written into it as one embedded JSON element. Every public reader asks
+that element first and fetches its relative source only when the page carries none, so the same shell code
+serves a directory and a file. The file exists for the places a directory cannot go: a browser opening a page
+from disk refuses to fetch the file beside it, and a channel that hands over one file — a workflow's artifact
+card, an attachment — would otherwise deliver a shell with nothing to show. It is the same read-only surface,
+so the same exclusions hold; it has no archive beside it, so its About panel offers none.
 
 `npm run build:public` builds the dashboard with `VITE_PUBLIC_GRAPH_ONLY=1` and copies that snapshot plus
 the per-node documents under `specs/` beside the static assets. The published client reads the small index
@@ -100,7 +113,8 @@ overlay is what it is.
 
 The build also emits `public-graph-meta.json`, a lazy static source for the floating About panel, and a
 `spexcode.spec.zip` archive rooted at `.spec/` and made from the graph revision's `.spec/spexcode` tree. The panel offers the
-archive download always and a repository link only when the publication names one — the shell also renders
+archive download whenever the release carries one (a single-file page carries none) and a repository link
+only when the publication names one — the shell also renders
 [[flat]]'s locally produced sites, whose source may be a path with no forge behind it, and a link labelled
 for a forge the source does not live on would be a claim rather than a fact. Its human-readable summary and
 facts come from the metadata beside the graph. It

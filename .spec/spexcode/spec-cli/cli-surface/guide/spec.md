@@ -33,7 +33,8 @@ the agent from one verb, picked by an optional topic:
   registry (the prose says to drop what you don't use — any one id or comma-separated subset is
   valid, required with no default). A registry-derived docs assertion (`docs-quickstart.test.ts`)
   holds this page and both READMEs' Quick start to exactly that set, so the example can neither
-  regress to one privileged harness nor silently drift from the registry.
+  regress to one privileged harness nor silently drift from the registry. Beside it the step names the
+  spec-only posture, `spex init --pure`, which a later full adoption takes in as it is ([[spex-init]]).
 - **`spec` → the agent-facing FILE-FORMAT manual.** The whole detail of the one authored artifact —
   spec.md: frontmatter, body, the rules lint enforces — so an agent looks the format up on demand instead
   of reverse-engineering it. Compact always-on prompts point here for their operational detail: the page

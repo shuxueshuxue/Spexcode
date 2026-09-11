@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/init.test.ts
   - packages/spec-core/templates/spexcode.json
+  - spec-cli/templates/pure/project/spec.md
 ---
 # spex-init
 
@@ -81,6 +82,28 @@ whole scaffold was skipped. So when the scaffold is skipped, init still seeds `.
 the tree already has, additively — anything already there stays the reader's. Exactly one root can own it;
 init refuses to guess when `.spec` holds several and says so.
 
+**A tree without the machinery is adopted, not skipped past.** A single root with no `.plugins` is a tree that
+arrived before adoption (`spex init --pure`, an atlas run, a hand-written or copied tree), and taking it into
+SpexCode is the whole job of this run. So init says it is adopting that tree as it is, with its node count,
+rather than warning that it skipped a scaffold, and no node is rewritten. The config such a tree carries was
+written without an adoption, so besides stamping `harnesses` and `mainBranch` init fills what a fresh adoption
+would have planted and the file lacks: the launcher pool for the selected harnesses, because no session can
+start without one, and the lint section, because an absent one inherits SpexCode's own roots and governs
+nothing here. Launchers anywhere in the merged config, the local overlay included, are the reader's and stay,
+and a selection whose harnesses have no template launcher fills none. `uploads` is not filled: its runtime
+default already comes from the template.
+
+**`--pure` plants the spec skeleton and nothing else.** `spex init --pure` copies the root node from
+`templates/pure/` (the seed root without its paragraph about `.plugins`, which a pure tree does not have) and
+writes a `.spec/spexcode.json` holding only the template's `lint` section. It seeds no `.plugins`, installs no
+git hook, materializes nothing, writes no global store, and touches nothing in `.git` or outside `.spec`: the
+asset without the wiring, for a repo that wants the spec tree and its lint and nothing that changes how its git
+or its agents behave. It keeps the git precondition, since lint reads git. It takes no `--harness` or
+`--preset`, which choose wiring it does not plant, and refuses that pairing before writing anything. On a repo
+whose `.spec` already carries a tree it writes nothing. The full adoption later is the ordinary
+`spex init --harness <id>`, which recognizes the tree by the absence of `.plugins`; there is no marker to write
+and none to trust.
+
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
 literal restated in the code, which is how the message once claimed a `["src"]` starter while the template
@@ -133,8 +156,8 @@ All of those adoption Git queries use [[git-exec]]'s resolved executable for the
 same selected Git binary serves the precondition, common-hooks lookup and branch read without each child
 repeating PATH resolution.
 
-**Adoption is additive and preserves user ownership.** An existing `<dir>/.spec` aborts the spec phase with
-a warning. A user-owned hook is never executed as a probe and never overwritten. SpexCode-owned hook
+**Adoption is additive and preserves user ownership.** An existing tree skips the scaffold, and one without
+the machinery is adopted as described above. A user-owned hook is never executed as a probe and never overwritten. SpexCode-owned hook
 snapshots carry a managed header that proves ownership, so re-init atomically refreshes that snapshot to the
 current protocol. This is necessary
 when a protocol moves work between hooks: leaving an old SpexCode pre-commit beside new arm/consume hooks

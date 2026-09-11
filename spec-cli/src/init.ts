@@ -97,14 +97,78 @@ function adoptionMainBranch(dir: string): string {
   throw error
 }
 
-export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string): Promise<void> {
+// A spec TREE is any entry beside the two config files: the config lives inside .spec ([[portable-layout]]), so a
+// repo that declared its harnesses first has a .spec directory with no tree in it yet.
+function hasSpecTree(specDest: string): boolean {
+  return existsSync(specDest) && readdirSync(specDest).some((e) => e !== 'spexcode.json' && e !== 'spexcode.local.json')
+}
+
+// the reader's nodes: every spec.md outside dot-folders (.plugins is machinery, not the reader's tree)
+function countSpecNodes(dir: string): number {
+  let n = 0
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name.startsWith('.')) continue
+    if (e.isDirectory()) n += countSpecNodes(join(dir, e.name))
+    else if (e.name === 'spec.md') n += 1
+  }
+  return n
+}
+
+// The session launchers an adoption seeds: the template's per-harness pool narrowed to the SELECTED native
+// harnesses, default = the first kept. A selection with no native harness keeps the whole pool, since
+// dispatched sessions still need a launcher. One derivation for a fresh config and for filling an existing one.
+function templateSessions(nativeChosen: string[]): Record<string, any> | undefined {
+  const sessions = (readJsonConfig(templateConfigPath) as Record<string, any> | null)?.sessions
+  if (!sessions?.launchers || !nativeChosen.length) return sessions
+  const launchers = Object.fromEntries(
+    Object.entries(sessions.launchers as Record<string, { harness?: string }>).filter(([, l]) => nativeChosen.includes(l.harness ?? 'claude')))
+  const names = Object.keys(launchers)
+  return { ...sessions, launchers, ...(names.length ? { defaultLauncher: names[0] } : {}) }
+}
+
+// `spex init --pure`: the spec skeleton and nothing else — the root node from templates/pure and a config
+// holding only the template's lint section. No .plugins, no git hooks, no harness artifacts, no global store:
+// every byte it writes is under .spec. A tree that already exists is left exactly as it is.
+function pureInit(targetDir: string): void {
+  const specDest = join(targetDir, '.spec')
+  const cfgDest = join(specDest, 'spexcode.json')
+  console.log(`spex init --pure → ${targetDir}`)
+  if (hasSpecTree(specDest)) {
+    console.log(`• .spec already carries a tree — --pure adds nothing to an existing tree; nothing was written.`)
+  } else {
+    const planted = copyTreeNoClobber(join(TEMPLATES, 'pure'), specDest, targetDir)
+    if (!existsSync(cfgDest)) {
+      const lint = (readJsonConfig(templateConfigPath) as Record<string, unknown> | null)?.lint
+      writeFileSync(cfgDest, JSON.stringify({ lint }, null, 2) + '\n')
+      planted.push(relative(targetDir, cfgDest))
+    }
+    console.log(`✓ planted ${planted.join(', ')} — and nothing else: no .plugins, no git hooks, no agent config, no file outside .spec`)
+  }
+  const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
+  console.log(`
+Next steps:
+  1. .spec/ is project source of truth: add and commit it (\`spex spec lint\` reports an untracked tree).
+  2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
+  3. lint.governedRoots in .spec/spexcode.json (currently ${roots}) names what \`spex spec lint\` governs.
+  4. When you want SpexCode's workflow too (git hooks, sessions, agent wiring), run \`spex init --harness <id>\`:
+     it adopts this tree as it is and adds the machinery beside it.`)
+}
+
+export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string, pure = false): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
+
+  // --pure plants the spec skeleton and nothing else, so the flags that choose wiring have nothing to act on.
+  // Refuse the pairing before writing anything rather than silently ignoring half of the request.
+  if (pure && ((harnessArg ?? '').trim() || (presetArg ?? '').trim())) {
+    console.error('spex init: --pure plants only the spec skeleton; --harness and --preset choose the full adoption\'s wiring. Run `spex init --pure` now and `spex init --harness <id>` when you want the rest.')
+    process.exit(1)
+  }
 
   // the preset the NEW adopter gets — `--preset <name>` wins, else an existing target .spec/spexcode.json's
   // `preset` field, else the lean `default`. Validated loudly against the chain (an unknown name would
   // otherwise seed silently). A non-default tier stacks its template package on top of the default set below.
   const selected = (presetArg ?? '').trim() || (readConfig(targetDir).preset ?? '').trim() || 'default'
-  if (!(PRESET_TIERS as readonly string[]).includes(selected)) {
+  if (!pure && !(PRESET_TIERS as readonly string[]).includes(selected)) {
     console.error(`spex init: unknown preset '${selected}'. Valid presets (cumulative, lean→cautious): ${PRESET_TIERS.join(', ')}.`)
     process.exit(1)
   }
@@ -120,6 +184,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.error(`spex init: ${targetDir} is not a git repository. SpexCode is git-backed (git is the version database; the hooks live in .git). Run \`git init\` there first, then \`spex init\`.`)
     process.exit(1)
   }
+  if (pure) return pureInit(targetDir)
 
   // the harness DELIVERY TARGET set ([[harness-select]]) is a REQUIRED, explicit choice — `--harness <ids>`
   // stamps it into .spec/spexcode.json; absent the flag, a pre-existing explicit `harnesses` field IS the choice.
@@ -151,18 +216,21 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   // writing that file alone, and skipping on the directory would leave it with no tree and no contract.
   // What blocks the scaffold is a real tree — any entry that is not one of the two config files.
   const specDest = join(targetDir, '.spec')
-  const specTreeExists = existsSync(specDest)
-    && readdirSync(specDest).some((e) => e !== 'spexcode.json' && e !== 'spexcode.local.json')
+  const specTreeExists = hasSpecTree(specDest)
   const includeSeedDir = (dir: string) => selectedNativeEvents === null || seedableForEvents(dir, selectedNativeEvents)
   if (specTreeExists) {
-    console.warn(`• .spec already carries a tree at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
+    const roots = readdirSync(specDest, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+    // a single root with no .plugins is a tree that arrived without the machinery — `spex init --pure`, an atlas
+    // run, a hand-written or copied tree. Adopting it is the job, not an obstacle: say so, and leave every node.
+    if (roots.length === 1 && !existsSync(join(specDest, roots[0], '.plugins')))
+      console.log(`✓ adopting the existing spec tree under '${roots[0]}' (${countSpecNodes(specDest)} spec node(s)) as it is — no node is rewritten; the machinery goes in beside it`)
+    else console.warn(`• .spec already carries a tree at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
     // @@@ the tree is the reader's; .plugins is the MACHINERY - and skipping one must not skip the other. A
     // tree that arrived by hand (copied in, or written before this machine adopted) has no `.plugins`, and
     // without it the hook manifest is EMPTY: every dispatch fires and executes nothing, so a project can sit
     // in the graph for weeks with a full spec tree and not one working hook. Re-running init could never fix
     // it either, because the whole scaffold was skipped. Seed the plugins into whichever root the tree
     // already has — copyTreeNoClobber is additive, so anything already there stays the reader's.
-    const roots = readdirSync(specDest, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
     if (roots.length === 1) {
       const planted = copyTreeNoClobber(
         join(TEMPLATES, 'spec', 'project', '.plugins'), join(specDest, roots[0], '.plugins'), targetDir, includeSeedDir,
@@ -199,15 +267,28 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   const existingCfg = existsSync(cfgDest) ? cfgDest : legacyCfg
   const nativeChosen = (chosenHarnesses as unknown[]).filter((m): m is string => typeof m === 'string')
   if (existsSync(existingCfg)) {
-    const cfg = (readJsonConfig(existingCfg) ?? {}) as Record<string, unknown>
+    const cfg = (readJsonConfig(existingCfg) ?? {}) as Record<string, any>
     const stampedBranch = typeof cfg.mainBranch !== 'string' || !cfg.mainBranch.trim()
     if (stampedBranch) cfg.mainBranch = adoptionMainBranch(targetDir)
     if (flagRaw) cfg.harnesses = flagRaw
-    if (flagRaw || stampedBranch) {
+    // @@@ fill what a fresh adoption would have planted - a config written before adoption (--pure, an atlas
+    // run, by hand) has no launchers, and no session can start without one. Launchers anywhere in the merged
+    // config (the local overlay included) are the reader's and stay; only an absent pool is filled. lint is
+    // filled the same way, since an absent one inherits SpexCode's own roots and governs nothing here.
+    const merged = readConfig(targetDir).sessions
+    const filledSessions = !Object.keys(merged?.launchers ?? {}).length && !merged?.defaultLauncher?.trim()
+    const pool = filledSessions ? templateSessions(nativeChosen) : undefined
+    const seeded = Object.keys(pool?.launchers ?? {}).length ? pool : undefined
+    if (seeded) cfg.sessions = { ...(cfg.sessions ?? {}), ...seeded }
+    const filledLint = !cfg.lint
+    if (filledLint) cfg.lint = (readJsonConfig(templateConfigPath) as Record<string, any> | null)?.lint
+    if (flagRaw || stampedBranch || seeded || filledLint) {
       writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
       console.log(`✓ stamped ${[
         flagRaw ? `"harnesses": ${JSON.stringify(flagRaw)}` : '',
         stampedBranch ? `"mainBranch": ${JSON.stringify(cfg.mainBranch)}` : '',
+        seeded ? `launchers ${JSON.stringify(Object.keys(seeded.launchers ?? {}))} (default ${JSON.stringify(seeded.defaultLauncher)})` : '',
+        filledLint ? `lint.governedRoots ${JSON.stringify(cfg.lint?.governedRoots ?? null)}` : '',
       ].filter(Boolean).join(' and ')} into the existing .spec/spexcode.json (other fields untouched)`)
     } else {
       console.warn(`• .spec/spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
@@ -216,12 +297,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     const cfg = (readJsonConfig(templateConfigPath) ?? {}) as Record<string, any>
     cfg.harnesses = chosenHarnesses
     cfg.mainBranch = adoptionMainBranch(targetDir)
-    if (nativeChosen.length && cfg.sessions?.launchers) {
-      cfg.sessions.launchers = Object.fromEntries(
-        Object.entries(cfg.sessions.launchers as Record<string, { harness?: string }>).filter(([, l]) => nativeChosen.includes(l.harness ?? 'claude')))
-      const names = Object.keys(cfg.sessions.launchers)
-      if (names.length) cfg.sessions.defaultLauncher = names[0]
-    }
+    cfg.sessions = templateSessions(nativeChosen)
     writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
     const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
     console.log(`✓ planted .spec/spexcode.json — mainBranch ${JSON.stringify(cfg.mainBranch)}, harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)

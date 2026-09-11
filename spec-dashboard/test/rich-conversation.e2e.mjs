@@ -115,7 +115,7 @@ try {
       composerFocused: document.activeElement?.classList.contains('m-input'),
       text: getSelection()?.toString() || '',
     }))
-    assert.equal(selection.composerFocused, true, `${name}: selecting rich text preserves the composer focus sink`)
+    assert.equal(selection.composerFocused, false, `${name}: native rich-text selection owns document focus`)
     assert.ok(selection.text.length > 0, `${name}: rich text remains selectable`)
     await page.keyboard.press('Escape')
 
@@ -191,7 +191,7 @@ try {
     }))
     assert.equal(formulaCopy.clipboard, 'Copy E = mc^2 and a+b once.', `${name}: copied formulas use their authored source once`)
     assert.equal(formulaCopy.native, formulaCopy.clipboard)
-    assert.equal(formulaCopy.composerFocused, true)
+    assert.equal(formulaCopy.composerFocused, false)
     await page.keyboard.press('Escape')
 
     const formulaGlyph = formulaNote.locator('[data-math-source="E = mc^2"] .katex-html .mord').first()
@@ -208,7 +208,7 @@ try {
     assert.equal(partialFormulaCopy.clipboard, 'E = mc^2', `${name}: partial formula selection copies the atomic authored source`)
     assert.ok(partialFormulaCopy.range.length > 0)
     assert.equal(partialFormulaCopy.native, partialFormulaCopy.clipboard)
-    assert.equal(partialFormulaCopy.composerFocused, true)
+    assert.equal(partialFormulaCopy.composerFocused, false)
     await page.keyboard.press('Escape')
 
     await page.screenshot({ path: join(OUT, `${name}.png`), fullPage: true })

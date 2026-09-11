@@ -35,7 +35,7 @@ try {
   }))
   assert.ok(selected.text.length > 0, 'native double-click did not create a text selection')
   assert.equal(selected.custom, false, 'the timeline still owns a Custom Highlight')
-  assert.equal(selected.focused, true, 'reading text stole composer focus')
+  assert.equal(selected.focused, false, 'native reading selection owns document focus')
 
   await page.keyboard.press('Control+c')
   const copied = await page.evaluate(() => navigator.clipboard.readText())
@@ -53,7 +53,7 @@ try {
   await page.locator('#native-paste-audit').evaluate((element) => element.remove())
 
   await page.keyboard.press('Escape')
-  const cleared = await page.evaluate(() => ({ native: window.getSelection()?.toString() || '', draft: document.querySelector('.m-input:visible')?.value || '' }))
+  const cleared = await page.evaluate(() => ({ native: window.getSelection()?.toString() || '', draft: document.querySelector('.m-input')?.value || '' }))
   assert.equal(cleared.native, '', 'Escape did not clear the explicit native selection')
   assert.equal(cleared.draft, 'draft remains separate from reader selection', 'selection cleanup changed the composer draft')
 

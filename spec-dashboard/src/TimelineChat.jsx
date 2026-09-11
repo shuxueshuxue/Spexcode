@@ -21,7 +21,7 @@ import { CopyButton } from './CopyButton.jsx'
 import { SessionFilesContext } from './fileRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
 import { inboxCommands } from './sessionCommands.js'
-import { clearNativeSelection, nativeSnapshot, observeNativeSelection, readerIsSelecting, useSelectionController } from './selectionController.js'
+import { clearNativeSelection, nativeSelectionWithin, nativeSnapshot, observeNativeSelection, readerIsSelecting, useSelectionController } from './selectionController.js'
 
 // a short date for the day separators the timeline inserts when the calendar day flips between
 // neighbouring events; the row time itself is the transcript's (`timeOf`, @spexcode/transcript-ui).
@@ -561,7 +561,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   useEffect(() => {
     if (!active) return undefined
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && timelineRangeRef.current) clearSelection()
+      if (event.key === 'Escape' && (timelineRangeRef.current || nativeSelectionWithin(scrollRef.current))) clearSelection()
     }
     document.addEventListener('keydown', onKeyDown, true)
     return () => document.removeEventListener('keydown', onKeyDown, true)

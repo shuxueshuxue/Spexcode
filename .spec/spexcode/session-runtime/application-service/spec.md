@@ -50,9 +50,9 @@ State events use the closed `session.state.changed.v1` envelope with JSON payloa
 proposal and note fields. Replay folds the append-only
 event stream on restart and validates sequence gaps and unknown required event types through [[session-events]].
 Successful dequeue remains the protocol transfer boundary; runtime binding resolution occurs before dequeue and is not
-an acknowledgement or a second queue. A leaf adapter that has no native conversation id uses its session-owned
-controller or rendezvous listener as the transport and may drain the canonical queue through that adapter. Shared
-adapter runtimes remain fail-closed until their exact `spex-governed` binding exists.
+an acknowledgement or a second queue. Every adapter drains through its exact `spex-governed` binding and none drains
+without one: the adopter binds a caller-pinned adapter when it launches and a native-assigned adapter when its id is
+captured.
 
 ## Transaction and failure contract
 

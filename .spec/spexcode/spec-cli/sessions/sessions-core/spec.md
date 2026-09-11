@@ -65,12 +65,14 @@ No caller reads or writes lifecycle facts in JSON.
 
 A retired protocol address is not delivery debt — the sweep drops that impossible lookup instead of polling it
 forever — and a queue with no bound runtime is retained but not polled, since binding is what makes it drainable.
-Every adapter reaches that binding through one writer, and it records the adapter's exact native target identity
-([[harness-adapter]]): a caller-pinned adapter (Claude and pi, headless or not) is bound by every launch, which is
-idempotent for an unchanged identity, and a native-assigned adapter by its capture. There is no unbound delivery path
-beside it, so the retry sweep reaches every launched session. Acceptance there is still success: the caller is told
-`delivery: queued` after the message commits, never a false append failure because the post-commit drain refused an
-unbound runtime.
+A binding means an attached runtime. Every adapter reaches it through one writer, and it records the adapter's exact
+native target identity ([[harness-adapter]]): a caller-pinned adapter (Claude and pi, headless or not) is bound by
+every launch, which is idempotent for an unchanged identity, and a native-assigned adapter by its capture. The
+teardown that stops or closes a session releases it, as does a launch that fails to attach and leaves the record
+stopped. There is no unbound delivery path beside it, so the retry sweep reaches every running session and no
+stopped or closed one: their debt waits in the queue for the resume that binds them again, and the post-commit wake
+likewise leaves an unbound recipient alone. Acceptance there is still success: the caller is told `delivery: queued`
+after the message commits, never a false append failure because the post-commit drain refused an unbound runtime.
 
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is settled, its worktree is
@@ -156,12 +158,13 @@ failure: it clears the prior `error` lifecycle and its failure note, publishes t
 until a real activity hook makes it `active`, and never leaves an online worker represented as `error`. Waiting
 declarations (`asking`, `parked`, or an `awaiting` proposal) remain waiting declarations when resumed; only the
 terminal error state is reset by this explicit recovery operation.
-A backend start gives each governed, unarchived record it launched the binding its launch writes, so a session
-launched by an earlier toolchain is not left outside the retry sweep. The launch script a launch leaves in the
-session store is the witness; a record no launch here produced (an adopter's or a fixture's) keeps whatever binding
-its owner gives it, and a session that is already bound keeps its binding. The start token's one home is the record;
-a record without one gets its first token when it is bound. The pass is idempotent and reports each record it cannot
-bind.
+A backend start brings each governed record it launched in line with that rule, so what an earlier toolchain left
+behind is repaired: a running one gets the binding its launch writes, and a stopped or closed one loses a binding it
+has no runtime for. The launch script a launch leaves in the session store is the witness; a record no launch here
+produced (an adopter's or a fixture's) keeps whatever binding its owner gives it, and a running session that is
+already bound keeps its binding. The start token's one home is the record; a record without one gets its first token
+when it is bound. The pass is idempotent and reports each record it cannot settle. A session whose agent died without
+a stop or close keeps its binding until someone stops, closes, or resumes it: nothing here infers death from a probe.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],

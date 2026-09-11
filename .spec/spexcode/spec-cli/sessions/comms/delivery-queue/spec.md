@@ -109,11 +109,13 @@ peer message after reparent, but a command it had already queued cannot cross th
 **Any process may drain; one process is expected to.** A pass costs nothing when the queue is empty, so
 `sendText` runs one immediately in whatever process accepted the message — that is what puts the text in a
 live agent's current turn instead of at the next sweep tick. The retry belongs to the `spex serve` that owns the project root:
-it watches the queues of its bound sessions, which is every launched session whatever its adapter
+it watches the queues of its bound sessions, which is every running session whatever its adapter
 ([[sessions-core]]), and drains what an earlier pass could not. So a message owed to an agent whose harness was
-busy, restarting, or gone, or whose handover a concurrent connection displaced ([[claude-rendezvous]]), is
-delivered when it can be, rather than waiting for that agent to happen to take a turn or for the next message to
-arrive. Neither is privileged — the lock, not the process, is the guarantee.
+busy or restarting, or whose handover a concurrent connection displaced ([[claude-rendezvous]]), is delivered when
+it can be, rather than waiting for that agent to happen to take a turn or for the next message to arrive. A stopped
+or closed session holds no binding, so its debt is kept but not polled: retrying a runtime that is not there would
+be work that grows with every such session and delivers nothing, and the resume that binds it hands the debt over.
+Neither is privileged — the lock, not the process, is the guarantee.
 
 **Delivery has exactly one shape: an ordinary prompt.** The agent receives a message the same way it receives
 anything else a human types, through the harness adapter's control channel. There is no second injection path

@@ -12,7 +12,7 @@ import { readTimeline } from './session-timeline.js'
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest } from './session-application.js'
 import { sessionStateKit } from './session-declarations.js'
 import { rvSock, stampRvSock } from './harness.js'
-import { bindLaunchedRuntimes, markHumanPromptActive, sendText, sessionHasPendingDelivery } from './sessions.js'
+import { markHumanPromptActive, reconcileLaunchedRuntimes, sendText, sessionHasPendingDelivery } from './sessions.js'
 import { readRecord } from './session-record.js'
 import { sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
@@ -125,7 +125,7 @@ test('canonical lifecycle writers resolve a Codex thread alias before transition
   }
 })
 
-test('a Claude session launched before launch-time binding is bound at backend start and then receives a prompt', async () => {
+test('a backend start binds a running launched session, releases a closed one, and leaves the rest alone', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-cutover-legacy-dispatch-'))
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
@@ -151,15 +151,27 @@ test('a Claude session launched before launch-time binding is bound at backend s
   mkdirSync(sessionStoreDir(migrated), { recursive: true })
   writeFileSync(sessionRecordPath(migrated), JSON.stringify({ session_id: migrated, governed: true, worktree_path: process.cwd(), branch: 'main', harness: 'codex', harness_session_id: 'migrated-thread', stopped: false, archived: false }) + '\n')
   writeFileSync(sessionArtifactPath(migrated, 'launch.sh'), '')
+  // a launched session closed while it still owed a message: no runtime can ever take it until a resume
+  const closed = 'closed-owing-session'
+  mkdirSync(sessionStoreDir(closed), { recursive: true })
+  writeFileSync(sessionRecordPath(closed), JSON.stringify({ session_id: closed, governed: true, worktree_path: process.cwd(), branch: 'main', harness: 'codex', harness_session_id: 'closed-thread', runtime_start_token: 'closed-token', stopped: true, archived: true }) + '\n')
+  writeFileSync(sessionArtifactPath(closed, 'launch.sh'), '')
   const app = configuredSessionApplication()
   app.createSession({ sessionId: id, status: 'active' })
   app.createSession({ sessionId: adopted, status: 'active' })
   app.createSession({ sessionId: migrated, status: 'active' })
+  app.createSession({ sessionId: closed, status: 'archived' })
   app.bindRuntime(migrated, { namespace: 'spex-governed', runtimeKind: 'codex', nativeSessionId: 'migrated-thread', nativeStartToken: 'migration-token' })
+  app.bindRuntime(closed, { namespace: 'spex-governed', runtimeKind: 'codex', nativeSessionId: 'closed-thread', nativeStartToken: 'closed-token' })
+  app.enqueueMessage(closed, { kind: 'session.prompt.v1', body: Buffer.from('owed to a closed session'), senderSessionId: null })
+  assert.equal(sessionHasPendingDelivery(closed), true, 'fixture: the closed session starts out polled')
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
-    await bindLaunchedRuntimes()
+    await reconcileLaunchedRuntimes()
+    assert.equal(app.resolveRuntime(closed, 'spex-governed')?.status, 'unbound', 'a closed session holds no binding')
+    assert.equal(sessionHasPendingDelivery(closed), false, 'the retry sweep no longer polls it')
+    assert.equal(app.readPendingMessages(closed).length, 1, 'its debt is retained for a resume')
     assert.equal(app.resolveRuntime(adopted, 'spex-governed'), null, 'a record no launch here produced is not bound')
     const kept = app.resolveRuntime(migrated, 'spex-governed')
     assert.deepEqual([kept?.nativeStartToken, kept?.bindingGeneration], ['migration-token', 1], 'an existing binding is left as it is')
@@ -245,7 +257,7 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   writeFileSync(sessionArtifactPath(id, 'launch.sh'), '')
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
-    await bindLaunchedRuntimes()
+    await reconcileLaunchedRuntimes()
     const first = await sendText(id, 'queued prompt', undefined, { deliveryKey: deliveryId })
     assert.deepEqual(first, { ok: true, delivery: 'queued', replayed: false })
     assert.equal(app.readState(id)?.status, 'asking', 'a queued prompt must not claim the session is working before handoff')
@@ -303,7 +315,7 @@ test('a delivered human prompt reopens a parked session even when another prompt
   }, { text: 'already queued', from: null })
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
-    await bindLaunchedRuntimes()
+    await reconcileLaunchedRuntimes()
     const result = await sendText(id, 'wake now')
     assert.equal(result.ok, true)
     assert.equal(app.readState(id)?.status, 'active', 'successful handoff must reopen parked even if later debt remains')

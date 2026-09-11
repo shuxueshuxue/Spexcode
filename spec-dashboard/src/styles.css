@@ -515,11 +515,11 @@ button.ft-row { cursor: pointer; }
    grab strip with no feedback at all while [[resizable-panes]]'s divider lit under the pointer — two
    dividers with two answers to the same question. One answer now: the seam thickens into the accent under
    the pointer and while dragging, and shows nothing at rest, so a resting window gains no visible handle. */
-.ft-resize::after, .ctx-resize::after {
+.ft-resize::after, .ctx-resize::after, .diff-panel-resize::after {
   content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent;
 }
-.ft-resize:hover::after, .ctx-resize:hover::after,
-body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after {
+.ft-resize:hover::after, .ctx-resize:hover::after, .diff-panel-resize:hover::after,
+body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after, body.is-resizing .diff-panel-resize::after {
   background: color-mix(in srgb, var(--blue) 55%, transparent);
 }
 

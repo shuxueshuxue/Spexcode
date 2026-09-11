@@ -467,11 +467,15 @@ body.is-session-dragging .dock-archive-door:hover {
   color: var(--blue); background: transparent; border: 0; border-top: var(--divider-rule); font: inherit; text-align: left; cursor: pointer;
 }
 .ft-graph-entry:hover { color: var(--ink2); background: var(--wash-hover); }
+/* A row is a div, an anchor, or a button depending on what pressing it does, and it wears the same band
+   whichever it is: the element's own chrome (a button's border and face) is cleared here, once, so no
+   projection can list its files in bordered grey boxes because its rows happened to be buttons. */
 .ft-row {
   display: flex; align-items: center; gap: 4px; width: calc(100% - var(--space-4) * 2); margin: 0 var(--space-4);
-  padding: var(--space-2) 10px; border-radius: var(--radius);
+  padding: var(--space-2) 10px; border: 0; border-radius: var(--radius); background: transparent; text-align: left;
   font-family: var(--ui-font); font-size: var(--type-meta); line-height: var(--line-session-row); color: var(--ink);
 }
+button.ft-row { cursor: pointer; }
 /* ONE SIDEBAR GRAMMAR. A tree row is drawn exactly as a session row is (`.si-item`, [[session-console]]): an
    inset rounded band on the panel ground, body ink at rest, heading ink and the hover wash under the pointer,
    the selected wash plus the medium weight when it is the address. The two docks are one product's two
@@ -503,7 +507,7 @@ body.is-session-dragging .dock-archive-door:hover {
 .ft-mark-active { background: var(--orange); }
 .ft-mark-drift { background: var(--yellow); }
 /* the disk projection's rows: a directory only discloses (whole row is the hinge), a file is an anchor */
-.ft-dir { cursor: pointer; background: none; border: 0; text-align: left; }
+.ft-dir { cursor: pointer; }
 .ft-code .ft-label, .ft-code { color: var(--blue); text-decoration: none; }
 .ft-code:hover { color: var(--ink2); }
 .ft-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }

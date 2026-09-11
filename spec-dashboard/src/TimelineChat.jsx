@@ -14,7 +14,6 @@ import { useEscLayer } from './escStack.js'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
-import { readerIsSelecting } from './readerSelection.js'
 import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -23,7 +22,7 @@ import { CopyButton } from './CopyButton.jsx'
 import { SessionFilesContext } from './fileRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
 import { inboxCommands } from './sessionCommands.js'
-import { clearNativeSelection, nativeSnapshot, observeNativeSelection, useSelectionController } from './selectionController.js'
+import { clearNativeSelection, nativeSnapshot, observeNativeSelection, readerIsSelecting, useSelectionController } from './selectionController.js'
 
 // a short date for the day separators the timeline inserts when the calendar day flips between
 // neighbouring events; the row time itself is the transcript's (`timeOf`, @spexcode/transcript-ui).

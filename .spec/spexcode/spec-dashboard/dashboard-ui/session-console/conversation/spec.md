@@ -19,7 +19,6 @@ related:
   - spec-dashboard/test/conversation-working-tail.e2e.mjs
   - spec-dashboard/test/seam-fold-motion.e2e.mjs
   - spec-dashboard/test/timeline-load-earlier-position.e2e.mjs
-  - spec-dashboard/src/readerSelection.js
   - spec-dashboard/src/CopyButton.jsx
   - spec-dashboard/src/clipboard.js
 ---

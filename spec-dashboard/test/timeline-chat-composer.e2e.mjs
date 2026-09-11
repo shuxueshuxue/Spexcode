@@ -45,16 +45,18 @@ async function verifyComposerPress(page, input) {
     const walker = note ? document.createTreeWalker(note, NodeFilter.SHOW_TEXT) : null
     let text = walker?.nextNode()
     while (text && !text.data.trim()) text = walker.nextNode()
-    if (!text || typeof Highlight === 'undefined' || !CSS.highlights) return false
+    if (!text) return false
     const range = document.createRange()
     range.setStart(text, 0)
     range.setEnd(text, Math.min(4, text.data.length))
-    CSS.highlights.set('timeline-sel', new Highlight(range))
-    return CSS.highlights.has('timeline-sel')
+    const selection = document.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection.toString().length > 0
   })
   await input.click()
   const after = await page.evaluate(() => ({
-    highlighted: CSS.highlights?.has('timeline-sel') || false,
+    highlighted: (window.getSelection()?.toString() || '').length > 0,
     focused: document.activeElement?.matches('.m-input') || false,
   }))
   return { available: highlighted, ...after }

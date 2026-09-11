@@ -37,6 +37,11 @@ export function clearNativeSelection(root) {
   if (root.contains(range.commonAncestorContainer)) selection.removeAllRanges()
 }
 
+export function readerIsSelecting() {
+  const native = typeof window !== 'undefined' && window.getSelection ? window.getSelection() : null
+  return !!native && !native.isCollapsed && String(native).trim().length > 0
+}
+
 export function observeNativeSelection(root, options = {}) {
   if (!root || typeof document === 'undefined') return () => {}
   const { surfaceId, semantic, onSnapshot } = options

@@ -37,32 +37,17 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   overlay already holds focus by then, it owns it — the return never yanks. The shared modal chrome returns
   on its own unmount, so every closing path — Esc, backdrop, cancel, submit — honors the contract without
   each caller wiring it.
-- **Inert chrome.** The acquisition-side twin: a pointer-down on anything that is not itself an input surface
-  (an editable field, the xterm screen, or a scrollbar gutter) is **prevented from moving focus at all** — the
-  click still lands and acts. A posted-file preview explicitly marks only its rendered document body as native
-  selectable: its non-focusable content may create a browser Selection and receive Ctrl/Cmd+C without moving
-  focus from the current sink. Selectable conversation text is interaction content, but not an exception to
-  this rule: its surface keeps the sink continuously focused and translates pointer coordinates into a CSS Custom
-  Highlight Range, never a document Selection. That driver ports xterm.js `SelectionService`'s mousedown
-  `MouseEvent.detail` modes rather than layering late click handlers over a drag: NORMAL extends by character,
-  WORD keeps a double-click-and-drag snapped from its anchor word through its landing word, and LINE selects a
-  whole note. Only one of those valid text presses starts a new selection: an excluded control or a consecutive
-  press after LINE leaves the current Range intact. Drag, double-click, double-click-and-drag, and triple-click selection therefore remain visible and
-  copyable without a native press ever extinguishing the sink. Buttons, links, summaries, roles, and editable
-  controls are outside that driver, while their click actions still work under the same inert press. A surface or
-  menu attaches this one capture-phase guard, and then most pops need no return because focus never left: the
-  ticket stays pinned to the real input region instead of getting polluted by the button that opened the pop. A
-  read-only reading surfaces mark themselves `data-reading-surface`: they deliberately keep the browser's native text
-  selection and copy gesture, while any authored action (such as a diff comment) belongs on a separate gutter door.
-  A session tree drag is an ordinary whole-row primary-pointer gesture: the row starts tracking without native
-  HTML drag state, while the guard keeps the active sink in place through the press and drag.
+- **Inert chrome.** The acquisition-side twin protects explicit chrome only: buttons, rows, resizers and menus
+  can keep the current sink from being blurred while their click still acts. A read-only reading surface marks
+  itself `data-reading-surface`; its pointer, browser Selection, copy and contextmenu remain native, and any
+  authored action (such as a diff comment) belongs on a separate action door. The controller behind those surfaces
+  publishes the native Range without painting a second selection or moving focus. A session tree drag remains an
+  ordinary whole-row gesture; it is chrome, not reading text, so it may use the inert guard.
 
-The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it.
-For a terminal-free conversation it is continuous through chrome presses and text selection; the textarea's own
-native caret remains authoritative even while a custom highlight is painted, so the first edit needs no synthetic
-handoff or caret restoration. The **session interface is a surface, not a transient overlay** — it owns its own
-focus discipline and hosts the sink, so it stays outside this boundary; the boundary governs only the modals that
-float over it.
+The **sink** is the notes-app axiom for authored inputs, not a reason to own reader focus. A surface names where
+focus returns when an overlay closes; a reader may focus a native reading surface or leave focus in a composer,
+and its draft/caret remains application state either way. The **session interface is a surface, not a transient
+overlay** — it owns its chrome focus discipline, while [[selection-controller]] owns the reading selection seam.
 
 ## why decoupled, not a focus stack
 

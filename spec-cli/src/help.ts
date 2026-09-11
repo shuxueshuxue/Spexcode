@@ -190,7 +190,7 @@ const ENTRIES: Record<string, Entry> = {
   // ── project verbs (implicit object = this project) ────────────────────────
   graph: {
     line: 'graph                 list the assembled spec nodes: bare = readable tree · --json = full payload · --public = static graph snapshot',
-    body: `Usage: spex graph [--focus <id>] [--depth N] [--json] | spex graph --public [--out <path>] [--content-dir <path>]
+    body: `Usage: spex graph [--focus <id>] [--depth N] [--json] | spex graph --public [--out <path>] [--content-dir <path>] [--html <file>]
 
 The normal assembled view is merged spec tree + worktree overlay + sessions. Bare it renders the
 status-coloured tree (coloured when stdout is a tty; NO_COLOR respected), one line per node: id,
@@ -201,7 +201,9 @@ derived status, title, and attention badges (drift:N · stale:N · issues:N · g
                 food; with --focus/--depth it is that filtered subtree as nested objects instead
   --public      deterministic read-only Spec Graph payload; excludes sessions, issues, and write state
   --out <path>  write the public graph index to a file instead of stdout (only with --public)
-  --content-dir <path>  write one read-only spec document per node for a static host (only with --public)`,
+  --content-dir <path>  write one read-only spec document per node for a static host (only with --public)
+  --html <file>  write the whole public graph as ONE self-contained page: the read-only dashboard with the
+                index and every node document inside it, so it opens straight from disk (only with --public)`,
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },
   init: {

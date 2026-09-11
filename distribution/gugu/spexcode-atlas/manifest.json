@@ -1,0 +1,36 @@
+{
+  "id": "spexcode-atlas",
+  "name": "SpexCode Atlas",
+  "description": "The workspace's spec tree with an architecture diagram above each node that has one, drawn in the tab; one button starts an agent that extracts the tree and draws it.",
+  "author": "SpexCode",
+  "categories": [
+    "architecture"
+  ],
+  "version": "0.7.0",
+  "apiVersion": 1,
+  "entry": "index.html",
+  "permissions": {
+    "capabilities": [
+      "workspace:read",
+      "agents:control"
+    ]
+  },
+  "contributes": {
+    "tabs": [
+      {
+        "name": "atlas",
+        "title": "Spec Atlas",
+        "toolbar": [
+          {
+            "id": "draw",
+            "title": "Draw the atlas"
+          },
+          {
+            "id": "refresh",
+            "title": "Refresh"
+          }
+        ]
+      }
+    ]
+  }
+}

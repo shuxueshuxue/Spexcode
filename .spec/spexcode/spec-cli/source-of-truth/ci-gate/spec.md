@@ -25,7 +25,8 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   (retired vocabulary cannot reappear on product surfaces), the **docs-release producer test** (the published
   immutable guidance bundle remains reproducible), the **[[release-publish]] producer test** (the complete
   public package set remains version-locked, ordered, and guarded against direct publication), the
-  **`tsc --noEmit`** type check on the CLI package, the [[suite-parity]] and [[import-cycles]] checks,
+  **[[distribution]] test** (each host package's generated files are fresh, and the gugu tab's bundled renderer
+  draws what archify draws), the **`tsc --noEmit`** type check on the CLI package, the [[suite-parity]] and [[import-cycles]] checks,
   **every workspace unit suite**
   (each run in its own workspace), the CLI package's complete **unit/integration suite**, and
   one data-driven **production clean-init matrix**. The workspace suites are not a curated selection: parity

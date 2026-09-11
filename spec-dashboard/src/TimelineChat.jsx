@@ -14,7 +14,6 @@ import { useEscLayer } from './escStack.js'
 import { Caret, Icon, IconButton } from './icons.jsx'
 import { DashboardTranscriptUi, TimelineRichText } from './Transcript.jsx'
 import { conversationItems } from './conversationItems.js'
-import { readerIsSelecting } from './readerSelection.js'
 import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
@@ -23,6 +22,7 @@ import { CopyButton } from './CopyButton.jsx'
 import { SessionFilesContext } from './fileRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
 import { inboxCommands } from './sessionCommands.js'
+import { clearNativeSelection, nativeSnapshot, observeNativeSelection, readerIsSelecting, useSelectionController } from './selectionController.js'
 
 // a short date for the day separators the timeline inserts when the calendar day flips between
 // neighbouring events; the row time itself is the transcript's (`timeOf`, @spexcode/transcript-ui).
@@ -114,101 +114,6 @@ const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
   }, [from, skewRef])
   return <>{elapsed(Math.max(0, now - from))}</>
 })
-
-const SELECTION_CONTROLS = 'button, summary, a, input, textarea, select, option, label, [role], [contenteditable]:not([contenteditable="false"])'
-const EDITING_KEYS = new Set([
-  'Backspace', 'Delete', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
-  'Home', 'End', 'PageUp', 'PageDown',
-])
-// Mirrors @xterm/xterm 6 SelectionService: mousedown chooses the mode from event.detail and the
-// document mousemove for that same press extends the mode-specific anchor.
-const SelectionMode = Object.freeze({ NORMAL: 0, WORD: 1, LINE: 2 })
-
-const hasTimelineHighlight = () => typeof Highlight !== 'undefined'
-  && typeof CSS !== 'undefined' && !!CSS.highlights
-
-const clearTimelineHighlight = () => {
-  if (hasTimelineHighlight()) CSS.highlights.delete('timeline-sel')
-}
-
-// The custom path exists only where both halves do; without them the press stays the browser's.
-const hasTimelineSelection = () => hasTimelineHighlight() && typeof document.caretRangeFromPoint === 'function'
-
-// @@@leaked-selection - the browser can still own a Selection over the timeline (a drag begun on a control,
-// a fourth quick click), and the cancelled mousedown that keeps the composer caret also cancels the browser's
-// own click-to-collapse — so a leaked Selection must be retired here or it outlives every later press.
-const clearNativeSelectionWithin = (timeline) => {
-  const selection = document.getSelection()
-  if (!timeline || !selection || selection.rangeCount === 0) return
-  const inside = (node) => !!node && timeline.contains(node)
-  if (inside(selection.anchorNode) || inside(selection.focusNode)) selection.removeAllRanges()
-}
-
-const setTimelineHighlight = (range) => {
-  if (!hasTimelineHighlight() || !range || range.collapsed) return false
-  CSS.highlights.set('timeline-sel', new Highlight(range))
-  return true
-}
-
-const rangeAtPoint = (timeline, clientX, clientY) => {
-  const range = document.caretRangeFromPoint?.(clientX, clientY)
-  return range && timeline.contains(range.startContainer) ? range : null
-}
-
-const wordRangeAtPoint = (timeline, clientX, clientY) => {
-  const point = rangeAtPoint(timeline, clientX, clientY)
-  const node = point?.startContainer
-  if (!node || node.nodeType !== Node.TEXT_NODE || !node.data) return null
-
-  const offset = Math.min(point.startOffset, node.data.length)
-  let bounds = null
-  if (typeof Intl.Segmenter === 'function') {
-    const segments = [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(node.data)]
-    bounds = segments.find(({ index, segment, isWordLike }) => (
-      isWordLike && index <= offset && offset < index + segment.length
-    )) || segments.findLast(({ index, segment, isWordLike }) => (
-      isWordLike && index < offset && offset <= index + segment.length
-    ))
-    if (bounds) bounds = [bounds.index, bounds.index + bounds.segment.length]
-  }
-  if (!bounds) {
-    const isWord = (char) => /[\p{L}\p{M}\p{N}_]/u.test(char)
-    let start = Math.min(offset, node.data.length - 1)
-    if (!isWord(node.data[start]) && start > 0 && isWord(node.data[start - 1])) start -= 1
-    if (!isWord(node.data[start])) return null
-    let end = start + 1
-    while (start > 0 && isWord(node.data[start - 1])) start -= 1
-    while (end < node.data.length && isWord(node.data[end])) end += 1
-    bounds = [start, end]
-  }
-
-  const range = document.createRange()
-  range.setStart(node, bounds[0])
-  range.setEnd(node, bounds[1])
-  return range
-}
-
-const lineRangeAtPoint = (timeline, clientX, clientY) => {
-  const point = rangeAtPoint(timeline, clientX, clientY)
-  const node = point?.startContainer
-  const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement
-  const line = element?.closest('.m-ev-note, .tx-quote-text')
-  if (!line || !timeline.contains(line)) return null
-  const range = document.createRange()
-  range.selectNodeContents(line)
-  return range
-}
-
-const rangeFromAnchorToFocus = (anchor, focus, mode) => {
-  const forward = anchor.compareBoundaryPoints(Range.START_TO_START, focus) <= 0
-  const start = forward ? anchor : focus
-  const end = forward ? focus : anchor
-  const range = document.createRange()
-  range.setStart(start.startContainer, start.startOffset)
-  if (mode === SelectionMode.NORMAL) range.setEnd(end.startContainer, end.startOffset)
-  else range.setEnd(end.endContainer, end.endOffset)
-  return range
-}
 
 // The shared surface renders as the semantic footer (`<footer className=...>`); keeping that landmark on
 // the primitive means Conversation and Command Box still have one shell rather than nested card chrome.
@@ -357,6 +262,7 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
 function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome, specs = [], boardCommands = [] }) {
   const t = useT()
   const isMobile = useIsMobile()
+  const { publish, clear } = useSelectionController()
   const [events, setEvents] = useState(null)
   // WHERE THE WINDOW SITS. `offset` is how many earlier events the history holds that this window does not
   // show — the number the back-load button names, and the reason a long session no longer just ends at the
@@ -382,8 +288,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const scrollRef = useRef(null)
   const timelineContentRef = useRef(null)
   const inputRef = useRef(null)
-  const selectionDragRef = useRef(null)
   const timelineRangeRef = useRef(null)
+  const timelineSurfaceId = `timeline:${s.id}`
   const copyStatusTimerRef = useRef(null)
   // A LIVE FRAME WITHHOLDS OUTPUT BODIES: a call opened in the open seam fetches its body once, by session and
   // interval, and the seam remembers it for as long as the session is on screen — reopening never refetches.
@@ -478,6 +384,28 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     })
     return () => cancelAnimationFrame(focusFrame)
   }, [s.id, active, isMobile])
+  useEffect(() => {
+    if (!active) return undefined
+    const timeline = scrollRef.current
+    if (!timeline) return undefined
+    const surfaceId = `timeline:${s.id}`
+    const stop = observeNativeSelection(timeline, {
+      surfaceId,
+      semantic: (range) => {
+        const node = range.startContainer?.nodeType === Node.ELEMENT_NODE
+          ? range.startContainer
+          : range.startContainer?.parentElement
+        const at = node?.closest?.('[data-at]')?.getAttribute('data-at') || null
+        return at ? { session: s.id, at } : { session: s.id, at: null }
+      },
+      onSnapshot: (snapshot) => {
+        timelineRangeRef.current = snapshot?.source || null
+        if (snapshot) publish(snapshot)
+        else clear(surfaceId)
+      },
+    })
+    return () => { stop(); timelineRangeRef.current = null; clear(surfaceId) }
+  }, [s.id, active, publish, clear])
   // @@@archived-history-no-poll - archived records are immutable; offline records can still receive sent events from external `spex session send`, so only archived skips the interval.
   useEffect(() => {
     if (!active || footerState === 'archived') return undefined
@@ -626,12 +554,14 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     return () => observer.disconnect()
   }, [active, followUnlessReaderGrewIt])
 
-  const clearSelection = () => {
+  // The native Range is the reader's selection; this helper is only for an explicit action (quote, Escape,
+  // or moving into the composer), never for ordinary pointer movement.
+  const clearSelection = useCallback(() => {
     timelineRangeRef.current = null
-    clearTimelineHighlight()
-    clearNativeSelectionWithin(scrollRef.current)
+    clearNativeSelection(scrollRef.current)
+    clear(timelineSurfaceId)
     setCopyStatus(null)
-  }
+  }, [clear, timelineSurfaceId])
 
   const copyText = useCallback(async (text) => {
     clearTimeout(copyStatusTimerRef.current)
@@ -645,96 +575,29 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   }, [])
 
   useEffect(() => () => clearTimeout(copyStatusTimerRef.current), [])
-
-  // Custom Highlight preserves the textarea caret while conversation text is selected.
-  const beginTimelineSelection = (e) => {
-    const timeline = scrollRef.current
-    const target = e.target
-    if (e.button !== 0 || !timeline || !(target instanceof Element) || !hasTimelineSelection()) return
-    const control = target.closest(SELECTION_CONTROLS)
-    if (control && timeline.contains(control)) return
-    if (target === timeline) {
-      const rect = timeline.getBoundingClientRect()
-      if (e.clientX - rect.left - timeline.clientLeft >= timeline.clientWidth
-        || e.clientY - rect.top - timeline.clientTop >= timeline.clientHeight) return
-    }
-    // From here the press is the timeline's whether or not it lands on selectable text: it retires every
-    // selection and keeps the composer caret. A press left to the browser would select natively instead.
-    clearSelection()
-    e.preventDefault()
-    const mode = e.detail === 2 ? SelectionMode.WORD
-      : e.detail >= 3 ? SelectionMode.LINE : SelectionMode.NORMAL
-    const anchor = mode === SelectionMode.WORD
-      ? wordRangeAtPoint(timeline, e.clientX, e.clientY)
-      : mode === SelectionMode.LINE
-        ? lineRangeAtPoint(timeline, e.clientX, e.clientY)
-        : rangeAtPoint(timeline, e.clientX, e.clientY)
-    if (!anchor) return
-    selectionDragRef.current = { mode, anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
-    if (mode !== SelectionMode.NORMAL) {
-      timelineRangeRef.current = anchor
-      setTimelineHighlight(anchor)
-    }
-  }
-
   useEffect(() => {
     if (!active) return undefined
-    const onMouseMove = (e) => {
-      const drag = selectionDragRef.current
-      const timeline = scrollRef.current
-      if (!drag || !timeline) return
-      e.preventDefault()
-      if (drag.mode === SelectionMode.NORMAL && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return
-      const focus = drag.mode === SelectionMode.WORD
-        ? wordRangeAtPoint(timeline, e.clientX, e.clientY)
-        : drag.mode === SelectionMode.LINE
-          ? lineRangeAtPoint(timeline, e.clientX, e.clientY)
-          : rangeAtPoint(timeline, e.clientX, e.clientY)
-      if (!focus || !drag.anchor.startContainer.isConnected) return
-      const range = rangeFromAnchorToFocus(drag.anchor, focus, drag.mode)
-      timelineRangeRef.current = range
-      setTimelineHighlight(range)
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && timelineRangeRef.current) clearSelection()
     }
-    const onMouseUp = () => { selectionDragRef.current = null }
-    const onKeyDown = (e) => {
-      const range = timelineRangeRef.current
-      const input = inputRef.current
-      if (!range || range.collapsed || !input) return
-      const primary = e.ctrlKey || e.metaKey
-      const key = e.key.toLowerCase()
-      if (e.key === 'Escape') { clearSelection(); return }
-      if (primary && key === 'c') {
-        if (document.activeElement !== input || input.selectionStart !== input.selectionEnd) return
-        e.preventDefault(); e.stopPropagation()
-        copyText(richTextFromRange(range, scrollRef.current))
-        return
-      }
-      if (document.activeElement !== input) return
-      const printable = e.key.length === 1 && !primary && !e.altKey
-      const editingShortcut = primary && !e.altKey && ['a', 'v', 'x', 'y', 'z'].includes(key)
-      const composing = e.isComposing || e.key === 'Process' || e.key === 'Dead'
-      if (printable || editingShortcut || composing || EDITING_KEYS.has(e.key)) clearSelection()
-    }
-    document.addEventListener('mousemove', onMouseMove, true)
-    document.addEventListener('mouseup', onMouseUp, true)
     document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      selectionDragRef.current = null
-      clearSelection()
-      document.removeEventListener('mousemove', onMouseMove, true)
-      document.removeEventListener('mouseup', onMouseUp, true)
-      document.removeEventListener('keydown', onKeyDown, true)
-    }
-  }, [active, copyText])
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [active, clearSelection])
 
-  // THE TIMELINE'S OWN MENU. The console suppresses the native menu nowhere by default ([[session-console]]),
-  // and the one sanctioned exception is a surface that has a menu to put in its place — which is true here
-  // only while a passage is actually selected. With nothing selected the press stays the browser's, so copy,
-  // search and inspect over ordinary conversation text are untouched. The timeline's selection is a painted
-  // Highlight rather than a document Selection, so the native menu could never have acted on it anyway; this
-  // is what gives that selection its verbs. A right-click does not retire the selection — `beginTimelineSelection`
-  // answers only to the primary button — so the menu opens on a passage that is still there.
+  // A selected native passage gets the timeline's extra quote/copy verbs; without one the browser keeps its native menu.
   const onTimelineContextMenu = (event) => {
+    const snapshot = nativeSnapshot(scrollRef.current, {
+      surfaceId: timelineSurfaceId,
+      semantic: (range) => {
+        const node = range.startContainer?.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer?.parentElement
+        const at = node?.closest?.('[data-at]')?.getAttribute('data-at') || null
+        return { session: s.id, at }
+      },
+    })
+    if (snapshot) {
+      timelineRangeRef.current = snapshot.source
+      publish(snapshot)
+    }
     const range = timelineRangeRef.current
     if (!range || range.collapsed) return
     event.preventDefault()
@@ -829,14 +692,15 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     lastDay = dayKey(ts)
     rows.push(<div className="m-day" key={`d${key}`}><div className="m-day-rule" /><span className="m-day-label">{dayOf(ts)}</span></div>)
   }
-  const gutter = (ts) => <div className="m-gut"><time>{timeOf(ts)}</time></div>
+  // a quoted message's copy control lives on its time, under it in the ruler ([[copy-control]])
+  const gutter = (ts, copy = null) => <div className="m-gut">{ts ? <time>{timeOf(ts)}</time> : null}{copy}</div>
   const promptTs = s.created || detail?.created || events?.[0]?.ts
   if (detail?.prompt) {
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
       <div className="m-ev m-ev-prompt" key="prompt" data-at={atOf(promptTs)}>
-        <div className="m-quote-line"><Quote ts={promptTs} text={detail.prompt} /><CopyButton text={detail.prompt} className="m-copy" /></div>
-        {promptTs ? gutter(promptTs) : <div className="m-gut" />}
+        <Quote ts={promptTs} text={detail.prompt} />
+        {gutter(promptTs, <CopyButton text={detail.prompt} className="m-copy" />)}
       </div>,
     )
   }
@@ -858,11 +722,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (item.kind === 'quote') {
       rows.push(
         <div className="m-ev m-ev-sent" key={i} data-at={atOf(item.ts)}>
-          <div className="m-quote-line">
-            <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
-            <CopyButton text={item.text} className="m-copy" />
-          </div>
-          {gutter(item.ts)}
+          <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+          {gutter(item.ts, <CopyButton text={item.text} className="m-copy" />)}
         </div>,
       )
     } else if (item.kind === 'say') {
@@ -878,9 +739,9 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
                 <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
                 <span className="m-ev-word">{t(`status.${item.status}`)}</span>
               </span>
+              {item.text && <CopyButton text={item.text} className="m-copy" />}
             </div>
             {item.text && <ClampedNote text={item.text} />}
-            {item.text && <CopyButton text={item.text} className="m-copy" />}
           </article>
         </div>,
       )
@@ -958,9 +819,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     <SessionFilesContext.Provider value={filesScope}>
     <DashboardTranscriptUi>
     <div className="tl-chat">
-      <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
-        onClickCapture={notePress}
-        onMouseDown={beginTimelineSelection} onContextMenu={onTimelineContextMenu}>
+      <div className="m-timeline" data-reading-surface ref={scrollRef} onScroll={onScroll}
+        onClickCapture={notePress} onContextMenu={onTimelineContextMenu}>
         <div className="m-col" ref={timelineContentRef}>
           {events === null || holdingFirstPaint
             ? <div className="m-empty">{t('common.loading')}</div>

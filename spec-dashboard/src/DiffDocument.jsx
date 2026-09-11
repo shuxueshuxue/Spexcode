@@ -62,12 +62,24 @@ export function parseUnifiedPatch(patch) {
   return { oldText: oldLines.join('\n'), newText: newLines.join('\n'), oldNumbers, newNumbers }
 }
 
-function numberedLines(numbers) {
-  return lineNumbers({ formatNumber: (line) => numbers[line - 1] ? String(numbers[line - 1]) : '' })
+function numberedLines(numbers, onComment) {
+  return lineNumbers({
+    formatNumber: (line) => numbers[line - 1] ? String(numbers[line - 1]) : '',
+    domEventHandlers: {
+      mousedown: (view, line, event) => {
+        if (event.button !== 0) return false
+        const lineNo = view.state.doc.lineAt(line.from).number
+        const target = numbers[lineNo - 1]
+        if (!target) return false
+        onComment(target, target)
+        return true
+      },
+    },
+  })
 }
 
-function readOnlyExtensions(numbers, lang, wrap) {
-  return [EditorState.readOnly.of(true), EditorView.editable.of(false), numberedLines(numbers), syntaxHighlighting(HIGHLIGHT), lang, wrap ? EditorView.lineWrapping : [], THEME]
+function readOnlyExtensions(numbers, lang, wrap, onComment) {
+  return [EditorState.readOnly.of(true), EditorView.editable.of(false), numberedLines(numbers, onComment), syntaxHighlighting(HIGHLIGHT), lang, wrap ? EditorView.lineWrapping : [], THEME]
 }
 
 const entryKey = (entry) => entry ? `${entry.scope}:${entry.file.path}` : ''
@@ -79,6 +91,8 @@ const firstEntry = (data) => (data?.files || []).length ? { scope: 'branch', fil
 
 function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onComment, onEdit, onRetract, onView, onNext, onPrevious }) {
   const t = useT(); const host = useRef(null); const mounted = useRef(null)
+  const onCommentRef = useRef(onComment)
+  onCommentRef.current = onComment
   const [patch, setPatch] = useState(file.patch || '')
   const parsed = useMemo(() => parseUnifiedPatch(patch), [patch])
 
@@ -100,8 +114,8 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
       if (!live || !host.current) return
       if (mode === 'split') {
         const merge = new MergeView({
-          a: { doc: parsed.oldText, extensions: readOnlyExtensions(parsed.oldNumbers, lang, wrap) },
-          b: { doc: parsed.newText, extensions: readOnlyExtensions(parsed.newNumbers, lang, wrap) },
+          a: { doc: parsed.oldText, extensions: readOnlyExtensions(parsed.oldNumbers, lang, wrap, (start, end) => onCommentRef.current(start, end)) },
+          b: { doc: parsed.newText, extensions: readOnlyExtensions(parsed.newNumbers, lang, wrap, (start, end) => onCommentRef.current(start, end)) },
           parent: host.current,
           orientation: 'a-b', highlightChanges: true, gutter: true,
           // The endpoint already pays for 40 lines of context per hunk; collapsing to three of them threw
@@ -116,7 +130,7 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
           parent: host.current,
           state: EditorState.create({
             doc: parsed.newText,
-            extensions: [...readOnlyExtensions(parsed.newNumbers, lang, wrap), unifiedMergeView({
+            extensions: [...readOnlyExtensions(parsed.newNumbers, lang, wrap, (start, end) => onCommentRef.current(start, end)), unifiedMergeView({
               original: parsed.oldText, highlightChanges: true, syntaxHighlightDeletions: true,
               mergeControls: false, collapseUnchanged: { margin: 10, minSize: 12 },
               diffConfig: { scanLimit: 5000, timeout: 100 },
@@ -129,17 +143,6 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
     mount()
     return () => { live = false; mounted.current?.destroy(); mounted.current = null; onView(file.path, null) }
   }, [file.path, mode, open, parsed, onView, patch, wrap])
-
-  const chooseLine = (event) => {
-    if (event.button !== 0) return
-    const line = event.target.closest?.('.cm-line'); if (!line || !host.current?.contains(line)) return
-    const editor = line.closest('.cm-editor'); const view = mode === 'split' ? (editor === mounted.current?.a?.dom ? mounted.current.a : mounted.current?.b) : mounted.current
-    if (!view) return
-    const lineNo = view.state.doc.lineAt(view.posAtDOM(line, 0)).number
-    const numbers = mode === 'split' && view === mounted.current.a ? parsed.oldNumbers : parsed.newNumbers
-    const target = numbers[lineNo - 1]
-    if (target) onComment(target, target)
-  }
 
   // The header STAYS while the diff scrolls, because the one thing a reader loses inside a long hunk is
   // which file they are in. It spends its width on the leaf name and lets the directories in front of it
@@ -154,7 +157,7 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
       <span className="diff-toolbar-spacer" />
       <span className="diff-hunk-tools"><button type="button" onClick={onPrevious} aria-label={t('session.diffPrevious')}>↑</button><button type="button" onClick={onNext} aria-label={t('session.diffNext')}>↓</button></span>
     </header>
-    <div className={`diff-editor diff-editor-${mode}${wrap ? ' is-wrap' : ''}`} ref={host} onMouseDown={chooseLine} />
+    <div className={`diff-editor diff-editor-${mode}${wrap ? ' is-wrap' : ''}`} ref={host} data-reading-surface />
     {comments.length > 0 && <div className="diff-comments">{comments.map((comment) => <div key={comment.id} className={`diff-comment${comment.sentAt ? ' sent' : ''}`}>
       <span className="diff-comment-line">L{comment.lineStart}{comment.lineEnd !== comment.lineStart ? `-L${comment.lineEnd}` : ''}</span>
       <span className="diff-comment-body">{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}<IconButton icon="pencil" size={12} label={t('session.diffEdit')} onClick={() => onEdit(comment)} />

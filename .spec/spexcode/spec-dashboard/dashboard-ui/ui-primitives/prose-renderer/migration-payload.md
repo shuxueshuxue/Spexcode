@@ -35,10 +35,11 @@ formula three times (`E=mc2E = mc^2E=mc2`), while the user-facing clipboard resu
 - WORD double-click with the second press held and dragged expands continuously across at least four words; a
   late `dblclick` must not collapse it to the landing word.
 - LINE triple-click returns the complete row and intersects its inline code, link, and math descendants.
-- A plain click creates no custom highlight; Escape and a composer press clear one without moving focus.
+- A plain click creates no action snapshot; Escape and a composer press clear the native selection without moving focus.
 - Ctrl/Cmd+C equals the hardcoded user-facing fixture literal and contains `E = mc^2` exactly once.
-- During every gesture and a real timeline poll, `getSelection().toString()` stays empty, the same composer stays
-  focused, its draft survives, and immediate printable/editing keys land through the native textarea path.
+- During every gesture and a real timeline poll, the native selection remains stable until an explicit action or
+  editing gesture clears it; the draft survives, and immediate printable/editing keys land through the native
+  textarea path.
 - The originating-prompt summary remains clickable, and two warm desktop conversations expose exactly one sink.
 
 The fixture session is headless, parked before measurement, and receives no input during the gate. Its exact note

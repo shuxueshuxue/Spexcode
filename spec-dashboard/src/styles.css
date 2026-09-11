@@ -371,19 +371,27 @@ body {
 .app-shell { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 .app { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; }
 .app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
-.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.context-toggle {
-  width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius); cursor: pointer;
+.context-toggle-slot {
+  position: absolute; top: var(--space-2); right: var(--space-2); z-index: 6;
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
 }
-.context-toggle:hover, .context-toggle.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.context-toggle-reservation {
+  flex: 0 0 32px; width: 32px; height: 28px;
+  /* reserve the 28px control plus a 4px visual gap from the tab-list door */
+}
+.context-toggle {
+  color: var(--muted);
+}
+.context-toggle:hover { color: var(--ink2); background: var(--wash-hover); }
+.context-toggle.on { color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
 
 .context-dock { flex: 0 0 auto; position: relative; display: flex; flex-direction: column; min-height: 0; max-width: 640px; overflow: hidden; background: var(--ground); border-left: 1px solid var(--edge); }
 .ctx-body { flex: 1; min-height: 0; overflow: auto; }
 .ctx-resize { position: absolute; top: 0; left: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
-.ctx-head { flex: 0 0 var(--line-top); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 0 var(--space-5); color: var(--muted); font-size: var(--type-meta); border-bottom: 1px solid var(--edge); }
-.ctx-node-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
+.ctx-head { flex: 0 0 var(--line-top); display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-5); color: var(--muted); font-size: var(--type-meta); border-bottom: 1px solid var(--edge); }
+.ctx-node-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
 .ctx-panel { flex: 0 0 auto; border-bottom: 1px solid var(--edge); }
 .ctx-panel-head { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-5); color: var(--ink2); background: transparent; border: 0; font: inherit; font-size: var(--type-meta); font-weight: var(--weight-medium); text-align: left; cursor: pointer; }
 .ctx-panel-head:hover { background: var(--wash-hover); }
@@ -426,8 +434,8 @@ body {
 .sb-stale::before { content: '~'; position: absolute; left: 0; top: 0; }
 .dock-head-acts { margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-1); }
 .dock-head-act {
-  width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
+  appearance: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius); cursor: pointer;
 }
 .dock-head-act:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
 /* a door with nothing behind it stays in place, quieter: the head keeps one shape ([[dock-modes]]) */
@@ -1209,6 +1217,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .stat-status.st-pending { color: var(--muted);  } .stat-status.st-pending .stat-dot { background: var(--muted); }
 .stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--ink2); background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; }
 .stat-chip.stat-drift { color: var(--yellow); font-weight: var(--weight-medium); background: color-mix(in srgb, var(--yellow) 12%, transparent); }
+/* the pending-change toggle ([[spec-view]]): tinted like the `active` status it explains, pressed while the
+   document shows its change face */
+.stat-change { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: var(--type-meta); color: var(--orange); background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; cursor: pointer; }
+.stat-change:hover:not(:disabled) { background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.stat-change[aria-pressed="true"] { background: color-mix(in srgb, var(--orange) 14%, transparent); border-color: color-mix(in srgb, var(--orange) 35%, transparent); }
+.stat-change:disabled { cursor: default; }
 .stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
 .stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1399,10 +1413,23 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-card { padding: 7px 8px; }
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
 .pane-issues .issue-card-title { font-size: var(--type-control); }
-/* edit pane — the node's pending change, reusing the history tab's .ev-diff renderer */
+/* the node's pending change — the popup's edit tab and the spec document's change face — as a redline of
+   git's word diff: shared words read as the prose they are, removed words struck in the history diff's
+   orange, added words in its green, and the author's own line breaks kept. */
 .edit-rev { margin: 0 0 18px; }
 .edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
 .edit-by-label { font-weight: var(--weight-semibold); }
+.edit-by-session { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink2); text-decoration: none; }
+.edit-by-session:hover { text-decoration: underline; }
+.pending-none { color: var(--muted); font-size: var(--type-body); }
+.wd { display: flex; flex-direction: column; gap: 10px; }
+.wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 10px; }
+.wd-at { font-size: var(--type-caption); color: var(--muted); margin-bottom: 4px; }
+.wd-text { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.wd-text ins { text-decoration: none; color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-radius: 2px; }
+.wd-text del { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); text-decoration: line-through; border-radius: 2px; }
+/* a replaced word: git emits the removal and the addition back to back, so they need a gap to read as two */
+.wd-text del + ins { margin-left: .3em; }
 .edit-state { margin-left: auto; font-family: var(--ui-font); font-size: var(--type-caption); }
 
 .ov-marks { display: flex; gap: 3px; flex: none; margin-left: 2px; }
@@ -2539,6 +2566,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 /* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */
 .si-term-body { container-type: size; flex: 1; min-height: 0; overflow: clip; padding: 6px 10px 4px; background: var(--term-bg); }
 .si-term-body.is-conversation { padding: 0; background: var(--paper); }
+.si-term-body.is-resource { padding: 0; background: var(--paper); }
 
 /* Command Box ([[command-box]]): the layer occupies the terminal only as a click-away boundary. The box's
    bottom is fixed at 78% from the pane top (`bottom:22%`), so the shared footer never walks as lines grow. */
@@ -2938,21 +2966,20 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
    footprint on a message. */
 .m-say { min-width: 0; max-width: 100%; }
-.m-say-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
+.m-say-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
 .m-say-chip { display: inline-flex; align-items: baseline; gap: 5px; font-size: var(--type-caption); font-weight: var(--weight-medium); }
 .m-ev-note { font-size: var(--type-prose); line-height: var(--leading-body); color: var(--ink2); overflow-wrap: anywhere; }
 /* A MESSAGE CAN BE TAKEN WHOLE ([[copy-control]]): every row that carries authored text wears one copy
-   control, hung just under the message's bottom-right corner — in the empty space between rows, so it never
-   covers a word or adds height — and shown while the row is pointed at. Hidden, it takes no pointer, so the
-   space it hangs in stays the reader's. Where nothing can point it is always there, on its own line. */
-.m-say, .m-line, .m-quote-line { position: relative; }
-.m-copy { position: absolute; top: 100%; right: 0; z-index: 1; opacity: 0; pointer-events: none; }
+   control right of its time, in the same flow, so the line's width decides whether it wraps — after the status in
+   a note's head, after the time in a quoted message's ruler (or on its bubble, where a narrow pane moves the time
+   there), at the end of an event's one line — and, like the time, it comes up only while the row is pointed at
+   or holds focus. Hidden, it takes no pointer. Where nothing can point it is simply there. */
+.m-copy { opacity: 0; pointer-events: none; }
 .m-ev:hover .m-copy, .m-copy:focus-visible, .m-copy.is-failed { opacity: 1; pointer-events: auto; }
-.m-quote-line { display: flex; justify-content: flex-end; min-width: 0; }
-@media (hover: none) {
-  .m-copy { position: static; display: flex; margin: var(--space-2) 0 0 auto; opacity: 1; pointer-events: auto; }
-  .m-quote-line { flex-direction: column; align-items: flex-end; }
-}
+@media (hover: none) { .m-copy { opacity: 1; pointer-events: auto; } }
+.m-say-head > .m-copy { align-self: center; margin-block: -4px; }
+.m-line > .m-copy { align-self: flex-start; margin: -1px 0 -3px auto; }
+.m-gut > .m-copy { display: inline-flex; vertical-align: middle; margin-left: var(--space-2); }
 
 /* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
    page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.
@@ -3651,7 +3678,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .diff-editor .cm-editor, .diff-editor .cm-mergeView, .diff-editor .cm-mergeViewEditors,
 .diff-editor .cm-mergeViewEditor, .diff-editor .cm-scroller { background:var(--paper) !important; color:var(--ink); }
 .diff-editor .cm-mergeViewEditor { border-color:var(--line); }
-.diff-editor .cm-line { cursor:pointer; }
+.diff-editor .cm-line { cursor:text; }
+.diff-editor .cm-lineNumbers .cm-gutterElement { cursor:pointer; }
 .diff-editor-split, .diff-editor-unified { min-height:0; overflow:auto; }
 /* @codemirror/merge lays the two panes out itself: .cm-mergeViewEditors is the flex row and each
    .cm-mergeViewEditor is an equal, overflow-hidden column. Only the divider is ours. Do NOT make

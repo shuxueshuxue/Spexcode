@@ -111,13 +111,10 @@ try {
     await page.mouse.move(Math.min(targetBox.x + 120, targetBox.x + targetBox.width - 6), y, { steps: 4 })
     await page.mouse.up()
 
-    const selection = await page.evaluate(() => {
-      const highlight = CSS.highlights?.get('timeline-sel')
-      return {
-        composerFocused: document.activeElement?.classList.contains('m-input'),
-        text: highlight ? [...highlight].map((range) => range.toString()).join('') : '',
-      }
-    })
+    const selection = await page.evaluate(() => ({
+      composerFocused: document.activeElement?.classList.contains('m-input'),
+      text: getSelection()?.toString() || '',
+    }))
     assert.equal(selection.composerFocused, true, `${name}: selecting rich text preserves the composer focus sink`)
     assert.ok(selection.text.length > 0, `${name}: rich text remains selectable`)
     await page.keyboard.press('Escape')
@@ -186,18 +183,14 @@ try {
     assert.ok(formulaBox, `${name}: formula copy note is visible`)
     await page.mouse.click(formulaBox.x + 18, formulaBox.y + Math.min(14, formulaBox.height / 2), { clickCount: 3 })
     await page.keyboard.press('Control+c')
-    const formulaCopy = await page.evaluate(async () => {
-      const highlight = CSS.highlights?.get('timeline-sel')
-      const range = highlight ? [...highlight][0] : null
-      return {
-        clipboard: await navigator.clipboard.readText(),
-        range: range?.toString() || '',
-        native: getSelection()?.toString() || '',
-        composerFocused: document.activeElement?.classList.contains('m-input'),
-      }
-    })
+    const formulaCopy = await page.evaluate(async () => ({
+      clipboard: await navigator.clipboard.readText(),
+      range: getSelection()?.toString() || '',
+      native: getSelection()?.toString() || '',
+      composerFocused: document.activeElement?.classList.contains('m-input'),
+    }))
     assert.equal(formulaCopy.clipboard, 'Copy E = mc^2 and a+b once.', `${name}: copied formulas use their authored source once`)
-    assert.equal(formulaCopy.native, '')
+    assert.equal(formulaCopy.native, formulaCopy.clipboard)
     assert.equal(formulaCopy.composerFocused, true)
     await page.keyboard.press('Escape')
 
@@ -206,19 +199,15 @@ try {
     assert.ok(glyphBox, `${name}: formula glyph is visible`)
     await page.mouse.click(glyphBox.x + glyphBox.width / 2, glyphBox.y + glyphBox.height / 2, { clickCount: 2 })
     await page.keyboard.press('Control+c')
-    const partialFormulaCopy = await page.evaluate(async () => {
-      const highlight = CSS.highlights?.get('timeline-sel')
-      const range = highlight ? [...highlight][0] : null
-      return {
-        clipboard: await navigator.clipboard.readText(),
-        range: range?.toString() || '',
-        native: getSelection()?.toString() || '',
-        composerFocused: document.activeElement?.classList.contains('m-input'),
-      }
-    })
+    const partialFormulaCopy = await page.evaluate(async () => ({
+      clipboard: await navigator.clipboard.readText(),
+      range: getSelection()?.toString() || '',
+      native: getSelection()?.toString() || '',
+      composerFocused: document.activeElement?.classList.contains('m-input'),
+    }))
     assert.equal(partialFormulaCopy.clipboard, 'E = mc^2', `${name}: partial formula selection copies the atomic authored source`)
     assert.ok(partialFormulaCopy.range.length > 0)
-    assert.equal(partialFormulaCopy.native, '')
+    assert.equal(partialFormulaCopy.native, partialFormulaCopy.clipboard)
     assert.equal(partialFormulaCopy.composerFocused, true)
     await page.keyboard.press('Escape')
 

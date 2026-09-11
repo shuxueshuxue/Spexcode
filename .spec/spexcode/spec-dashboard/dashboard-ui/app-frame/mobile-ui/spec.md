@@ -110,42 +110,28 @@ The two planes, made native to touch:
   history remains where they placed the thumb.
   Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
-  through a note or message, refresh work neither remounts the conversation nor clears its custom
-  highlight. When a terminal-free console becomes active, desktop focuses its mounted composer on the
+  through a note or message, refresh work neither remounts the conversation nor clears its native
+  selection. When a terminal-free console becomes active, desktop focuses its mounted composer on the
   next animation frame so typing can continue immediately; the phone surface never auto-focuses it,
-  because a tab switch must not summon the soft keyboard. The active TimelineChat's composer is its
-  **continuous sink**: a plain press or drag in
-  conversation text is prevented from moving DOM focus, so that exact textarea remains
-  `document.activeElement` from mousedown through every move and mouseup. Because suppressing the press
-  also suppresses the browser's native selection start, the coordinate driver follows xterm.js
-  `SelectionService`'s one interaction model: **mousedown** maps `MouseEvent.detail` to NORMAL (one click),
-  WORD (two), or LINE (three) and establishes that mode's anchor immediately; there is no independent
-  double-click or triple-click handler after the gesture. Document mousemove is that same gesture's
-  `_selectTo`: NORMAL extends caret point to caret point after real movement, WORD snaps both ends to the
-  anchor and focus words, and LINE snaps to whole-note boundaries in either direction; mouseup only freezes
-  the resulting Range. A plain click therefore leaves no highlight, a double-click selects one word, a
-  double-click whose second press stays down and drags grows continuously from the first word through the
-  landing word, and a triple-click selects the complete note. Every result is ordinary rendered conversation
-  text painted by `::highlight(timeline-sel)` and copyable without ever creating a `document Selection`.
-  Buttons, links, summaries, roles, and editable controls are outside the driver; their native click actions
-  still land while inert chrome keeps them from stealing the sink.
+  because a tab switch must not summon the soft keyboard. Timeline text is a `data-reading-surface`: the
+  browser owns drag, double-click, triple-click, copy, and contextmenu, and [[selection-controller]] publishes
+  the resulting native Range without painting a second selection or cancelling the pointer gesture. The
+  composer draft and caret are independent state rather than a reason to replace browser selection. A
+  clamped note expands only on a real click; a drag stays a selection. Explicit quote/copy actions consume
+  a frozen snapshot, while ordinary right-click remains the browser's menu.
 
-  The composer remains a real focused textarea and its native caret is never re-armed or handed off:
-  printable text, Backspace, Delete, arrows, Enter, paste, and IME input land immediately through the
-  unchanged native editing path even while a custom timeline highlight is visible. A document capture
-  listener owns only the `Ctrl/Cmd+C` exception, gated to a non-collapsed timeline Range and an empty
-  composer selection; a composer's own non-collapsed selection wins. Keyboard copy and a message's copy
-  control ([[copy-control]]) enter ONE clipboard seam — the rendered Range's text, or the message's authored
-  text. The seam prefers the secure Clipboard
+  The composer remains a real textarea and keeps its native editing path: printable text, Backspace, Delete,
+  arrows, Enter, paste, and IME input remain browser-native. Keyboard copy and a message's copy control
+  ([[copy-control]]) enter ONE clipboard seam — the native selection's text, or the message's authored text.
+  The seam prefers the secure Clipboard
   API when available, then on API absence or rejection performs the browser's synchronous `copy` command
   from that same user gesture while a one-shot `copy` event writes `text/plain` into `clipboardData`. It
   creates no textarea, document Selection, or focus handoff. Success means the API resolved, or BOTH the
   fallback event accepted the text and `execCommand("copy")` returned true; a false/throw/unconfirmed event
-  fails loud through the conversation's restrained live status, keeps the custom highlight, and never flashes
+  fails loud through the conversation's restrained live status, keeps the native selection, and never flashes
   a false success. Successful copy gets only a brief acknowledgement. Escape, a new timeline gesture, or a
-  composer press/first edit deletes the custom highlight as visual cleanup, never by moving focus. If Custom
-  Highlight is missing, the surface degrades to its ordinary text affordances without pretending a native
-  selection is safe; a message's copy control is there either way, on the same seam, and answers on itself.
+  composer press/first edit clears the native selection as explicit cleanup, never by installing a second
+  selection model. A message's copy control remains available on the same seam and answers on itself.
   The active TimelineChat alone declares that composer as its surface sink; warm hidden headless layers declare
   none, so two mounted conversations can never route input to the wrong draft.
   Offline shows an honest can't-deliver hint; a failed send fails loud, keeping the draft.

@@ -13,6 +13,7 @@ related:
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/guidance-catalog.ts
+  - spec-cli/src/edit-diff.api.test.ts
 ---
 # spec-cli
 
@@ -155,9 +156,9 @@ not a special case (the board is still rebuilt each request; the cost saved is t
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`
-(a node's in-flight working-tree delta vs its fork point, reviewable from the
-board — incl. a **brand-new, still-untracked node** as an all-additions diff, so a just-created uncommitted
-node shows its body not nothing), `/api/source` (one **byte window** of a governed source file, gated by the
+(a node's in-flight working-tree delta vs its fork point as git's porcelain word diff, reviewable from the
+board, including a **brand-new, still-untracked node** as an all-additions diff so a just-created
+uncommitted node shows its body instead of nothing), `/api/source` (one **byte window** of a governed source file, gated by the
 same policy predicate the coverage walk uses — [[source-read]] owns the contract; the route only resolves the
 root, compiles the policy, and maps a refusal onto its status), `/api/settings` (the resolved
 [[portable-layout]]), and `/api/plugins` + `/api/slash-commands` (the

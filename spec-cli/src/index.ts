@@ -173,10 +173,6 @@ app.get('/api/specs/:id/history', async (c) => c.json(await specHistory(c.req.pa
 // the spec.md line diff one version introduced — the history tab's per-version proof-of-change, fetched
 // lazily when an older version's item expands (the latest version's diff ships with the board as node.lastDiff).
 app.get('/api/specs/:id/diff/:hash', async (c) => c.json(await specDiffAt(c.req.param('id'), c.req.param('hash'))))
-// a unified diff of a node's spec.md from its fork point (the worktree's merge-base with main) to that
-// worktree's working tree. An untracked brand-new node is invisible to `git diff <base>`, so when the base
-// diff is empty AND status is `??` synthesize an all-additions view via `diff --no-index` (gitTry — --no-index
-// exits 1, which gitA would swallow). Gated on `??` so a tracked file with no pending change stays empty.
 // [[source-read]]: a governed source file, read as a byte WINDOW. The spec tree names the files it governs
 // but the board could never open one — this is the read half of "spec and code on one screen". The policy
 // gate is `isSourceFile`, the SAME predicate the coverage walk uses, so the set of files the board can show
@@ -239,17 +235,22 @@ app.get('/api/specs/:id/files/content', (c) => {
     throw e
   }
 })
+// a node's spec.md change from its fork point (the worktree's merge-base with main) to that worktree's working
+// tree, as git's porcelain WORD diff: a spec body is hard-wrapped prose, and a line diff would report every
+// re-wrapped line as changed. An untracked brand-new node is invisible to `git diff <base>`, so when the base
+// diff is empty AND status is `??` synthesize an all-additions view via `diff --no-index` (gitTry — --no-index
+// exits 1, which gitA would swallow). Gated on `??` so a tracked file with no pending change stays empty.
 app.get('/api/edit', async (c) => {
   const source = c.req.query('source') || '', path = c.req.query('path') || ''
-  if (!source || !path) return c.json({ patch: '' })
+  if (!source || !path) return c.json({ wordDiff: '' })
   const mb = mainBranch()
   const base = (await gitA(['-C', source, 'merge-base', mb, 'HEAD'])).trim() || mb
-  let patch = await gitA(['-C', source, 'diff', base, '--', path])
-  if (!patch) {
+  let wordDiff = await gitA(['-C', source, 'diff', '--word-diff=porcelain', base, '--', path])
+  if (!wordDiff) {
     const status = await gitA(['-C', source, 'status', '--porcelain', '--untracked-files=all', '--', path])
-    if (status.startsWith('??')) patch = (await gitTry(['-C', source, 'diff', '--no-index', '--', '/dev/null', path])).stdout
+    if (status.startsWith('??')) wordDiff = (await gitTry(['-C', source, 'diff', '--no-index', '--word-diff=porcelain', '--', '/dev/null', path])).stdout
   }
-  return c.json({ patch })
+  return c.json({ wordDiff })
 })
 // serve a reading's evidence blob by content hash (bytes never enter git): bad hash → 400, missing → 404,
 // else the bytes with a sniffed MIME and an immutable cache header (the name IS the content hash).

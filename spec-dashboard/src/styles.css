@@ -1667,13 +1667,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .set-row { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; align-items: center; gap: var(--space-6); padding: var(--space-3) 0; }
 .set-label { color: var(--ink); font-size: var(--type-control); }
 .set-control { min-width: 0; display: flex; align-items: center; }
-.set-seg { display: inline-flex; padding: var(--space-1); gap: var(--space-1); background: var(--panel2); border-radius: var(--radius); }
-.set-lang {
-  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink); cursor: pointer;
+/* THE SEGMENTED CONTROL ([[segmented-control]]): one trough, the chosen segment lifted onto paper, the rest
+   quiet. Settings and the diff document both choose with it; a host tunes density from its own container. */
+.seg { display: inline-flex; flex: none; padding: var(--space-1); gap: var(--space-1); background: var(--panel2); border-radius: var(--radius); }
+.seg-option {
+  font-family: var(--ui-font); font-size: var(--type-control); color: var(--ink); cursor: pointer; white-space: nowrap;
   border: 0; border-radius: var(--radius); height: 26px; padding: 0 var(--space-5); background: transparent;
 }
-.set-lang:hover { color: var(--ink2); }
-.set-lang.on { color: var(--ink2); background: var(--paper); font-weight: var(--weight-medium); box-shadow: 0 0 0 1px var(--edge); }
+.seg-option:hover { color: var(--ink2); }
+.seg-option.on { color: var(--ink2); background: var(--paper); font-weight: var(--weight-medium); box-shadow: 0 0 0 1px var(--edge); }
 .set-hint { display: block; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
 /* the theme picker shows each preset as itself: ground under paper, an ink line and an accent line */
 .set-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-4); }
@@ -3379,7 +3381,7 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .proj-err { color: var(--red); font-size: var(--type-meta); margin-top: 4px; }
 .proj-dim { color: var(--muted); font-size: var(--type-meta); }
 
-/* the shared compact action button (rows, forms, header) — .set-lang's density, semantic accents */
+/* the shared compact action button (rows, forms, header) — .seg-option's density, semantic accents */
 .proj-act {
   display: inline-flex; align-items: center; gap: 5px; text-decoration: none; box-sizing: border-box;
   font-family: var(--ui-font); font-size: var(--type-meta); color: var(--ink); cursor: pointer; white-space: nowrap;

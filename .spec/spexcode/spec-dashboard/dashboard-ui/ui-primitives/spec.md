@@ -30,6 +30,8 @@ prose three ways. The pattern is the point: the second copy is where the defect 
   timeout instead of each page pinning an ad-hoc acknowledgement into its layout.
 - [[copy-control]] — the one copy control and clipboard seam: a code block or a message taken whole, as
   authored, with the answer on the button pressed.
+- [[segmented-control]] — the one choice among a few values: a trough of segments with the chosen one
+  lifted, and the same segment standing alone for one on/off setting.
 
 What keeps this from becoming a junk drawer is a real admission test, applied twice. A node belongs here
 only when it is **owned by no single surface** — a widget only one page will ever mount belongs to that

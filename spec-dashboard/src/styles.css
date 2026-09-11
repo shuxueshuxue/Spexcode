@@ -2938,19 +2938,20 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    to a measure, with one small chip above saying in what state it said it. The chip is the machine's whole
    footprint on a message. */
 .m-say { min-width: 0; max-width: 100%; }
-.m-say-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
+.m-say-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); font-family: var(--ui-font); }
 .m-say-chip { display: inline-flex; align-items: baseline; gap: 5px; font-size: var(--type-caption); font-weight: var(--weight-medium); }
 .m-ev-note { font-size: var(--type-prose); line-height: var(--leading-body); color: var(--ink2); overflow-wrap: anywhere; }
 /* A MESSAGE CAN BE TAKEN WHOLE ([[copy-control]]): every row that carries authored text wears one copy
-   control on its time — right after the status in a note's head, at the end of an event's line, under the time
-   in a quoted message's ruler — and, like the time, it comes up only while the row is pointed at or holds
-   focus. Hidden, it takes no pointer. Where nothing can point it is simply there. */
+   control right of its time, in the same flow, so the line's width decides whether it wraps — after the status in
+   a note's head, after the time in a quoted message's ruler (or on its bubble, where a narrow pane moves the time
+   there), at the end of an event's one line — and, like the time, it comes up only while the row is pointed at
+   or holds focus. Hidden, it takes no pointer. Where nothing can point it is simply there. */
 .m-copy { opacity: 0; pointer-events: none; }
 .m-ev:hover .m-copy, .m-copy:focus-visible, .m-copy.is-failed { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .m-copy { opacity: 1; pointer-events: auto; } }
 .m-say-head > .m-copy { align-self: center; margin-block: -4px; }
 .m-line > .m-copy { align-self: flex-start; margin: -1px 0 -3px auto; }
-.m-gut > .m-copy { display: flex; margin-top: var(--space-2); }
+.m-gut > .m-copy { display: inline-flex; vertical-align: middle; margin-left: var(--space-2); }
 
 /* THE PERSON IS QUOTED: a bubble off to its own side, capped well under the measure — the one grammar this
    page shares with the transcript inside a seam, so the outer conversation and the inner one read alike.
@@ -3023,18 +3024,6 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   .m-timeline { padding-inline: 14px; }
   .m-ev { grid-template-columns: minmax(0, 1fr); column-gap: 0; padding: var(--space-4) 0; }
   .m-ev > .m-gut { display: none; }
-  /* the time moves onto the bubble here, so a quoted message's ruler keeps only its copy control, hung under
-     the bubble's bottom-right corner — or, where nothing can point, on its own line there */
-  .m-ev-prompt, .m-ev-sent { position: relative; }
-  .m-ev-prompt > .m-gut, .m-ev-sent > .m-gut {
-    display: block; position: absolute; top: calc(100% - var(--space-4)); right: 0; z-index: 1;
-    grid-column: auto; padding: 0;
-  }
-  .m-ev-prompt > .m-gut > time, .m-ev-sent > .m-gut > time { display: none; }
-  .m-gut > .m-copy { margin-top: 0; }
-  @media (hover: none) {
-    .m-ev-prompt > .m-gut, .m-ev-sent > .m-gut { position: static; justify-self: end; }
-  }
 }
 /* ---- the conversation, shaped as one ([[conversation]]) --------------------------------------------
    The old transcript was a nested log: a tinted well, a rule under every turn, a role word above each one,

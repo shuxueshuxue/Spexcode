@@ -233,7 +233,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
   }
 })
 
-test('YATU: a dispatched probe worker receives the note-to-terminal counter-insert exactly once', { timeout: 90_000 }, async () => {
+test('YATU: a dispatched probe worker keeps terminal sends as ordinary prompt text', { timeout: 90_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-delivery-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
@@ -281,13 +281,12 @@ test('YATU: a dispatched probe worker receives the note-to-terminal counter-inse
     await input('phone-message', 'note')
     await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY phone-message')), 'note message in probe pane')
     const afterNote = await capture()
-    assert.match(afterNote, /REPLY TRANSPORT/, afterNote)
+    assert.match(afterNote, /SEND FROM NOTE FLOW:/, afterNote)
 
     await input('back-at-terminal')
-    await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY back-at-terminal')), 'counter-insert in probe pane')
+    await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY back-at-terminal')), 'terminal message in probe pane')
     const afterTransition = await capture()
-    assert.match(afterTransition, /terminal-attached client/, afterTransition)
-    assert.match(afterTransition, /declaration --notes/, afterTransition)
+    assert.doesNotMatch(afterTransition, /terminal-attached client/)
 
     await input('ordinary-terminal-message')
     await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY ordinary-terminal-message')), 'bare terminal message in probe pane')
@@ -521,7 +520,9 @@ process.exit(result.status === null ? 1 : result.status)
     const invocations = readFileSync(turns, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { argv: string[]; prompt: string; session: string; note: string })
     assert.equal(invocations.length, 2)
     assert.deepEqual(invocations.map((turn) => turn.note), ['HEADLESS_LAUNCH_ANSWER', 'HEADLESS_CLI_ANSWER'])
-    assert.ok(invocations.every((turn) => turn.session === id && turn.prompt.includes('REPLY TRANSPORT')))
+    assert.ok(invocations.every((turn) => turn.session === id && turn.prompt.includes('SEND FROM NOTE FLOW')))
+    assert.match(invocations[0].prompt, /Normal output is not visible to the sender/)
+    assert.match(invocations[1].prompt, /— SEND FROM NOTE FLOW\.$/)
     assert.deepEqual(invocations.map((turn) => turn.argv.slice(0, 3)), [['-p', '--session-id', id], ['-p', '--session', id]])
 
     const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)

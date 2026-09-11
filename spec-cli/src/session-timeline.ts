@@ -60,6 +60,11 @@ export const timelineStamp = (id: string): string | null => {
 export const timelineTail = (id: string, limit = 500): TimelineEvent[] =>
   timelineEvents(id).slice(-Math.max(1, limit))
 
+export const lastSendVia = (id: string): 'note' | null => {
+  const sent = [...timelineEvents(id)].reverse().find((event): event is Extract<TimelineEvent, { kind: 'sent' }> => event.kind === 'sent')
+  return sent?.replyVia ?? null
+}
+
 export const lastHumanSendVia = (id: string): 'note' | null => {
   const events = timelineEvents(id)
   const sent = [...events].reverse().find((event): event is Extract<TimelineEvent, { kind: 'sent' }> => event.kind === 'sent' && event.from === null)

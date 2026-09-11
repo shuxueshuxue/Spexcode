@@ -11,6 +11,7 @@ import { configuredSessionApplication, resetConfiguredSessionApplicationForTest 
 import {
   currentHumanTurn,
   lastHumanSendVia,
+  lastSendVia,
   readTimeline,
   recordStatus,
   timelineDisplay,
@@ -18,7 +19,7 @@ import {
   timelineStamp,
 } from './session-timeline.js'
 import { cancelSessionWatch, listSessionWatches, subscribeSessionWatch } from './sessions.js'
-import { composeSessionPrompt, withNoteReplyHint, withTerminalReplyHint } from './session-prompt.js'
+import { composeSessionPrompt, withNoteReplyContinuationHint, withNoteReplyHint } from './session-prompt.js'
 
 const ID = 'timeline-session'
 const PARENT = 'timeline-parent'
@@ -120,6 +121,26 @@ test('human channel reconstruction reads only canonical conversation messages', 
   assert.match(currentHumanTurn(ID)?.acceptedAt ?? '', /^20/)
 })
 
+test('note flow uses the full hint once and a suffix on consecutive note messages', async () => {
+  freshHome()
+  const target = { session: ID, harness: 'codex-headless' } as never
+  const first = await composeSessionPrompt('first', target)
+  assert.match(first.text, /SEND FROM NOTE FLOW:/)
+  assert.equal(lastSendVia(ID), null)
+  app().enqueueConversationMessage(ID, { kind: 'prompt', body: Buffer.from('first') }, {
+    text: 'first', from: null, replyVia: 'note',
+  })
+  assert.equal(lastSendVia(ID), 'note')
+  const next = await composeSessionPrompt('next', target)
+  assert.equal(next.text, 'next\n\n— SEND FROM NOTE FLOW.')
+  assert.equal(withNoteReplyContinuationHint('next'), next.text)
+  app().enqueueConversationMessage(ID, { kind: 'prompt', body: Buffer.from('terminal') }, {
+    text: 'terminal', from: null,
+  })
+  const reentered = await composeSessionPrompt('reentered', target)
+  assert.match(reentered.text, /SEND FROM NOTE FLOW: Normal output is not visible to the sender/)
+})
+
 test('timeline display maps lifecycle and proposal once', () => {
   assert.equal(timelineDisplay({ status: 'active', proposal: null }), 'working')
   assert.equal(timelineDisplay({ status: 'awaiting', proposal: 'merge' }), 'review')
@@ -128,24 +149,23 @@ test('timeline display maps lifecycle and proposal once', () => {
   assert.equal(timelineDisplay({ status: 'error', proposal: null }), 'error')
 })
 
-test('reply hints are explicit and composable', () => {
+test('note reply hint is explicit', () => {
   const note = withNoteReplyHint('hello')
-  assert.match(note, /REPLY TRANSPORT/)
+  assert.match(note, /SEND FROM NOTE FLOW/)
+  assert.match(note, /This does not mean that all subsequent messages use note flow/)
+  assert.match(note, /does not include the note flow suffix/)
   assert.match(note, /FINAL tool call a Spex declaration/)
   assert.match(note, /session ask.*done.*park/)
   assert.match(note, /real LF characters/)
-  assert.match(note, /functions\.exec.*shell command through bash/)
+  assert.match(note, /functions\.exec.*runs through bash/)
   assert.match(note, /never interpolate `JSON\.stringify\(note\)` into it/)
   assert.match(note, /stdin, a heredoc, or base64/)
-  assert.match(note, /never use `String\.raw` or literal backslash\+n/i)
+  assert.match(note, /never use `String\.raw` or a literal backslash\+n/i)
   assert.match(note, /`JSON\.stringify\(note\)`/)
-  const terminal = withTerminalReplyHint(note)
-  assert.match(terminal, /terminal-attached client/)
-  assert.match(terminal, /hello/)
 })
 
 test('composeSessionPrompt keeps headless defaults and explicit prompt order', async () => {
-  const target = { id: ID, harness: 'codex-headless', capabilities: { headless: true } } as never
+  const target = { session: ID, harness: 'codex-headless' } as never
   const result = await composeSessionPrompt('hello', target)
   assert.match(result.text, /hello/)
   assert.ok(result.text.length > 0)

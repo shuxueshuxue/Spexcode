@@ -157,7 +157,7 @@ function DiffFile({ sessionId, file, scope, comments, open, mode, wrap, onCommen
       <span className="diff-toolbar-spacer" />
       <span className="diff-hunk-tools"><button type="button" onClick={onPrevious} aria-label={t('session.diffPrevious')}>↑</button><button type="button" onClick={onNext} aria-label={t('session.diffNext')}>↓</button></span>
     </header>
-    <div className={`diff-editor diff-editor-${mode}${wrap ? ' is-wrap' : ''}`} ref={host} data-selectable />
+    <div className={`diff-editor diff-editor-${mode}${wrap ? ' is-wrap' : ''}`} ref={host} data-reading-surface />
     {comments.length > 0 && <div className="diff-comments">{comments.map((comment) => <div key={comment.id} className={`diff-comment${comment.sentAt ? ' sent' : ''}`}>
       <span className="diff-comment-line">L{comment.lineStart}{comment.lineEnd !== comment.lineStart ? `-L${comment.lineEnd}` : ''}</span>
       <span className="diff-comment-body">{comment.body}</span>{comment.sentAt && <Icon name="check" size={12} />}<IconButton icon="pencil" size={12} label={t('session.diffEdit')} onClick={() => onEdit(comment)} />

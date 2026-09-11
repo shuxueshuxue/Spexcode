@@ -64,7 +64,7 @@ test('an empty diff names which of the three branch states is true and prints co
   assert.match(diff, /import \{ EditorView, lineNumbers \}/)
   assert.match(diff, /function numberedLines\(numbers, onComment\)/)
   assert.match(diff, /domEventHandlers:/)
-  assert.match(diff, /data-selectable \/>/)
+  assert.match(diff, /data-reading-surface \/>/)
   assert.doesNotMatch(diff, /onMouseDown=\{chooseLine\}/)
   assert.doesNotMatch(diff, /onView=\{\(path, view\) => registerView/)
   assert.doesNotMatch(diff, /base\.slice\(0, 8\)/)

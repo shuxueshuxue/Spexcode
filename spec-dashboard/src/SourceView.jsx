@@ -5,6 +5,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { fetchSourceSlice } from './data.js'
 import { useT } from './i18n/index.jsx'
+import { useSelectionController } from './selectionController.js'
 
 // [[source-view]]: the read-only face of a governed source file. CodeMirror carries this rather than a list
 // of rendered rows because it VIRTUALISES the viewport natively — measured, a 200k-line document renders in
@@ -62,8 +63,11 @@ const PREFETCH_PX = 900
 // knowing which one it is rendering.
 export default function SourceView({ path, read, className = '', onSelection }) {
   const t = useT()
+  const { publish, clear } = useSelectionController()
   const host = useRef(null)
   const view = useRef(null)
+  const onSelectionRef = useRef(onSelection)
+  onSelectionRef.current = onSelection
   const cursor = useRef({ offset: 0, eof: false, size: 0, busy: false })
   const [status, setStatus] = useState({ phase: 'loading', size: 0, loaded: 0, error: null })
   useEffect(() => {
@@ -96,7 +100,10 @@ export default function SourceView({ path, read, className = '', onSelection }) 
     const watchScroll = EditorView.updateListener.of((u) => {
       if (u.selectionSet) {
         const { from, to } = u.state.selection.main
-        if (from === to) onSelection?.(null)
+        if (from === to) {
+          onSelectionRef.current?.(null)
+          clear(`source:${path}`)
+        }
         else {
           const startLine = u.state.doc.lineAt(from).number
           const endLine = u.state.doc.lineAt(Math.max(from, to - 1)).number
@@ -105,7 +112,16 @@ export default function SourceView({ path, read, className = '', onSelection }) 
           const x = start ? Math.min(start.left, end?.left ?? start.left) : 0
           const y = start ? Math.max(start.bottom, end?.bottom ?? start.bottom) : 0
           const next = { path, startLine, endLine, text: u.state.sliceDoc(from, to), x, y }
-          onSelection?.(next)
+          const text = next.text
+          onSelectionRef.current?.(next)
+          publish({
+            surfaceId: `source:${path}`,
+            kind: 'codemirror',
+            text,
+            semantic: { path, startLine, endLine },
+            visualRect: { x, y, width: Math.max(0, (end?.right ?? start?.right ?? x) - x), height: Math.max(0, (end?.bottom ?? start?.bottom ?? y) - y) },
+            source: { view: u.view, from, to },
+          })
         }
       }
       if (!u.geometryChanged && !u.docChanged) return
@@ -140,11 +156,12 @@ export default function SourceView({ path, read, className = '', onSelection }) 
 
     return () => {
       live = false
-      onSelection?.(null)
+      onSelectionRef.current?.(null)
+      clear(`source:${path}`)
       view.current?.destroy()
       view.current = null
     }
-  }, [path, read, onSelection])
+  }, [path, read, publish, clear])
 
   const pct = status.size > 0 ? Math.min(100, Math.round((status.loaded / status.size) * 100)) : 0
   // The viewer shows the file, and nothing about the file. Its path is already the address, the tab and the
@@ -153,7 +170,7 @@ export default function SourceView({ path, read, className = '', onSelection }) 
   // is still true, and leaves when it stops being news.
   const reading = !status.error && (status.phase === 'loading' || (status.size > 0 && pct < 100))
   return (
-    <div className={`srcview ${className}`.trim()}>
+    <div className={`srcview ${className}`.trim()} data-reading-surface>
       <div className="srcview-body">
         <div className="srcview-cm" ref={host} />
         {(status.error || reading) && (

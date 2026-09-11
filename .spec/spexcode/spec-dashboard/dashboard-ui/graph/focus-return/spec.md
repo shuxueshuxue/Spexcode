@@ -52,7 +52,7 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   controls are outside that driver, while their click actions still work under the same inert press. A surface or
   menu attaches this one capture-phase guard, and then most pops need no return because focus never left: the
   ticket stays pinned to the real input region instead of getting polluted by the button that opened the pop. A
-  read-only diff body may also mark itself `data-selectable`: it deliberately keeps the browser's native text
+  read-only reading surfaces mark themselves `data-reading-surface`: they deliberately keep the browser's native text
   selection and copy gesture, while any authored action (such as a diff comment) belongs on a separate gutter door.
   A session tree drag is an ordinary whole-row primary-pointer gesture: the row starts tracking without native
   HTML drag state, while the guard keeps the active sink in place through the press and drag.

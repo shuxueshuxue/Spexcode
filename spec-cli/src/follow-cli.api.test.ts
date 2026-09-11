@@ -113,9 +113,9 @@ const events = (dir: string): Array<{ kind: string; text?: string; from?: string
   })
   return messages.filter((message, index) => messages.findIndex((candidate) => candidate.text === message.text && candidate.from === message.from) === index)
 }
-async function waitFor(check: () => boolean, label: string): Promise<void> {
+async function waitFor(check: () => boolean | Promise<boolean>, label: string): Promise<void> {
   const deadline = Date.now() + 2_000
-  while (!check()) {
+  while (!await check()) {
     if (Date.now() >= deadline) assert.fail(`timed out waiting for ${label}`)
     await new Promise((resolve) => setTimeout(resolve, 10))
   }

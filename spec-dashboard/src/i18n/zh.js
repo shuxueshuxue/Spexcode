@@ -46,7 +46,12 @@ export default {
   },
 
   // 左侧导航栏（[[side-nav]]）——每个顶层页面一个标签
-  specView: { missing: '没有这个节点：{id}' },
+  specView: {
+    missing: '没有这个节点：{id}',
+    pendingChanges: ({ n }) => `${n} 处进行中的改动`,
+    changeOpen: '查看进行中的改动',
+    changeClose: '离开改动，回到规格正文',
+  },
   fileView: { none: '未选择文件' },
   fileTree: {
     aria: '项目文件树',

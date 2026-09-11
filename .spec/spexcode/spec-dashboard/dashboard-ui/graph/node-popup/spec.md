@@ -75,7 +75,8 @@ touched paragraph as removed and re-added, and the reader has to hunt for the fe
 A word diff ignores re-wrapping and marks only those words. Git computes the diff; the dashboard runs no diff
 algorithm of its own. Each worktree's section opens with the shared op mark, the owning session (a link into
 it when the board has a live row for it, otherwise the branch name), and whether the change is committed.
-It is **memoised** like the history tab (re-opening shows the last change at once instead of
+This pane is also the spec document's change face ([[spec-view]]), so the popup and the document render one
+change pane. It is **memoised** like the history tab (re-opening shows the last change at once instead of
 reloading) and **revalidated** on every open, since a pending change is live. The history tab keeps its line
 diff.
 

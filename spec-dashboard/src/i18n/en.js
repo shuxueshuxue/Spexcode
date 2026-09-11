@@ -47,7 +47,12 @@ export default {
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
-  specView: { missing: 'no such node: {id}' },
+  specView: {
+    missing: 'no such node: {id}',
+    pendingChanges: ({ n }) => `${n} pending change${n === 1 ? '' : 's'}`,
+    changeOpen: 'show the pending change',
+    changeClose: 'leave the pending change, back to the spec',
+  },
   fileView: { none: 'no file selected' },
   fileTree: {
     aria: 'project file tree',

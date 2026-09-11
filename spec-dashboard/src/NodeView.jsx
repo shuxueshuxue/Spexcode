@@ -163,7 +163,9 @@ function NodeAttachments({ nodeId, enabled }) {
   )
 }
 
-export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
+// `stat` joins the property row (the document's pending-change toggle, [[spec-view]]); `children`, when given,
+// stand in for everything under that row — the document's change face keeps the node's head and swaps the rest.
+export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY, stat = null, children = null }) {
   const t = useT()
   const content = useSpecContent(node.id, node.version, { embedded: node.body != null })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
@@ -177,8 +179,18 @@ export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
         </span>
         <span className="stat-chip" data-tip={t('nodeView.versionLabel')}>v{node.version || 0}</span>
         {node.drift > 0 && <span className="stat-chip stat-drift" data-tip={driftTitle}>⚠{node.drift}</span>}
+        {stat}
         <span className="stat-sess" data-tip={t('nodeView.lastEditedBy')}>✎ <b>{node.session || t('common.none')}</b></span>
       </div>
+      {children ?? <SpecReading node={node} graphOnly={graphOnly} content={content} />}
+    </div>
+  )
+}
+
+function SpecReading({ node, graphOnly, content }) {
+  const t = useT()
+  return (
+    <>
       {node.code?.length > 0 ? (
         <GovernedFiles files={node.code} count={node.code.length} />
       ) : (
@@ -197,7 +209,7 @@ export function SpecPane({ node, graphOnly = PUBLIC_GRAPH_ONLY }) {
         const parts = node.parts ?? content?.parts ?? null
         return parts ? <TwoPart parts={parts} body={body} /> : <SpecBody body={body} lineBase={1} />
       })()}
-    </div>
+    </>
   )
 }
 
@@ -491,7 +503,8 @@ function EditOverlay({ node, ov, sessions }) {
   )
 }
 
-// every worktree's pending change to this node, one section each.
+// every worktree's pending change to this node, one section each — the popup's edit tab and the spec document's
+// change face ([[spec-view]]) render this same list, so the two can never show a change differently.
 export function PendingChanges({ node, sessions = [] }) {
   const t = useT()
   const overlays = node.overlays || []

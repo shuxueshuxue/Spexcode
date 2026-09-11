@@ -1209,6 +1209,12 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .stat-status.st-pending { color: var(--muted);  } .stat-status.st-pending .stat-dot { background: var(--muted); }
 .stat-chip { display: inline-flex; align-items: center; gap: 4px; font-size: var(--type-meta); color: var(--ink2); background: color-mix(in srgb, var(--ink) 8%, transparent); border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; }
 .stat-chip.stat-drift { color: var(--yellow); font-weight: var(--weight-medium); background: color-mix(in srgb, var(--yellow) 12%, transparent); }
+/* the pending-change toggle ([[spec-view]]): tinted like the `active` status it explains, pressed while the
+   document shows its change face */
+.stat-change { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: var(--type-meta); color: var(--orange); background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 1px 6px; cursor: pointer; }
+.stat-change:hover:not(:disabled) { background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.stat-change[aria-pressed="true"] { background: color-mix(in srgb, var(--orange) 14%, transparent); border-color: color-mix(in srgb, var(--orange) 35%, transparent); }
+.stat-change:disabled { cursor: default; }
 .stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
 .stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1399,8 +1405,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-card { padding: 7px 8px; }
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
 .pane-issues .issue-card-title { font-size: var(--type-control); }
-/* the node's pending change, in the popup's edit tab, as a redline of git's word diff: shared words read
-   as the prose they are, removed words struck in the history diff's
+/* the node's pending change — the popup's edit tab and the spec document's change face — as a redline of
+   git's word diff: shared words read as the prose they are, removed words struck in the history diff's
    orange, added words in its green, and the author's own line breaks kept. */
 .edit-rev { margin: 0 0 18px; }
 .edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }

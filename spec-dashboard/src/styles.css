@@ -1353,9 +1353,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .rec-v { color: var(--ink2); font-weight: var(--weight-semibold); }
 .rec-hash { color: var(--muted); font-size: var(--type-meta); }
 .rec-date { color: var(--muted); }
-.rec-diff { margin-left: auto; display: flex; gap: 8px; font-size: var(--type-control); }
-.rec-add { color: var(--green); }
-.rec-del { color: var(--orange); }
+.rec-diff { margin-left: auto; font-size: var(--type-control); }
 .rec-msg { color: var(--ink2); font-size: var(--type-body); margin-top: 5px; word-break: break-word; }
 .rec-sub { color: var(--muted); font-size: var(--type-meta); margin-top: 3px; }
 .rec-msg.muted { color: var(--muted); }
@@ -1363,13 +1361,18 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* an expanded item's proof: the version's spec.md line diff */
 .rec-evidence { margin: 12px 0 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
 .ev-note { font-size: var(--type-meta); color: var(--muted); text-align: center; margin-top: 12px; }
-/* the version's spec.md line diff — its proof-of-change. */
+/* the version's spec.md line diff — its proof-of-change. It speaks the session diff's language
+   ([[diff-marks]]): a moved line is tinted in the diff pair and carries the change bar at its edge, the
+   context around it recedes, and each hunk is named by the line it starts at, like the redline's. */
 .ev-difflabel { font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
-.ev-diff { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 0; overflow-x: auto; }
+/* the one frame a change excerpt sits in, whether it is a line diff or a redline hunk */
+.ev-diff, .wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); }
+.ev-diff { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); padding: 8px 0; overflow-x: auto; }
 .ev-diff .dl { padding: 0 12px; white-space: pre; }
-.dl-hunk { color: var(--blue); opacity: .75; }
-.dl-add { color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
-.dl-del { color: var(--orange); background: color-mix(in srgb, var(--orange) 10%, transparent); }
+.ev-diff .dl-hunk { color: var(--muted); font-family: var(--ui-font); font-size: var(--type-caption); }
+.ev-diff .dl-hunk:not(:first-child) { margin-top: 6px; }
+.dl-add { color: var(--ink2); background: var(--diff-add-line); box-shadow: inset 3px 0 0 var(--diff-add); }
+.dl-del { color: var(--ink2); background: var(--diff-del-line); box-shadow: inset 3px 0 0 var(--diff-del); }
 .dl-ctx { color: var(--muted); }
 
 /* pane: history — the full version log */
@@ -1421,8 +1424,9 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .pane-issues .issue-card + .issue-card { margin-top: 1px; }
 .pane-issues .issue-card-title { font-size: var(--type-control); }
 /* the node's pending change — the popup's edit tab and the spec document's change face — as a redline of
-   git's word diff: shared words read as the prose they are, removed words struck in the history diff's
-   orange, added words in its green, and the author's own line breaks kept. */
+   git's word diff: shared words read as the prose they are, removed words struck through and added words
+   marked in the diff pair's word tint (the same mark a changed word wears in the session diff), and the
+   author's own line breaks kept. */
 .edit-rev { margin: 0 0 18px; }
 .edit-by { display: flex; align-items: center; gap: 8px; font-size: var(--type-meta); color: var(--muted); margin-bottom: 8px; }
 .edit-by-label { font-weight: var(--weight-semibold); }
@@ -1430,11 +1434,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .edit-by-session:hover { text-decoration: underline; }
 .pending-none { color: var(--muted); font-size: var(--type-body); }
 .wd { display: flex; flex-direction: column; gap: 10px; }
-.wd-hunk { background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 10px; }
+.wd-hunk { padding: 8px 12px 10px; }
 .wd-at { font-size: var(--type-caption); color: var(--muted); margin-bottom: 4px; }
 .wd-text { margin: 0; font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-relaxed); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
-.wd-text ins { text-decoration: none; color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); border-radius: 2px; }
-.wd-text del { color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); text-decoration: line-through; border-radius: 2px; }
+.wd-text ins { text-decoration: none; color: var(--ink2); background: var(--diff-add-word); border-radius: 2px; }
+.wd-text del { color: var(--ink2); background: var(--diff-del-word); text-decoration: line-through; text-decoration-color: var(--diff-del); border-radius: 2px; }
 /* a replaced word: git emits the removal and the addition back to back, so they need a gap to read as two */
 .wd-text del + ins { margin-left: .3em; }
 .edit-state { margin-left: auto; font-family: var(--ui-font); font-size: var(--type-caption); }

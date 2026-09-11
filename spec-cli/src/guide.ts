@@ -512,15 +512,21 @@ session record only after confirming it is a readable regular file. It copies, m
 posting changes what the human downloads. The reference is host-local; opening the session elsewhere cannot
 make its path point at another machine's file.
 
+Point at a posted file from anything you write — a declaration note, a reply, a message — as
+\`[[file:<name>]]\`, where <name> is the file's name, or as much of the end of its path as no other posted file
+shares. \`add\` prints the exact reference to use. In the dashboard it is a link: from the Conversation and from
+the live terminal pane it opens the file's tab (on the phone, its preview page). A name the session's list does
+not answer to exactly once shows as unresolved instead of guessing.
+
 Put raw run artifacts in a persistent directory OUTSIDE the product repository by default. A worktree artifact
 makes merge readiness report a dirty tree and pressures generated evidence into the product commit. Before review,
 run \`spex session files ls\`: a target that disappeared or became unreadable is printed as \`INVALID\` and must be
 recreated or retracted; a valid path prints normally.
 
 The session page's top-right files icon is grey while the list is empty. Once live, it opens the posted list;
-choosing a path previews its current text or raster-image bytes in a pop-out, while the adjacent download tool
-downloads it through the backend at that moment. Previews are limited to 2 MiB, text and PNG/JPEG/GIF/WebP;
-other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
+choosing a path previews its current bytes in a tab beside the session, while the adjacent download tool
+downloads it through the backend at that moment. Previews are limited to 16 MiB: text, Markdown, HTML (rendered
+as a live page), and PNG/JPEG/GIF/WebP; other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
 marked invalid by the CLI; preview/download reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
 list.
 

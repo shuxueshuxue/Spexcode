@@ -210,3 +210,15 @@ test('useTranscriptFrames merges frames through the protocol', () => {
   renderToString(createElement(Probe))
   assert.ok(api)
 })
+
+test('a spoken turn carries the host copy control, handed its authored text; a tool-only turn and a bare host carry none', () => {
+  const turns = [turn('a1', 'assistant', 'the **answer**'), turn('a2', 'assistant', undefined, [tool('t1', 'Bash', { command: 'ls' }, 'x', 1)])]
+  const bare = renderToStaticMarkup(createElement(TranscriptView, { data: { turns } }))
+  assert.doesNotMatch(bare, /tx-copy/, 'no host control means no slot')
+  const copied: string[] = []
+  const html = renderToStaticMarkup(createElement(TranscriptUi, { renderCopy: (text) => { copied.push(text); return createElement('button', { 'data-copy': text }) } },
+    createElement(TranscriptView, { data: { turns } })))
+  assert.equal((html.match(/class="tx-copy"/g) || []).length, 1, 'only the turn that said something')
+  assert.deepEqual(copied, ['the **answer**'], 'the control is handed the source, not the rendered text')
+  assert.match(html, /<div class="tx-say-text">.*<span class="tx-copy"><button data-copy="the \*\*answer\*\*"><\/button><\/span><\/div>/)
+})

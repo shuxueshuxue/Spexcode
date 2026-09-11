@@ -8,6 +8,8 @@ related:
   - .spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/prose-renderer/migration-payload.md
   - spec-dashboard/src/proseTokens.js
   - spec-dashboard/src/proseTokens.test.mjs
+  - spec-dashboard/src/richText.test.mjs
+  - spec-dashboard/src/clipboard.js
   - spec-dashboard/src/RichText.js
   - spec-dashboard/src/TimelineChat.jsx
   - spec-dashboard/src/NodeView.jsx
@@ -78,7 +80,11 @@ made this node necessary.
     ([[address-routing]]) — the same door the side rails wear, now available in prose;
   - `evidence` (an `/api/evidence/<hash>` media link) → the one shared evidence renderer (`BlobMedia`);
   - `time_anchor` (a `▶m:ss · step` head) → the seek component, with the host's seek/degraded state
-    arriving as a handler.
+    arriving as a handler;
+  - `file_ref` (`[[file:<name>]]`) → the host's door to a file its session posted ([[files]]). It is read
+    ahead of the node reference, so `file:` never reaches a surface as a node id; a surface with no session
+    behind it (a spec body, an issue) renders the bare name. Whatever element a handler returns is keyed by the
+    renderer, which is the one that puts it into a child list.
   Because the marks survive as tokens, the thread stops pre-stripping its own prose: the regex
   extraction and the sibling anchor/media rendering are DELETED, and a mark renders in place, wherever
   the text is read.
@@ -134,6 +140,14 @@ made this node necessary.
   token's markup becomes in the token→React rewrite, it inherits the browser-level copy proof (a real
   Range over the rendered message, compared against hardcoded expected literals) — a rewrite that
   re-grows the duplicate is wrong even if every formula still LOOKS right.
+- **A code block carries its copy control; the renderer only places it.** Every fenced or indented block is
+  one framed block — its `pre`, which keeps the block's source-map stamps, inside a positioned frame — whose
+  top-right corner holds the [[copy-control]], handed the block's source minus its own closing newline. The
+  control comes from the root through context, never from a surface: every prose surface has it without asking,
+  no surface can forget it, and a bare render (a node test) has none. The renderer never imports the control,
+  which is what keeps this module loadable where the app's icons and words are not. The block's outer spacing
+  lives on the frame, so a code block that opens or closes a message loses its outer margin exactly like any
+  other first or last block.
 - **Math weight is real, and the TOKEN is the only loading fact.** Measured on the console's own landing:
   adding the parser plus KaTeX took that surface's JS from ~3.5 kB to ~128 kB gzip and added ~8 kB gzip of
   lazy CSS, while the shared index CSS moved ~0.4 kB and the other bundles did not move; KaTeX's

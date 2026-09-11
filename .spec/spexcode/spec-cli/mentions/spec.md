@@ -78,8 +78,8 @@ grammar it wears a reserved qualified token, so reading a draft tells you which 
   `@new` is the discoverable, durable shorthand for creating a fresh worker from the containing work item;
   `spex session new` and the New Session composer remain its direct creation peers.
 - **In a CLI argument the sigil is optional, never banned.** In free text sigils separate references from
-  prose. A CLI reference argument tolerates dashboard form: `spex review @graph` equals `spex review graph`,
-  and `measurement filing [[cli-surface]]` equals `measurement filing cli-surface`. One shared `stripRefSigil` sheds a
+  prose. A CLI reference argument tolerates dashboard form: `spex session show @<id>` equals `spex session show <id>`,
+  and `spex graph --focus [[cli-surface]]` equals `spex graph --focus cli-surface`. One shared `stripRefSigil` sheds a
   leading `@` or a full `[[...]]` wrapper without widening the underlying match.
 - **The originator loop-in is separate.** A committed reply may send an online originator a courtesy copy over
   [[dispatch]]. It is not caused by an ordinary `@session` token, is never a spawn, and stays silent when its

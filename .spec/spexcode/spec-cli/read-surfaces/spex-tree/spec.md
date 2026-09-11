@@ -18,7 +18,7 @@ badges the dashboard puts on a node — drifted-file count and open-issue count.
 added by a worktree)
 says so.
 
-Scope and shape follow the dashboard's own drill-down: `--node <id>` renders one subtree (an
+Scope and shape follow the dashboard's own drill-down: `--focus <id>` renders one subtree (an
 unknown id fails loud and names the recovery — never an empty tree), `--depth N` limits levels
 below the shown root and *says* how many children were pruned, and `--json` keeps the machine exit —
 the same filtered subtree as nested objects with the badge counts precomputed (a shaped view;

@@ -2,7 +2,7 @@
 title: spec-search
 status: active
 hue: 200
-desc: The lexical floor of spec retrieval — `spex search <query>` ranks spec NODES by term overlap and returns {id,title,path,score,snippet}, the one return two consumers reuse.
+desc: The lexical floor of spec retrieval — `spex spec search <query>` ranks spec NODES by term overlap and returns {id,title,path,score,snippet}, the one return two consumers reuse.
 code:
   - spec-cli/src/search.ts#searchSpecs
   - spec-cli/src/search.ts#nearestTitles
@@ -31,7 +31,7 @@ a simpler general rule over a special-case — a couple of clean misses beats a 
 
 ## expanded spec
 
-`spex search <query> [--json] [--limit N]` is the lexical retrieval floor. It ranks over spec **nodes** and
+`spex spec search <query> [--json] [--limit N]` is the lexical retrieval floor. It ranks over spec **nodes** and
 returns results sorted by `score` DESC, each `{ id, title, path, score, snippet }`:
 
   - `id` / `title` / `path` — the node (`path` is the repo-relative `spec.md`).
@@ -51,10 +51,10 @@ unsupported — CJK that DOES hit corpus prose returns results, unconditional, n
 route to the next step: the nearest node titles (`nearestTitles` — per-word normalised Levenshtein over
 title+id, best-match ≥0.5 per query word then summed, top 3, reusing the same `loadSpecsLite` read, so a
 transposed-`keyboard` typo still points at `keyboard-nav`; omitted when nothing is lexically near, e.g. a
-pure-CJK query, whose titles are English kebab-case) and a closing `browse all: spex tree` line. The
+pure-CJK query, whose titles are English kebab-case) and a closing `browse all: spex graph` line. The
 nearest-title distance is deliberately NOT part of the ranking — it tolerates typos, the ranker must not.
 Under `--json` the whole zero-result message goes to stderr so the stdout array stays verbatim. `spex help
-search` states the same corpus-is-English hint, so a query that matches nothing self-explains at both surfaces.
+spec` states the same corpus-is-English hint, so a query that matches nothing self-explains at both surfaces.
 
 ### the ranking
 
@@ -99,12 +99,12 @@ by one that spikes on a single rare word it happens to carry in its NAME — the
 search`-named node buried "…searches specs…" or an injected-* sibling buried a concept node purely on one
 uncapped name term.
 
-It reads the spec tree from the **filesystem only** (no git walk), so a cold `spex search` is cheap to call
+It reads the spec tree from the **filesystem only** (no git walk), so a cold `spex spec search` is cheap to call
 as freely as `grep`. `cli.ts`'s `search` verb is a thin router over `searchSpecs`; all scoring lives there so
 every consumer shares one implementation. There is NO index or cache — every call re-reads and re-ranks the
 whole tree (`O(Q×D)` in corpus tokens) — so it emits its pure-compute time (`nodes·tokens·ms`, excl. process
-start) to stderr per call and `measurement contract` tracks a baseline; nearing ~1s means an index is overdue.
+start) to stderr per call; nearing ~1s means an index is overdue.
 
-Loss is the the former measurement core-measured recall of a held-out question→node benchmark (this node's `measurement contract`), run
-through the REAL `spex search --json`. It guards robustness — the ranking is iterated to lift recall WITHOUT
+Loss is recall on a held-out question→node benchmark (`search.bench.mjs`), run through the REAL
+`spex spec search --json`. It guards robustness — the ranking is iterated to lift recall WITHOUT
 special-casing.

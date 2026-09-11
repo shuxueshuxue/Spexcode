@@ -7,6 +7,7 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openProjectSessionApplication } from '@spexcode/session-application'
 import { listenerAt, rvSock } from './harness.js'
 import { piHeadlessSock } from './pi-headless.js'
 
@@ -364,6 +365,84 @@ for (const harness of ['claude', 'pi'] as const) test(`YATU: a Command Box messa
     const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)
     const body = await timeline.json() as { events: Array<{ kind: string; text?: string }> }
     assert.deepEqual(body.events.filter((event) => event.kind === 'sent').map((event) => event.text), ['first-handoff-lost'])
+  } finally {
+    if (id) await fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
+    if (backend) await stop(backend)
+    spawnSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' })
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('YATU: a stopped session is not polled, and its owed message arrives with the resume that binds it again', { timeout: 120_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-stopped-'))
+  const project = join(fixture, 'project')
+  const home = join(fixture, 'home')
+  const databasePath = join(home, 'sessions.sqlite')
+  const port = await freePort()
+  const tmux = `timeline-stopped-${process.pid}-${Date.now()}`
+  let backend: ChildProcess | null = null
+  let log = ''
+  const base = `http://127.0.0.1:${port}`
+  let id = ''
+  const binding = () => {
+    const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+    try { return app.resolveRuntime(id, 'spex-governed') } finally { app.close() }
+  }
+  try {
+    mkdirSync(join(project, '.spec', 'project'), { recursive: true })
+    writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
+    writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
+      harnesses: ['claude'], sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
+    }) + '\n')
+    git(project, 'init', '-q', '-b', 'main'); git(project, 'config', 'user.email', 'timeline@example.test'); git(project, 'config', 'user.name', 'Timeline Fixture')
+    git(project, 'add', '.'); git(project, 'commit', '-qm', 'fixture')
+    const env: NodeJS.ProcessEnv = {
+      ...process.env, SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: databasePath, SPEXCODE_TMUX: tmux,
+      CLAUDE_CONFIG_DIR: join(home, 'claude'), FAKE_HARNESS_INTERVAL_MS: '1000',
+    }
+    mkdirSync(join(home, 'claude'), { recursive: true })
+    delete env.SPEXCODE_API_URL
+    delete env.SPEXCODE_SESSION_ID
+    for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'OPENCODE_SESSION_ID', 'PI_SESSION_ID']) delete env[key]
+    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'cli.ts'), 'serve', '--port', String(port)], {
+      cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+    })
+    backend.stdout?.on('data', (chunk) => { log += chunk })
+    backend.stderr?.on('data', (chunk) => { log += chunk })
+
+    await waitFor(() => fetch(`${base}/health`).then((r) => r.ok).catch(() => false), 'backend health', 30_000)
+    const created = await fetch(`${base}/api/sessions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'stop probe', launcher: 'fake' }),
+    })
+    const createdText = await created.text()
+    assert.equal(created.status, 201, createdText)
+    id = (JSON.parse(createdText) as { id: string }).id
+    const online = () => fetch(`${base}/api/sessions/${id}`).then(async (r) => r.ok && (await r.json() as { liveness?: string }).liveness === 'online').catch(() => false)
+    await waitFor(online, 'probe worker online', 30_000)
+    const launched = binding()
+    assert.equal(launched?.status, 'bound', 'the launch bound the runtime')
+
+    const stopped = await fetch(`${base}/api/sessions/${id}/stop`, { method: 'POST' })
+    assert.equal(stopped.status, 200, await stopped.text())
+    assert.equal(binding()?.status, 'unbound', 'the stop released the binding')
+    const sent = await fetch(`${base}/api/sessions/${id}/input`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text: 'owed-while-stopped' }),
+    })
+    assert.equal(sent.status, 200, await sent.text())
+    // three sweep ticks: a stopped session has no runtime, so nothing may try to hand the message over
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
+    assert.doesNotMatch(log, new RegExp(`delivery to ${id} held`), log)
+
+    const resumed = await fetch(`${base}/api/sessions/${id}/resume`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    assert.equal(resumed.status, 200, await resumed.text())
+    const capture = () => fetch(`${base}/api/sessions/${id}/capture`).then((r) => r.text())
+    await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY owed-while-stopped')), 'the owed message delivered after resume', 30_000)
+    const rebound = binding()
+    assert.equal(rebound?.status, 'bound', 'the resume launch bound the runtime again')
+    assert.ok((rebound?.bindingGeneration ?? 0) > (launched?.bindingGeneration ?? 0), 'a new generation fences the old runtime')
+    const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)
+    const body = await timeline.json() as { events: Array<{ kind: string; text?: string }> }
+    assert.deepEqual(body.events.filter((event) => event.kind === 'sent').map((event) => event.text), ['owed-while-stopped'])
   } finally {
     if (id) await fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     if (backend) await stop(backend)

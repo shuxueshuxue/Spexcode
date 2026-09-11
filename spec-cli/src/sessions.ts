@@ -20,6 +20,7 @@ import { type ProductionSessionApplication } from '@spexcode/session-application
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
 import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, SessionRecordUnusable, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
+import { unbindSpexGovernedRuntime } from './session-runtime-adapter.js'
 import { shQuote } from './sh.js'
 import {
   composeSessionPrompt, launchScript, launchShellCommand, nodeFromPrompt, slugify, titleFromPrompt,
@@ -890,7 +891,9 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown, terminal = 
     // and a later explicit resume have an honest starting point.
     if (terminal) {
       publishCanonicalLifecycle(rec, 'error', null, note)
-      writeRecord({ ...rec, status: 'error', proposal: null, stopped: true, note, launchOwner: null, launchReadinessStartedAt: null })
+      const failed: SessRec = { ...rec, status: 'error', proposal: null, stopped: true, note, launchOwner: null, launchReadinessStartedAt: null }
+      writeRecord(failed)
+      releaseDetachedRuntimeUnlocked(failed)
     } else {
       const status = live && (rec.status === 'error' || rec.stopped) ? 'active' : rec.status
       const stopped = live ? false : rec.stopped
@@ -933,7 +936,7 @@ export function sessionHasPendingDelivery(
     = configuredSessionApplication(),
 ): boolean {
   const runtime = application.resolveRuntime?.(id, 'spex-governed')
-  if (runtime === null) return false
+  if (runtime !== undefined && runtime?.status !== 'bound') return false   // no binding, or one released by a stop/close
   try {
     return application.readPendingMessages(id).length > 0
   } catch (error) {
@@ -1258,12 +1261,13 @@ const requestQueueDrain = (): void => {
 }
 
 // Canonical state commits already own the durable recipient queue. This is only the post-commit wake that hands
-// each queued recipient to its existing runtime; a failed or absent runtime leaves the message pending for retry.
+// each queued recipient to its existing runtime; a failed runtime leaves the message pending for retry, and a
+// recipient with no bound runtime (stopped, closed, not yet launched) is not woken until a launch binds it.
 setSessionApplicationCommitWake((recipients) => {
   const wakeRecipients = recipients.filter(recipient => !readinessWakeSuppressed.has(recipient))
   queueMicrotask(() => {
     for (const recipient of wakeRecipients) {
-      void drainSession(recipient).catch((error) => {
+      void Promise.resolve().then(() => sessionHasPendingDelivery(recipient) ? drainSession(recipient) : undefined).catch((error) => {
         console.error(`spex: canonical delivery wake failed for ${recipient}: ${error instanceof Error ? error.message : String(error)}`)
       })
     }
@@ -1328,7 +1332,7 @@ async function reconcileWatchDeliveries(application: ProductionSessionApplicatio
     drain.add(item.watcherSessionId)
   }
   for (const id of drain) {
-    try { await drainSession(id) }
+    try { if (sessionHasPendingDelivery(id, application)) await drainSession(id) }
     catch (error) { console.error(`spex: managed watch handoff failed for ${id}: ${error instanceof Error ? error.message : String(error)}`) }
   }
 }
@@ -2503,7 +2507,9 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
     if (!readiness.ok) {
       const failed = readRecord(id) || current
-      writeRecord({ ...failed, ...preResume, harnessSessionId: failed.harnessSessionId, launchReadinessPending: null })
+      const restored: SessRec = { ...failed, ...preResume, harnessSessionId: failed.harnessSessionId, launchReadinessPending: null }
+      writeRecord(restored)
+      releaseDetachedRuntimeUnlocked(restored)
       return {
         ok: false,
         refused: true,
@@ -2530,7 +2536,9 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
     if (!stillReady) {
       const failed = readRecord(id) || candidate
-      writeRecord(restoreLaunchReadinessOriginal(failed))
+      const restored = restoreLaunchReadinessOriginal(failed)
+      writeRecord(restored)
+      releaseDetachedRuntimeUnlocked(restored)
       return {
         ok: false,
         refused: true,
@@ -2668,24 +2676,39 @@ function bindNativeRuntimeUnlocked(rec: SessRec): void {
   application.bindRuntime(rec.session, identity, current?.bindingGeneration)
 }
 
-// @@@ bindLaunchedRuntimes - a launch did not always bind a caller-pinned adapter, so a backend start gives every
-// working-set session this backend launched the binding its launch now writes. The launch script a launch leaves in
-// the session store is the witness: a record nobody launched here (an adopter's, a fixture's) is not ours to bind.
-// A session that is already bound keeps that binding. A record that cannot be bound is reported and left to the
-// ordinary loud paths.
-export async function bindLaunchedRuntimes(): Promise<void> {
-  const unbound = (id: string) => configuredSessionApplication().resolveRuntime(id, 'spex-governed')?.status !== 'bound'
+// A stopped or archived record has no attached runtime, so it holds no binding: its queue is retained, not polled,
+// until a launch binds it again ([[delivery-queue]]). Every write that makes a record stopped or archived passes the
+// record it wrote here; nothing to release is a no-op.
+function releaseDetachedRuntimeUnlocked(rec: SessRec): void {
+  if (!rec.stopped && !rec.archived) return
+  const application = configuredSessionApplication()
+  const current = application.resolveRuntime(rec.session, 'spex-governed')
+  if (current?.status !== 'bound') return
+  unbindSpexGovernedRuntime(application.protocol, application.runtimeBindings, rec.session, { expectedGeneration: current.bindingGeneration })
+}
+
+// @@@ reconcileLaunchedRuntimes - a backend start brings every session this backend launched in line with the
+// binding rule, so what an earlier toolchain left behind is repaired: a running one gets the binding its launch
+// writes, a stopped or archived one loses the binding it no longer has a runtime for. The launch script a launch
+// leaves in the session store is the witness; a record nobody launched here (an adopter's, a fixture's) is not ours.
+// A running session that is already bound keeps its binding. A record that cannot be settled is reported and left
+// to the ordinary loud paths.
+export async function reconcileLaunchedRuntimes(): Promise<void> {
+  const bound = (id: string) => configuredSessionApplication().resolveRuntime(id, 'spex-governed')?.status === 'bound'
+  const settled = (rec: SessRec) => (rec.stopped || rec.archived) !== bound(rec.session)
   for (const id of listSessionIds()) {
     try {
-      if (!existsSync(sessionArtifactPath(id, 'launch.sh')) || !unbound(id)) continue
+      if (!existsSync(sessionArtifactPath(id, 'launch.sh'))) continue
       const seen = readRecord(id)
-      if (!seen?.governed || seen.archived) continue
+      if (!seen?.governed || settled(seen)) continue
       await withRecordLock(id, async () => {
         const rec = readRecord(id)
-        if (rec?.governed && !rec.archived && unbound(id)) bindNativeRuntimeUnlocked(rec)
+        if (!rec?.governed || settled(rec)) return
+        if (rec.stopped || rec.archived) releaseDetachedRuntimeUnlocked(rec)
+        else bindNativeRuntimeUnlocked(rec)
       })
     } catch (error) {
-      console.error(`spex: could not bind the launched runtime of ${id}: ${error instanceof Error ? error.message : String(error)}`)
+      console.error(`spex: could not settle the runtime binding of ${id}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 }
@@ -3216,6 +3239,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   }
   clearLaunched(id)
   await harness.cleanupRuntime(rec)
+  releaseDetachedRuntimeUnlocked({ ...rec, stopped: true })   // the inverse of the launch's binding, as cleanupRuntime is of its transport
   if (requireCold) {
     const cold = await harness.coldRuntime?.(rec, coldReceipt)
     if (cold && !cold.ok) throw new ResourceConflict(`refusing to close ${id}: ${cold.reason}`)
@@ -3425,7 +3449,7 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (!retired && existsSync(wt.path)) archiveWorktreeState(id, wt.path)
   const latest = readRecord(id)
   if (!latest) throw new ResourceConflict(`refusing to finish close for ${id}: session record disappeared before publication`)
-  writeRecord({
+  const archivedRecord: SessRec = {
     ...latest,
     proposal: null,
     archived: true,
@@ -3433,7 +3457,9 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
     stopped: true,
     coldProof: latest.coldProof || coldProofFor(latest),
     adapterRecovery: null,
-  })
+  }
+  writeRecord(archivedRecord)
+  releaseDetachedRuntimeUnlocked(archivedRecord)   // a retired tree skipped the teardown above
   // The canonical lifecycle must settle at the same terminal boundary as the durable close fact. `archived`
   // is an internal terminal marker; public projections render its closed record as `retired`.
   const application = configuredSessionApplication()

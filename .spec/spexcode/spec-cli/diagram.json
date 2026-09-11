@@ -146,75 +146,16 @@
       ]
     },
     {
-      "id": "host-gateway",
+      "id": "serve",
       "type": "cloud",
-      "label": "host-gateway",
-      "sublabel": "7 节点 · spex dashboard 多项目入口",
-      "tag": "1 drift",
-      "sources": [
-        {
-          "path": ".spec/spexcode/spec-cli/host-gateway/spec.md",
-          "label": "spec"
-        },
-        {
-          "path": "spec-cli/src/host.ts",
-          "label": "code"
-        }
-      ],
+      "label": "serve",
+      "sublabel": "supervisor · gateway · 端口",
       "pos": [
         390,
         60
       ],
       "size": [
         200,
-        60
-      ]
-    },
-    {
-      "id": "public-mode",
-      "type": "security",
-      "label": "public-mode",
-      "sublabel": "4 节点 · 密码 + TLS 公网暴露",
-      "sources": [
-        {
-          "path": ".spec/spexcode/spec-cli/public-mode/spec.md",
-          "label": "spec"
-        },
-        {
-          "path": "spec-cli/src/gateway.ts",
-          "label": "code"
-        }
-      ],
-      "pos": [
-        720,
-        60
-      ],
-      "size": [
-        190,
-        60
-      ]
-    },
-    {
-      "id": "listener-readiness",
-      "type": "backend",
-      "label": "listener-readiness",
-      "sublabel": "端口获取失败与就绪发布",
-      "sources": [
-        {
-          "path": ".spec/spexcode/spec-cli/listener-readiness/spec.md",
-          "label": "spec"
-        },
-        {
-          "path": "spec-cli/src/listen.ts",
-          "label": "code"
-        }
-      ],
-      "pos": [
-        1040,
-        60
-      ],
-      "size": [
-        190,
         60
       ]
     },
@@ -272,9 +213,7 @@
       "kind": "region",
       "label": "host 面 / 传输",
       "wraps": [
-        "host-gateway",
-        "public-mode",
-        "listener-readiness"
+        "serve"
       ]
     },
     {
@@ -331,7 +270,7 @@
     },
     {
       "from": "cli-surface",
-      "to": "host-gateway",
+      "to": "serve",
       "label": "2 imports",
       "fromSide": "top",
       "toSide": "left"
@@ -360,29 +299,12 @@
     },
     {
       "from": "sessions",
-      "to": "host-gateway",
+      "to": "serve",
       "label": "3 imports · 3 back",
       "fromSide": "top",
       "toSide": "bottom",
       "labelDx": -60,
       "labelDy": -40
-    },
-    {
-      "from": "host-gateway",
-      "to": "public-mode",
-      "label": "4 imports · 2 back"
-    },
-    {
-      "from": "public-mode",
-      "to": "listener-readiness",
-      "label": "2 imports"
-    },
-    {
-      "from": "host-gateway",
-      "to": "listener-readiness",
-      "label": "1 import",
-      "fromSide": "bottom",
-      "toSide": "bottom"
     },
     {
       "from": "read-surfaces",

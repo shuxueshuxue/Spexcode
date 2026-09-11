@@ -33,7 +33,7 @@ a login. The
 supervisor and its child stay on `127.0.0.1`: **loopback is the trust boundary, the gateway is the
 internet face.** Locally launched agents reach the loopback supervisor directly and never carry the
 password. Without `--public` nothing changes: dev stays plain
-loopback, no TLS, no gate — a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no
+loopback, no TLS, no gate — a pure additive switch over [[serve]]'s supervisor; the dashboard needs no
 change (it already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
 This is a trusted collaboration gateway, not the anonymous public artifact. [[public-spec-graph]] builds
@@ -104,6 +104,6 @@ the workspace and an installed package use that same resolution. (The host-level
 gateway for EVERY project's backend, no pairing — rides [[gateway-hub]] with [[host-gateway]]'s registry
 mounted on its extension seam.)
 
-**A busy port fails loudly.** The gateway obeys [[spec-cli]]'s port-ownership contract: a port already in
+**A busy port fails loudly.** The gateway obeys [[serve]]'s port-ownership contract: a port already in
 use (or permission-denied) is a non-zero exit naming the port and the repair, never a silent or half-up
 serve — and `spex serve`, `spex serve ui`, and `spex dashboard` answer it identically.

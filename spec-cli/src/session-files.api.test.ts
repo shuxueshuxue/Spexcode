@@ -93,7 +93,7 @@ test('public session files CLI stores a live path and the backend authorizes onl
     const add = await runCli(project, env, 'session', 'files', 'add', '../artifact.txt')
     assert.equal(add.code, 0, add.err)
     const absolute = resolve(project, '../artifact.txt')
-    assert.equal(add.out.trim(), `posted ${absolute}`)
+    assert.equal(add.out.trim(), `posted ${absolute}\npoint at it as [[file:artifact.txt]]`)
     assert.equal(readFileSync(artifact, 'utf8'), 'before\n')
     assert.deepEqual(JSON.parse(readFileSync(sessionFilesPath(id), 'utf8')), [absolute])
 
@@ -127,6 +127,12 @@ test('public session files CLI stores a live path and the backend authorizes onl
     assert.equal(htmlPreview.headers.get('X-Spexcode-Preview-Kind'), 'html')
     assert.equal(htmlPreview.headers.get('Content-Type'), 'text/html; charset=utf-8')
     assert.match(await htmlPreview.text(), /<h1 id="proof">Rendered HTML<\/h1>/)
+    // a second file with a name already posted is pointed at by as much of its path as tells it apart
+    mkdirSync(join(fixture, 'sub'), { recursive: true })
+    writeFileSync(join(fixture, 'sub', 'artifact.txt'), 'twin\n')
+    const addTwin = await runCli(project, env, 'session', 'files', 'add', '../sub/artifact.txt')
+    assert.equal(addTwin.code, 0, addTwin.err)
+    assert.equal(addTwin.out.trim(), `posted ${join(fixture, 'sub', 'artifact.txt')}\npoint at it as [[file:sub/artifact.txt]]`)
     const addUnpreviewable = await runCli(project, env, 'session', 'files', 'add', '../diagram.svg')
     assert.equal(addUnpreviewable.code, 0, addUnpreviewable.err)
     const unsupported = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(resolve(project, '../diagram.svg'))}&preview=1`)
@@ -145,7 +151,7 @@ test('public session files CLI stores a live path and the backend authorizes onl
     const oversized = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(absolute)}&preview=1`)
     assert.deepEqual({ status: oversized.status, body: await oversized.json() }, {
       status: 413,
-      body: { error: `preview is limited to 2 MiB; download this ${SESSION_FILE_PREVIEW_MAX_BYTES + 1}-byte file instead` },
+      body: { error: `preview is limited to 16 MiB; download this ${SESSION_FILE_PREVIEW_MAX_BYTES + 1}-byte file instead` },
     })
 
     rmSync(artifact)
@@ -167,6 +173,8 @@ test('public session files CLI stores a live path and the backend authorizes onl
       code: 0,
       out: `retracted ${resolve(project, '../artifact.html')}`,
     })
+    const retractTwin = await runCli(project, env, 'session', 'files', 'retract', '../sub/artifact.txt')
+    assert.equal(retractTwin.code, 0, retractTwin.err)
     assert.deepEqual(JSON.parse(readFileSync(sessionFilesPath(id), 'utf8')), [])
   } finally {
     process.chdir(previousCwd)

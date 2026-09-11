@@ -776,6 +776,13 @@ if (cmd === 'serve') {
   // prose. Git hooks preserved unless --hooks. spex uninstall [targetDir] [--hooks]
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
+} else if (cmd === 'diagram') {
+  if (process.argv[3] === undefined) {
+    console.log((await import('./help.js')).commandHelp('diagram'))
+  } else {
+    const { runDiagram } = await import('./diagram-cli.js')
+    await flushExit(await runDiagram(process.argv.slice(3)))
+  }
 } else if (cmd === 'evidence') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
@@ -996,6 +1003,7 @@ if (cmd === 'serve') {
     } else if (verb === 'add') {
       const result = files.addSessionFile(id, path!, withSessionRecordLockSync)
       console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
+      console.log(`point at it as ${result.reference}`)
     } else if (verb === 'retract') {
       const result = files.retractSessionFile(id, path!, withSessionRecordLockSync)
       if (!result.removed) { console.error(`spex session files retract: path is not posted: ${result.path}`); process.exit(2) }

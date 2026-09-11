@@ -131,7 +131,7 @@ WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
                       \`others\` for small children folded together. A file that is not JSON errors here too.
   diagram-source (error) every source a box cites is a spec.md in the tree or a file some node claims in
                       code:. Diagrams have no staleness check of their own: they are revised with the
-                      node's spec.
+                      node's spec. The format and the scaffold → check loop: spex guide diagram.
   coverage   (warn)   every source file is claimed by ≥1 node — via code: OR related: (related is the net).
   drift      (warn)   a governed file has commits newer than the node's spec version — it may be stale.
                       ALWAYS advisory: unanchored drift never blocks a commit (the blocking tier is
@@ -512,15 +512,21 @@ session record only after confirming it is a readable regular file. It copies, m
 posting changes what the human downloads. The reference is host-local; opening the session elsewhere cannot
 make its path point at another machine's file.
 
+Point at a posted file from anything you write — a declaration note, a reply, a message — as
+\`[[file:<name>]]\`, where <name> is the file's name, or as much of the end of its path as no other posted file
+shares. \`add\` prints the exact reference to use. In the dashboard it is a link: from the Conversation and from
+the live terminal pane it opens the file's tab (on the phone, its preview page). A name the session's list does
+not answer to exactly once shows as unresolved instead of guessing.
+
 Put raw run artifacts in a persistent directory OUTSIDE the product repository by default. A worktree artifact
 makes merge readiness report a dirty tree and pressures generated evidence into the product commit. Before review,
 run \`spex session files ls\`: a target that disappeared or became unreadable is printed as \`INVALID\` and must be
 recreated or retracted; a valid path prints normally.
 
 The session page's top-right files icon is grey while the list is empty. Once live, it opens the posted list;
-choosing a path previews its current text or raster-image bytes in a pop-out, while the adjacent download tool
-downloads it through the backend at that moment. Previews are limited to 2 MiB, text and PNG/JPEG/GIF/WebP;
-other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
+choosing a path previews its current bytes in a tab beside the session, while the adjacent download tool
+downloads it through the backend at that moment. Previews are limited to 16 MiB: text, Markdown, HTML (rendered
+as a live page), and PNG/JPEG/GIF/WebP; other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
 marked invalid by the CLI; preview/download reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
 list.
 
@@ -549,7 +555,61 @@ and navigation URLs are relative and it reads its own base from location.pathnam
 root and under the gateway's path prefix. Configure the framework's base-path option when building, then serve
 that dist (for example, vite preview as above); the gateway forwards the prefix and bytes without rewriting them.`
 
-const TOPICS: Record<string, string> = { spec: SPEC, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB }
+const DIAGRAM = `spex guide diagram — a node's picture of its own level
+
+A spec node may carry ONE diagram: a file named diagram.json beside its spec.md. The dashboard draws it on the
+node's page, between the file rows and the body — a click on a box focuses it and lights its edges, a double-click
+on a child's box opens that child — and a published graph carries the same picture. The file is an archify
+diagram IR, and its "diagram_type" says which of five kinds it is:
+
+  architecture  the node's children and who depends on whom — the usual picture of a node with children
+  workflow      the steps, branches and hand-offs a process goes through
+  sequence      messages between a few participants, in time order
+  dataflow      data moving through sources, transforms and stores
+  lifecycle     the states one thing passes through, and what moves it between them
+
+Choose the kind from what the node's body spends its words on, not from habit. A node without a body worth a
+picture carries no diagram.
+
+THE LOOP
+  spex spec search <topic>          find the node; its folder is the directory of the spec.md path it prints
+  spex diagram scaffold <node>      write <folder>/diagram.json to start from (--type <kind>; default architecture)
+  … edit the file …
+  spex diagram check <node>         draw it and run every check; repeat until it passes
+                                    (--html <file> writes the full viewer page if you want to look at it)
+  spex spec lint                    the commit gate applies the same two tree rules
+  commit diagram.json together with the spec change it belongs to
+
+ARCHITECTURE: THE PICTURE OF THE TREE
+  Boxes are the node's DIRECT children. A box's "id" is the child's node id — one rule for every child, a dotted
+  id like .plugins included — or "others", one box that folds the small children together. scaffold already
+  writes one box per child. A box's "sources" cite the child's spec.md and the file its node claims in code:,
+  and nothing else. Both rules are lint errors (diagram-id, diagram-source; see spex guide spec).
+  Sources are evidence pinned to a commit: they need meta.repository {url, revision} naming a GitHub or Gitee
+  repository whose origin this checkout is. scaffold fills that in and pins HEAD; on any other origin it writes
+  no sources.
+
+  The fields you will write:
+    meta         title (required), locale "en" | "zh-CN", quality_profile "standard" | "showcase", note
+    components   id, type (frontend | backend | database | cloud | security | messagebus | external), label,
+                 sublabel, tag, pos [x, y], size [w, h], sources [{path, label}]
+    connections  from, to, label, variant (default | emphasis | security | dashed); fromSide / toSide, labelAt
+                 to steer a route or a label that collides
+    boundaries   kind (region | security-group), label, wraps [box ids]
+    cards        {dot (cyan | emerald | violet | amber | rose | orange | slate), title, items [lines]} — the
+                 explanation read beside the picture
+  Every other field, and the other four kinds, are defined by the JSON schemas shipped in the @spexcode/archify
+  package (schemas/<kind>.schema.json); scaffold --type <kind> writes archify's own example of that kind.
+
+WHAT TO WRITE, AND WHAT NOT TO
+  - meta.note: one short paragraph shown under the picture — what was folded, which relation is an inference.
+  - Draw the relations the body states; name each edge by what crosses it (a call, an event, a file, a role).
+  - No numbers that move on their own — node counts, drift counts, import counts. Nothing re-checks them, and
+    they are wrong a week later. The diagram has no staleness check: it is revised with its node's spec.
+  - check's findings come with archify's suggested fixes: layout collisions, labels too small to read at the
+    profile's width, routes through boxes. Repair from them rather than guessing.`
+
+const TOPICS: Record<string, string> = { spec: SPEC, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB, diagram: DIAGRAM }
 
 // every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
 // the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.

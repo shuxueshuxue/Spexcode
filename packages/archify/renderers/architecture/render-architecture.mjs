@@ -33,7 +33,6 @@ import {
   chosenSide,
   routeHonorsEndpointSides,
   normalizeRoutePoints,
-  polylinePath,
   routePointsValue,
   roundedPath,
   labelPoint,

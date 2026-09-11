@@ -32,7 +32,9 @@ conversation — SpexCode's dashboard is its first adopter, binding it through o
 **Every tunable has one home: `TranscriptUi`.** A host wraps its surface once and the components read the
 context instead of threading props: `renderText` (prose → elements; the default keeps the writer's line
 breaks and paragraphs and renders nothing else, a host with a markdown pipeline passes it and the same
-renderer serves every turn, quote and note), `loadToolOutput` (where a withheld live body is fetched from —
+renderer serves every turn, quote and note), `renderCopy` (the host's copy control for a turn the agent said,
+handed the turn's authored text — the host owns the control and its clipboard, the package owns where it sits;
+absent, a turn carries none), `loadToolOutput` (where a withheld live body is fetched from —
 absent means every body is inline), `labels` (the few words the surface says, in the host's language),
 `vocabulary` (the verbs, quiet set and target keys that turn a call into a sentence — DATA a host extends
 with `extendVocabulary`, never a branch on a harness id), `envelopes` (the ordered parser rows that read a

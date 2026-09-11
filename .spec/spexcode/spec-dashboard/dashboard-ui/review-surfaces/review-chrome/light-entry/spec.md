@@ -6,6 +6,8 @@ code:
   - spec-dashboard/src/Root.jsx#Root
 related:
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/clipboard.js
+  - spec-dashboard/src/CopyButton.jsx
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/route.js
@@ -18,7 +20,9 @@ The root is where the frame-wide providers are mounted, so every face — the bo
 public graph — is inside them without asking which face it is. [[status-bar]]'s registry is one of these: a
 contributor anywhere below can register an item without knowing which face is showing, and the hook is inert
 outside a provider, so the sealed public build pays nothing for it. [[transient-notices]] is another: a
-surface can acknowledge its own completed write through the provider alone. The same root wraps every face in
+surface can acknowledge its own completed write through the provider alone. [[copy-control]]'s code-block
+control is a third: the prose renderer places it and this root supplies it, so every Markdown surface below
+carries it without importing it. The same root wraps every face in
 the shared backend-health frame, so an unreachable backend shows one global retry banner before any runtime is
 asked to boot.
 

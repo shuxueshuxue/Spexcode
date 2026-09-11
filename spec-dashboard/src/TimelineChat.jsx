@@ -18,6 +18,9 @@ import { readerIsSelecting } from './readerSelection.js'
 import { useFoldOut } from './useFold.js'
 import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
 import { useAttachQueue } from './useAttachQueue.jsx'
+import { writeClipboard } from './clipboard.js'
+import { CopyButton } from './CopyButton.jsx'
+import { SessionFilesContext } from './fileRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
 import { inboxCommands } from './sessionCommands.js'
 
@@ -145,35 +148,6 @@ const setTimelineHighlight = (range) => {
   if (!hasTimelineHighlight() || !range || range.collapsed) return false
   CSS.highlights.set('timeline-sel', new Highlight(range))
   return true
-}
-
-const execCopyFallback = (text) => {
-  let eventConfirmed = false
-  const onCopy = (event) => {
-    if (!event.clipboardData) return
-    try {
-      event.clipboardData.setData('text/plain', text)
-      event.preventDefault()
-      eventConfirmed = true
-    } catch { /* the result remains an honest failure */ }
-  }
-  document.addEventListener('copy', onCopy, true)
-  let commandConfirmed = false
-  try { commandConfirmed = document.execCommand('copy') === true } catch { /* the result remains an honest failure */ }
-  document.removeEventListener('copy', onCopy, true)
-  return eventConfirmed && commandConfirmed
-}
-
-// One clipboard capability seam for the custom Range shortcut and the no-Custom-Highlight copy button.
-// The event fallback writes the payload without creating a Selection, temporary textarea, or focus handoff.
-const copyTimelineText = async (text) => {
-  try {
-    if (typeof navigator.clipboard?.writeText === 'function') {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch { /* plain HTTP and denied permissions continue through the synchronous browser copy path */ }
-  return execCopyFallback(text)
 }
 
 const rangeAtPoint = (timeline, clientX, clientY) => {
@@ -513,6 +487,11 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
 
   const items = useMemo(() => conversationItems(events || [], win.priorWorking), [events, win.priorWorking])
+  // what a `[[file:<name>]]` in this conversation resolves against; keyed by content, since a board push hands
+  // over a fresh array for an unchanged list and every reference below would re-render for nothing. The phone
+  // face has no resource tabs ([[mobile-ui]]), so there a reference opens the file's preview page instead.
+  const filesKey = (s.files || []).join('\n')
+  const filesScope = useMemo(() => ({ sessionId: s.id, files: filesKey ? filesKey.split('\n') : [], tabs: !isMobile }), [s.id, filesKey, isMobile])
   // THE OPEN SEAM STREAMS. A working record ends in an open seam; while the session is live that seam
   // subscribes to its interval's stream — the server advances the native thread only when it changed and
   // pushes what changed, merged by turn id in the subscriber — so the collapsed live tail and the expanded transcript are one
@@ -657,7 +636,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   const copyText = useCallback(async (text) => {
     clearTimeout(copyStatusTimerRef.current)
     setCopyStatus(null)
-    const copied = await copyTimelineText(text)
+    const copied = await writeClipboard(text)
     setCopyStatus(copied ? 'copied' : 'failed')
     if (copied) {
       copyStatusTimerRef.current = setTimeout(() => setCopyStatus(null), 1200)
@@ -856,7 +835,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (promptTs) dayRow(promptTs, 'p')
     rows.push(
       <div className="m-ev m-ev-prompt" key="prompt" data-at={atOf(promptTs)}>
-        <Quote ts={promptTs} text={detail.prompt} />
+        <div className="m-quote-line"><Quote ts={promptTs} text={detail.prompt} /><CopyButton text={detail.prompt} className="m-copy" /></div>
         {promptTs ? gutter(promptTs) : <div className="m-gut" />}
       </div>,
     )
@@ -879,7 +858,10 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     if (item.kind === 'quote') {
       rows.push(
         <div className="m-ev m-ev-sent" key={i} data-at={atOf(item.ts)}>
-          <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+          <div className="m-quote-line">
+            <Quote who={item.from ? item.envelope?.label || fromLabel(item.from) : null} ts={item.ts} text={item.text} />
+            <CopyButton text={item.text} className="m-copy" />
+          </div>
           {gutter(item.ts)}
         </div>,
       )
@@ -896,11 +878,9 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
                 <span className="m-ev-glyph">{STATUS_GLYPH[item.status] || '·'}</span>
                 <span className="m-ev-word">{t(`status.${item.status}`)}</span>
               </span>
-              {item.text && !hasTimelineHighlight() && (
-                <button type="button" className="m-copy-note" onClick={() => copyText(item.text)}>{t('mobile.copy')}</button>
-              )}
             </div>
             {item.text && <ClampedNote text={item.text} />}
+            {item.text && <CopyButton text={item.text} className="m-copy" />}
           </article>
         </div>,
       )
@@ -914,6 +894,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
             <span className="m-ev-glyph" style={{ color: STATUS_COLOR[item.status] }}>{STATUS_GLYPH[item.status] || '·'}</span>
             <span className="m-ev-word" style={{ color: STATUS_COLOR[item.status] }}>{t(`status.${item.status}`)}</span>
             {item.text && <div className="m-line-text"><ClampedNote text={item.text} /></div>}
+            {item.text && <CopyButton text={item.text} className="m-copy" />}
           </div>
         </div>,
       )
@@ -974,6 +955,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   }
 
   return (
+    <SessionFilesContext.Provider value={filesScope}>
     <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-selectable ref={scrollRef} onScroll={onScroll}
@@ -1005,6 +987,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
         specs={specs} sessions={sessions} boardCommands={boardCommands} />
     </div>
     </DashboardTranscriptUi>
+    </SessionFilesContext.Provider>
   )
 }
 

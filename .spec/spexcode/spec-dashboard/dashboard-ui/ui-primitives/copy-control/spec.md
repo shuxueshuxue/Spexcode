@@ -54,17 +54,18 @@ leaves the note clamped.
 **The control is shown by what it copies.** It rests hidden and appears while the thing it copies is pointed
 at or holds keyboard focus; while hidden it takes no pointer, so wherever it rests stays the reader's. Where
 nothing can point (`hover: none`, a phone) it is simply there, and so it may never sit over words — a code block
-keeps its corner clear of code, and a message's control takes its own line under the message.
+keeps its corner clear of code.
 
-**A code block's control is top-right; a message's is bottom-right.** A code block is read as an object, and its
-control sits in its top-right corner ([[prose-renderer]]). A message is read to its end, and its control sits at
-its bottom-right, where the reader finishes: the conversation hangs a note's, an event's and a quoted message's
-just under the message's bottom-right corner, in the empty space between rows, so it adds no height and covers
-no word ([[conversation]]); an agent turn inside a transcript keeps its control inside the text's bottom-right
-corner — where a paragraph's last line is usually short — because right under a turn's text is often its first
-tool call, whose chevron sits at the far right ([[transcript-view]], through the package's `renderCopy` slot). The
-two corners are what keep a message that opens or ends on a code block from stacking two controls; a turn that
-ends on a one-line code block moves its own control one control-width left of the block's.
+**A code block's control is in its top-right corner; a message's is on its time.** A code block is read as an
+object, and its control sits in its top-right corner ([[prose-renderer]]). A message's control sits with the
+message's time, the one piece of chrome a reader already looks to for it: right after the status in a note's
+head (`12:45 AM · review · [copy]`), at the end of an event's single line, and under the time in a quoted
+message's ruler ([[conversation]]). Where a pane is too narrow for the ruler, a quoted message's time moves onto
+its bubble and its control hangs under the bubble's bottom-right corner instead. An agent turn inside a
+transcript has no time of its own, so it keeps its control inside its text's bottom-right corner — where a
+paragraph's last line is usually short, and never under the text, where its first tool call's chevron sits at the
+far right ([[transcript-view]], through the package's `renderCopy` slot); a turn that ends on a one-line code block
+moves that control one control-width left of the block's.
 
 **The prose renderer places it, the root supplies it.** The renderer stays loadable where the app's icons and
 words are not (a node test renders it bare), so it never imports the control: the root mounts it once through

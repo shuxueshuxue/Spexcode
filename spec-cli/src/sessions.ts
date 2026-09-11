@@ -2669,16 +2669,18 @@ function bindNativeRuntimeUnlocked(rec: SessRec): void {
 }
 
 // @@@ bindLaunchedRuntimes - a launch did not always bind a caller-pinned adapter, so a backend start gives every
-// launched working-set session the binding its launch now writes. Idempotent; a record that cannot be bound is
-// reported and left to the ordinary loud paths.
+// working-set session this backend launched the binding its launch now writes. The launch script a launch leaves in
+// the session store is the witness: a record nobody launched here (an adopter's, a fixture's) is not ours to bind.
+// Idempotent; a record that cannot be bound is reported and left to the ordinary loud paths.
 export async function bindLaunchedRuntimes(): Promise<void> {
   for (const id of listSessionIds()) {
     try {
+      if (!existsSync(sessionArtifactPath(id, 'launch.sh'))) continue
       const seen = readRecord(id)
-      if (!seen?.governed || seen.archived || seen.status === 'queued') continue
+      if (!seen?.governed || seen.archived) continue
       await withRecordLock(id, async () => {
         const rec = readRecord(id)
-        if (rec?.governed && !rec.archived && rec.status !== 'queued') bindNativeRuntimeUnlocked(rec)
+        if (rec?.governed && !rec.archived) bindNativeRuntimeUnlocked(rec)
       })
     } catch (error) {
       console.error(`spex: could not bind the launched runtime of ${id}: ${error instanceof Error ? error.message : String(error)}`)

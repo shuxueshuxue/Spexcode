@@ -14,7 +14,7 @@ import { sessionStateKit } from './session-declarations.js'
 import { rvSock, stampRvSock } from './harness.js'
 import { bindLaunchedRuntimes, markHumanPromptActive, sendText, sessionHasPendingDelivery } from './sessions.js'
 import { readRecord } from './session-record.js'
-import { sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
+import { sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 function selectTestStore(home: string, databasePath: string): () => void {
   const previousHome = process.env.SPEXCODE_HOME
@@ -141,12 +141,19 @@ test('a Claude session launched before launch-time binding is bound at backend s
     sortkey: null, createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false,
     cold_proof: '', adapter_recovery: '', launcher: null, launch_cmd: null, launch_owner: '',
   }, null, 2) + '\n')
+  writeFileSync(sessionArtifactPath(id, 'launch.sh'), '')
+  // the same record shape that no launch here produced: an adopter owns its binding
+  const adopted = 'adopted-claude-session'
+  mkdirSync(sessionStoreDir(adopted), { recursive: true })
+  writeFileSync(sessionRecordPath(adopted), JSON.stringify({ session_id: adopted, governed: true, worktree_path: process.cwd(), branch: 'main', harness: 'claude', harness_session_id: '', stopped: false, archived: false }) + '\n')
   const app = configuredSessionApplication()
   app.createSession({ sessionId: id, status: 'active' })
+  app.createSession({ sessionId: adopted, status: 'active' })
   stampRvSock(id)
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     await bindLaunchedRuntimes()
+    assert.equal(app.resolveRuntime(adopted, 'spex-governed'), null, 'a record no launch here produced is not bound')
     const binding = app.resolveRuntime(id, 'spex-governed')
     assert.equal(binding?.status, 'bound')
     assert.equal(binding?.nativeSessionId, id, 'a caller-pinned adapter binds the id its launch pinned')
@@ -225,6 +232,7 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
   const app = openProjectSessionApplication({ databasePath, locality: () => {} })
   app.createSession({ sessionId: id, status: 'asking', note: 'waiting for input' })
   stampRvSock(id)
+  writeFileSync(sessionArtifactPath(id, 'launch.sh'), '')
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(rvSock(id), resolve) })
   try {
     await bindLaunchedRuntimes()
@@ -279,6 +287,7 @@ test('a delivered human prompt reopens a parked session even when another prompt
   const app = openProjectSessionApplication({ databasePath, locality: () => {} })
   app.createSession({ sessionId: id, status: 'parked', note: 'waiting' })
   stampRvSock(id)
+  writeFileSync(sessionArtifactPath(id, 'launch.sh'), '')
   app.enqueueConversationMessage(id, {
     kind: 'session.prompt.v1', body: Buffer.from('already queued'), senderSessionId: null,
   }, { text: 'already queued', from: null })

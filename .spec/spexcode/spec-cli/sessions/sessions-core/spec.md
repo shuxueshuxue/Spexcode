@@ -156,10 +156,11 @@ failure: it clears the prior `error` lifecycle and its failure note, publishes t
 until a real activity hook makes it `active`, and never leaves an online worker represented as `error`. Waiting
 declarations (`asking`, `parked`, or an `awaiting` proposal) remain waiting declarations when resumed; only the
 terminal error state is reset by this explicit recovery operation.
-A backend start gives each launched working-set record (governed, not archived, not queued) the binding its launch
-writes, so a session launched by an earlier toolchain is not left outside the retry sweep. The start token's one
-home is the record; a record without one gets its first token when it is bound. The pass is idempotent and reports
-each record it cannot bind.
+A backend start gives each governed, unarchived record it launched the binding its launch writes, so a session
+launched by an earlier toolchain is not left outside the retry sweep. The launch script a launch leaves in the
+session store is the witness; a record no launch here produced (an adopter's or a fixture's) keeps whatever binding
+its owner gives it. The start token's one home is the record; a record without one gets its first token when it is
+bound. The pass is idempotent and reports each record it cannot bind.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],

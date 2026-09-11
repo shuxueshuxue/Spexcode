@@ -47,7 +47,12 @@ export default {
   },
 
   // the left navigation rail ([[side-nav]]) — one label per top-level page
-  specView: { missing: 'no such node: {id}' },
+  specView: {
+    missing: 'no such node: {id}',
+    pendingChanges: ({ n }) => `${n} pending change${n === 1 ? '' : 's'}`,
+    changeOpen: 'show the pending change',
+    changeClose: 'leave the pending change, back to the spec',
+  },
   fileView: { none: 'no file selected' },
   fileTree: {
     aria: 'project file tree',
@@ -540,6 +545,7 @@ export default {
     expandedNote: 'versioned often · must match raw source',
     filesChanged: ({ n }) => `${n} file${n === 1 ? '' : 's'} changed`,
     loadingChange: 'loading diff…',
+    changeAt: ({ n }) => `line ${n}`,
     noChange: 'no recorded change yet — this spec is the latest ground truth.',
     diffLabel: 'spec line diff',
     loadingHistory: 'loading history…',

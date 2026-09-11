@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "spec-cli — 命令面 → 会话 → 真源，加 host 面",
+    "title": "spec-cli — 两个入口，写路径与读路径汇于 source-of-truth",
     "locale": "zh-CN",
     "quality_profile": "showcase",
     "legend": {
@@ -10,37 +10,48 @@
     },
     "repository": {
       "url": "https://github.com/shuxueshuxue/spexcode",
-      "revision": "250fd0032ef54107b9225665ba2869635c0706bf"
+      "revision": "d0d2f4787a89f652780234dc45fd92ac5a04733b"
     },
-    "note": "主干 cli-surface → sessions → source-of-truth：spex 的写路径是命令面驱动 worktree 会话，会话再向 main 上的 .spec 真源提案。四个区域按归属分：host 面与传输，会话与驻留，spec 真源与读路径，Issue 与文本引用。命令面和折叠框不进任何区域，因为它调用所有区域。边上的数字是子树之间的 import 条数，只画正文讲过的关系，其余写在卡片里。所有数字都在 revision 那一刻的树上重算。"
+    "note": "边只画各节点正文写明的关系，cli-surface 通往其余各框的动词边省略。三个独立的小契约折进 others。"
   },
   "components": [
     {
-      "id": "others",
-      "type": "external",
-      "label": "其余 14 个子节点",
-      "sublabel": "doctor · guide · flat · evidence×3 · spec-search …",
-      "tag": "3 drift",
-      "sources": [
-        {
-          "path": ".spec/spexcode/spec-cli/spec.md",
-          "label": "spec"
-        }
-      ],
+      "id": "serve",
+      "type": "cloud",
+      "label": "serve",
+      "sublabel": "supervisor · gateway · 端口",
       "pos": [
         60,
-        620
+        120
       ],
       "size": [
-        280,
-        60
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/serve/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/supervise.ts",
+          "label": "code"
+        }
       ]
     },
     {
       "id": "cli-surface",
       "type": "frontend",
       "label": "cli-surface",
-      "sublabel": "spex 命令面 · cli.ts",
+      "sublabel": "spex 命令面与帮助",
+      "pos": [
+        60,
+        340
+      ],
+      "size": [
+        200,
+        64
+      ],
       "sources": [
         {
           "path": ".spec/spexcode/spec-cli/cli-surface/spec.md",
@@ -50,22 +61,69 @@
           "path": "spec-cli/src/cli.ts",
           "label": "code"
         }
-      ],
+      ]
+    },
+    {
+      "id": "others",
+      "type": "external",
+      "label": "其余三个",
+      "sublabel": "flat · test-home · resilience",
       "pos": [
         60,
-        350
+        560
       ],
       "size": [
-        190,
-        60
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/flat/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": ".spec/spexcode/spec-cli/test-home-isolation/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": ".spec/spexcode/spec-cli/worktree-resilience/spec.md",
+          "label": "spec"
+        }
+      ]
+    },
+    {
+      "id": "read-surfaces",
+      "type": "frontend",
+      "label": "read-surfaces",
+      "sublabel": "图 · 树 · 搜索 · 节点与源码",
+      "pos": [
+        400,
+        120
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/read-surfaces/spec.md",
+          "label": "spec"
+        }
       ]
     },
     {
       "id": "sessions",
       "type": "backend",
       "label": "sessions",
-      "sublabel": "75 节点 · worktree 会话状态机",
-      "tag": "25 drift",
+      "sublabel": "worktree 会话",
+      "pos": [
+        400,
+        340
+      ],
+      "size": [
+        200,
+        64
+      ],
       "sources": [
         {
           "path": ".spec/spexcode/spec-cli/sessions/spec.md",
@@ -75,43 +133,41 @@
           "path": "packages/spec-core/src/graph.ts",
           "label": "code"
         }
-      ],
-      "pos": [
-        390,
-        340
-      ],
-      "size": [
-        200,
-        76
       ]
     },
     {
       "id": "footprint",
-      "type": "cloud",
+      "type": "external",
       "label": "footprint",
-      "sublabel": "20 节点 · 驻留到被治理仓库",
-      "tag": "2 drift",
+      "sublabel": "安装 · 接入 · 驻留 · 卸载",
+      "pos": [
+        400,
+        560
+      ],
+      "size": [
+        200,
+        64
+      ],
       "sources": [
         {
           "path": ".spec/spexcode/spec-cli/footprint/spec.md",
           "label": "spec"
         }
-      ],
-      "pos": [
-        390,
-        500
-      ],
-      "size": [
-        200,
-        60
       ]
     },
     {
       "id": "source-of-truth",
       "type": "database",
       "label": "source-of-truth",
-      "sublabel": "27 节点 · main 的 .spec 为真源",
-      "tag": "6 drift",
+      "sublabel": "main 上的 .spec 为真源",
+      "pos": [
+        740,
+        230
+      ],
+      "size": [
+        200,
+        64
+      ],
       "sources": [
         {
           "path": ".spec/spexcode/spec-cli/source-of-truth/spec.md",
@@ -121,49 +177,45 @@
           "path": "packages/spec-core/src/specs.ts",
           "label": "code"
         }
-      ],
-      "pos": [
-        720,
-        350
-      ],
-      "size": [
-        190,
-        60
       ]
     },
     {
-      "id": "read-surfaces",
-      "type": "frontend",
-      "label": "read-surfaces",
-      "sublabel": "图 · 树 · 搜索 · 打开节点与源码",
+      "id": "doctor",
+      "type": "security",
+      "label": "doctor",
+      "sublabel": "只读诊断",
       "pos": [
-        1040,
-        350
-      ],
-      "size": [
-        190,
-        60
-      ]
-    },
-    {
-      "id": "serve",
-      "type": "cloud",
-      "label": "serve",
-      "sublabel": "supervisor · gateway · 端口",
-      "pos": [
-        390,
-        60
+        740,
+        560
       ],
       "size": [
         200,
-        60
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/doctor/spec.md",
+          "label": "spec"
+        },
+        {
+          "path": "spec-cli/src/doctor.ts",
+          "label": "code"
+        }
       ]
     },
     {
       "id": "mentions",
       "type": "backend",
       "label": "mentions",
-      "sublabel": "[[node]] 与 @session 引用解析",
+      "sublabel": "引用语法",
+      "pos": [
+        1080,
+        340
+      ],
+      "size": [
+        200,
+        64
+      ],
       "sources": [
         {
           "path": ".spec/spexcode/spec-cli/mentions/spec.md",
@@ -173,21 +225,21 @@
           "path": "spec-cli/src/mentions.ts",
           "label": "code"
         }
-      ],
-      "pos": [
-        720,
-        500
-      ],
-      "size": [
-        190,
-        60
       ]
     },
     {
       "id": "issues",
       "type": "backend",
       "label": "issues",
-      "sublabel": "4 节点 · 本地与 forge 统一 Issue",
+      "sublabel": "本地与 forge 同一对象",
+      "pos": [
+        1080,
+        450
+      ],
+      "size": [
+        200,
+        64
+      ],
       "sources": [
         {
           "path": ".spec/spexcode/spec-cli/issues/spec.md",
@@ -197,47 +249,26 @@
           "path": "spec-cli/src/issues.ts",
           "label": "code"
         }
-      ],
+      ]
+    },
+    {
+      "id": "evidence-store",
+      "type": "database",
+      "label": "evidence-store",
+      "sublabel": "按哈希存证据",
       "pos": [
-        1040,
-        500
+        1080,
+        560
       ],
       "size": [
-        190,
-        60
-      ]
-    }
-  ],
-  "boundaries": [
-    {
-      "kind": "region",
-      "label": "host 面 / 传输",
-      "wraps": [
-        "serve"
-      ]
-    },
-    {
-      "kind": "region",
-      "label": "会话与驻留",
-      "wraps": [
-        "sessions",
-        "footprint"
-      ]
-    },
-    {
-      "kind": "region",
-      "label": "spec 真源与读路径",
-      "wraps": [
-        "source-of-truth",
-        "read-surfaces"
-      ]
-    },
-    {
-      "kind": "region",
-      "label": "Issue 与文本引用",
-      "wraps": [
-        "mentions",
-        "issues"
+        200,
+        64
+      ],
+      "sources": [
+        {
+          "path": ".spec/spexcode/spec-cli/evidence-store/spec.md",
+          "label": "spec"
+        }
       ]
     }
   ],
@@ -245,103 +276,126 @@
     {
       "from": "cli-surface",
       "to": "sessions",
-      "label": "22 imports",
+      "label": "session 动词",
       "variant": "emphasis"
     },
     {
       "from": "sessions",
       "to": "source-of-truth",
-      "label": "2 imports · 4 back",
+      "label": "带署名的提案",
       "variant": "emphasis"
     },
     {
-      "from": "cli-surface",
-      "to": "others",
-      "label": "7 imports",
-      "fromSide": "left",
-      "toSide": "left"
-    },
-    {
-      "from": "cli-surface",
-      "to": "footprint",
-      "label": "6 imports",
-      "fromSide": "right",
-      "toSide": "left"
-    },
-    {
-      "from": "cli-surface",
-      "to": "serve",
-      "label": "2 imports",
-      "fromSide": "top",
-      "toSide": "left"
-    },
-    {
-      "from": "cli-surface",
-      "to": "issues",
-      "label": "2 imports",
-      "fromSide": "bottom",
-      "toSide": "bottom"
-    },
-    {
-      "from": "sessions",
-      "to": "footprint",
-      "label": "7 imports · 10 back",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "labelDy": 24
-    },
-    {
-      "from": "sessions",
-      "to": "mentions",
-      "label": "4 imports · 1 back",
-      "fromSide": "right",
-      "toSide": "left"
-    },
-    {
-      "from": "sessions",
-      "to": "serve",
-      "label": "3 imports · 3 back",
-      "fromSide": "top",
-      "toSide": "bottom",
-      "labelDx": -60,
-      "labelDy": -40
+      "from": "serve",
+      "to": "read-surfaces",
+      "label": "HTTP 读路由"
     },
     {
       "from": "read-surfaces",
       "to": "source-of-truth",
-      "label": "2 imports"
+      "label": "读派生树"
+    },
+    {
+      "from": "read-surfaces",
+      "to": "sessions",
+      "label": "读 board",
+      "labelAt": [
+        500,
+        262
+      ]
+    },
+    {
+      "from": "mentions",
+      "to": "sessions",
+      "label": "@new 建会话"
     },
     {
       "from": "issues",
       "to": "mentions",
-      "label": "4 imports · 1 back"
+      "label": "正文语法"
+    },
+    {
+      "from": "issues",
+      "to": "evidence-store",
+      "label": "只存哈希",
+      "labelAt": [
+        1180,
+        537
+      ]
+    },
+    {
+      "from": "doctor",
+      "to": "footprint",
+      "label": "审计投递"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "入口",
+      "wraps": [
+        "serve",
+        "cli-surface"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "读路径",
+      "wraps": [
+        "read-surfaces",
+        "source-of-truth"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "驻留与诊断",
+      "wraps": [
+        "footprint",
+        "doctor"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Issue 与引用",
+      "wraps": [
+        "mentions",
+        "issues",
+        "evidence-store"
+      ]
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "主路径：命令面 → 会话 → 真源",
+      "title": "写路径与读路径汇于真源",
       "items": [
-        "cli-surface → sessions 有 22 条 import，是这一层最粗的边；spex 的写路径就是 CLI 驱动 worktree 会话",
-        "sessions 与 source-of-truth 互相 import（2 / 4）、互相提及 28 次：会话是对 main 上 .spec 真源的带署名提案",
-        "footprint 与 sessions 双向 17 条 import；它和 source-of-truth 只互相提及 14 次、不 import，图上未画"
+        "写：终端的 session 动词驱动 sessions，会话在自己的 worktree 里改 .spec，那是对 main 的带署名提案",
+        "读：source-of-truth 从 .spec 和 git 派生每个节点的版本、drift 和状态，read-surfaces 是读它的各张脸——整张图、终端树、静态发布、搜索、打开节点与源码"
       ]
     },
     {
       "dot": "amber",
-      "title": "host 面是 serve 的另一张脸",
+      "title": "serve 承载这一切",
       "items": [
-        "spex serve --public 时 supervisor 的代理退到 loopback，public-mode 的 gateway 接管公网口；默认 serve 不变",
-        "占不到公网口就必须响亮地非零退出；serve 与 spex dashboard 共用一个 bind helper（listener-readiness），不是各写一个分支",
-        "supervisor 发布带 instanceId 的端点记录，host-gateway 据此对账项目列表；读方先探活再信任"
+        "supervisor 持有端口，热重载不留空窗；绑不上端口就响亮地非零退出",
+        "public-mode 与 host-gateway 是面向网络的 gateway，后端始终在 loopback",
+        "它启动的每个会话都继承同一个稳定的 SPEXCODE_API_URL"
       ]
     },
     {
-      "dot": "rose",
-      "title": "折叠与漂移",
+      "dot": "violet",
+      "title": "Issue 与引用",
       "items": [
-        "其余 14 个子节点折进左下角一个框：doctor、guide、guidance-catalog、flat、spec-search、spex-tree、node-attachments、diagram、runtime-repair、worktree-resilience、test-home-isolation、evidence put/get/kind；cli-surface 对它们共 7 条 import",
-        "sessions 子树 25 个 drift 是这一层最该有人看的地方；source-of-truth 6、footprint 2、折叠框 3"
+        "本地与 forge 的 Issue 是同一个对象；正文里的节点引用、@session、@new 由 mentions 的一套语法解析",
+        "证据字节按哈希放在 evidence-store，Issue 只引用哈希"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "折叠与省略",
+      "items": [
+        "others 折进 flat（Flatcode）、test-home-isolation、worktree-resilience：三个互不相干、也不属于任何分组的独立契约",
+        "cli-surface 是所有动词的入口，图上只画驱动会话这一条主干"
       ]
     }
   ]

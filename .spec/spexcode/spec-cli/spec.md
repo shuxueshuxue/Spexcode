@@ -50,8 +50,8 @@ the file this node governs (the deeper mechanism lives in its [[source-of-truth]
 serves content-addressed evidence bytes and accepts uploads through one `/api/evidence` route ([[evidence-store]]);
 the dashboard and issue threads use that same transport.
 
-A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issues --json`,
-`board`, `review --json`, `spec search --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
+A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issue ls --json`,
+`graph --json`, `session review --json`, `spec search --json`, …) must FULLY reach a pipe. `process.exit()` force-quits
 without draining buffered pipe writes, silently truncating a large dump at the ~64KB pipe buffer, so those
 verbs exit through a shared **flush-then-exit** helper that waits for stdout to drain first — a >64KB piped
 board or issue dump arrives whole, never a JSON cut off mid-object that reads as complete.
@@ -65,7 +65,7 @@ dashboard's single source, identical to `spex graph --json`) and its push compan
 ([[graph-stream]]), an SSE that fires on session-store change so the dashboard reloads on real transitions
 instead of a tight poll. `/api/graph` stays a **conditional-request** endpoint: it `ETag`s the body so a
 reload that finds nothing changed costs a bodyless `304`, not the whole transfer — a standard HTTP capability,
-not a special case (the board is still rebuilt each request; the cost saved is the wire, not the git read). `/api/specs` (live via `loadSpecs`),
+not a special case (the cost saved is the wire; how often the board is built is [[graph-cache]]'s). `/api/specs` (live via `loadSpecs`),
 `/api/specs/:id/history` + `/api/specs/:id/diff/:hash` (a node's timeline and any version's spec.md
 line-diff), `/api/specs/lite` + `/api/specs/:id/content` (filesystem-only body reads the lean board
 ([[graph-lean]]) offloads: the whole search corpus, and one node's `{body, parts}` on open), `/api/edit`

@@ -52,7 +52,9 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /function SessionResourcePanel\(/)
   assert.match(source, /<SessionForestPanel/)
   assert.doesNotMatch(source, /id: 'session-menu'/)
-  assert.match(source, /onSessionContextMenu=\{\(next\) => \{ setResourceMenu\(false\); setCtxMenu\(next\) \}\}/)
+  // the session's own lifecycle menu has one door on this surface: its forest row. Its tab is an ordinary tab.
+  assert.match(source, /onContextMenu=\{setCtxMenu\}/)
+  assert.doesNotMatch(source, /onSessionContextMenu/)
 })
 
 test('posted resources use the floating picker and selected-file actions', () => {

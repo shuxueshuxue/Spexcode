@@ -9,6 +9,7 @@ code:
 related:
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/NodeDiagram.jsx
+  - spec-dashboard/src/specHistory.js
 ---
 # node-popup
 
@@ -106,7 +107,11 @@ row-header toggle remain the complete interaction. The version log itself
 fetches **when the history tab first shows** (lazy, like edit — most popup opens never visit it) and
 persists after, so returning to the tab stays instant. A version's proof is
 the **spec.md line diff** it introduced, fetched lazily on expand — every version, memoised by hash (the
-latest no longer shipped precomputed); a version with no recorded change says so plainly. That scaffold — scroll container,
+latest no longer shipped precomputed); a version with no recorded change says so plainly, and a log or diff
+that could not be READ says that instead — a failed request is never shown as "no versions" or "no change".
+The log and the per-version diff are the same reads, through one module (`specHistory.js`), that the context
+dock's history panel ([[context-dock]]) and the spec document's version face ([[spec-view]]) use, and the
+version diff is one exported component all of them render. That scaffold — scroll container,
 latest-expanded reveal, click-toggle, and the per-row header-over-evidence shape — is **data-agnostic**:
 the history tab is its one rider, and a row's outbound affordance renders as a sibling of its toggle, never
 nested inside it.

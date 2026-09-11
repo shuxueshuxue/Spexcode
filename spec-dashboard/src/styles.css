@@ -418,6 +418,18 @@ body {
 .ctx-row code, .ctx-state { flex: 0 0 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--type-caption); }
 .ctx-empty { padding: 8px 10px 12px; color: var(--muted); font-size: var(--type-meta); }
 .ctx-error { color: var(--red); }
+/* a version row: its text door (version, commit subject, date and size) and, beside it, its change door. The
+   version the document is showing wears the selected wash; the door it is showing through is the lit one. */
+.ctx-version { display: flex; align-items: stretch; min-width: 0; border-radius: var(--radius); }
+.ctx-version.on { background: var(--wash-selected); }
+.ctx-version-text { flex: 1; align-items: flex-start; }
+.ctx-version-v { flex: 0 0 auto; min-width: 3.2ch; color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); }
+.ctx-version-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ctx-version-meta { display: flex; align-items: center; gap: var(--space-4); color: var(--muted); font-size: var(--type-caption); }
+.ctx-version-change { flex: 0 0 26px; display: flex; align-items: center; justify-content: center; color: var(--muted); border-radius: var(--radius); }
+.ctx-version-change:hover { color: var(--ink2); background: var(--wash-hover); }
+.ctx-version-text[aria-current], .ctx-version-change[aria-current] { color: var(--ink2); }
+.ctx-version-change[aria-current] { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, transparent); }
 
 /* [[file-tree]] — the left dock. A spec node is a folder, so the tree that navigates the project is the
    folder tree: the same shape on disk, on the board, and here. */
@@ -1242,6 +1254,15 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .stat-change:disabled { cursor: default; }
 .stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
 .stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a past version's property row ([[spec-view]]): which version, the commit, the face switch, the way back */
+.stat-hash, .stat-date { font-size: var(--type-meta); color: var(--muted); }
+.stat-hash { font-family: var(--mono); }
+.spec-version .doc-stat .seg-option { height: 22px; padding: 0 var(--space-4); font-size: var(--type-meta); }
+.stat-back { display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--blue); text-decoration: none; border-radius: var(--radius); padding: 1px 6px; }
+.stat-back:hover { background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.version-reason { margin: 0 0 var(--space-6); color: var(--ink2); font-size: var(--type-body); }
+.version-missing { color: var(--red); font-size: var(--type-body); }
+.ev-error { color: var(--red); }
 
 .pane-doc .doc-gov { margin: 0 0 16px; }
 .doc-gov-h { display: block; font-size: var(--type-meta); color: var(--muted); margin-bottom: 6px; }

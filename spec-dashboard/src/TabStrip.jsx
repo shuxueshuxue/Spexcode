@@ -99,7 +99,7 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, leading = null, trailing = null, onSessionContextMenu = null }) {
+export default function TabStrip({ specs, sessions, route, leading = null, trailing = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
   // ONE ROW, AND A LIST FOR WHAT THE ROW CANNOT SHOW. Tabs shrink toward their floor and then the row
@@ -270,13 +270,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
             onContextMenu={(e) => {
               if (isClosing) return
               e.preventDefault()
-              const session = tab.page === 'sessions' && tab.param && tab.param !== 'new'
-                ? (sessions?.find((item) => item.id === tab.param || item.id?.startsWith(tab.param)) || pendingSessionFor(tab.param))
-                : null
-              if (session && onSessionContextMenu) {
-                setMenu(null)
-                onSessionContextMenu({ x: e.clientX, y: e.clientY, session })
-              } else setMenu({ x: e.clientX, y: e.clientY, tab, key })
+              setMenu({ x: e.clientX, y: e.clientY, tab, key })
             }}
             onAuxClick={(e) => { if (!isClosing && e.button === 1) { e.preventDefault(); close(tab) } }}>
             {/* alt-click sends a tab to the second pane: the reader is already pointing at the document

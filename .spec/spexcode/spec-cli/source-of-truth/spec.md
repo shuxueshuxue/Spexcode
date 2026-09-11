@@ -74,6 +74,14 @@ The board **overlay** — each managed worktree's pending spec-delta versus `mai
 function of fork point, worktree HEAD, working-tree `.spec`, and main's tip, memoized on exactly those; session
 liveness is owned by [[sessions]].
 
+**A node's past is readable one version at a time, and only through its own log.** A version is a row of the
+node's history index, so the two per-version reads — the spec.md line diff a version introduced, and spec.md
+as that version left it (its title, desc, body and parts, parsed exactly as the live node's) — first look the
+requested hash up in THAT node's rows and answer nothing for any other string. The gate is what keeps a URL
+segment out of git's argument list: another node's commit, a ref expression, and an option-shaped string
+(`--output=<path>`, which `git show` would obey by writing a file) all stop there. The same row yields where
+spec.md sat at that commit, so a node moved or reparented since still reads its old text from its old path.
+
 Status is a four-state derived value computed from version and drift, with frontmatter kept only as a
 fallback when git is unreadable: the loader derives the git-only part (pending / drift / merged), and
 the live **active** state is layered on by the board assembler from the worktree overlay. The four

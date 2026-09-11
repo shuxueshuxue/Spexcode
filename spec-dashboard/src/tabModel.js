@@ -19,7 +19,8 @@ export const tabKind = (route) => isResourceRoute(route) ? 'file' : route?.page
 // redundant with `placeTab`'s focused-same-kind replacement, which is what actually keeps browsing the graph
 // from minting a tab per node, and it cost the strip its headline law: no gesture could mint a second Spec
 // tab, so "open in a new tab" on a spec silently overwrote the document the reader was reading. A spec's
-// query is a face (`?surface=diff`, its pending change) and is dropped exactly like a session face.
+// query is a face (`?surface=diff`, its pending change; `?version=<hash>`, a past version) and is dropped
+// exactly like a session face.
 const RESIDENT_BOARDS = new Set(['issues', 'settings'])
 export const tabRoute = (route) => RESIDENT_BOARDS.has(route?.page)
   ? { ...route, param: null, query: null }

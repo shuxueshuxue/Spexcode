@@ -10,6 +10,7 @@ const views = readFileSync(new URL('./views.jsx', import.meta.url), 'utf8')
 const catalog = readFileSync(new URL('./viewCatalog.js', import.meta.url), 'utf8')
 const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const contextDock = readFileSync(new URL('./ContextDock.jsx', import.meta.url), 'utf8')
 const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
 const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
 const dockToggleSource = readFileSync(new URL('./DockToggle.jsx', import.meta.url), 'utf8')
@@ -141,9 +142,15 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.doesNotMatch(sideBar, /<DockToggle|name="panel-left"/)   // the rail draws no switch of its own
   const contextToggle = shell.match(/function ContextToggle\([\s\S]*?\n}\n\nexport default function Shell/)
   assert.ok(contextToggle, 'Shell must keep a document-owned context toggle')
+  assert.match(contextToggle[0], /className=\{`context-toggle dock-head-act\$\{visible \? ' on' : ''\}`\}/)
   assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
+  assert.match(shell, /trailing=\{!contextToggleInDock \? contextToggle : null\}/)
+  assert.match(shell, /ContextDock page=\{page\} param=\{param\} open=\{contextOpen\}[\s\S]*?toggle=\{contextToggleInDock \? contextToggle : null\}/)
+  assert.match(contextDock, /ctx-head-acts.*\{toggle\}/)
+  assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*22px; height:\s*22px;/s)
+  assert.match(css, /\.ctx-head\s*\{[^}]*padding:\s*0 var\(--space-3\) 0 var\(--space-5\);/s)
 })
 
 test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {

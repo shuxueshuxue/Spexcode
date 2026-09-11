@@ -78,7 +78,10 @@ it when the board has a live row for it, otherwise the branch name), and whether
 This pane is also the spec document's change face ([[spec-view]]), so the popup and the document render one
 change pane. It is **memoised** like the history tab (re-opening shows the last change at once instead of
 reloading) and **revalidated** on every open, since a pending change is live. The history tab keeps its line
-diff.
+diff. Both panes, and each version row's `+N −N`, draw a change in the dashboard's one diff vocabulary
+([[diff-marks]]), the same one the session diff uses: the redline's struck and inserted words wear the pair's
+word tint, a moved line in the history diff wears its line tint with the change bar at its edge while the
+context recedes, and a history hunk is labelled by the line it starts at, like a redline hunk.
 
 `panesFor(node)` is the single source of which tabs exist and their order — both the tab bar and App's
 keyboard pane-nav read it, so number/Tab keys never cycle to a tab that isn't there. The tab CAPTIONS are

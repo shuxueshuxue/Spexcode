@@ -18,6 +18,7 @@ const ICONS = {
   'corner-up-left': { node: <><path d="m9 14-5-5 5-5" /><path d="M4 9h8a8 8 0 0 1 8 8v2" /></>, sw: 2 },
   'chevron-right': { node: <path d="m9 18 6-6-6-6" />, sw: 2 },
   'chevron-down': { node: <path d="m6 9 6 6 6-6" />, sw: 2 },
+  'chevron-up': { node: <path d="m18 15-6-6-6 6" />, sw: 2 },
   check: { node: <path d="M20 6 9 17l-5-5" />, sw: 2 },
   blank: { node: null },
   // Review-state rings share Primer's 16-grid optical diameter and 1.5px weight. This keeps the

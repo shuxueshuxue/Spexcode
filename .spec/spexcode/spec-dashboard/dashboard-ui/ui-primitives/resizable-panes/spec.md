@@ -35,8 +35,10 @@ split's own divider lit under the pointer. Two dividers with two answers to one 
 same accent now — nothing at rest, the accent on hover and for as long as a drag is live — so a seam that
 can be moved says so wherever it is, and a resting window still gains no visible handle.
 
-The current pane on the mechanism is the session board's list ([[session-console]]). A future pane joins by
-mounting the same hook + divider, not by writing its own drag handling; the graph remains a full-width canvas
-and therefore mounts no divider. There is no generic `.pane-resizer` surface: each mounted consumer owns its
-named seam (`.content-divider`, `.ft-resize`, or `.ctx-resize`), so an unowned selector cannot quietly become
-a second resize mechanism.
+The session board's list ([[session-console]]) was the first pane on the mechanism. The session diff's
+changed-file panel ([[diff-document]]) is on it too, so a reader with deep paths widens the panel instead of
+reading clipped names. A future pane joins by mounting the same hook + divider, not by writing its own drag
+handling; the graph remains a full-width canvas and therefore mounts no divider. There is no generic
+`.pane-resizer` surface: each mounted consumer owns its named seam (`.content-divider`, `.ft-resize`,
+`.ctx-resize`, or `.diff-panel-resize`), and the seams share one accent rule, so an unowned selector cannot
+quietly become a second resize mechanism.

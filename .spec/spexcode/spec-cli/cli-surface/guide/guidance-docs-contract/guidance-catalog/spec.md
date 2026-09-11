@@ -13,7 +13,7 @@ related:
   - spec-cli/src/guide.ts
   - spec-cli/src/index.ts
   - spec-cli/src/guidance-catalog.test.ts
-  - .spec/spexcode/spec-cli/guide/guidance-docs-contract/spec.md
+  - .spec/spexcode/spec-cli/cli-surface/guide/guidance-docs-contract/spec.md
 ---
 # guidance-catalog
 
@@ -46,8 +46,8 @@ entries sorted by stable kind/id/source path, and an `effectiveSystemContract` c
 `surface:system` materialization output (trimmed bodies joined by blank lines in loader name order), its SHA-256,
 and its ordered source entry ids. Each entry has source path, source revision, SHA-256, content role, and exact content. It has no
 timestamps, random ids, or repo-stored bundle file. `bundleHash` is the SHA-256 of the canonical bundle payload,
-while the release manifest may separately hash the exact downloaded JSON bytes as required by
-`spexcode.guidance-release/v1`.
+while the release manifest separately hashes the exact downloaded JSON bytes as required by
+`spexcode.docs-release/v1` ([[guidance-docs-contract]]).
 
 The CLI command `spex guidance` prints this JSON; `spex guidance --out <path>` writes the same bytes. The backend
 route `GET /api/guidance` returns the same object. Both are read-only and deterministic; unknown flags, missing

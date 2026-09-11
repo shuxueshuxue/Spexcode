@@ -15,7 +15,7 @@ from what the graph *contains* (assembly stays with [[sessions]]).
 
 ## expanded spec
 
-Three halves of one budget:
+Four parts of one budget:
 
 - **[[graph-lean]]** — the payload: the graph carries only the summary the tree overview actually
   renders; per-node detail is lazy-loaded where it is viewed, and stays fresh by construction.
@@ -26,9 +26,13 @@ Three halves of one budget:
 - **[[graph-cache]]** — the compute: the graph is BUILT once per change, not once per poll — a
   single-flight, change-invalidated cache in front of the assembly, so a poll storm shares one build
   (and mostly zero) instead of each request re-walking git, and the build never starves the liveness probe.
+- **[[graph-delta]]** — the change: a subscriber that asks for it receives what changed as a patch between
+  two snapshots instead of refetching the whole graph, provably equivalent to that refetch and never bigger
+  than it.
 
-The three compound: the stream decides *when* the wire is paid, the lean payload decides *how much*, and
-the cache decides *how often the graph is built* — together they take the graph from a megabyte-every-poll
+The four compound: the stream decides *when* the wire is paid, the delta decides whether a change costs a
+patch or a snapshot, the lean payload decides *how much* a snapshot carries, and the cache decides *how often
+the graph is built* — together they take the graph from a megabyte-every-poll
 that could wedge the whole server toward a small, mostly-static summary built on change and fetched from
 cache. None owns the graph's contents ([[sessions]]) nor the slow cold-path poll for tree reshapes
 ([[dashboard-shell]]); this group owns only the wire between the graph and its viewers, and the cost of

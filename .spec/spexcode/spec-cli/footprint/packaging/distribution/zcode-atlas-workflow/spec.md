@@ -25,7 +25,10 @@ to set the language and the phase names to the user's and change nothing else ([
 3. *Check the spec tree and repair it until it passes.* The gate is `spex spec lint`: no errors, and coverage at
    or above the floor. One repairer carries the findings from round to round, for a bounded number of rounds. The
    tree is committed once it passes — `spex diagram scaffold` cites only committed files.
-4. *Choose the nodes worth a picture*, by what each body spends its words on, the root always among them.
+4. *Choose the nodes worth a picture*, by what each body spends its words on, the root always among them. Every
+   pick is checked against the tree's node ids — the folder names the script itself listed — because a planner can
+   hand back a name that is not a node (the first full run's planner appended a skip note to one); it gets one
+   round to correct itself, and what still names nothing is reported as skipped, with that reason.
 5. *Draw each picture and check it until it passes*, one cartographer per node in parallel, each gated on
    `spex diagram check` with a bounded number of repairs.
 6. *Have an independent reader check the tree against the code*: claims at the top of the tree the code does not

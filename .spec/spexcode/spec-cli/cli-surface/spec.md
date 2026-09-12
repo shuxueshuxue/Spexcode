@@ -108,6 +108,11 @@ the resulting command reads naturally, permits a batch of children, and gives a 
 usage error. It is a mutation like `send` or `rename`, so normal backend routing flags apply; its parent and
 watch semantics belong to [[session-reparent]], not to the generic grammar.
 
+`spex session new` keeps parent selection in the prompt's one create-time `@parent:<SEL>` directive rather than
+adding a second `--parent` spelling. `@parent:none` explicitly creates a top-level row when the ordinary session
+resolver finds no match for `none`; an exact id, unique prefix, or branch that resolves to `none` retains its
+normal selector meaning, and an ambiguous match remains an error.
+
 `spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path>
 --branch <absent-branch>` is the separate record-integrity control for an unreadable row. It moves no worktree,
 branch, process, or readable lifecycle record: the backend consumes its exact absence witness before it moves

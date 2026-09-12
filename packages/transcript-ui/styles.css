@@ -142,16 +142,18 @@
 .tx-tool-outcome { flex: none; color: var(--tx-red); font-size: var(--tx-type-caption); }
 .tx-tool-cut { color: var(--tx-muted); font-size: var(--tx-type-caption); padding: var(--tx-space-1) 0 0; }
 .tx-tool.is-failed > .tx-tool-row .tx-tool-verb, .tx-tool.is-rejected > .tx-tool-row .tx-tool-verb { color: var(--tx-red); }
-/* A rotation that never stops keeps the browser's animation clock running, and every running animation
-   costs a style recalc per frame for the whole document — about a point of a core each, whatever it draws.
-   The mark stays; the motion goes to the elapsed counter, which moves once a second. */
-.tx-spin { opacity: .8; }
+/* Measured at 0.6% of a core on a live conversation: a small transform animation is what a browser is built
+   for. What is NOT affordable is animating a property that repaints text every frame — see the seam's sweep
+   in the dashboard's own sheet. */
+.tx-spin { animation: tx-spin 1s linear infinite; }
+@keyframes tx-spin { to { transform: rotate(360deg); } }
 .tx-live { margin-top: var(--tx-space-2); min-width: 0; }
 .tx-live .tx-say-text { animation: tx-rise var(--tx-dur-rise) ease; }
 @keyframes tx-rise { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
-.tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after { content: '▍'; margin-left: 2px; color: var(--tx-muted); }
+.tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after { content: '▍'; margin-left: 2px; color: var(--tx-muted); animation: tx-caret 1s steps(2, start) infinite; }
+@keyframes tx-caret { to { visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) {
-  .tx-live .tx-say-text,
+  .tx-live .tx-say-text, .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after, .tx-spin, .tx-caret,
   .tx-fold, .tx-fold.is-opening, .tx-fold.is-closing, .tx-work.is-folding > .tx-work-row { animation: none; transition: none; }
   /* the fold still folds — it just arrives: the copy on its way out is already at nothing, and the JS half
      that holds it drops it on the same timer, so no motion and nothing lingers */

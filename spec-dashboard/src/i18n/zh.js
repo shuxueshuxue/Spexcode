@@ -158,7 +158,7 @@ export default {
     projects: '项目',
   },
   plugins: {
-    profile: 'SPEX_PROFILE',
+    profileLabel: '启动 profile',
     profileAll: ({ n }) => `${n} 个核心钩子全部保留`,
     profileSome: ({ kept, off }) => `保留 ${kept} 个 · 这里被禁用的：${off}`,
     disabled: '被 profile 禁用',
@@ -167,7 +167,6 @@ export default {
     blocksTip: '这个钩子被允许拒绝该事件。拒不拒绝是它每次现场决定的：派发器之所以把它的 exit 2 或 decision:block 变成真正的中断，正是因为有这个标志',
     title: '插件',
     sub: ({ nodes, surfaces }) => `${nodes} 个插件节点，${surfaces} 个面归属 —— 文件夹只是货架，路由看的是 surface 字段`,
-    blocks: '阻塞',
     spine: '一次会话，agent 依次撞上的顺序',
     offSpine: '不在生命周期上',
     nothingRuns: '这一格没有任何东西跑',

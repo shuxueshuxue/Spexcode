@@ -52,7 +52,10 @@ test('a published tree runs the workspace shell over static input, opening only 
   assert.deepEqual(PUBLIC_PAGES, ['spec', 'file', 'graph'])
   assert.match(route, /PUBLIC_GRAPH_ONLY/)
   assert.match(route, /if \(PUBLIC_PAGES\.includes\(face\.page\)\) return face/)
-  assert.match(route, /replaceState\(null, '', '#\/spec'\)/)
+  assert.match(route, /replaceHash\('#\/spec'\)/)
+  // An address a document refuses to restate — an `srcdoc` frame, a sandboxed preview — must cost the
+  // reader the address bar, never the page: this runs inside a render-time state initializer.
+  assert.match(route, /function replaceHash[\s\S]*?try \{[\s\S]*?replaceState[\s\S]*?\} catch \{ return false \}/)
   assert.match(sideBar, /disabled=\{graphOnly && !PUBLIC_PAGES\.includes\(p\)\}/)
   assert.match(sideBar, /aria-disabled="true"/)
 

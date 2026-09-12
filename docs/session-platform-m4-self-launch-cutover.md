@@ -143,7 +143,3 @@ calibration 里是一次真正的 `openat` 打开 poison 的 `pending.json`，�
   缺失即拒绝，唯一越过方式是显式 `--assume-local-storage` 旗标。
 - **listener 的交付面限于 UTF-8 文本 body**：非文本 body 被大声拒绝并打出 `messageId` 与原始 `bodyBase64`
   供人工恢复。这是刻意的边界，不是缺陷；协议本身仍然是 opaque bytes。
-- **locality 的两个洞不变**（M1 遗留）：网络 FS 魔数从未在真实挂载上执行；macOS/Windows 无 detector，
-  缺失即拒绝，唯一越过方式是显式 `--assume-local-storage` 旗标。
-- **listener 的交付面限于 UTF-8 文本 body**：非文本 body 被大声拒绝并打出 `messageId` 与原始 `bodyBase64`
-  供人工恢复。这是刻意的边界，不是缺陷；协议本身仍然是 opaque bytes。

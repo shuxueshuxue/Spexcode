@@ -104,34 +104,15 @@ const sameEvents = (a, b) => a != null && a.length === b.length
 // of them, each with its own rich text — was rebuilt to draw it. The count lives here now, so a working
 // session redraws one line per second instead of its entire history. The clock is still the server's: the
 // skew is read through a ref, so a fresh poll's correction reaches the next tick without re-rendering anyone.
-//
-// THE SWEEP OF LIGHT IS PAINTED, NEVER ANIMATED. A gradient travelling across glyphs clipped to it is the
-// obvious way to write this line and the most expensive thing a page can do: `background-position` is a paint
-// property, so every frame re-rasterizes the text, measured at 6-7% of a core on the main thread and far more
-// once the frames are rastered. Instead the sweep is drawn once per PHASE — one copy of the same words per
-// position of the light — and the phases take turns with `opacity`, which the compositor owns. Nothing
-// repaints after the first frame (traced: 844 paints against zero), and because each phase simply switches on
-// at its moment, the page produces a handful of frames a second rather than sixty.
-const SEAM_PHASES = 12
-const SeamLead = memo(function SeamLead({ lead, ticking, from, skewRef }) {
+const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
   const [now, setNow] = useState(() => Date.now() + skewRef.current)
   useEffect(() => {
-    if (!ticking) return undefined
     const tick = () => { if (document.visibilityState !== 'hidden') setNow(Date.now() + skewRef.current) }
     tick()
     const iv = setInterval(tick, 1000)
     return () => clearInterval(iv)
-  }, [from, skewRef, ticking])
-  const label = ticking ? `${lead} · ${elapsed(Math.max(0, now - from))}` : lead
-  if (!ticking) return <span className="m-seam-lead">{label}</span>
-  return (
-    <span className="m-seam-lead">
-      {label}
-      {Array.from({ length: SEAM_PHASES }, (_, k) => (
-        <span key={k} className="m-seam-phase" style={{ '--k': k }} aria-hidden="true">{label}</span>
-      ))}
-    </span>
-  )
+  }, [from, skewRef])
+  return <>{elapsed(Math.max(0, now - from))}</>
 })
 
 // A widget's pending contribution, sitting above the input box as an attachment rather than inside the
@@ -832,7 +813,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
           <div className="m-gut" />
           <div className={`m-seam${collapsing ? ' is-folding' : ''}`}>
             <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
-              <SeamLead lead={lead} ticking={ticking} from={item.from} skewRef={skewRef} />
+              <span className="m-seam-lead">{lead}{ticking && <> · <SeamElapsed from={item.from} skewRef={skewRef} /></>}</span>
               {transcript?.state === 'ready' && (
                 <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>
               )}

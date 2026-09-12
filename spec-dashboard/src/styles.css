@@ -3151,27 +3151,21 @@ body.is-session-dragging .si-pill.archive:hover {
    and by a slow sweep of light across them: the page's one moving thing while the agent works. The words
    count up every second between polls (TimelineChat anchors the clock to the server's Date header), so the
    number and the light agree that something is happening now. Reduced motion keeps the green and drops the sweep. */
-/* THE LIGHT IS PAINTED ONCE PER PHASE AND THE PHASES TAKE TURNS. Written the obvious way — one line of text
-   clipped to a gradient whose `background-position` animates — this cost 6-7% of a core on the main thread and
-   844 paints in seven seconds, because a paint property cannot be composited: every frame re-rasterized the
-   glyphs, and neither `will-change`, `contain: strict` nor a layer of its own changed that (all measured). Each
-   phase here is the same words with the light already at its position, painted once; only `opacity` moves, and
-   it moves in a step, so the compositor owns the animation, nothing repaints (traced: zero paints) and the page
-   draws a few frames a second instead of sixty. The phase count is [[conversation]]'s SEAM_PHASES. */
-.m-seam-row.is-live .m-seam-lead { color: var(--green); position: relative; display: inline-block; white-space: pre; }
-.m-seam-phase {
-  position: absolute; left: 0; top: 0; white-space: pre; pointer-events: none;
+/* The sweep is the ordinary one every component library ships (ai-elements' TextShimmer, which z-code uses,
+   is the same three lines): a gradient wider than the line, clipped to the glyphs, moved across them. Its one
+   expense is that `background-position` is a paint property, so each change re-rasterizes the words — and a
+   browser will happily do that sixty times a second. It does not need to: over 2.4 seconds the light advances
+   a step at a time, twelve of them, which reads as the same sweep and asks for a twelfth of the repaints
+   (measured on a live conversation: 16.8% of a core against 6.7%, all processes). */
+.m-seam-row.is-live .m-seam-lead {
+  color: var(--green);
   background: linear-gradient(90deg, var(--green) 0 38%, color-mix(in srgb, var(--green) 40%, var(--ink2)) 50%, var(--green) 62% 100%);
-  background-size: 240% 100%;
-  background-position: calc(120% - (240% * var(--k) / 12)) 0;
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  opacity: 0; will-change: opacity;
-  animation: m-seam-phase 2.4s steps(1, end) infinite;
-  animation-delay: calc(-2.4s * var(--k) / 12);
+  background-size: 240% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: m-seam-shimmer 2.4s steps(12) infinite;
 }
-@keyframes m-seam-phase { 0% { opacity: 1; } 8.34% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes m-seam-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .m-seam-phase { display: none; }
+  .m-seam-row.is-live .m-seam-lead { animation: none; background: none; -webkit-text-fill-color: currentColor; }
 }
 /* one quiet line, no rule across the page: the work between two messages is a footnote to the exchange,
    said in the caption voice and lit only under the pointer, the way a reading surface folds its thinking. */

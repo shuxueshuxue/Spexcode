@@ -2,7 +2,7 @@
 title: commands
 status: active
 hue: 40
-desc: Grouping shelf for the `surface: command` prompt presets offered wherever a human composes work for an agent. A shelf, not a surface — routing stays field-driven per [[surface]].
+desc: Grouping shelf for the `surface: command` prompt presets offered wherever a human composes work for an agent. A shelf, not a surface — routing stays field-driven per surface.
 ---
 # commands
 
@@ -13,7 +13,7 @@ contracts on [[prompts]], with [[core]] (the dev-flow contract subsystem) a flat
 
 Invocation belongs to the backend prompt boundary, not to whichever client happens to render the picker.
 Every compose surface sends the raw `/<preset> [[node]]… <free text>` prompt; the shared resolver expands the
-live `surface: command` body before either [[launch]] starts a worker or [[dispatch]] sends text to one. At
+live `surface: command` body before either launch starts a worker or dispatch sends text to one. At
 launch, the raw invocation remains the session's originating prompt and identity source, so links inside a
 plugin body can never invent a node target. Dashboard and phone menus are therefore discovery/insertion
 chrome, while dashboard, phone, CLI, API, and in-process fallback all invoke through the same backend

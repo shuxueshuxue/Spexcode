@@ -185,7 +185,7 @@ production-cutin spec 说残留吸收"runs the same migration entry point"，所
 | `scripts/session-production-cutover-yatu.mjs`（**已退役 2026-09-13**，人类选 lane G 的 (a)；owning 节点正文记了退役理由） | ~~红 8/10~~ | 退役前 main 上红 8/10，同两条：`multiple watchers receive one ordered stream`（期望 2 条 state.changed，得 `[]`）、`ordered batch delivery is FIFO and at-most-once` | 断言的是"状态转移直接给 watcher 入队"；owning spec `production-cutin-yatu` 现在写的是"backend 把 cursor 对账成队列消息后再 dequeue"。脚本最后修改 `53e225443`（08-22），语义此后变了。它是该节点的 `related:`，不是 `code:` |
 | `spec-cli/src/session-production-cutover.yatu.test.ts`（`npm test` 会跑的那份） | **绿 1/1** | — | 最后修改 `3ecf24e09`（09-11），跟着契约走 |
 | `spec-cli/src/hook-dispatch.test.ts` | **绿 30/30**（含 session-listen 两条） | — | — |
-| `scripts/session-application-yatu.mjs` | **NOT-MEASURED**：`npm install` 五个打包 tarball 返回 status 254、stdout/stderr 皆空 | — | 未定位（可能是 `--silent` 吞掉的网络或沙箱错误）；不当作红，也不当作绿 |
+| `scripts/session-application-yatu.mjs` | ~~NOT-MEASURED~~ → **绿**（2026-09-13） | — | 根因量到：脚本把 tarball 文件名硬编码成 `…-0.6.7.tgz`，版本号一升就装不到文件（`--silent` 把这条错吞了）。改为从根 `package.json` 取版本；跑通 |
 
 两条红的共同形状与 M4 §4.3 那五条一样：**证明守的是一个已经过期的契约，而它过期之后没有任何门再跑它。**
 D-23 由此而来。
@@ -244,16 +244,23 @@ D-23 由此而来。
 ## 7. 仍然 OPEN，以及点名的事实问题
 
 - **`@spexcode/session-core` 在 2026-08-24 被物理删除（`81c7e9f7e`）**，而 M5 台账 §1 写"在该 adopter 迁移之前删除
-  `runtime-session.ts` 会打断一个活着的外部产品"，并把 M8 的拆除标为"被 M5 阻塞"。两者只能有一个是现状：
-  要么 z-code 已接受 `m5/zswarm-protocol-cutover` 提案（M5 §4 说需要对方所有者同意），要么一个外部消费者的依赖已断。
-  本账 **NOT-MEASURED(z-code 侧未查)**，只点名矛盾。
+  `runtime-session.ts` 会打断一个活着的外部产品"。2026-09-13 在 mbp 上量了：z-code `zcode-spec` 分支上**没有** `third_party/spexcode`，
+  也没有 `docs/swarm-session-protocol.md` 的历史——M5 提案未被采纳。矛盾是软的：z-code 消费的是 registry 上已发布的
+  `@spexcode/session-core@0.6.7`，本仓删源码不影响它安装；真正断的是"本仓还能给它发修复"这条路。归 M5/M8 owner。
 - **M4 台账在 head 上的四处过期**（不改正文，点名）：§2 D-17 与 §4.2 描述的 listener 投递已被 D-19 撤销；
   §1/§4.2 引用的 `sessions.ts:4262-4264` 现为 `:3620`；§6 末尾两条重复 bullet（已顺手删）；
   owning 节点 `self-launch-cutover` 正文同样描述投递（归 lane G）。
+- **另三台部署机的现状（2026-09-13 实测，未动）**：rocket delta 跑本机主检出，backend 已随落地热重载，`spex materialize` 已跑；
+  它的 `.spec/project/.plugins/core` 里本来就没有 `session-listen` 节点（旧模板部署不自动获得新节点，CLAUDE.local 的老教训），所以那边的
+  self-launch 会话仍不会登记，要不要迁入这个节点是人的决定。**macmini**（gugu）工具链 `~/specMech` 落后 main **903** 个提交
+  （head 2026-09-02），树上有未提交的用户工作（`packages/terminal-ui/` 等 3 项 untracked + 2 项修改，含 `package-lock.json`）。
+  **mbp**（z-code）工具链 `~/spexcode` 落后 **3629** 个提交（head 2026-08-14，**在 08-22 的 SQLite 切换之前**），也就是它的
+  z-code store 还是 JSON 记录——更新它不是"npm install → materialize → 重启"，而是一次带备份与 plan 的 live cutover 维护操作。
+  两台都不是可以无人值守夜里做的事：一台要碰用户未提交的文件，一台要迁数据。这里只记事实，不动。
 - **路线图本身已不在树里**：`docs/session-platform-construction-roadmap.html` 等六份于 `a15028b59`（09-03）删除。
   本账引用的 M6 定义、删除表和合并公式取自 `a15028b59^` 那一版；`adopter-cutin` 节点里"the milestones named by the
   architecture ledger"这句现在指向一个不存在的文件。要不要把里程碑定义重新落在某个 spec 节点里，是人的决定。
-- **`session-application-yatu.mjs` 未测**（§4.1），原因未定位。
+- ~~`session-application-yatu.mjs` 未测~~ 已定位并修好（§4.1）。
 
 ## 8. 里程碑状态：一个声音
 

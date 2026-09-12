@@ -58,8 +58,10 @@ environment variable of the process an agent launches under, not a project setti
 ## one document, no dock
 
 The board names no object, projects no navigator, and holds one full-width document. It is `resident`, so
-the bare address is its one tab identity, and it is absent from the published-tree page set because a
-static publication has no worktrees to report on.
+the bare address is its one tab identity, and it is absent from the published-tree page set because a static
+publication has no live plugin surface to read. Its body sits in the shared [[page-scroll]] scrollport like
+every other document of this shape — it shipped without one, and a board taller than the viewport that
+cannot be scrolled shows only its first screen.
 
 ## colour is spent against the surface, never between two inks
 

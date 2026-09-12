@@ -8,6 +8,7 @@ code:
 related:
   - .spec/spexcode/session-topology/spec.md
   - .spec/spexcode/session-protocol/package-entry/spec.md
+  - packages/session-topology/src/index.test.ts
 ---
 # session topology package entry
 
@@ -22,3 +23,6 @@ way to combine relation mutation with taking a message.
 
 Reads normally open a short protocol transaction; callers already inside one may pass that transaction explicitly so
 queries observe the same uncommitted relation state without transaction re-entry.
+
+The reparent cycle-refusal and directional-relation checks remain synchronous contract tests: each runs in one
+transaction and asserts active-edge state, so their result does not depend on process scheduling or a timing window.

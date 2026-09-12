@@ -59,7 +59,7 @@ await page.addInitScript(() => {
   // Drive the host's agent view the way the bridge would: set the row, then say only that the id moved.
   window.__agentSays = async (row) => {
     window.__agents = row ? [{ agentId: 'atlas-1', title: 'SpexCode atlas', ...row }] : []
-    window.__onAgents({ type: 'agentsChanged', agentIds: ['atlas-1'] })
+    window.__onAgents(['atlas-1'])
   }
 })
 
@@ -143,6 +143,13 @@ await page.evaluate(() => window.__agentSays({ status: 'working', isGenerating: 
 await page.waitForFunction(() => /is running/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
 await page.evaluate(() => window.__onFiles({ kind: 'change', changes: [{ path: '.spec/project/spec.md' }] }))
 await page.waitForFunction(() => /is writing/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
+
+// Wrote, then exited: still "is writing" would announce a state nobody is in. Having written does not make
+// the agent permanently present.
+await page.evaluate(() => window.__agentSays({ status: 'completed', isGenerating: false, lastStopReason: 'end_turn' }))
+await page.waitForFunction(() => /finished; its writes/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
+await page.evaluate(() => window.__agentSays({ status: 'error', isGenerating: null, lastStopReason: null }))
+await page.waitForFunction(() => /stopped with an error; what it wrote/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
 assert.equal(errors.length, 0, `no error may appear at any point: ${errors.join(' | ')}`)
 
 console.log(`gugu tab e2e: ok — ${rowCount} node row(s), diagram node ${withDiagram ?? '(none in this tree)'}, agent started, 0 page errors`)

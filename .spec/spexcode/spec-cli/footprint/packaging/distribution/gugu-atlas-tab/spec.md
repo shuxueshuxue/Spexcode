@@ -46,7 +46,9 @@ the host's to say and is never inferred from files, which is why the tab asks fo
 `agents:control` that starts it. The field that carries it is `status`: an errored turn and a turn that never
 happened are projected as the same `lastStopReason: null`, so a branch keyed on that one could never run. And a
 `null` from the host means it CANNOT TELL — a closed panel, a terminal agent — never "no", so it falls back to
-reporting what was asked rather than announcing a verdict the tab was never given.
+reporting what was asked rather than announcing a verdict the tab was never given. Having written does not make an
+agent permanently present either: one that wrote and exited reports `completed`, and the line says it finished
+rather than going on claiming it is writing.
 
 **Proof.** Two halves, and the split is the point. What can be checked without a browser runs with the suite:
 gugu's own manifest schema accepts the manifest, the folder tree reads as a spec tree, a body renders escaped,

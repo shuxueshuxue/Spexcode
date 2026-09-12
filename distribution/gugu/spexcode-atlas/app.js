@@ -190,7 +190,13 @@ function paintStatus(agent) {
   const status = agent?.status ?? null
   const generating = agent?.isGenerating ?? null
   if (sawAtlasWrite) {
-    $('status').textContent = 'The atlas agent is writing; this tab follows its changes.'
+    // It wrote. Whether it is STILL writing is the host's to say: an agent that wrote and exited reports
+    // `completed`, and a tab that kept saying "is writing" would be back to announcing a state nobody is in.
+    $('status').textContent = status === 'error'
+      ? 'The atlas agent stopped with an error; what it wrote is below.'
+      : status === 'completed'
+        ? 'The atlas agent finished; its writes are below.'
+        : 'The atlas agent is writing; this tab follows its changes.'
   } else if (status === 'error') {
     $('status').textContent = 'The atlas agent stopped with an error and wrote nothing.'
   } else if (status === 'completed') {
@@ -238,9 +244,8 @@ async function start() {
   window.gugu.onCommand((id) => { if (id === 'draw') void drawAtlas(); if (id === 'refresh') void load() })
   if (has('workspace:read')) window.gugu.onFilesChanged(onFiles)
   // Whether the AGENT moved is the host's to say, not something to infer from files. Ids only, by design.
-  if (has('agents:read')) window.gugu.onAgentsChanged((change) => {
-    const ids = Array.isArray(change) ? change : (change?.agentIds ?? [])
-    if (atlasAgentId && ids.includes(atlasAgentId)) void readAtlasAgent()
+  if (has('agents:read')) window.gugu.onAgentsChanged((agentIds) => {
+    if (atlasAgentId && agentIds.includes(atlasAgentId)) void readAtlasAgent()
   })
   await load()
 }

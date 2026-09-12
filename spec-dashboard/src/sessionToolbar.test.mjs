@@ -274,9 +274,9 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.match(icons, /command:\s*\{[\s\S]*keyboard:\s*\{[\s\S]*'rotate-ccw':\s*\{/)
 })
 
-test('merge is one present plugin on both the command and skill surfaces', () => {
+test('merge is one present plugin on the skill surface', () => {
   for (const body of [mergePlugin, mergeTemplate]) {
-    assert.match(body, /surface: skill, command/)
+    assert.match(body, /surface: skill\n/)
     assert.match(body, /git merge-base --is-ancestor/)
     assert.match(body, /--no-ff/)
     assert.match(body, /Push the source-of-truth branch only after/)

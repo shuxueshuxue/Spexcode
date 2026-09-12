@@ -3,6 +3,7 @@ title: session-fail
 surface: hook
 status: active
 hue: 200
+desc: When a turn ends because the API failed rather than because the agent declared, marks the session `error` — and a subagent’s failed turn is never the session’s.
 events:
 - StopFailure
 order: 10

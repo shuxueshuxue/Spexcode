@@ -3,6 +3,7 @@ title: spec-first
 surface: hook
 status: active
 hue: 200
+desc: A one-shot access gate: the first read or edit of code that has a real `code:` governor must read that spec first, and ungoverned touches never consume it.
 events:
 - PreToolUse
 order: 20

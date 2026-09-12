@@ -4017,41 +4017,60 @@ body.is-session-dragging .si-pill.archive:hover {
 
 /* THE PLUGINS PAGE ([[plugins-page]]) — the automation drawn as what it does. The spine is the hook surface
    and only the hook surface: an event, a deterministic order inside it, and whether the script may refuse.
-   Everything here is keyed on palette tokens rather than blends between two inks, because a colour whose
-   contrast is defined against another ink flips direction between light and dark palettes and can collapse
-   to invisible on one of them — the live seam's sweep lost a whole theme that way. */
-.pg { width: min(860px, 94%); margin: 0 auto; padding: var(--space-7) 0 60px; }
+   Every plugin is a CARD that carries its own one-line purpose and opens its spec node, because a name and a
+   number is a fact nobody asked for. Colour is keyed on palette tokens rather than blends between two inks —
+   a colour whose contrast is defined against another ink flips direction between light and dark palettes and
+   can collapse to invisible on one of them; the live seam's sweep lost a whole theme that way. */
+.pg { width: min(880px, 94%); margin: 0 auto; padding: var(--space-7) 0 60px; }
 .pg-loading { min-height: 40vh; }
 .pg-error { color: var(--red); padding: var(--space-7) 0; }
-.pg-head { margin: 0 0 var(--space-7); }
+.pg-head { margin: 0 0 var(--space-5); }
 .pg-title { font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); color: var(--ink2); margin: 0 0 var(--space-2); }
 .pg-sub { margin: 0; color: var(--muted); font-size: var(--type-meta); }
 .pg-section { margin: 0 0 var(--space-7); }
-.pg-h { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); margin: 0 0 var(--space-3); }
-.pg-note { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--type-meta); }
+.pg-h { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); margin: 0 0 var(--space-2); }
+.pg-note { margin: 0 0 var(--space-4); color: var(--muted); font-size: var(--type-meta); max-width: 62ch; }
 
+/* the one switch that turns a core hook off, shown as the state it is */
+.pg-profile { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;
+  margin: 0 0 var(--space-7); padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); font-size: var(--type-meta); }
+.pg-profile-key { color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); }
+.pg-profile code { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink);
+  background: var(--raised); padding: 1px 6px; border-radius: var(--radius); }
+.pg-profile-note { color: var(--muted); }
 
-/* the lifecycle spine: the event names are the rail, the hooks hang off them in order */
+/* THE LIFECYCLE AS A RAIL: the event names are stations down one line, the hooks hang off them in order */
 .pg-spine { list-style: none; margin: 0; padding: 0; }
-.pg-slot { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--space-4); align-items: baseline;
-  padding: var(--space-3) 0; border-left: 2px solid var(--line); padding-left: var(--space-5); }
-.pg-slot.is-empty { border-left-color: var(--edge); }
-.pg-event { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink); }
-.pg-event em { font-style: normal; color: var(--red); margin-left: 6px; font-size: var(--type-caption); }
-.pg-hooks { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: baseline; }
-.pg-nothing { color: var(--muted); font-size: var(--type-meta); font-style: italic; }
-.pg-hook { display: inline-flex; align-items: baseline; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 2px 9px; font-size: var(--type-meta); color: var(--ink); background: var(--raised); }
-.pg-hook.blocks { border-color: var(--orange); }
-.pg-order { font-style: normal; color: var(--muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
-.pg-blocks { font-style: normal; color: var(--orange); font-size: var(--type-caption); }
+.pg-stop { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: var(--space-4);
+  align-items: start; padding: 0 0 var(--space-4) var(--space-5); border-left: 2px solid var(--line); position: relative; }
+.pg-stop::before { content: ''; position: absolute; left: -5px; top: 4px; width: 8px; height: 8px;
+  border-radius: var(--radius-full); background: var(--line); }
+.pg-stop.is-empty { border-left-color: var(--edge); }
+.pg-stop.is-empty::before { background: var(--edge); }
+.pg-stop:last-child { border-left-color: transparent; }
+.pg-event { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink); padding-top: 2px; }
+.pg-off { font-style: normal; color: var(--red); margin-left: 6px; font-size: var(--type-caption); }
+.pg-stop-cards { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.pg-nothing { color: var(--muted); font-size: var(--type-meta); font-style: italic; padding-top: 2px; }
+.pg-slot-wrap { display: block; min-width: 0; }
+.pg-slot-wrap.is-off .pg-card { opacity: .55; }
 
-/* the two surfaces that have no timeline — one strip each, never forced onto the spine */
-.pg-strip { display: flex; gap: var(--space-3); flex-wrap: wrap; }
-.pg-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 3px 10px; font-size: var(--type-meta); color: var(--ink); background: var(--raised); }
-.pg-chip em { font-style: normal; color: var(--muted); font-size: var(--type-caption); }
+/* a plugin is a card: its name, what it is for, and the way into its body */
+.pg-card { display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--raised); text-decoration: none; color: inherit; }
+.pg-card:hover { border-color: var(--accent, var(--blue)); }
+.pg-card-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.pg-card-name { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink); }
+.pg-card-desc { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.pg-card-files { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--type-caption); }
+.pg-ord { color: var(--muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
+.pg-blocks { color: var(--orange); font-size: var(--type-caption); }
+.pg-offbadge { color: var(--red); font-size: var(--type-caption); }
+.pg-surf { color: var(--muted); font-size: var(--type-caption); }
 /* a node that plugs into two surfaces at once — the one thing a folder tree structurally cannot show */
-.pg-chip.is-both { border-color: var(--blue); }
-.pg-chip.is-both em { color: var(--blue); }
+.pg-surf.is-both { color: var(--blue); }
+
+.pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--space-3); }
 .pg-unused { margin: 0; color: var(--muted); font-size: var(--type-meta); font-style: italic; }

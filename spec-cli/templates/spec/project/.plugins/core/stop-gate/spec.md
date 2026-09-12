@@ -3,6 +3,7 @@ title: stop-gate
 surface: hook
 status: active
 hue: 200
+desc: Refuses a stop left in an undeclared `active` state, and a done/merge proposal whose branch carries no commits or a dirty tree — an ending is a claim the board acts on.
 events:
 - Stop
 order: 10

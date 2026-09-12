@@ -3,6 +3,7 @@ title: session-listen
 surface: hook
 status: active
 hue: 280
+desc: Self-launch registration: on SessionStart it initializes the harness’s native session id in the adopter protocol database, and exits silently where the project has not adopted one.
 events:
 - SessionStart
 order: 20

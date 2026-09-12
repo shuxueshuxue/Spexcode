@@ -3,6 +3,7 @@ title: mark-active
 surface: hook
 status: active
 hue: 200
+desc: The one freshness signal — any prompt or any tool about to run flips the session to `active` and drops a now-stale proposal; an AskUserQuestion makes it `asking` instead.
 events:
 - UserPromptSubmit
 - PreToolUse

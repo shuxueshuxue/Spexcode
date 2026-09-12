@@ -3,6 +3,7 @@ title: spec-of-file
 surface: hook
 status: active
 hue: 200
+desc: A per-edit annotation that never renders a verdict: the first edit of a file tells an uncovered one to find a spec home, and names the governor of a covered one.
 events:
 - PostToolUse
 order: 10

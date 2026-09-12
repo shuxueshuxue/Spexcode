@@ -38,7 +38,7 @@ const viaWorkingDirectory = new Set(
 function walkFiles(dir) {
   const files = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === '.git' || entry.name === 'node_modules') continue
+    if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === '.worktrees' || entry.name === '.claude' || entry.name === '.spexcode') continue
     const path = join(dir, entry.name)
     if (entry.isDirectory()) files.push(...walkFiles(path))
     else files.push(path)

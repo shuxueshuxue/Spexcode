@@ -51,10 +51,15 @@ caret and a spinner, and nothing else: the caret sits INLINE at the end of the n
 while that prose is the newest thing in the turn — once a call follows it the words are finished and a caret
 blinking on its own line under them, above a tool row, would mark nothing — and the spinner sits on a running
 call, a call being running exactly while the harness has recorded no result for it; reduced motion stills both.
-Both move the cheap way, and both move in STEPS. A transform and a visibility toggle never repaint, but a
-smooth rotation still asks for sixty composited frames a second for as long as a call runs, which is the
-largest single cost a quiet conversation has. A dozen steps a second is the same turning mark to a reader and
-a fifth of the frames. Motion a reader cannot distinguish is motion not worth drawing. Output stays folded until asked, each
+Both move the cheap way, and both move in STEPS. The spinner turns on a transform, which the compositor owns
+outright — this thread is never woken for it. What a transform still costs is FRAMES: a smooth rotation asks
+for sixty composited frames a second for as long as a call runs, measured at 6.8% of a core against 0.6% at
+rest on a window that rasterizes in software, and a dozen steps a second is the same turning mark to a reader
+at 3.4%. The caret blinks on OPACITY for the same reason the spinner turns on a transform. It used to toggle
+`visibility`, which is a paint input only the main thread can compute, so its two blinks a second were
+sampled sixty times and walked the whole document each time — 1.65% of a core against 0.02% on opacity, for a
+mark that is fully on or fully off either way. Motion a reader cannot distinguish is motion not worth
+drawing, and a thread nothing needs woken is a thread not worth waking. Output stays folded until asked, each
 call opening inline and independently; a refresh of the same interval keeps what the reader opened, because
 disclosure is keyed to the transcript's own ids, and a new seam starts closed.
 

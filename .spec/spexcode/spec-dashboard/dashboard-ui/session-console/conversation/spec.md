@@ -183,13 +183,16 @@ exactly those three:
   open seam of a live session streams its interval — [[session-transcript]]), opened directly
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
-  `working · 4m 12s` in the live green with a slow sweep of light across the words, and is the page's only
-  moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. Its number
+  `working · 4m 12s` in the live green, and its COUNT is the page's only moving thing — no dot in the gutter,
+  nothing beside the sentence, the words themselves say it. The green is flat: a sweep of light across those
+  words was a repaint of the line and a style recalc of the whole document on every frame, for as long as any
+  session worked, and it cost about five percent of a core on an otherwise idle page. One number moving once
+  a second says the same thing for nothing. Its number
   COUNTS EVERY SECOND: the record only moves on a poll, so between polls the browser ticks, but the clock
   is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
-  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep. THE SECOND HAND
+  is; a hidden tab does not tick. THE SECOND HAND
   OWNS ONLY ITSELF: that count is its own component, so a tick redraws one line and not the conversation
   around it — a long history costs nothing per second merely by being long, and the seam's start is all
   the ticker is given, so the clock correction from a later poll reaches it without redrawing anyone; the tail seam of a dead session says `working` — the

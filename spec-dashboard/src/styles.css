@@ -3148,16 +3148,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
    and by a slow sweep of light across them: the page's one moving thing while the agent works. The words
    count up every second between polls (TimelineChat anchors the clock to the server's Date header), so the
    number and the light agree that something is happening now. Reduced motion keeps the green and drops the sweep. */
-.m-seam-row.is-live .m-seam-lead {
-  color: var(--green);
-  background: linear-gradient(90deg, var(--green) 0 38%, color-mix(in srgb, var(--green) 40%, var(--ink2)) 50%, var(--green) 62% 100%);
-  background-size: 240% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  animation: m-seam-shimmer 2.4s linear infinite;
-}
-@keyframes m-seam-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .m-seam-row.is-live .m-seam-lead { animation: none; background: none; -webkit-text-fill-color: currentColor; }
-}
+/* The sweep was a gradient travelling across text clipped to it: a repaint of the line on every frame, and
+   a style recalc of the whole document with it, for as long as a session works. Measured at 4.8% of a core
+   on an otherwise idle page. The live signal is carried by the counter beside it, which already ticks once
+   a second, so the line is simply green. */
+.m-seam-row.is-live .m-seam-lead { color: var(--green); }
 /* one quiet line, no rule across the page: the work between two messages is a footnote to the exchange,
    said in the caption voice and lit only under the pointer, the way a reading surface folds its thinking. */
 .m-seam-row {

@@ -386,7 +386,13 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   }
 
   // coverage: every governed source file must be claimed by at least one spec.
-  if (governed.length === 0)
+  // Two different silences, and only one of them is a mistake. NOTHING NAMED means coverage was never asked
+  // for — a young tree, a repository adopting one corner — and telling it that it "governs nothing" would
+  // accuse it of a setting it never made. Roots that WERE named and match nothing is the real misconfiguration
+  // and keeps its accusing report.
+  if (cfg.governedRoots.length === 0)
+    out.push({ level: 'warn', rule: 'coverage', msg: `coverage is off: no lint.governedRoots is named, so no file is expected to be claimed by a spec. Name the directories you want covered under the "lint" key in .spec/spexcode.json (top-level keys are ignored); "." is the whole git-tracked project.` })
+  else if (governed.length === 0)
     out.push({ level: 'warn', rule: 'coverage', msg: `governing NOTHING — 0 source candidates under governedRoots [${cfg.governedRoots.join(', ')}]; ${sourcePolicyDescription(cfg)}. Repair these knobs under the "lint" key in spexcode.json (top-level keys are ignored): governedRoots, sourceIncludeGlobs, sourceExcludeGlobs, testGlobs; sourceExtensions remains compatibility shorthand for include globs.` })
   for (const f of governed)
     if (!claimed.has(f)) out.push({ level: 'warn', rule: 'coverage', file: f, msg: `no spec governs: ${f}` })

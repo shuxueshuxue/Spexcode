@@ -95,7 +95,10 @@ default already comes from the template.
 
 **`--pure` plants the spec skeleton and nothing else.** `spex init --pure` copies the root node from
 `templates/pure/` (the seed root without its paragraph about `.plugins`, which a pure tree does not have) and
-writes a `.spec/spexcode.json` holding only the template's `lint` section. It seeds no `.plugins`, installs no
+writes a `.spec/spexcode.json` that claims NOTHING: no `governedRoots`, because a skeleton governs nothing yet
+and a config that claimed the whole tree would ask coverage a question whose answer is every file in the
+repository — thousands of warnings saying only that the tree is young. Naming roots is the later, deliberate act
+that turns coverage on. It seeds no `.plugins`, installs no
 git hook, materializes nothing, writes no global store, and touches nothing in `.git` or outside `.spec`: the
 asset without the wiring, for a repo that wants the spec tree and its lint and nothing that changes how its git
 or its agents behave. It keeps the git precondition, since lint reads git. It takes no `--harness` or
@@ -104,10 +107,15 @@ whose `.spec` already carries a tree it writes nothing. The full adoption later 
 `spex init --harness <id>`, which recognizes the tree by the absence of `.plugins`; there is no marker to write
 and none to trust.
 
-**What init prints is TRUE of what it planted.** The success message and the next-steps read the
-`governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
-literal restated in the code, which is how the message once claimed a `["src"]` starter while the template
-seeded `["."]` (the first-minute lie a real field adoption hit). Harness-artifact reporting follows the same
+**`--title` names the project, so its pages are not named after a directory.** Every board and every published
+page titles a project from `dashboard.title`, falling back to the directory's own name — which is the project's
+name only by luck, so a scratch clone called `repo` publishes a page titled that. `spex init --title <name>`
+writes it, for a pure skeleton and a full adoption alike, and never overwrites a title the config already has.
+
+**What init prints is TRUE of what it planted.** The success message and the next-steps read what was actually
+written back from the just-planted (or pre-existing) file and interpolate it — never a string literal restated
+in the code, which is how the message once claimed a `["src"]` starter while the template seeded `["."]` (the
+first-minute lie a real field adoption hit). Harness-artifact reporting follows the same
 rule: materialize returns a receipt of the contract, shim, skill/agent, plugin, and trust artifacts its selected
 adapters actually asserted, and init renders that receipt. A Claude-only init therefore cannot claim AGENTS,
 Codex shims, or Codex trust; a Codex-only init cannot claim CLAUDE or Claude shims.

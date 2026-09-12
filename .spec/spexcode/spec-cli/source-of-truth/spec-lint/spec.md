@@ -131,7 +131,10 @@ worktree state to inspect and continue with the immutable candidate tree.
   in `code:` — the same two sets the graph already knows. Both rules live in one function that
   `spex diagram check` calls on a single node ([[diagram-cli]]), so an author's check and the gate never disagree. A diagram has no staleness rule of its own: it
   lives beside its node's spec and is revised with it.
-- **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Source is
+- **coverage** (warn): every source file is claimed by ≥1 spec via `code:` **or** `related:`. Naming NO
+  `governedRoots` turns the rule off and says so; it is not reported as governing nothing, because a tree that
+  never asked for coverage has made no mistake. Roots that WERE named and match nothing is the misconfiguration,
+  and keeps its accusing report. Source is
   enumerated from **git-tracked** files (`git ls-files`), so `governedRoots: ["."]` safely means the whole
   project. The source set is one explicit algebra: current regular text under those roots, selected by
   optional `sourceIncludeGlobs`, minus SpexCode-owned data, `sourceExcludeGlobs`, and `testGlobs`. There is

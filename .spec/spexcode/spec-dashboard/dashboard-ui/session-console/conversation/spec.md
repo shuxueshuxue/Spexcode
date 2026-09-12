@@ -184,12 +184,15 @@ exactly those three:
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
   `working · 4m 12s` in the live green with a slow sweep of light across the words, and is the page's only
-  moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. THAT SWEEP IS
-  A LAYER THAT MOVES, never a gradient that repaints the text: written as a background-position animation on
-  glyphs clipped to their own gradient it re-rasterized the line every frame and cost 6.5% of a core on its
-  own, while the same light drawn as one promoted overlay animating only a transform measures 0.4%. The rule
-  generalizes to anything that moves here — the effect is affordable, the implementation decides whether it
-  is; a rotation on a small mark measures 0.6% and stays. Its number
+  moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. THE SWEEP IS
+  PAINTED, NEVER ANIMATED: the light is drawn once per PHASE, one copy of the same words per position it
+  reaches, and the phases take turns with `opacity` in a step. Written the obvious way instead — one line
+  clipped to a gradient whose `background-position` animates — it cost 6-7% of a core on the main thread and
+  844 paints in seven seconds, because a paint property cannot be composited and neither `will-change`,
+  `contain: strict` nor a layer of its own changes that; all three were measured. Phased, the same trace
+  records zero paints, and because a phase simply switches on at its moment the page draws a few frames a
+  second rather than sixty. The rule generalizes to anything that moves here: the effect is affordable and the
+  implementation decides whether it is — a rotation on a small mark is composited already and measures 0.6%. Its number
   COUNTS EVERY SECOND: the record only moves on a poll, so between polls the browser ticks, but the clock
   is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record

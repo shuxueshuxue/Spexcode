@@ -95,9 +95,12 @@ whole shell hangs off, re-derived from what the product is rather than from what
   why it is not a finding surface and not a tab. **A region owns its resting state, and that state is
   closed** — it is closed because opening it costs the spec prose 383px of 575 at 1440: a question about the
   document does not get to spend the document's width until it is asked. The toggle lives in one right-edge
-  slot per region and the primary's choice persists: while closed the slot overlays that region's band; once
-  open it overlays the context head at the same edge, so opening and folding back are one stationary-pointer
-  gesture without replacing or reflowing the button.
+  slot per region and the primary's choice persists: the slot overlays the right end of that region's BAND in
+  both states — the region positions it, not the region's body, so it never lands on the document — and the
+  band keeps that column free (a trailing reservation beside the document actions) only while the document
+  has context to toggle. The dock stands beneath the band, so opening puts the dock's head under the same
+  spot and opening and folding back are one stationary-pointer gesture without replacing or reflowing the
+  button.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content. It is a full-window flow row after the app row, so rail and
   optional dock stop at its top edge and the view/context row gets the rest of the height. The bar consumes
@@ -118,9 +121,9 @@ whole shell hangs off, re-derived from what the product is rather than from what
 A control belongs to the region whose question it answers, and to exactly one owner there — the dock's
   projection is named in its header, while the permanently mounted rail's mirrored panel control owns dock
   open/closed and exposes `aria-pressed`. The context dock's switch is the one document-owned exception: it
-  is painted by one stable right-edge slot: over the tab strip while the dock is closed and over the context
-  header while open. The slot keeps one `28px` button instance through the dock's width animation, so the
-  same pointer can open and close it without a flash. The dock itself has no second collapse door.
+  is painted by one stable right-edge slot over the tab strip, closed or open — the band spans the region, so
+  the open dock's head sits beneath that same spot. The slot keeps one `28px` button instance through the
+  dock's width animation, so the same pointer can open and close it without a flash. The dock itself has no second collapse door.
 
 **Each region gets ONE band, and a band is a row that earns its place.** [[ui-state-model]] states the
 budget and measures it; the shell's obligation is to have no spacer that stands in for a band it does not
@@ -128,9 +131,9 @@ draw. The tab strip is the top band itself, not a wrapper holding it: on every s
 renders unconditionally and names the routed place when no document is held, so the row is either a working
 set or an answer to where the reader is, and never 29 empty pixels; the Sessions document lays the same strip
 out inside the surface it owns, beside its forest ([[session-console]]). A control that belongs to the current DOCUMENT — the context
-dock's toggle — is painted by the strip's right-edge slot beside the document actions while the dock is closed.
-When the dock is open, that same mounted control overlays the context head's right edge; it does not create
-another band, replace the node, or move the pointer's target.
+dock's toggle — is painted by the strip's right-edge slot beside the document actions, whether the dock is
+closed or open; the strip reserves that column only for a document that has context. Opening the dock does
+not create another band, replace the node, or move the pointer's target.
 
 **The window says where it is.** The shell is the only component that reads the address, so it is the only
 one that can name the place, and it writes `<place> · <project>` into the document title on every route.

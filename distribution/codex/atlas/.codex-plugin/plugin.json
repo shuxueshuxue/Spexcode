@@ -1,0 +1,19 @@
+{
+  "name": "atlas",
+  "version": "0.7.0-next.20",
+  "description": "Draw a spec atlas for a repository: choose the spec nodes worth a picture and draw each one's diagram with SpexCode, checked until it passes, then hand over the whole tree as one page.",
+  "author": {
+    "name": "SpexCode",
+    "url": "https://spexcode.net"
+  },
+  "homepage": "https://spexcode.net",
+  "repository": "https://github.com/shuxueshuxue/spexcode",
+  "license": "MIT",
+  "keywords": [
+    "spec",
+    "architecture",
+    "diagram",
+    "spexcode"
+  ],
+  "skills": "./skills/"
+}

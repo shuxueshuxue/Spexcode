@@ -135,6 +135,10 @@ test('every package names only files that exist, and the ZCode skill points at t
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/)
   const html = readFileSync(join(root, 'distribution/gugu/spexcode-atlas', manifest.entry), 'utf8')
   for (const [, ref] of html.matchAll(/(?:src|href)="([^"]+)"/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode-atlas', ref)), ref)
+  // Codex reads the same shape as Claude Code under its own dotted directory; its manifest points at the folder.
+  const codex = JSON.parse(readFileSync(join(root, 'distribution/codex/atlas/.codex-plugin/plugin.json'), 'utf8'))
+  assert.ok(existsSync(join(root, 'distribution/codex/atlas', codex.skills)), codex.skills)
+  assert.ok(existsSync(join(root, 'distribution/codex/atlas/skills/atlas/SKILL.md')))
   for (const pkg of ['distribution/penguin/use-spexcode']) {
     const listed = JSON.parse(readFileSync(join(root, pkg, 'package.json'), 'utf8')).files
     for (const file of listed) assert.ok(existsSync(join(root, pkg, file)), `${pkg}/${file}`)

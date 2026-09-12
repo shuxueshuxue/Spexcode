@@ -150,6 +150,7 @@ async function archifyBundle() {
 
 const claudeCode = 'distribution/claude-code/atlas'
 const zcode = 'distribution/zcode/atlas'
+const codex = 'distribution/codex/atlas'
 const gugu = 'distribution/gugu/spexcode-atlas'
 const penguin = 'distribution/penguin/use-spexcode'
 // A classic script's top-level declarations land in the page's ONE global scope, so a helper publishes its
@@ -165,6 +166,13 @@ const files = new Map([
     keywords: ['spec', 'architecture', 'diagram', 'spexcode'],
   })],
   [`${claudeCode}/skills/atlas/SKILL.md`, skillFile('atlas', trigger, genericSkill)],
+  // Codex reads the same shape under its own dotted directory: a plugin.json beside a skills/ folder whose
+  // SKILL.md carries `name` and `description`. Same skill text, different envelope.
+  [`${codex}/.codex-plugin/plugin.json`, json({
+    name: 'atlas', version, description, author, homepage, repository, license: 'MIT',
+    keywords: ['spec', 'architecture', 'diagram', 'spexcode'], skills: './skills/',
+  })],
+  [`${codex}/skills/atlas/SKILL.md`, skillFile('atlas', trigger, genericSkill)],
   [`${zcode}/.zcode-plugin/plugin.json`, json({ name: 'atlas', version, description, author, homepage, repository, license: 'MIT', skills: 'skills' })],
   [`${zcode}/skills/atlas/SKILL.md`, skillFile('atlas', zcodeTrigger, skill(title, zcodeWorkflow))],
   [`${gugu}/manifest.json`, json({

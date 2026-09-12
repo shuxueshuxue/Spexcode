@@ -68,9 +68,11 @@ whole shell hangs off, re-derived from what the product is rather than from what
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
   **The dock is a property of the focused tab** — both its projection and its existence. A node or a governed
-  file brings the explorer. The Sessions surface brings no shell dock at all: it is a complete document that owns
+  file brings the explorer. A FULL-WIDTH Sessions surface brings no shell dock at all: it is a complete document that owns
   its own forest and console ([[session-console]]), so a finding dock beside it would only repeat the same list
-  under an empty header. Review surfaces and Settings have no dock anywhere in their address family — a detail
+  under an empty header. Once the workspace is split that forest is gone — page chrome belongs to a one-group
+  workspace — and the dock's sessions projection takes the listing over, so focusing a session cell never
+  leaves the reader without a list of sessions. Review surfaces and Settings have no dock anywhere in their address family — a detail
   route never inherits the previous Spec/Explorer projection from workspace state, which belongs to document
   routes only. Issues and Settings use the shared workspace/tab strip; Issues omits the
   activity rail while retaining the strip. Spec/file routes keep the Spec rail selection and derive the explorer

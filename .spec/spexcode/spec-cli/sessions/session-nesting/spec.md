@@ -124,3 +124,9 @@ that durable edge through [[session-reparent]]. The tree remains a read-time fol
 collection and no migration of a missing parent. Reparent changes the child's one pointer and the matching
 `parent` watch source together; `parent: null` removes that source for an explicit top-level detach while
 leaving any independent manual watch intact. Ordinary view reads still need no repair daemon.
+
+Creation has the same top-level state without a later repair: `@parent:none` is consumed at the create boundary
+and settles the new record's `parent` to `null` when no session selector named `none` resolves. The ordinary
+resolver runs first, so a real id, unique prefix, or branch named `none` remains a parent target; an ambiguous
+match is rejected. A top-level create installs no managed `parent` watch, while its caller's unrelated manual
+watches remain unchanged.

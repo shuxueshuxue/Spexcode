@@ -394,6 +394,13 @@ test('session-create refuses an unusable @parent: directive instead of creating 
   assert.deepEqual(onlyDirective, { status: 400, error: 'empty prompt' })
 })
 
+test('session-create accepts @parent:none as an explicit top-level parent when no selector resolves', serial, async () => {
+  const orphan = await sessionCreateRequest({ prompt: '@parent:none probe', launcher: 'no-such-launcher' })
+  assert.equal(orphan.status, 400)
+  assert.match((orphan as { error: string }).error, /unknown launcher 'no-such-launcher'/)
+  assert.doesNotMatch((orphan as { error: string }).error, /@parent: names no session: none/)
+})
+
 test('session-create API refuses the retired JSON store while migration is fenced', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH

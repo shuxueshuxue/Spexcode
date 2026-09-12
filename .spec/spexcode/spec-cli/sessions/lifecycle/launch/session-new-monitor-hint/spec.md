@@ -50,6 +50,8 @@ name is the new record's initial display override; it does not enter, replace, o
 It also lists `--base <commit-ish>`, which pins the new worktree's fork point instead of taking the
 source-of-truth branch's current head ([[sessions-core]]); help names the input and its refusal-before-creation
 guarantee, and leaves the resolution contract to that owner.
+The prompt's `@parent:<SEL>` directive may attach the row under a retained supervisor; `@parent:none` settles a
+top-level row only when the ordinary resolver finds no exact id, unique prefix, or branch named `none`.
 
 Live-reference entries keep the same map: `session files add|ls|get|retract` names live file paths — `add`/`retract`
 are the worker's own writers, `ls [SEL]`/`get <SEL> <name>` let a parent read what a child posted, locally or

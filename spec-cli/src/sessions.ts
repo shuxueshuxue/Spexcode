@@ -10,7 +10,7 @@ import { git, gitTry, withGitAbortSignal, isGitObjectId } from '@spexcode/spec-c
 import { loadSpecsLite } from '@spexcode/spec-core'
 import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type AdapterLoadedReferenceState, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { parseParentDirective } from './mentions.js'
+import { parseParentDirective, stripRefSigil } from './mentions.js'
 import { resolveSession } from './session-selectors.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles, sessionUploads, type SessionUpload } from './session-files.js'
@@ -1564,7 +1564,12 @@ async function settleCreateParentage(selectors: string[], callerParent: string |
   if ('ambiguous' in resolved) {
     throw new SessionCreateError('session_create_failed', 'request', `session-create @parent: is ambiguous: ${resolved.ambiguous.map((session) => session.id.slice(0, 8)).join(', ')}`, 400)
   }
-  if ('none' in resolved) throw new SessionCreateError('session_create_failed', 'request', `session-create @parent: names no session: ${selector}`, 400)
+  if ('none' in resolved) {
+    // `none` is the create-time top-level spelling only after the ordinary resolver found no row. An
+    // exact id, unique prefix, or branch named `none` therefore keeps its normal selector meaning.
+    if (stripRefSigil(selector) === 'none') return { id: null, source: 'directive' }
+    throw new SessionCreateError('session_create_failed', 'request', `session-create @parent: names no session: ${selector}`, 400)
+  }
   return { id: resolved.ok.id, source: 'directive' }
 }
 type SessionCreateRequestOptions = {

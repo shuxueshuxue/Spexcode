@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
-import { buildProjection } from './sync-init-plugins.mjs'
+import { seedFiles } from './check-init-plugins.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
@@ -19,7 +19,7 @@ const spexWithPage = `npx -y -p spexcode${tag} -p @spexcode/spec-dashboard${tag}
 // A penguin plugin's version is the date of its content, by that host's convention; bump it when the skill changes.
 const PENGUIN_VERSION = '2026.09.10.1'
 
-const preset = buildProjection().get(join('skills', 'atlas', 'spec.md'))
+const preset = seedFiles().get(join('skills', 'atlas', 'spec.md'))
 if (!preset) throw new Error('.spec/spexcode/.plugins/skills/atlas/spec.md is missing')
 const [, frontmatter, body] = preset.content.toString('utf8').match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/) ?? []
 const trigger = frontmatter?.match(/^desc:\s*(.+)$/m)?.[1]?.trim()

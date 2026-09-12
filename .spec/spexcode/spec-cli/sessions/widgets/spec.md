@@ -2,6 +2,22 @@
 title: widgets
 hue: 165
 desc: A session-owned named HTML component the agent redraws at will, rendered inline in the conversation, whose only way to reach the agent is a draft the human sends.
+code:
+  - spec-cli/src/session-widgets.ts
+related:
+  - spec-cli/src/cli.ts
+  - spec-cli/src/help.ts
+  - spec-cli/src/index.ts
+  - spec-cli/src/sessions.ts
+  - spec-dashboard/src/SessionWidget.jsx
+  - spec-dashboard/src/widgetRefs.js
+  - spec-dashboard/src/TimelineChat.jsx
+  - spec-dashboard/src/Transcript.jsx
+  - spec-dashboard/src/proseTokens.js
+  - spec-dashboard/src/data.js
+  - spec-dashboard/src/styles.css
+  - spec-dashboard/src/i18n/en.js
+  - spec-dashboard/src/i18n/zh.js
 ---
 # widgets
 

@@ -3838,3 +3838,32 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .pa-go { border-color: var(--blue); color: var(--blue); }
 .pa-go:hover { background: var(--blue); color: var(--paper); }
 .pa-btn:disabled { opacity: .5; cursor: default; }
+
+/* [[widgets]] — a component the session drew, rendered where its name appears in the conversation. The
+   frame is inline-level so it can sit inside prose, and takes block layout here. */
+.wg { display: block; margin: 8px 0; border: 1px solid var(--line); border-radius: var(--radius, 4px); background: var(--panel); overflow: hidden; }
+.wg-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--line);
+  color: var(--muted); font-size: var(--type-caption); }
+.wg-name { font-family: var(--mono); }
+.wg-pending { color: var(--yellow); }
+.wg-actions { display: flex; gap: 4px; margin-left: auto; }
+.wg-btn { border: 1px solid var(--line); background: var(--raised); color: var(--ink); border-radius: var(--radius);
+  font-size: var(--type-caption); padding: 1px 6px; cursor: pointer; }
+.wg-btn:hover { border-color: var(--blue); }
+.wg-frame { display: block; width: 100%; border: 0; background: transparent; }
+.wg-error, .wg-loading { display: block; padding: 8px; color: var(--muted); font-size: var(--type-meta); }
+.doc-widget-ref { display: inline-flex; align-items: center; gap: 3px; color: var(--blue); }
+.doc-widget-ref.is-unresolved { color: var(--muted); text-decoration: line-through; }
+
+/* the pending contribution, above the input box: what will be sent, before it is sent */
+.m-widget-queue { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.m-widget-draft { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--raised); padding: 2px 6px; }
+.m-widget-draft-main { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+  background: none; border: 0; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.m-widget-draft-name { color: var(--muted); font-size: var(--type-caption); font-family: var(--mono); white-space: nowrap; }
+.m-widget-draft-text { flex: 1; min-width: 0; font-size: var(--type-meta); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.m-widget-draft-text.is-open { white-space: pre-wrap; overflow: visible; }
+.m-widget-draft-act { border: 0; background: none; color: var(--muted); font-size: var(--type-caption); cursor: pointer; }
+.m-widget-draft-act:hover { color: var(--ink); }

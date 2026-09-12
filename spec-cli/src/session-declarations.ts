@@ -87,9 +87,43 @@ export async function sessionStateKit(sessionId?: string) {
   return { s, sess, noRecord, mark, noteEcho }
 }
 
+// A declaration may carry the picture its words point at ([[widgets]]): `--widget <name>=<path>` draws it in
+// the same step that records the state, so the note and what it refers to land together rather than in two
+// commands a reader can catch between. A malformed pair stops the declaration instead of recording a note
+// whose reference resolves to nothing.
+async function putDeclarationWidget(argv: readonly string[], sessionId: string | undefined): Promise<boolean> {
+  const pair = flag(argv, 'widget')
+  if (!pair) return true
+  const split = pair.indexOf('=')
+  if (split <= 0 || split === pair.length - 1) {
+    console.error('--widget takes <name>=<path>')
+    process.exitCode = 2
+    return false
+  }
+  const { ownSessionId } = await import('./sessions.js')
+  const id = sessionId || ownSessionId()
+  if (!id) {
+    console.error('--widget needs a governed session — run this from the agent session whose conversation shows it')
+    process.exitCode = 2
+    return false
+  }
+  const { withSessionRecordLockSync } = await import('./session-record.js')
+  const { putSessionWidget } = await import('./session-widgets.js')
+  try {
+    const result = putSessionWidget(id, pair.slice(0, split), pair.slice(split + 1), withSessionRecordLockSync)
+    console.log(`${result.changed ? 'put' : 'unchanged'} ${result.name} — point at it as ${result.reference}`)
+    return true
+  } catch (error) {
+    console.error(`--widget refused: ${error instanceof Error ? error.message : String(error)}`)
+    process.exitCode = 2
+    return false
+  }
+}
+
 export async function runSessionDeclaration(verb: DeclarationVerb, argv: readonly string[] = process.argv): Promise<void> {
   const sessionId = flag(argv, 'session')
   const note = flag(argv, 'note')
+  if (!(await putDeclarationWidget(argv, sessionId))) return
   if (verb === 'done') {
     // `merge`/`close` are awaiting declarations; `nothing` is an intentional no-write correction trap.
     const proposal = (flag(argv, 'propose') as any) || 'nothing'

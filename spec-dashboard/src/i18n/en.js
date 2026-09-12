@@ -665,7 +665,7 @@ export default {
     issuesEmpty: 'No issues yet.',
     issuesNoMatch: 'No issues match this view.',
     issuesLoading: 'loading issues…',
-    issuesFocusNode: 'focus this node on the graph',
+    issuesFocusNode: 'open this node in Spec',
     issuesReplies: ({ n }) => `${n} ${n === 1 ? 'reply' : 'replies'}`,
     issuesOpenOnStore: 'Open on {store} ↗',
     // the human write path ([[issues-view]]) — a reply composer + the New issue COMPOSE PAGE (#/issues/new).
@@ -926,5 +926,14 @@ export default {
   fileRef: {
     missing: 'not among this session’s posted files',
     ambiguous: ({ count }) => `matches ${count} posted files — name more of its path`,
+  },
+  widget: {
+    missing: 'this session has no widget by that name',
+    olderMention: 'an earlier mention — the live one is further down',
+    pending: 'not sent yet',
+    send: 'send',
+    discard: 'discard',
+    bodyMissing: ({ reason }) => `widget document unavailable (${reason})`,
+    draftLabel: ({ name }) => `${name} · not sent`,
   },
 }

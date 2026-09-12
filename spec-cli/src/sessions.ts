@@ -15,6 +15,7 @@ import { resolveSession } from './session-selectors.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles, sessionUploads, type SessionUpload } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
+import { readSessionWidgets, type SessionWidget } from './session-widgets.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplication, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { type ProductionSessionApplication } from '@spexcode/session-application'
 import { decodeEventJson } from '@spexcode/session-events'
@@ -139,6 +140,7 @@ export type Session = {
   files?: string[]         // live posted paths ([[files]]), read from the session store with the rest of the projection
   uploadedFiles?: SessionUpload[] // the human's own uploads among `files` ([[files]]), recognised by the upload sink's name
   web?: SessionWeb[]       // live posted loopback services ([[web]]), read from the session store with the rest of the projection
+  widgets?: SessionWidget[] // named components the conversation renders inline ([[widgets]]), read with the rest of the projection
   zcodeChildSessionIds?: string[] // explicit ZCode worker identities; absent means this SpexCode session has no asserted worker association
 }
 
@@ -443,7 +445,7 @@ function corruptSession(id: string, entry: { path: string; error: string }): Ses
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: corruptReason(entry), archived: false, closedAt: null, prompt: null, promptPreview: null, created: 0,
-    activity: null, sortKey: null, archiveHazard: null, files: [], uploadedFiles: [], web: [],
+    activity: null, sortKey: null, archiveHazard: null, files: [], uploadedFiles: [], web: [], widgets: [],
   }
 }
 
@@ -457,7 +459,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const parts = { id: rec.session, name: rec.name, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
   const files = readSessionFiles(rec.session)
-  return { id: rec.session, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files, uploadedFiles: sessionUploads(files), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+  return { id: rec.session, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.closedAt ? 'archived' as Lifecycle : rec.status, proposal: rec.closedAt ? null : rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived || !!rec.closedAt, closedAt: rec.closedAt, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files, uploadedFiles: sessionUploads(files), web: readSessionWebs(rec.session), widgets: readSessionWidgets(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
 }
 
 export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }

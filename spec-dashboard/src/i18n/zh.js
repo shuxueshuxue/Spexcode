@@ -654,7 +654,7 @@ export default {
     issuesEmpty: '暂无 issue。',
     issuesNoMatch: '当前视图没有匹配的 issue。',
     issuesLoading: '正在加载 issues……',
-    issuesFocusNode: '在看板上聚焦此节点',
+    issuesFocusNode: '在 Spec 中打开此节点',
     issuesReplies: ({ n }) => `${n} 条回复`,
     issuesOpenOnStore: '在 {store} 上打开 ↗',
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建 issue 的独立页面（#/issues/new）。
@@ -912,5 +912,14 @@ export default {
   fileRef: {
     missing: '这个 session 没有登记这个文件',
     ambiguous: ({ count }) => `匹配到 ${count} 个已登记的文件——多写一段路径`,
+  },
+  widget: {
+    missing: '这个 session 没有这个名字的组件',
+    olderMention: '较早的引用，正在显示的那个在下面',
+    pending: '未发送',
+    send: '发送',
+    discard: '清除',
+    bodyMissing: ({ reason }) => `组件正文取不到（${reason}）`,
+    draftLabel: ({ name }) => `${name} · 未发送`,
   },
 }

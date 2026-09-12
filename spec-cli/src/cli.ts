@@ -1018,6 +1018,41 @@ if (cmd === 'serve') {
       console.error(`spex session files: unknown verb '${verb}' — add | ls | retract  (spex help session)`)
       process.exit(2)
     }
+  } else if (sub === 'widget') {
+    rejectUnknownFlags('spex session widget', 4, ['json'])
+    const [verb, name, path, extra] = positionals(4)
+    const needsName = verb === 'put' || verb === 'show' || verb === 'retract'
+    if (extra || !verb || (verb === 'put' && !path) || (needsName && !name) || (!needsName && (name || path))) {
+      console.error('usage: spex session widget put <name> <file> | ls | show <name> | retract <name>')
+      process.exit(2)
+    }
+    const { ownSessionId } = await import('./sessions.js')
+    const { withSessionRecordLockSync } = await import('./session-record.js')
+    const id = ownSessionId()
+    if (!id) {
+      console.error('spex session widget: no governed caller session — run this from the agent session whose conversation shows the widget')
+      process.exit(2)
+    }
+    const widgets = await import('./session-widgets.js')
+    if (verb === 'ls') {
+      const all = widgets.listSessionWidgets(id)
+      if (has('json')) console.log(JSON.stringify(all, null, 2))
+      else for (const widget of all) console.log(`${widget.name}\t${widget.body.slice(0, 12)}\t${widget.state == null ? 'no state' : JSON.stringify(widget.state)}`)
+    } else if (verb === 'show') {
+      const widget = widgets.showSessionWidget(id, name!)
+      console.log(JSON.stringify(widget, null, 2))
+    } else if (verb === 'put') {
+      const result = widgets.putSessionWidget(id, name!, path!, withSessionRecordLockSync)
+      console.log(result.changed ? `put ${result.name} (${result.body.slice(0, 12)})` : `unchanged ${result.name} (${result.body.slice(0, 12)})`)
+      console.log(`point at it as ${result.reference}`)
+    } else if (verb === 'retract') {
+      const result = widgets.retractSessionWidget(id, name!, withSessionRecordLockSync)
+      if (!result.removed) { console.error(`spex session widget retract: no widget named '${result.name}'`); process.exit(2) }
+      console.log(`retracted ${result.name}`)
+    } else {
+      console.error(`spex session widget: unknown verb '${verb}' — put | ls | show | retract  (spex help session)`)
+      process.exit(2)
+    }
   } else if (sub === 'web') {
     rejectUnknownFlags('spex session web', 4, [])
     const [verb, url, extra] = positionals(4)
@@ -1352,7 +1387,7 @@ if (cmd === 'serve') {
       await assertLocalBackend()
       process.exit(await attachSession(await resolveSelectorOrExit(id)))
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | show | watch | wait | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | resources | quarantine | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | widget | show | watch | wait | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | resources | quarantine | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }

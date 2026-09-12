@@ -617,7 +617,81 @@ WHAT TO WRITE, AND WHAT NOT TO
   - check's findings come with archify's suggested fixes: layout collisions, labels too small to read at the
     profile's width, routes through boxes. Repair from them rather than guessing.`
 
-const TOPICS: Record<string, string> = { spec: SPEC, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB, diagram: DIAGRAM }
+const WIDGET = `spex guide widget — draw a picture into the conversation
+
+  spex session widget put <name> <file>   store the document's bytes, point the name at them
+  spex session widget ls [--json]         your widgets: name, current hash, committed state
+  spex session widget show <name>         one widget, including what the human's send committed
+  spex session widget retract <name>      remove a name
+  spex session done|park|ask --widget <name>=<path>    put it in the same step as the declaration
+
+Point at it from anything you write — a declaration note, a reply, a message — as [[widget:<name>]], and the
+dashboard draws it there. Putting the same name again is the update; a name appearing several times is drawn
+at its LAST mention and linked from the earlier ones.
+
+WHAT YOU WRITE is the page's CONTENT, not a document: markup, its own <style>, its own <script>. No doctype,
+no <html>, no <head>, no <body> — the dashboard supplies those, and with them the theme, the current state
+and the bridge, so all three exist before your first line of script runs.
+
+STYLE IT WITH THE HOST'S TOKENS so it belongs to the page it lands in: var(--fg), var(--bg), var(--accent),
+and the palette (--panel, --raised, --line, --muted, --blue, --green, --red, --yellow), plus --ui-font-sans
+and --mono. Leave the background transparent. The frame is measured for you; nothing needs to report its
+height. There is no network restriction, but a widget that fetches stops being readable later, so inline what
+you can.
+
+THE BRIDGE is spex, and it has three members:
+  spex.state              what the human's last send committed for this widget, or null
+  spex.draft(text, state) what THIS widget would contribute to the human's next message
+  spex.save(state)        the same state half, without touching the text
+
+The text and the state are two halves of the same answer, not one derived from the other: the text is the
+sentence the agent reads, the state is what the picture needs to draw itself. Say both. And take the bridge as
+\`const ui = window.spex || { state: null, draft() {} }\` at the top, so the same file still renders when it is
+opened outside the dashboard.
+
+A WIDGET CANNOT SEND. draft() fills a block above the human's input box, with send and discard controls
+mirrored on the frame; nothing reaches you until they press send. Their send commits both halves at
+once: you receive the text as an ordinary message, and the state becomes this widget's state. So six ticks
+arrive as one decision, not six messages.
+
+WHAT SURVIVES: the body and the committed state, in the repository. A reload draws the body and hands it the
+committed state — which is why a widget should render itself FROM spex.state rather than from whatever was
+clicked. What was never sent is stored nowhere: discarding reloads the frame back to body plus committed
+state, and so does a refresh.
+
+WHEN ONE IS WORTH DRAWING: choose by form, not by length. A comparison, a set of options, a progress a human
+will read again in an hour, a supervisor's view of a fleet — those are pictures. An explanation is prose;
+write it as prose. Do not narrate progress in both places, and do not redraw a widget to repaint a checkbox:
+redraw it when the MEANING changed.
+
+Facts the system already knows — sessions and their states, a branch's ahead count, lint errors — a widget can
+read for itself from the same API the dashboard reads (spex.api, spex.session). Bake in what only you know;
+query what anyone could.
+
+A progress picture:
+
+  <p>3 / 7 nodes</p><div class="bar"><i></i></div>
+  <style>.bar{height:8px;background:var(--line);border-radius:4px}
+         .bar i{display:block;height:100%;width:42%;background:var(--accent)}</style>
+
+A question that restores itself from what was sent:
+
+  <button data-v="A">Plan A</button><button data-v="B">Plan B</button>
+  <script>
+    const ui = window.spex || { state: null, draft() {} }
+    let current = ui.state?.choice || null
+    const paint = () => { for (const b of document.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === current)) }
+    for (const b of document.querySelectorAll('button')) b.onclick = () => {
+      current = b.dataset.v
+      ui.draft('I choose ' + current, { choice: current })
+      paint()
+    }
+    paint()
+  </script>
+
+see also: spex guide files (hand over a whole artifact) · spex help session`
+
+const TOPICS: Record<string, string> = { spec: SPEC, settings: SETTINGS, footprint: FOOTPRINT, files: FILES, web: WEB, widget: WIDGET, diagram: DIAGRAM }
 
 // every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
 // the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.

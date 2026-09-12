@@ -19,6 +19,7 @@ import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } 
 import { useAttachQueue } from './useAttachQueue.jsx'
 import { CopyButton } from './CopyButton.jsx'
 import { SessionFilesContext } from './fileRefs.js'
+import { SessionWidgetsContext } from './widgetRefs.js'
 import { useCommandPresets, useHarnessCommands, useLaunchers } from './launch.js'
 import { inboxCommands } from './sessionCommands.js'
 import { clearNativeSelection, nativeSelectionWithin, nativeSnapshot, observeNativeSelection, readerIsSelecting, useSelectionController } from './selectionController.js'
@@ -114,6 +115,27 @@ const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
   return <>{elapsed(Math.max(0, now - from))}</>
 })
 
+// A widget's pending contribution, sitting above the input box as an attachment rather than inside the
+// text: the send control is the one the human already uses, and the exact words that will go are readable
+// before they go. Folded when long, because a draft is read at a glance and inspected on demand.
+function WidgetDraftBlock({ entry, onDiscard }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const long = entry.text.length > 80 || entry.text.includes('\n')
+  return (
+    <div className="m-widget-draft">
+      <button type="button" className="m-widget-draft-main" onClick={() => long && setOpen((v) => !v)}>
+        <Icon name="list-checks" size={12} />
+        <span className="m-widget-draft-name">{t('widget.draftLabel', { name: entry.name })}</span>
+        <span className={`m-widget-draft-text${open ? ' is-open' : ''}`}>{entry.text}</span>
+      </button>
+      <button type="button" className="m-widget-draft-act" onClick={onDiscard} aria-label={t('widget.discard')}>
+        <Icon name="x" size={12} />
+      </button>
+    </div>
+  )
+}
+
 // The shared surface renders as the semantic footer (`<footer className=...>`); keeping that landmark on
 // the primitive means Conversation and Command Box still have one shell rather than nested card chrome.
 //
@@ -124,7 +146,7 @@ const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
 // and the paperclip, a pasted screenshot or a dropped file all go through the one resumable upload path
 // ([[file-attach]]) and leave the file's path in this draft. The only Command Box control this surface does
 // not carry is the terminal-only Alt+I opener, because this composer is already open.
-function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [], quotes = [], onRemoveQuote }) {
+function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [], quotes = [], onRemoveQuote, widgetDrafts = [], onWidgetDiscard }) {
   const t = useT()
   const readOnly = state !== 'live'
   const restoring = actionOutcome?.phase === 'pending'
@@ -166,8 +188,15 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
       className={`m-composer is-${state}${attach.dragging ? ' dragover' : ''}`}
       data-footer-state={state}
       {...attach.dropProps}
-      preview={(quotes.length > 0 || sendErr || sendNote) && (
+      preview={(quotes.length > 0 || widgetDrafts.length > 0 || sendErr || sendNote) && (
         <>
+          {widgetDrafts.length > 0 && (
+            <div className="m-widget-queue">
+              {widgetDrafts.map((entry) => (
+                <WidgetDraftBlock key={entry.name} entry={entry} onDiscard={() => onWidgetDiscard?.(entry.name)} />
+              ))}
+            </div>
+          )}
           {quotes.length > 0 && (
             <div className="m-quote-queue" aria-label={t('session.quoteAttachments')}>
               {quotes.map((quote, index) => (
@@ -275,6 +304,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
   // resolved when the menu OPENS, so an unaddressable passage shows the quote verb unavailable instead of
   // producing a token that points nowhere.
   const [quotes, setQuotes] = useState([])
+  const [widgetDrafts, setWidgetDrafts] = useState({})   // name → { text, state }: what a widget would contribute, until the human sends it
+  const [widgetReloads, setWidgetReloads] = useState({}) // name → counter: discarding a draft reloads the frame back to body + committed state
   const [menu, setMenu] = useState(null)
   const [sending, setSending] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -620,17 +651,42 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
 
   // `text` is the footer's composed message — the draft with its mentions already expanded
   const send = async (text) => {
-    if (!text || sending) return
+    const blocks = Object.entries(widgetDrafts).map(([name, entry]) => ({ name, ...entry }))
+    const composed = [...blocks.map((block) => block.text), text].filter((part) => part && part.trim()).join('\n\n')
+    if (!composed || sending) return
     setSending(true); setSendErr(null)
     // Redundant for a headless target, whose adapter now owns the note-reply default. Keep the explicit input
     // for compatibility; the server's shared prompt seam remains the sole policy and phrase owner.
     // The footer IS a Command Box, so it speaks the box's input kind: the durable append is the acceptance
     // and any `@new` child receipt rides back as the mention summary, shown in the composer's own line.
-    const r = await sendSessionCommand(s.id, text, { replyVia: 'note' })
+    const r = await sendSessionCommand(s.id, composed, {
+      replyVia: 'note',
+      ...(blocks.length ? { widgets: blocks.map(({ name, state }) => ({ name, state })) } : {}),
+    })
     setSending(false)
-    if (r.ok) { setDraft(''); setQuotes([]); setSendNote(r.outcome?.mentionSummary || null); load() }
+    if (r.ok) { setDraft(''); setQuotes([]); setWidgetDrafts({}); setSendNote(r.outcome?.mentionSummary || null); load() }
     else setSendErr(r.outcome?.error || t('mobile.sendFailed'))
   }
+
+  // A widget writes only here. Its clicks change what WOULD be sent; the send control is the human's.
+  const onWidgetDraft = useCallback((name, text, state) => {
+    setWidgetDrafts((prev) => (text && text.trim() ? { ...prev, [name]: { text, state } } : Object.fromEntries(Object.entries(prev).filter(([key]) => key !== name))))
+  }, [])
+  // Discarding says this message will not carry that widget, and reloads its frame: only the widget can
+  // draw its own interface, so returning it to body plus committed state is the one honest undo.
+  const discardWidgetDraft = useCallback((name) => {
+    setWidgetDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== name)))
+    setWidgetReloads((prev) => ({ ...prev, [name]: (prev[name] || 0) + 1 }))
+  }, [])
+  const widgetScope = useMemo(() => ({
+    sessionId: s.id,
+    widgets: s.widgets || [],
+    drafts: widgetDrafts,
+    reloads: widgetReloads,
+    onDraft: onWidgetDraft,
+    onRemoveDraft: discardWidgetDraft,
+    onSend: () => send(draft),
+  }), [s.id, s.widgets, widgetDrafts, widgetReloads, onWidgetDraft, discardWidgetDraft, draft])
 
   const stop = async () => {
     if (stopping) return
@@ -792,6 +848,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
 
   return (
     <SessionFilesContext.Provider value={filesScope}>
+    <SessionWidgetsContext.Provider value={widgetScope}>
     <DashboardTranscriptUi>
     <div className="tl-chat">
       <div className="m-timeline" data-reading-surface ref={scrollRef} onScroll={onScroll}
@@ -813,9 +870,12 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
         quotes={quotes} onRemoveQuote={(index) => setQuotes((prev) => prev.filter((_, n) => n !== index))}
         sending={sending} send={send} sendErr={sendErr} sendNote={sendNote} onRestore={onRestore} actionOutcome={actionOutcome}
         onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
-        specs={specs} sessions={sessions} boardCommands={boardCommands} />
+        specs={specs} sessions={sessions} boardCommands={boardCommands}
+        widgetDrafts={Object.entries(widgetDrafts).map(([name, entry]) => ({ name, ...entry }))}
+        onWidgetDiscard={discardWidgetDraft} />
     </div>
     </DashboardTranscriptUi>
+    </SessionWidgetsContext.Provider>
     </SessionFilesContext.Provider>
   )
 }

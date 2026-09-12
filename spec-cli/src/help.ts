@@ -103,6 +103,8 @@ prompt carries a runnable reply path over that same tunnel.`, ['project-bound']]
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
       'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
+    widget: [['spex session widget put <name> <file>', 'spex session widget ls [--json]', 'spex session widget show <name>', 'spex session widget retract <name>'],
+      'Draw a named component into YOUR session\u2019s conversation. `put` stores the HTML file\u2019s bytes and points the name at them; putting the same name again is the update. Point at it in prose as `[[widget:<name>]]`. Write the page\u2019s CONTENT, not a whole document: the dashboard supplies the document, the theme, and `spex.draft(text, state)` \u2014 the one call a widget has, which fills the human\u2019s input box rather than sending anything. `show` reads back what their send committed.'],
     web: [['spex session web add <url>', 'spex session web ls', 'spex session web retract <url>'],
       'Publish, list, or withdraw YOUR session’s live loopback web-service URLs. Posting records no bytes and does not contact the service; the dashboard proxies the current HTTP/WebSocket service only when the human opens its preview.'],
     watch: [['spex session watch <SEL…>', 'spex session watch list', 'spex session watch cancel <SEL…>', 'spex session watch stream [SEL…] [--as NAME] [--idle] [--interval N=1]'],

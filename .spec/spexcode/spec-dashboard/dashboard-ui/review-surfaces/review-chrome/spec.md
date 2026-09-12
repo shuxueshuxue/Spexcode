@@ -178,7 +178,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   hover underline, and a visible focus ring; identity skins (the originator liveness chip's dot + tint)
   layer OVER the primitive, never beside it as a parallel span/anchor/tooltip variant. Information type
   is explicit: an issue's own id wears a localized Issue label, a spec-node reference wears the
-  localized spec-node label and its real focus/navigate behavior — no bare `#slug` left to be guessed
+  localized spec-node label and its real document navigation behavior — no bare `#slug` left to be guessed
   at. A rail row that takes INPUT — the compose page's store picker ([[issues-view]]) — is a control, not a
   value, and stays outside the primitive; every value the rails SHOW still goes through it.
   List rows keep their own one compact meta grammar — two densities, each a single implementation.

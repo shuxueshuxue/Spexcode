@@ -2,7 +2,7 @@
 title: skills
 status: active
 hue: 280
-desc: Grouping shelf for the `surface: skill` plugins — the harness skills an agent invokes on demand. A shelf, not a surface — routing stays field-driven per surface.
+desc: Grouping shelf for the `surface: skill` plugins — the harness skills an agent invokes on demand. A shelf, not a surface — routing stays field-driven per [[surface]].
 ---
 # skills
 

@@ -141,8 +141,9 @@ screen; the store decides only what a bare address means.
 Published files and web services open as resource tabs beside the session document ([[resource-tabs]]).
 
 The shell tab row owns the
-session document's action slot ([[document-actions]]); this document registers its menu, resource-picker,
-diff-door, and other session actions there. It does not render a second chrome band under the tabs. The shell's
+session document's action slot ([[document-actions]]); this document registers its diff-door and other session
+actions there. It does not render a second chrome band under the tabs. The one exception is the door to
+what the session has published: [[resource-picker]] floats over the document's own top-right corner instead. The shell's
 top [[tab-strip]] names the session object with its headline and status dot, with no face suffix.
 Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
@@ -152,19 +153,19 @@ on the session; the console registers them only while its own pane is the READ d
 workspace keeps hidden documents mounted and an action left behind would describe a document nobody has
 open.
 
-The session document renders no internal toolbar. Its menu, resource picker, diff door, Command Box,
-relaunch, and selected-resource actions register with the shell's [[document-actions]] slot at the tab row's
-right edge. The slot keeps one compact icon-button geometry across themes, locales, lifecycle and liveness. The resource picker
-is the one posted-files/web-services entry point, and a document with no posted resources leaves its menu empty.
+The session document renders no internal toolbar. Its diff door, Command Box, relaunch, and selected-resource
+actions register with the shell's [[document-actions]] slot at the tab row's right edge. The slot keeps one compact
+icon-button geometry across themes, locales, lifecycle and liveness. The floating [[resource-picker]] is the one
+posted-files/web-services entry point; with nothing posted it opens onto an empty state.
 Surface choice is address state (`?surface=…`) controlled by two compact icon buttons in the document-actions slot:
 one terminal/conversation button replaces the URL and updates the remembered base face, while the independent
 `git-compare` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
 base face and leaves the session tab alone. Both are omitted when the session has only one available face (headless,
-offline, or archived). The slot also carries the session's own **lifecycle menu** (the ellipsis): it is the only route on this surface
-to rename, tmux attach, and lock-on-graph, and its tooltip names those rather than describing a shape. Its twin
-is the right-click on a finding-dock session row ([[dock-modes]]) — one menu, two ways in, the slot for the
-session you are reading and the dock for any other. Other document kinds register nothing, so their tab-row edge
-is blank.
+offline, or archived). The slot does not carry the session's own **lifecycle menu** (rename, select, tmux
+attach, lock-on-graph, resume, quarantine, close). That menu opens from a right-click on the session's ROW —
+in the forest beside this document, or in the finding dock's session list on any other page ([[dock-modes]]):
+one menu, and its doors are the places that list sessions. Other document kinds register nothing, so their
+tab-row edge is blank.
 
 **The console cancels the native context menu nowhere.** It once cancelled it for the whole panel, which was
 survivable while a session list filled most of that panel and did own a right-click menu of its own; with the
@@ -215,14 +216,14 @@ cancel affordance — so one failed item never collapses a batch into a generic 
 Which layer a session mounts — a warm, always-connected terminal for a live pane, the Conversation for everything
 else — and how hidden layers keep their place are [[terminal-io]]'s and [[conversation]]'s.
 
-The shell's document-actions slot renders the session's registered icon actions. The top-right [[files]] icon is grey when the
-selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. The base surface is selected by its route address and the document-actions slot exposes one compact
+The shell's document-actions slot renders the session's registered icon actions. What the session has
+published ([[files]], [[web]]) is listed by the floating [[resource-picker]], whose rows show names and keep full
+paths behind their copy tool. The base surface is selected by its route address and the document-actions slot exposes one compact
 terminal/conversation icon that replaces the URL and remembers the chosen base face. A separate `git-compare` icon
 enters or leaves the diff URL with `aria-pressed`; it returns to the remembered base face and is visually distinct from
 the diff action. There is no painted divider, wrapper boundary, or extra gutter separating the document actions: the whole
-right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
-singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
+right edge uses one shared icon gap and one outer padding. Picking a posted file opens or selects its
+singleton resource tab; the row's download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live on the terminal
 surface; Conversation owns the same command-shaped footer, so its toolbar opener remains visible but
 disabled and cannot create a second input overlay. The
@@ -261,6 +262,9 @@ through the workspace's one dock open/closed state — the console keeps no fold
 folded the document column takes the full width. Folding is the frame's one shared movement ([[dock-modes]]):
 the sidebar outlives the closed state by a single panel duration and slides out before it unmounts, the same
 way the left dock and the right context dock do. It is the same gesture on the same panel, so it cannot be a
-second timer with its own idea of how long a fold takes. A session tab's right-click enters the same session context menu
-as a row (lock, rename, select, attach, detach, resume, quarantine, and close); the old duplicate
-`session-menu` document-action button is absent.
+second timer with its own idea of how long a fold takes. The strip in this column is the SAME workspace strip
+the shell draws everywhere else, so a session tab's right-click opens the ordinary tab menu — close, close
+others, send to split pane ([[tab-layout]]) — exactly as it does in the shell's strip and exactly as any other
+tab in this strip does. A tab is the workspace's handle on an address, not the session: routing the session's
+lifecycle menu through it made one tab answer differently depending on which strip drew it, and took the tab's
+own verbs away. The lifecycle menu stays on the session row, and there is no `session-menu` document-action button.

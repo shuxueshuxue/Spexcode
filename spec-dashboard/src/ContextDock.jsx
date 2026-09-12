@@ -9,21 +9,25 @@ import { useArrival, useFold } from './useFold.js'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
+import { DiffStat } from './DiffMarks.jsx'
+import { useHistory } from './specHistory.js'
+import { routeHash } from './route.js'
 
 const PANEL_KEY = 'spexcode.ctxPanels'
 
 function readPanels() {
   try {
     const value = JSON.parse(localStorage.getItem(PANEL_KEY) || 'null')
-    return { issues: value?.issues !== false }
-  } catch { return { issues: true } }
+    return { issues: value?.issues !== false, history: value?.history !== false }
+  } catch { return { issues: true, history: true } }
 }
 
 // EVERY ROW IS A DETAIL DOOR, on the workspace's own tab semantics: a real anchor, plain click into the
 // focused tab, ctrl/⌘ into a tab of its own ([[tab-strip]]). The panels list objects that HAVE detail
 // pages, so there is nothing here that opens a second-level panel inside the dock.
-function Row({ href, children }) {
-  return <a className="ctx-row" href={href} onClick={(event) => newTabAnchor(event, href)}>{children}</a>
+function Row({ href, className = 'ctx-row', current = false, label, children }) {
+  return <a className={className} href={href} aria-current={current ? 'page' : undefined} aria-label={label} data-tip={label}
+    onClick={(event) => newTabAnchor(event, href)}>{children}</a>
 }
 
 // The node's OPEN issues, through the SAME paged review request the Issues board serves ([[paged-review]])
@@ -44,6 +48,40 @@ function Issues({ id }) {
     : <div className="ctx-empty">{t('contextDock.noIssues')}</div>
 }
 
+// The node's versions, newest first, from the SAME log the popup's history pane reads. Each version has two
+// doors into the document ([[spec-view]]): its text, and the change it made. The newest version's text IS the
+// current document, so that door is the bare node address — the list is also the way back from the past.
+// The row the document is showing is marked current; its change door is pressed while the change face shows.
+function History({ node, query }) {
+  const t = useT()
+  const rows = useHistory(node.id, true, node.version)
+  if (!rows) return <div className="ctx-empty">{t('contextDock.loadingHistory')}</div>
+  if (rows.error) return <div className="ctx-empty ctx-error">{rows.error}</div>
+  if (!rows.length) return <div className="ctx-empty">{t('contextDock.noHistory')}</div>
+  const showing = query?.version || rows[0].hash
+  const changeFace = query?.surface === 'diff'
+  return <div className="ctx-list">{rows.map((row, i) => {
+    const ordinal = rows.length - i
+    const textHref = i === 0 ? routeHash('spec', node.id) : routeHash('spec', node.id, { version: row.hash })
+    const changeHref = routeHash('spec', node.id, { version: row.hash, surface: 'diff' })
+    const current = row.hash === showing && (!!query?.version || !changeFace)
+    return <div key={row.hash} className={`ctx-version${current ? ' on' : ''}`}>
+      <Row href={textHref} className="ctx-row ctx-version-text" current={current && !changeFace}
+        label={t(i === 0 ? 'contextDock.versionCurrent' : 'contextDock.versionText', { n: ordinal })}>
+        <span className="ctx-version-v">v{ordinal}</span>
+        <span className="ctx-version-body">
+          <span className="ctx-row-label">{row.reason}</span>
+          <span className="ctx-version-meta">{(row.date || '').slice(0, 10)}<DiffStat additions={row.additions ?? 0} deletions={row.deletions ?? 0} /></span>
+        </span>
+      </Row>
+      <Row href={changeHref} className="ctx-version-change" current={current && changeFace}
+        label={t('contextDock.versionChange', { n: ordinal })}>
+        <Icon name="git-compare" size={13} />
+      </Row>
+    </div>
+  })}</div>
+}
+
 function Panel({ title, open, onToggle, children }) {
   return <section className="ctx-panel">
     <button type="button" className="ctx-panel-head" aria-expanded={open} onClick={onToggle}>
@@ -53,9 +91,9 @@ function Panel({ title, open, onToggle, children }) {
   </section>
 }
 
-// [[context-dock]]: what surrounds the node the reader has open. The dock carries the node's issue context;
-// the shell-owned right-edge switch stays mounted outside the animated panel.
-export default function ContextDock({ page, param, open = true }) {
+// [[context-dock]]: what surrounds the node the reader has open — what has been asked of it, and how it came
+// to say what it says. The shell-owned right-edge switch stays mounted outside the animated panel.
+export default function ContextDock({ page, param, query = null, open = true }) {
   const t = useT()
   const { specs } = useBoard()
   const [width, onDrag, reset] = useResizable('spex.ctxWidth', 276, { min: 220, max: 460, dir: -1 })
@@ -91,6 +129,9 @@ export default function ContextDock({ page, param, open = true }) {
     <div className="ctx-body">
       <Panel title={t('contextDock.issues')} open={panels.issues} onToggle={() => togglePanel('issues')}>
         <Issues id={param} />
+      </Panel>
+      <Panel title={t('contextDock.history')} open={panels.history} onToggle={() => togglePanel('history')}>
+        <History node={node} query={query} />
       </Panel>
     </div>
   </aside>

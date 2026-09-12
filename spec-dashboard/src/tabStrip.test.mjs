@@ -24,8 +24,9 @@ const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
   assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
-  assert.match(source, /onContextMenu=\{\(e\) => \{[\s\S]*?e\.preventDefault\(\)[\s\S]*?setMenu\(null\)/)
-  assert.match(source, /onSessionContextMenu\(\{ x: e\.clientX, y: e\.clientY, session \}\)/)
+  assert.match(source, /onContextMenu=\{\(e\) => \{\s*if \(isClosing\) return\s*e\.preventDefault\(\)\s*setMenu\(\{ x: e\.clientX, y: e\.clientY, tab, key \}\)\s*\}\}/)
+  // every tab gets the same tab menu; a session's lifecycle verbs stay on its row, never on the strip
+  assert.doesNotMatch(source, /onSessionContextMenu/)
   assert.doesNotMatch(source, /onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); closeOthers\(tab\)/)
 })
 
@@ -145,7 +146,7 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
-  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} open=\{contextOpen\} \/>/)
+  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} query=\{query\} open=\{contextOpen\} \/>/)
   assert.match(shell, /<div className="context-toggle-slot">\{contextToggle\}<\/div>/)
   assert.match(shell, /trailing=\{contextToggleReservation\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)

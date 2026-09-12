@@ -34,16 +34,17 @@ The resource tab is an ordinary file-class tab: it lands beside the session beca
 kind, and like every tab it is replaced only while it is the focused tab and a same-kind address arrives.
 The dock's sessions projection is the always-present free return to the session and never destroys its tmux/PTY.
 
-The plus lists the selected session's posted
-files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
-browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
-the plus menu, never a duplicate. Clicking a filename in the top-right files dropdown uses this same open/select operation for its
-file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service
+The floating [[resource-picker]] lists the selected
+session's posted files and loopback web services ([[files]] / [[web]]), open or not. Picking one is the one
+open-or-focus operation: it creates one browser-local tab for that exact session/reference, or focuses the tab
+already open for it, never a duplicate; closing that tab removes only that view and permits reopening from the
+picker. A resolved `[[file:<name>]]` reference uses this same operation, so neither can create a separate preview
+surface or a duplicate tab. A newly observed posted web service
 never creates or selects a visible tab automatically. It raises the existing unread signal; clicking that signal is
 the user gesture that opens/focuses its one address tab. Each resource tab exposes a close icon and a right-side **refresh** action:
 for a file it rereads the current preview response, while for a web resource it recreates the same-origin iframe and
 requests the current local-service response. A selected file also gets **download** and **copy path**, the same actions
-offered by the files dropdown; those file-specific actions do not appear for a web resource. Removing a published
+a file row in the picker offers; those file-specific actions do not appear for a web resource. Removing a published
 reference closes its resource tab. An open resource tab is a **warm browser instance**, not merely the selected
 surface: its file preview request or same-origin iframe stays mounted, including its scroll position and page state, while
 another resource, Terminal/Conversation, another session, or another routed page is selected; returning makes that same DOM

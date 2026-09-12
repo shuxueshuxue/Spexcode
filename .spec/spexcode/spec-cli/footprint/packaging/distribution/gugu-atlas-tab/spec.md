@@ -10,6 +10,8 @@ related:
   - distribution/gugu/spexcode-atlas/index.html
   - distribution/gugu/spexcode-atlas/style.css
   - distribution/gugu/spexcode-atlas/manifest.json
+  - scripts/distribution.mjs
+  - scripts/distribution.test.mjs
 ---
 
 # gugu-atlas-tab
@@ -39,3 +41,8 @@ is said plainly, with where to grant it, never worked around.
 **Proof.** gugu's own manifest schema accepts the manifest. The tab is driven in a real browser against a stub of
 the documented `window.gugu` surface over this repository's spec tree: the tree, a node's body and its diagram
 render, a mention and a double-click navigate, and "Draw the atlas" hands the prompt to `spawnAgent`.
+
+The gugu shelf's shipped-example harness parses every `.js` file as a classic script, so the package's model, focus,
+and prompt helpers expose globals. The archify renderer keeps its top-level-await ESM bundle as `archify.mjs`, loaded
+by the classic page through a local dynamic import. The page calls the bridge as explicit `window.gugu.*` methods; the
+distribution parity test still compares the resulting SVG byte for byte with archify's Node renderer.

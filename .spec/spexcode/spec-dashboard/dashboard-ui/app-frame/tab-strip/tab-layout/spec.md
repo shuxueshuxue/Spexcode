@@ -8,6 +8,7 @@ related:
   - spec-dashboard/src/tabStrip.test.mjs
   - spec-dashboard/test/divider-geometry.e2e.mjs
   - spec-dashboard/test/tab-overflow-list.e2e.mjs
+  - spec-dashboard/test/tab-context-menu.e2e.mjs
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/SideBar.jsx
   - spec-dashboard/src/tabs.js
@@ -72,6 +73,8 @@ only by opening a document, and the empty workspace's doors are that gesture's h
 All tab faces share one geometry: control-size type, a kind icon or status mark, a 12px lead, and a round
 20px close target that shows on the active card and under the pointer; there is no second face for a
 replaceable tab, because every tab is replaceable. Resident pages keep their registry icon. The
-strip context menu
-provides close, close-others, and split through the workspace APIs; session-specific lifecycle verbs belong to
-the session menu, not a second strip surface.
+strip context menu provides close, close-others, and split through the workspace APIs, and it is the ONE menu
+a tab's right-click opens — for every kind of tab, session tabs included, in whichever strip draws it (the
+shell's, or the Sessions document's own column). A menu that depended on what the tab held or which strip drew
+it would make the same tab answer two ways. Session-specific lifecycle verbs belong to the session menu on the
+session's row, not to the strip.

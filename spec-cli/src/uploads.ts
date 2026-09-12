@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createWriteStream, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, statfsSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
@@ -245,6 +245,27 @@ export function completeUpload(id: string): string {
   } catch (error) {
     throw new UploadError(500, `upload completion failed: ${(error as Error).message}`)
   }
+}
+
+// The completed name `completeUpload` writes is the upload's only record, so reading it back is how a posted
+// path is known to be one, and what the human called the file.
+const COMPLETED_UPLOAD = /^([0-9a-z]+)-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})-([A-Za-z0-9._-]+)$/
+const UPLOAD_PATH = new RegExp(`${UPLOAD_DIR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[A-Za-z0-9._-]+`, 'g')
+
+export function completedUpload(path: string): { name: string; uploadedAt: number } | null {
+  if (dirname(path) !== UPLOAD_DIR) return null
+  const match = COMPLETED_UPLOAD.exec(basename(path))
+  return match ? { name: match[3], uploadedAt: parseInt(match[1], 36) } : null
+}
+
+// A sentence may end right after a spliced path, and a safe name may itself end in a dot, so both readings
+// of a trailing dot are offered and the caller keeps whichever file exists.
+export function uploadPathsIn(text: string): string[] {
+  const found = new Set<string>()
+  for (const [token] of text.matchAll(UPLOAD_PATH)) {
+    for (const path of [token, token.replace(/\.+$/, '')]) if (completedUpload(path)) found.add(path)
+  }
+  return [...found]
 }
 
 export function cancelUpload(id: string): void {

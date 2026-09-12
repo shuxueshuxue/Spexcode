@@ -56,6 +56,9 @@ the accessible name impossible to forget.
   query/facet chrome also takes search, chevron-down, the secondary Filters trigger's filter/funnel,
   comments, and check marks from here; that filter-only menu never masquerades as an ellipsis/kebab action
   menu, and no Unicode check/cross or component-local triangle appears.
+- **A posted file's mark names its type.** Lucide's file family — the plain sheet and its text, code, image,
+  JSON, spreadsheet, video, and archive variants, which share one folded-sheet geometry in the registry — marks
+  each row of [[resource-picker]] by type, so a list of files scans by shape before its tone or its words.
 - **`<Caret open/>` is the one disclosure mark.** A thin `chevron-right` that the `.caret.is-open` rule turns a
   quarter — trees, section heads, conversation seams and tool rows all spend it, so a collapsible thing looks
   the same everywhere and no component draws a triangle glyph or a CSS-border arrow of its own.

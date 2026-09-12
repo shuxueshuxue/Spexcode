@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, historyStats, pathsStats, driftIndex, driftFor, fileDiffAt,
+import { repoRoot, historyIndex, rowsFor, historyStats, pathsStats, driftIndex, driftFor, fileDiffAt, gitRequiredA,
   sourceIndexes, treeTextFiles, primeAncestorClosures, ancestorsOf, inAncestors, type HistoryIndex, type DriftIndex } from './git.js'
 import { parseCodeEntry, parseRelation, relationClaimsPath } from './anchors.js'
 
@@ -380,14 +380,39 @@ export async function specHistory(id: string) {
   })
 }
 
-// the line-diff a specific version introduced to a node's spec.md, by hash; fetched lazily when a history
-// item expands. fileDiffAt resolves the spec.md path AT that commit (reparents). `{hash:'',patch:''}` for
-// an empty hash, null for an unknown id.
-export async function specDiffAt(id: string, hash: string) {
+// @@@ version gate - a hash from a URL names a version only when the node's OWN log lists it. Both per-version
+// reads answer through here, so another commit, a ref expression, or an option-shaped string (`--output=…`,
+// which `git show` would obey) is refused before any of it reaches git. Also yields where spec.md sat then.
+async function nodeVersion(id: string, hash: string) {
   const node = raws().find((r) => r.id === id)
   if (!node) return null
-  if (!hash) return { hash: '', patch: '' }
-  return latestDiff(node.relPath, hash)
+  const idx = await historyIndex(ROOT)
+  const rows = rowsFor(idx, node.relPath)
+  const at = rows.findIndex((v) => v.hash === hash)
+  if (at < 0) return null
+  return { node, row: rows[at], ordinal: rows.length - at, count: rows.length, path: idx.versionPaths.get(`${node.relPath}\0${hash}`) ?? node.relPath }
+}
+
+// the line-diff one of a node's versions introduced to its spec.md; fetched lazily when a history item
+// expands. fileDiffAt resolves the spec.md path AT that commit (reparents). null for an unknown id or a hash
+// that is not one of this node's versions.
+export async function specDiffAt(id: string, hash: string) {
+  const version = await nodeVersion(id, hash)
+  return version ? latestDiff(version.node.relPath, hash) : null
+}
+
+// a node's spec.md as it stood at one of its versions ([[spec-view]]'s version face): body and parts parsed
+// the way the live node's are, with that version's own title/desc and its place in the log (v`ordinal` of
+// `count`). null for an unknown id or a hash that is not one of this node's versions.
+export async function specAt(id: string, hash: string) {
+  const version = await nodeVersion(id, hash)
+  if (!version) return null
+  const source = await gitRequiredA(['-C', ROOT, 'cat-file', 'blob', `${hash}:${version.path}`], `read ${id} at ${hash.slice(0, 7)}`)
+  const { fm, body } = parseFrontmatter(source)
+  return {
+    ...version.row, path: version.path, version: version.ordinal, versions: version.count,
+    title: str(fm.title, id), desc: str(fm.desc), body: body.trim(), parts: parseParts(body),
+  }
 }
 
 // plugin presets - REFLEXIVE, SKILL-SHAPED preset nodes whose folder IS a skill bundle: `spec.md`'s

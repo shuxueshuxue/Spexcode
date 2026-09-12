@@ -8,7 +8,7 @@
 // the FIRST element with that id — if that copy is hidden (a background tab), the visible diagram loses every
 // arrowhead. scopeIds(svgText, prefix) prefixes each id the SVG defines and every reference to one, so each
 // inline copy is self-contained. Call it on the text before inserting it.
-export function scopeIds(svgText, prefix) {
+function scopeIds(svgText, prefix) {
   const ids = new Set([...svgText.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
   const scoped = (id) => (ids.has(id) ? `${prefix}-${id}` : id);
   return svgText
@@ -24,7 +24,7 @@ export function scopeIds(svgText, prefix) {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const OVERLAY = 'relationship-pulse-overlay';
 
-export function focusDiagram(svg, id) {
+function focusDiagram(svg, id) {
   for (const el of svg.querySelectorAll('[data-focus-selected], [data-focus-match]')) {
     el.removeAttribute('data-focus-selected');
     el.removeAttribute('data-focus-match');
@@ -65,3 +65,5 @@ export function focusDiagram(svg, id) {
   svg.append(overlay);
   return true;
 }
+
+globalThis.SpexCodeAtlasFocus = { scopeIds, focusDiagram }

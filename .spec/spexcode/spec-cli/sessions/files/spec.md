@@ -2,7 +2,7 @@
 title: files
 status: active
 hue: 165
-desc: A session-owned list of live file paths that an agent can publish and the dashboard can download on demand.
+desc: A session-owned list of live file paths — what the agent publishes, and the uploads a human sends it — that the dashboard can preview and download on demand.
 code:
   - spec-cli/src/session-files.ts
 related:
@@ -12,7 +12,10 @@ related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/guide.ts
   - spec-cli/src/session-files.api.test.ts
+  - spec-cli/src/uploads.ts
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/ResourcePicker.jsx
+  - spec-dashboard/src/resourceCatalog.js
   - spec-dashboard/src/icons.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/src/i18n/en.js
@@ -86,24 +89,36 @@ set where it is because a review report is one self-contained HTML page with its
 real screenshots already weigh about 1.2 MB once base64-encoded, so a 2 MiB ceiling refused ordinary reports. The
 human may still download any posted file regardless of its previewability or size.
 
+## the human's own uploads
+
+The list also holds what the human handed the session. A file the human attaches to a prompt reaches the backend
+as a completed upload whose path the prompt carries ([[file-attach]]); when that prompt arrives — as a new
+session's first prompt or as a message to a running one — every completed upload it names that still exists is
+posted to the receiving session's list, once. That makes the prompt the record of which session received which
+upload, so an attachment the human removed from the draft before sending is not posted, and one sent to two
+sessions is posted to both. Any other path a prompt mentions is left alone: this is not a way to post arbitrary
+host paths, and the download route's membership check is unchanged.
+
+The upload's origin is not a stored flag. A path directly in the upload sink under the completed name the sink
+writes is by construction the human's upload, and the session projection reads it back as `uploadedFiles` — the
+path, the name the human gave the file, and when it arrived — beside the plain `files` list, so the dashboard can
+mark it as theirs and show its own name rather than the sink's collision-proof one. The posting follows the
+prompt's acceptance and never holds or fails it; it waits for the session record's lock like any other list
+write, and a failure is logged by the backend.
+
 ## dashboard handoff
 
-The selected session's top-right file icon is disabled grey when its projected list is empty. Once at least
-one path is posted, the same icon is live and opens a compact, content-sized dropdown. Each row shows only
-the file name; the full absolute path is exposed only on its copy-path icon's tooltip, preserving the useful
-host-local detail without turning a toolbar menu into a path dump. Long names clip at a viewport-safe bound,
-but a short name does not inherit a fixed empty menu width. Every row uses one flexible filename column followed
-by two fixed action columns, so copy and download stay aligned to the dropdown's right edge across all posted
-paths. The filename itself is the preview target: clicking it opens or selects the same singleton resource tab
-that the toolbar's `+` picker opens. Its adjacent download icon starts the download, and its copy icon writes the
-absolute path. With that file tab selected, the same download and copy-path actions join its right-side toolbar
-group beside refresh; the menu and tab intentionally call one action path, so their authorization check and
-failure message cannot drift. Preview errors appear inside that tab, not in a second overlay.
-File and resource dropdowns share the app's restrained context-menu chrome:
-a real border plus shallow ambient depth, never a glowing halo. No browser fetch happens merely because the dropdown opened. The control
-uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a
-concrete session action error, while a preview refusal is shown inside the selected resource tab, never mistaken
-for file content. The dropdown is transient: clicking outside it dismisses it.
+The session document's floating [[resource-picker]] is the dashboard's handoff surface for this list. It is live
+whether or not anything is posted, and with nothing posted it says where files come from. Each row shows the
+file's name, a folder only where two posted names collide, and the human's own uploads marked as such; the full
+absolute path is exposed only on the row's copy-path tool, preserving the useful host-local detail without turning
+the list into a path dump. Picking the row opens or selects that path's singleton resource tab
+([[resource-tabs]]). Its download tool starts the download, and its copy tool writes the absolute path. With
+that file tab selected, the same download and copy-path actions join its right-side toolbar group beside refresh;
+the picker and tab intentionally call one action path, so their authorization check and failure message cannot
+drift. Preview errors appear inside that tab, not in a second overlay. No browser fetch happens merely because
+the picker opened. A failed download is shown as a concrete session action error, while a preview refusal is
+shown inside the selected resource tab, never mistaken for file content.
 
 ## pointing at a posted file
 
@@ -131,4 +146,5 @@ loose files; [[review-report]] is the skill that says how, and the report is pos
 
 The guide teaches the three CLI operations, the fact that the path is live and host-local, and that the
 dashboard downloads only on click. It explicitly distinguishes this from [[file-attach]], which sends human
-bytes to a worker; files sends an agent-owned path to a human.
+bytes to a worker; files sends an agent-owned path to a human — and tells the agent that what the human sends it
+is listed here too.

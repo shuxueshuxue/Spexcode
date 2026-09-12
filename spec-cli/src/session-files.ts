@@ -1,6 +1,7 @@
 import { accessSync, constants, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { readRecordEntry, sessionArtifactPath } from '@spexcode/spec-core'
+import { completedUpload, uploadPathsIn } from './uploads.js'
 
 export class SessionFileError extends Error {
   constructor(readonly status: 400 | 403 | 404 | 500, message: string) {
@@ -10,6 +11,7 @@ export class SessionFileError extends Error {
 }
 
 type SessionFileLock = <T>(id: string, body: () => T) => T
+type SessionFileAsyncLock = <T>(id: string, body: () => Promise<T>) => Promise<T>
 
 export const SESSION_FILE_PREVIEW_MAX_BYTES = 16 * 1024 * 1024
 export type SessionFilePreviewKind = 'text' | 'image' | 'html'
@@ -106,6 +108,31 @@ export function addSessionFile(id: string, input: string, lock: SessionFileLock,
     const next = [...files, path]
     writeFiles(id, next)
     return { path, added: true, reference: fileReference(path, next) }
+  })
+}
+
+export type SessionUpload = { path: string; name: string; uploadedAt: number }
+
+export function sessionUploads(files: readonly string[]): SessionUpload[] {
+  return files.flatMap((path) => {
+    const upload = completedUpload(path)
+    return upload ? [{ path, ...upload }] : []
+  })
+}
+
+// Only a completed upload that still exists is posted; any other path the text mentions is left alone. The
+// backend posts while a starting session's own transactions hold its record, so this waits for the lock.
+export async function postSentUploads(id: string, text: string, lock: SessionFileAsyncLock): Promise<string[]> {
+  const sent = uploadPathsIn(text).filter((path) => {
+    try { currentFile(path); return true } catch { return false }
+  })
+  if (!sent.length) return []
+  return lock(id, async () => {
+    requireSession(id)
+    const files = readFiles(id)
+    const added = sent.filter((path) => !files.includes(path))
+    if (added.length) writeFiles(id, [...files, ...added])
+    return added
   })
 }
 

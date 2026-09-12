@@ -1,10 +1,9 @@
 // The SpexCode Atlas tab for gugu ([[gugu-atlas-tab]]). It reads the workspace's spec tree through the host's
 // workspace bridge, draws each node's diagram in the page with archify's own renderer, and starts an agent on the
 // atlas when asked. It writes nothing itself: the agent writes, and the tab follows the files it changes.
-import { buildTree, renderMarkdown, SPEC_ROOT } from './atlas-model.js'
-import { renderDiagram } from './archify.js'
-import { focusDiagram, scopeIds } from './focus.js'
-import { ATLAS_PROMPT } from './prompt.js'
+const { buildTree, renderMarkdown, SPEC_ROOT } = globalThis.SpexCodeAtlasModel
+const { focusDiagram, scopeIds } = globalThis.SpexCodeAtlasFocus
+const { ATLAS_PROMPT } = globalThis.SpexCodeAtlasPrompt
 
 const gugu = window.gugu
 const $ = (id) => document.getElementById(id)
@@ -16,6 +15,7 @@ let tree = { byId: new Map(), roots: [] }
 let current = null
 let truncated = false
 let pendingLoad = null
+let renderDiagram = null
 const open = new Set()
 
 const has = (capability) => Boolean(context?.capabilities?.includes(capability))
@@ -23,7 +23,7 @@ const has = (capability) => Boolean(context?.capabilities?.includes(capability))
 async function walk(dir, found) {
   if (found.count >= WALK_LIMIT) { truncated = true; return }
   let entries = []
-  try { entries = await gugu.listFiles(dir) } catch { return }
+  try { entries = await window.gugu.listFiles(dir) } catch { return }
   for (const entry of entries) {
     found.count += 1
     const name = entry.path.split('/').pop() || ''
@@ -41,7 +41,7 @@ async function load() {
   truncated = false
   const found = { specs: [], diagrams: new Set(), count: 0 }
   await walk(SPEC_ROOT, found)
-  const files = await Promise.all(found.specs.map(async (path) => ({ path, text: await gugu.readFile(path) })))
+  const files = await Promise.all(found.specs.map(async (path) => ({ path, text: await window.gugu.readFile(path) })))
   tree = buildTree(files, found.diagrams)
   if (!tree.roots.length) {
     showEmpty('This workspace has no spec tree yet. "Draw the atlas" starts an agent that reads the repository into .spec/ and draws its pictures; this tab follows along as it writes.')
@@ -128,7 +128,7 @@ async function drawDiagram(node) {
   const note = $('diagram-note')
   note.textContent = ''
   try {
-    const ir = JSON.parse(await gugu.readFile(node.diagram))
+    const ir = JSON.parse(await window.gugu.readFile(node.diagram))
     const parts = await renderDiagram(ir.diagram_type, ir, { evidence: false })
     box.innerHTML = scopeIds(parts.svg, `atlas-${node.id.replace(/[^\w-]/g, '')}`)
     note.textContent = typeof parts.meta?.note === 'string' ? parts.meta.note : ''
@@ -152,14 +152,14 @@ function wireDiagram(svg, node) {
 
 async function drawAtlas() {
   if (!has('agents:control')) {
-    await gugu.reportError('Starting the atlas needs the "start and steer agents" permission for SpexCode Atlas (Settings → Extensions).')
+    await window.gugu.reportError('Starting the atlas needs the "start and steer agents" permission for SpexCode Atlas (Settings → Extensions).')
     return
   }
   try {
-    await gugu.spawnAgent(ATLAS_PROMPT, 'SpexCode atlas')
+    await window.gugu.spawnAgent(ATLAS_PROMPT, 'SpexCode atlas')
     $('status').textContent = 'An agent is drawing the atlas; this tab follows its changes.'
   } catch (error) {
-    await gugu.reportError(`Could not start the atlas agent: ${error?.message ?? error}`)
+    await window.gugu.reportError(`Could not start the atlas agent: ${error?.message ?? error}`)
   }
 }
 
@@ -179,18 +179,23 @@ document.addEventListener('click', (event) => {
   const link = event.target.closest?.('a[data-node]')
   if (link) { event.preventDefault(); void select(link.dataset.node); return }
   const external = event.target.closest?.('a[data-external]')
-  if (external) { event.preventDefault(); void gugu.openBrowserTab(external.href) }
+  if (external) { event.preventDefault(); void window.gugu.openBrowserTab(external.href) }
 })
 $('draw').addEventListener('click', () => void drawAtlas())
 $('empty-draw').addEventListener('click', () => void drawAtlas())
 
-if (!gugu) {
-  showEmpty('SpexCode Atlas runs inside gugu as a tab extension.')
-} else {
-  context = await gugu.getContext()
+async function start() {
+  if (!gugu) {
+    showEmpty('SpexCode Atlas runs inside gugu as a tab extension.')
+    return
+  }
+  ({ renderDiagram } = await import('./archify.mjs'))
+  context = await window.gugu.getContext()
   applyTheme()
-  gugu.onContextChanged((next) => { context = next; applyTheme() })
-  gugu.onCommand((id) => { if (id === 'draw') void drawAtlas(); if (id === 'refresh') void load() })
-  if (has('workspace:read')) gugu.onFilesChanged(onFiles)
+  window.gugu.onContextChanged((next) => { context = next; applyTheme() })
+  window.gugu.onCommand((id) => { if (id === 'draw') void drawAtlas(); if (id === 'refresh') void load() })
+  if (has('workspace:read')) window.gugu.onFilesChanged(onFiles)
   await load()
 }
+
+void start()

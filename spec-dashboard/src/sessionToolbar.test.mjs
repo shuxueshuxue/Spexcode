@@ -13,6 +13,7 @@ const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url)
 const focus = readFileSync(new URL('./focus.js', import.meta.url), 'utf8')
 const _documentActions = readFileSync(new URL('./documentActions.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+const picker = readFileSync(new URL('./ResourcePicker.jsx', import.meta.url), 'utf8')
 const icons = readFileSync(new URL('./icons.jsx', import.meta.url), 'utf8')
 const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
@@ -44,17 +45,26 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /setUnreadResources\(\(unread\) => new Set\(\[\.\.\.unread, \.\.\.added\.map\(\(tab\) => tab\.id\)\]\)\)/)
   assert.doesNotMatch(source, /const selected = admitted\.find\(\(tab\) => tab\.sessionId === active\)/)
   assert.match(source, /SessionDocumentActions document=\{documentKey\}/)
-  assert.match(source, /id: 'resource-picker'/)
+  // the resource picker left the document-actions slot: it floats over the document's own corner
+  assert.doesNotMatch(source, /id: 'resource-picker'/)
+  assert.match(source, /<ResourcePicker entries=\{catalog\} openIds=\{openResourceTabIds\} open=\{resourceMenu\}/)
   assert.doesNotMatch(source, /className="si-tabbar"/)
   assert.match(source, /function SessionResourcePanel\(/)
   assert.match(source, /<SessionForestPanel/)
   assert.doesNotMatch(source, /id: 'session-menu'/)
-  assert.match(source, /onSessionContextMenu=\{\(next\) => \{ setResourceMenu\(false\); setCtxMenu\(next\) \}\}/)
+  // the session's own lifecycle menu has one door on this surface: its forest row. Its tab is an ordinary tab.
+  assert.match(source, /onContextMenu=\{setCtxMenu\}/)
+  assert.doesNotMatch(source, /onSessionContextMenu/)
 })
 
-test('posted resources use the document-actions picker and selected-file actions', () => {
-  assert.match(source, /function ResourceMenu\(\{ options, onOpen \}\)/)
-  assert.match(source, /className="si-resource-menu-row" role="menuitem"/)
+test('posted resources use the floating picker and selected-file actions', () => {
+  assert.doesNotMatch(source, /function ResourceMenu\(/)
+  assert.match(picker, /className=\{`si-rp-fab\$\{open \? ' on' : ''\}/)
+  assert.match(picker, /data-action="resource-picker"/)
+  assert.match(picker, /role="dialog" aria-label=\{t\('session\.resourceMenuLabel'\)\}\s*data-focus-overlay/)
+  assert.match(picker, /useEscLayer\(open, /)
+  assert.match(picker, /<IconButton icon="download"[^>]*onClick=\{\(\) => onDownload\(entry\)\}/)
+  assert.match(picker, /<IconButton icon="copy"[^>]*label=\{entry\.value\}/)
   assert.match(source, /id: 'download-resource'.*icon: 'download'/)
   assert.match(source, /id: 'copy-resource'.*icon: 'copy'/)
   assert.doesNotMatch(source, /function SessionFiles\(/)
@@ -83,8 +93,8 @@ test('file previews use one selectable resource tab, keep Markdown restricted, e
   assert.match(css, /\.si-file-html\s*\{[^}]*height:\s*100%;[^}]*border:\s*0;/s)
   // the three pop-overs float on the ONE shared elevation ([[typography]]'s --shadow), not three
   // hand-written drops that can drift apart into three different ideas of "above".
-  assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
-  assert.match(css, /\.si-files-menu\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
+  assert.match(css, /\.si-rp-fab\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
+  assert.match(css, /\.si-rp-drawer\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
   assert.match(css, /\.sess-menu\s*\{[^}]*box-shadow:\s*var\(--shadow\);/s)
 })
 

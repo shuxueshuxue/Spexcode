@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiUrl } from './project.js'
 import { Icon } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
+import { PageScroll } from './PageScroll.jsx'
 
 // THE AUTOMATION, DRAWN AS WHAT IT DOES. Every plugin here is already a spec node and already visible in the
 // graph, so this board is not about making them exist on screen — it is about reading them by their surface
@@ -50,8 +51,8 @@ export default function PluginsView() {
     return () => { live = false }
   }, [])
 
-  if (error) return <div className="pg pg-error">{t('plugins.failed', { reason: error })}</div>
-  if (!view) return <div className="pg pg-loading" />
+  if (error) return <PageScroll><div className="pg pg-error">{t('plugins.failed', { reason: error })}</div></PageScroll>
+  if (!view) return <PageScroll><div className="pg pg-loading" /></PageScroll>
 
   const { rows, spine, profile } = view
   const byName = new Map(rows.map((row) => [row.name, row]))
@@ -60,6 +61,7 @@ export default function PluginsView() {
   const unused = ['hook', 'system', 'command', 'skill', 'agent'].filter((surface) => on(surface).length === 0)
 
   return (
+    <PageScroll>
     <div className="pg">
       <header className="pg-head">
         <h1 className="pg-title">{t('plugins.title')}</h1>
@@ -131,5 +133,6 @@ export default function PluginsView() {
 
       {unused.length > 0 && <p className="pg-unused">{t('plugins.unused', { names: unused.join(', ') })}</p>}
     </div>
+    </PageScroll>
   )
 }

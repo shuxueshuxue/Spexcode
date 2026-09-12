@@ -56,10 +56,13 @@ library later, and until then a person loads it from the folder: Claude Code wit
 listing it in `plugins.dirs`, gugu's Install picker, and a copy into a PenguinHarness agent's `skills/`.
 
 **Nothing installed, nothing configured.** Every package runs SpexCode through npx, and a repository without a
-spec tree gets only what drawing needs: a root `spec.md` and one folder per part — no `spex init`, no git hooks, no
-agent configuration. Measured on a fresh home directory, that path leaves npm's own package cache and, from
-`spex spec lint`, a history cache of a few kilobytes under `~/.spexcode/projects/`; `spex init --harness none`
-would add about thirty seeded `.plugins` files, six git hooks and a project store. The page the skill ends with
+spec tree is seeded by `spex init --pure` — the skeleton verb that exists for exactly this: `.spec/spexcode.json`
+and a root `spec.md`, no git hooks, no agent configuration, nothing outside `.spec/` ([[spex-init]]). The packages
+say `--pure` rather than hand-writing that root, because the config it plants is what makes the tree self-describing:
+without it `spex spec lint` falls back to built-in `governedRoots` that name SpexCode's own source directories, and
+a foreign repository is told it governs nothing. Measured on a fresh home directory, that path leaves npm's own
+package cache and, from `spex spec lint`, a history cache of a few kilobytes under `~/.spexcode/projects/`;
+`spex init --harness none` would add about thirty seeded `.plugins` files, six git hooks and a project store. The page the skill ends with
 needs the dashboard package too, and npx fetches it for that one command.
 
 **Generated from one source, written by hand where a person decides.** `npm run build:distribution` writes every

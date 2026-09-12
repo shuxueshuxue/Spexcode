@@ -111,6 +111,21 @@ test('the ZCode workflow\'s lint gate runs as the command line it submits, and r
   }
 })
 
+test('the gugu page\'s classic scripts share one global scope without colliding', () => {
+  // A classic <script> puts its top-level declarations in the GLOBAL lexical scope, so every script on the page
+  // shares one namespace: a helper that leaks `function buildTree` makes the page's own `const { buildTree } = …`
+  // a redeclaration, and the browser refuses to parse the page's script at all. Evaluating each file on its own
+  // (as the helper above and gugu's shipped-example harness both do) cannot see that — the collision only exists
+  // between files — so this reads the scripts in the order the page loads them and parses them as one scope.
+  const dir = join(root, 'distribution/gugu/spexcode-atlas')
+  const html = readFileSync(join(dir, 'index.html'), 'utf8')
+  const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(([, src]) => src)
+  assert.ok(scripts.length >= 2, 'the page should load several classic scripts')
+  const source = scripts.map((src) => readFileSync(join(dir, src), 'utf8')).join('\n;\n')
+  // new Function parses without running: a duplicate declaration is a SyntaxError here exactly as in the browser.
+  assert.doesNotThrow(() => new Function(source), SyntaxError)
+})
+
 test('every package names only files that exist, and the ZCode skill points at the workflow it ships', () => {
   const zcodeSkill = readFileSync(join(root, 'distribution/zcode/atlas/skills/atlas/SKILL.md'), 'utf8')
   assert.match(zcodeSkill, /\$\{ZCODE_SKILL_DIR\}\/atlas\.dwf\.ts/)

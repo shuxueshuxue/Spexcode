@@ -642,6 +642,11 @@ THE BRIDGE is spex, and it has three members:
   spex.draft(text, state) what THIS widget would contribute to the human's next message
   spex.save(state)        the same state half, without touching the text
 
+The text and the state are two halves of the same answer, not one derived from the other: the text is the
+sentence the agent reads, the state is what the picture needs to draw itself. Say both. And take the bridge as
+\`const ui = window.spex || { state: null, draft() {} }\` at the top, so the same file still renders when it is
+opened outside the dashboard.
+
 A WIDGET CANNOT SEND. draft() fills a block above the human's input box, with send, open-as-text and discard
 controls mirrored on the frame; nothing reaches you until they press send. Their send commits both halves at
 once: you receive the text as an ordinary message, and the state becomes this widget's state. So six ticks
@@ -671,11 +676,12 @@ A question that restores itself from what was sent:
 
   <button data-v="A">Plan A</button><button data-v="B">Plan B</button>
   <script>
-    let current = spex.state?.choice || null
+    const ui = window.spex || { state: null, draft() {} }
+    let current = ui.state?.choice || null
     const paint = () => { for (const b of document.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === current)) }
     for (const b of document.querySelectorAll('button')) b.onclick = () => {
       current = b.dataset.v
-      spex.draft('I choose ' + current, { choice: current })
+      ui.draft('I choose ' + current, { choice: current })
       paint()
     }
     paint()

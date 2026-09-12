@@ -4015,62 +4015,76 @@ body.is-session-dragging .si-pill.archive:hover {
 .m-widget-draft-act { border: 0; background: none; color: var(--muted); font-size: var(--type-caption); cursor: pointer; }
 .m-widget-draft-act:hover { color: var(--ink); }
 
-/* THE PLUGINS PAGE ([[plugins-page]]) — the automation drawn as what it does. The spine is the hook surface
-   and only the hook surface: an event, a deterministic order inside it, and whether the script may refuse.
-   Every plugin is a CARD that carries its own one-line purpose and opens its spec node, because a name and a
-   number is a fact nobody asked for. Colour is keyed on palette tokens rather than blends between two inks —
-   a colour whose contrast is defined against another ink flips direction between light and dark palettes and
-   can collapse to invisible on one of them; the live seam's sweep lost a whole theme that way. */
-.pg { width: min(880px, 94%); margin: 0 auto; padding: var(--space-7) 0 60px; }
-.pg-loading { min-height: 40vh; }
-.pg-error { color: var(--red); padding: var(--space-7) 0; }
-.pg-head { margin: 0 0 var(--space-5); }
-.pg-title { font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); color: var(--ink2); margin: 0 0 var(--space-2); }
-.pg-sub { margin: 0; color: var(--muted); font-size: var(--type-meta); }
+/* THE PLUGINS PAGE ([[plugins-page]]). Two typographic tiers and no more: a name at body size carrying the
+   weight, its own sentence one step down and muted. This dashboard already spends the proportional/mono
+   contrast channel globally (`--ui-font` IS the mono), so size and colour carry the ranking that a product
+   with two typefaces would split three ways.
+
+   THE COLOUR BUDGET IS ONE NARROW COLUMN. A hook that may refuse its event puts a mark in the rail at the
+   row's left edge and nothing else on the board is tinted, so the hooks that can interrupt a session form a
+   broken vertical line a reader finds without reading. A tinted row would spend a whole line's worth of
+   colour to say one word, and a board where everything is marked marks nothing.
+
+   Rows are borderless and tight, like every other list this frame draws ([[issues]]' cards are 5px 6px with
+   2px between them): the box around a card is a border spent on a rectangle rather than on the thing inside
+   it. The lifecycle rail is a `border-left` and a dot — the same way n8n, Windmill, Trigger.dev and Inngest
+   each draw theirs, none of them with SVG, because a border is what survives virtualisation and reflow. */
+.pg { width: min(820px, 94%); margin: 0 auto; padding: var(--space-6) 0 60px; }
+.pg-error { color: var(--red); font-size: var(--type-body); }
+.pg-head { margin: 0 0 var(--space-7); }
+.pg-title { font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); color: var(--ink2); margin: 0 0 var(--space-3); }
+.pg-sub { margin: 0; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
+/* the profile is one more clause of the same sentence, not a panel: it is state to know, never a control */
+.pg-profile { display: block; margin-top: var(--space-2); }
+.pg-profile code { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink2); margin-right: var(--space-3); }
+
 .pg-section { margin: 0 0 var(--space-7); }
 .pg-h { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); margin: 0 0 var(--space-2); }
-.pg-note { margin: 0 0 var(--space-4); color: var(--muted); font-size: var(--type-meta); max-width: 62ch; }
+.pg-note { margin: 0 0 var(--space-4); color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); max-width: 64ch; }
 
-/* the one switch that turns a core hook off, shown as the state it is */
-.pg-profile { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap;
-  margin: 0 0 var(--space-7); padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); font-size: var(--type-meta); }
-.pg-profile-key { color: var(--muted); font-family: var(--mono); font-size: var(--type-caption); }
-.pg-profile code { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink);
-  background: var(--raised); padding: 1px 6px; border-radius: var(--radius); }
-.pg-profile-note { color: var(--muted); }
+/* one row: rail · body · metadata. The metadata is pushed to the end and never competes for the first read. */
+.pg-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: baseline;
+  gap: 0 var(--space-3); padding: var(--space-2) var(--space-3); border-radius: var(--radius);
+  text-decoration: none; color: inherit; }
+.pg-row + .pg-row { margin-top: var(--space-1); }
+.pg-row:hover { background: var(--wash-hover); }
+.pg-rail { grid-column: 1; text-align: center; line-height: var(--leading-ui); }
+.pg-body { grid-column: 2; min-width: 0; display: block; }
+.pg-name { display: block; font-size: var(--type-body); font-weight: var(--weight-medium); color: var(--ink); line-height: var(--leading-ui); }
+.pg-desc { display: block; font-size: var(--type-meta); color: var(--muted); line-height: var(--leading-ui); overflow-wrap: anywhere; }
+.pg-meta { grid-column: 3; display: inline-flex; align-items: baseline; gap: var(--space-3);
+  font-size: var(--type-caption); color: var(--muted); white-space: nowrap; }
+.pg-ord { font-variant-numeric: tabular-nums; }
+.pg-files::before { content: '+'; opacity: .7; }
+/* the mark for a hook that may refuse — the one place this board spends a hue */
+.pg-mark { font-size: var(--type-caption); }
+.pg-refuse { color: var(--orange); }
+/* a hook the profile turned off is quieter than the metadata beside it: a reader should skim past it, and
+   there is no token below `--muted`, so it is mixed toward the page's own ground. */
+.pg-row.is-dim .pg-name, .pg-row.is-dim .pg-desc, .pg-row.is-dim .pg-meta {
+  color: color-mix(in srgb, var(--muted) 70%, var(--paper));
+}
+.pg-dimword { font-style: italic; }
 
-/* THE LIFECYCLE AS A RAIL: the event names are stations down one line, the hooks hang off them in order */
+/* THE LIFECYCLE AS A RAIL: event names are stations down one line, their hooks hang off them in order. */
 .pg-spine { list-style: none; margin: 0; padding: 0; }
-.pg-stop { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: var(--space-4);
-  align-items: start; padding: 0 0 var(--space-4) var(--space-5); border-left: 2px solid var(--line); position: relative; }
-.pg-stop::before { content: ''; position: absolute; left: -5px; top: 4px; width: 8px; height: 8px;
+.pg-stop { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 0 var(--space-4);
+  padding: 0 0 var(--space-5) var(--space-5); border-left: 2px solid var(--line); position: relative; }
+.pg-stop::before { content: ''; position: absolute; left: -5px; top: 5px; width: 8px; height: 8px;
   border-radius: var(--radius-full); background: var(--line); }
-.pg-stop.is-empty { border-left-color: var(--edge); }
+.pg-stop:last-child { border-left-color: transparent; padding-bottom: 0; }
 .pg-stop.is-empty::before { background: var(--edge); }
-.pg-stop:last-child { border-left-color: transparent; }
-.pg-event { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink); padding-top: 2px; }
-.pg-off { font-style: normal; color: var(--red); margin-left: 6px; font-size: var(--type-caption); }
-.pg-stop-cards { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
-.pg-nothing { color: var(--muted); font-size: var(--type-meta); font-style: italic; padding-top: 2px; }
-.pg-slot-wrap { display: block; min-width: 0; }
-.pg-slot-wrap.is-off .pg-card { opacity: .55; }
+.pg-event { font-size: var(--type-meta); color: var(--ink2); padding-top: var(--space-2); line-height: var(--leading-ui); }
+.pg-offspine { font-style: normal; color: var(--red); margin-left: var(--space-2); font-size: var(--type-caption); }
+.pg-hooks { min-width: 0; }
+.pg-nothing { display: block; padding: var(--space-2) var(--space-3); color: var(--muted); font-size: var(--type-meta); font-style: italic; }
 
-/* a plugin is a card: its name, what it is for, and the way into its body */
-.pg-card { display: flex; flex-direction: column; gap: 3px; min-width: 0;
-  padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--raised); text-decoration: none; color: inherit; }
-.pg-card:hover { border-color: var(--accent, var(--blue)); }
-.pg-card-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
-.pg-card-name { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink); }
-.pg-card-desc { color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-body); overflow-wrap: anywhere; }
-.pg-card-files { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: var(--type-caption); }
-.pg-ord { color: var(--muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
-.pg-blocks { color: var(--orange); font-size: var(--type-caption); }
-.pg-offbadge { color: var(--red); font-size: var(--type-caption); }
-.pg-surf { color: var(--muted); font-size: var(--type-caption); }
-/* a node that plugs into two surfaces at once — the one thing a folder tree structurally cannot show */
+.pg-list { display: block; }
 .pg-surf.is-both { color: var(--blue); }
-
-.pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--space-3); }
 .pg-unused { margin: 0; color: var(--muted); font-size: var(--type-meta); font-style: italic; }
+
+/* narrow: the station label stops being a column and becomes the line above its hooks */
+@media (max-width: 620px) {
+  .pg-stop { grid-template-columns: minmax(0, 1fr); }
+  .pg-event { padding-top: 0; margin-bottom: var(--space-1); }
+}

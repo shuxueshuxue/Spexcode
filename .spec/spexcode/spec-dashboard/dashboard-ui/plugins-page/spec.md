@@ -38,13 +38,47 @@ verbs get a strip each, under the spine, which is also the honest shape: they ar
 
 A name and a number is a fact nobody asked for. The question a person brings to this board is what a thing
 does and why it is allowed to refuse, and both answers are already written: a node's `desc` is its one line
-and its body is the rest. So each plugin is a card carrying that line, and the card IS the link to the node —
+and its body is the rest. So each plugin is one row carrying that line, and the row IS the link to the node —
 the ordinary `#/spec/<id>` address, read by the same reader the rest of the dashboard uses. Nothing here
 restates a body or keeps a second description of anything.
 
 The seven hooks had no `desc` at all when this board first drew them, which is how it shipped as a grid of
-names and numbers explaining nothing. They have one now, because a plugin that cannot say what it is for in
-one line is a plugin nobody can review.
+names and numbers explaining nothing. They have one each now: a plugin that cannot say what it is for in one
+line is a plugin nobody can review.
+
+## a marker for the ordinary case is not drawable
+
+The first version was a badge farm — order, refusal, file count and surface all drawn as chips on every row,
+so nothing stood out because everything was marked. The repair is not "fewer chips". It is that the ordinary
+case must have no representation at all, enforced where the marker is built rather than remembered at each
+call: the mark component renders nothing unless the thing it names is true, `order` is drawn only on an event
+carrying more than one hook (the sole place the number decides anything — elsewhere vertical position already
+says it), and a hook's file count is never drawn, because the manifest compiler refuses a hook that does not
+ship exactly one script, so the count is a constant there. A row with nothing remarkable is its name and its
+sentence, which is what a reader should be able to skim past.
+
+## the colour budget is one narrow column
+
+A hook that may refuse its event puts a mark in the rail at the row's left edge, and nothing else on this
+board is tinted — so the hooks that can interrupt a session form a broken vertical line down the left that a
+reader finds without reading. The row itself is never coloured: a tinted row spends a whole line to say one
+word. The single exception is a node on two surfaces at once, which is the one fact a folder tree structurally
+cannot show, so it is the one that earns a hue.
+
+A hook the profile turned off is drawn quieter than the metadata beside it, not merely greyer than the name:
+its text is mixed toward the page's own ground, below `--muted`, because a reader should skim past it. Its
+refusal mark keeps full strength — what it would do if it ran has not changed.
+
+## two typographic tiers, and the rail is a border
+
+The name carries the weight at body size; its sentence is one step down and muted. There is no third rank,
+because this frame already spends the proportional/mono contrast channel globally — `--ui-font` IS the mono —
+so size and colour carry a ranking that a product with two typefaces would split three ways.
+
+Rows are borderless and tight, like every other list this frame draws: a box around a card is a border spent
+on a rectangle rather than on the thing inside it. The lifecycle rail is a `border-left` and a dot, never a
+drawn graphic — which is also how every workflow console worth copying draws one, because a border survives
+reflow and virtualisation and an SVG does not.
 
 ## the profile is the switch, and it is read here, never written
 

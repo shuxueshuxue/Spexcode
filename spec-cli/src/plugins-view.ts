@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadAgentConfig, loadConfig, loadHookConfig, loadSkillConfig, loadSystemConfig, treeSlotDir } from '@spexcode/spec-core'
 import type { ConfigPreset } from '@spexcode/spec-core'
 import { compileManifest } from './hooks.js'
+import { listSessions } from './sessions.js'
 
 // @@@the-lifecycle-an-agent-actually-walks - the spine's order is a READING order, not data: the harness
 // fires these, and this is the sequence a person meets them in over one session. It is written here rather
@@ -41,7 +41,7 @@ export type ManifestDiff = { kind: 'extra' | 'missing'; event: string; order: nu
 
 export type LiveRollup = {
   declared: string[]                  // the compiled manifest lines the contract asks every tree to carry
-  trees: number
+  trees: number                       // worktrees hosting a session right now — never the whole registry
   matching: number
   differing: number
   unmaterialized: number              // a tree with NO manifest runs NO hooks at all — no Stop gate, nothing
@@ -84,13 +84,16 @@ function buildSpine(rows: PluginRow[]): SpineSlot[] {
   return [...slots.values()]
 }
 
-// @@@live-is-per-tree-not-per-project - materialization writes one manifest into EACH registered worktree's
-// slot, so "is this hook running" has as many answers as the project has trees, and they drift apart
-// independently: a tree materialized before a contract changed keeps running the old set until something
-// materializes it again. Measured on this repository the day the view was written, 169 worktrees existed and
-// 11 carried the declared manifest. That gap is invisible everywhere else, and it is the reason a row here
-// reports a COUNT rather than a badge.
-function rollupLive(repo: string): LiveRollup {
+// @@@only-the-trees-an-agent-is-actually-in - materialization writes one manifest into EACH registered
+// worktree's slot, so "is this hook running" has as many answers as the project has trees, and they drift
+// apart independently: a tree materialized before a contract changed keeps running the old set until
+// something materializes it again. The denominator is therefore NOT every registered worktree. Counted that
+// way the number is a census of dormant directories — 169 trees, 11 matching, when 162 of them had no agent
+// in them and the stale manifest inside cost nobody anything. It only means something for a worktree an
+// agent is in RIGHT NOW, where a hook the contract does not declare is a hook actually running, or a missing
+// manifest is a session with no Stop gate. So the sessions on the board supply the trees, and a project with
+// no live session reports nothing rather than a number nobody should act on.
+function rollupLive(trees: string[]): LiveRollup {
   const declaredText = compileManifest()
   const declared = declaredText.split('\n').filter(Boolean)
   const declaredSet = new Set(declared)
@@ -104,11 +107,6 @@ function rollupLive(repo: string): LiveRollup {
     const [event, order, block, script] = line.split('\t')
     counts.set(key, { kind, event, order: Number(order), block: block === 'true', script, trees: 1 })
   }
-  let trees: string[] = []
-  try {
-    const out = execFileSync('git', ['-C', repo, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' })
-    trees = out.split('\n').filter((l) => l.startsWith('worktree ')).map((l) => l.slice('worktree '.length))
-  } catch { /* not a git repo — the view still renders the declared half */ }
   for (const tree of trees) {
     let file: string
     try { file = join(treeSlotDir(tree), 'hooks-manifest') } catch { unmaterialized += 1; continue }
@@ -131,7 +129,18 @@ function rollupLive(repo: string): LiveRollup {
   }
 }
 
-export function pluginsView(repo: string): PluginsView {
+// a session's worktree counts when the record is not archived and the directory is still on disk; anything
+// else is a record about a place, not a place an agent is in.
+async function hostingTrees(): Promise<string[]> {
+  try {
+    const sessions = await listSessions(false)
+    return sessions
+      .map((s) => (s as { path?: string }).path)
+      .filter((p): p is string => Boolean(p) && existsSync(p as string))
+  } catch { return [] }
+}
+
+export async function pluginsView(): Promise<PluginsView> {
   const rows = collectRows()
-  return { rows, spine: buildSpine(rows), live: rollupLive(repo) }
+  return { rows, spine: buildSpine(rows), live: rollupLive(await hostingTrees()) }
 }

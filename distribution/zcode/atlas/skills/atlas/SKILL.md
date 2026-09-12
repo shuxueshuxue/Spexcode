@@ -81,3 +81,10 @@ This skill is the campaign around that loop.
 `npx -y -p spexcode@next -p @spexcode/spec-dashboard@next spex graph --public --html spexcode-atlas.html` writes the whole tree — every body and
 every picture — as one self-contained page that opens in any browser, straight from disk. Offer it with the report;
 it is a product of the tree, not part of it, so leave it uncommitted.
+
+The page names the project after `dashboard.title` in `.spec/spexcode.json`, and falls back to the name of the
+directory it was run in. A scratch checkout called `repo` or `tmp` therefore publishes a page titled that, which
+is wrong on the one artifact a person is meant to read. Set the title when the directory is not the project's name.
+
+The page opens on the whole-tree overview, so a node's drawing is one click in. Say which node to open when you
+hand it over, or the first thing the reader sees is a map rather than the picture they asked for.

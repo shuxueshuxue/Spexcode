@@ -365,8 +365,8 @@ the guard (the flag is the declaration of intent). Reads point anywhere.
 
 ── LINT (.spec/spexcode.json — a top-level "lint" key; budgets are portable, so committed only) ──
   lint.governedRoots       dirs whose source files must each be governed by a spec (coverage).
-                           '.' = the whole project (only git-TRACKED files). Default
-                           ["spec-dashboard/src", "spec-cli/src"].
+                           '.' = the whole project (only git-TRACKED files). No default: name your own,
+                           or take the ["."] that 'spex init --pure' writes.
   lint.sourceIncludeGlobs  optional repo-relative includes. Omit = ALL tracked current regular text under
                            governedRoots; [] = intentionally none. Slash-less globs match at any depth.
   lint.sourceExcludeGlobs  repo-relative paths subtracted from the includes (default []). Nothing about

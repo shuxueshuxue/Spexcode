@@ -18,8 +18,15 @@ This skill is the campaign around that loop.
    architecture diagram of those children. A node whose body is a process, a protocol, a data path or a
    lifecycle gets that kind instead. Skip leaves with nothing to show, and nodes that already carry a
    `diagram.json` unless the user asked for a redraw. Say what you skipped and why.
-3. **Draw each node.** Go top-down, one node at a time; if your harness can run sub-agents, give each node to its
-   own, handing it only that node's context — its body, its children's titles and descriptions, and these steps.
+3. **Draw each node.** Choose the order top-down, but the drawing itself is per-node and independent: one picture
+   reads its own node's body and its children's titles, and writes one file, that node's `diagram.json`. Two nodes
+   never write the same file, so where your harness can run sub-agents they may be drawn at the same time — one
+   node per sub-agent, handed only that node's context: its body, its children's titles and descriptions, and
+   these steps. Keep a batch small enough that you still read every result before dispatching the next; a node
+   whose check will not pass is that node's problem and must not stall the others, and a node that defeats you is
+   reported in step 6 rather than retried forever. A sub-agent draws and checks its one node and stops: it does
+   not commit, does not lint the tree, and does not touch a node it was not given. Landing happens once, in
+   step 5, by whoever is running the campaign.
    For one node:
    - read its `spec.md` and its children's, and choose the kind from what the body spends its words on;
    - `spex diagram scaffold <node>` (add `--type <kind>` for anything but architecture);

@@ -28,7 +28,9 @@ export type LintConfig = {
                              // semantics are untouched by this knob.
 }
 const DEFAULT_CONFIG: LintConfig = {
-  governedRoots: ['spec-dashboard/src', 'spec-cli/src'],
+  // No default: a repository says which of ITS directories are governed. Naming any here shipped this
+  // repository's own layout to every other one, where those paths do not exist.
+  governedRoots: [],
   sourceIncludeGlobs: null,
   sourceExcludeGlobs: [],
   sourceExtensions: null,

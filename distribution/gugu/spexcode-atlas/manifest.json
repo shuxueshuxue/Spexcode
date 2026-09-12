@@ -12,6 +12,7 @@
   "permissions": {
     "capabilities": [
       "workspace:read",
+      "agents:read",
       "agents:control"
     ]
   },

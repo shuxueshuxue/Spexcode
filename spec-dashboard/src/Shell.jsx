@@ -426,12 +426,13 @@ function BoardStatus({ specs, sessions, page }) {
 // NOT is a second workspace — the rail, the navigator sidebar and the status bar are the window's and are
 // drawn once, by the frame. Both regions mount the same component, so a document sent right keeps its band,
 // its controls and its context instead of borrowing the chrome of whatever page it came from.
-function DocumentRegion({ primary = false, band, route, width = null, contextOpen, onToggleContext, children }) {
+function DocumentRegion({ primary = false, band, route, width = null, height = null, contextOpen, onToggleContext, children }) {
   // Context belongs to the DOCUMENT, so each region answers it for its own ([[context-dock]]) — the dock a
   // region draws describes the document that region holds, and nothing else.
   const hasContext = route.page === 'spec'
   return (
-    <div className={`region${primary ? ' region-primary' : ' region-held'}`} style={width ? { width } : undefined}>
+    <div className={`region${primary ? ' region-primary' : ' region-held'}`}
+      style={width ? { width } : height ? { height } : undefined}>
       {band}
       <div className="region-body">
         <div className="app-main">{children}</div>
@@ -479,7 +480,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     }
   }, [sessions, notify, t])
   const documentNames = useDocumentNames()
-  const { dock, dockMode, palette, helpOpen } = useWorkspace()
+  const { dock, dockMode, palette, heldSide, helpOpen } = useWorkspace()
   const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode } = useWorkspaceApi()
   useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
     tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
@@ -504,7 +505,12 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // shell reads it to know whether there are two regions; the strip owns the move that puts it there.
   const { held, release } = useTabs()
   const [heldContextOpen, setHeldContextOpen] = useState(false)
-  const [heldWidth, onHeldDrag, resetHeldWidth] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
+  // ONE SEAM MECHANISM, TWO AXES ([[resizable-panes]]): the held region is sized along whichever axis it was
+  // put on, and each axis remembers its own size — moving a document from beside to below never inherits a
+  // width as a height.
+  const stacked = heldSide === 'bottom'
+  const [heldWidth, onHeldWidthDrag, resetHeldWidth] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
+  const [heldHeight, onHeldHeightDrag, resetHeldHeight] = useResizable('spex.splitHeight', 320, { min: 160, max: 1200, dir: -1, axis: 'y' })
 
   // THE DOCK FOLLOWS THE FOCUSED TAB. The projection is derived from what the reader is holding, not
   // chosen once and left behind: moving to a session tab brings the session list, moving to a node or a
@@ -647,7 +653,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
           </ViewErrorBoundary>
         )}
         <div className="app-content-column">
-          <div className="app-content-row">
+          <div className={`app-content-row${stacked && held ? ' app-content-stacked' : ''}`}>
             {/* the strip IS the primary region's band — it used to be wrapped in a spacer that stood in for it
                 on every route without an open document, which is one band wearing two names. The fold switch
                 stands at its left edge only while the sidebar it folds is closed; open, it rides that
@@ -661,9 +667,11 @@ export default function Shell({ routeOverride = null, inactive = false }) {
             </DocumentRegion>
             {held && (
               <>
-                <div className="content-divider" onMouseDown={onHeldDrag} onDoubleClick={resetHeldWidth}
-                  role="separator" aria-orientation="vertical" />
-                <DocumentRegion route={held} width={heldWidth}
+                <div className={`content-divider${stacked ? ' content-divider-h' : ''}`}
+                  onMouseDown={stacked ? onHeldHeightDrag : onHeldWidthDrag}
+                  onDoubleClick={stacked ? resetHeldHeight : resetHeldWidth}
+                  role="separator" aria-orientation={stacked ? 'horizontal' : 'vertical'} />
+                <DocumentRegion route={held} width={stacked ? null : heldWidth} height={stacked ? heldHeight : null}
                   contextOpen={heldContextOpen} onToggleContext={() => setHeldContextOpen((open) => !open)}
                   band={<HeldBar specs={specs} sessions={sessions} tab={held} onRelease={release}
                     trailing={contextReservation} />}>

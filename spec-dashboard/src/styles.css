@@ -389,6 +389,10 @@ body {
    document's own context dock. Both regions are the same box; only the held one takes a width. */
 .region { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .region-held { flex: 0 0 auto; }
+/* the second region sits BESIDE the first or UNDER it; the row stacks and the seam turns with it, and each
+   axis keeps its own remembered size ([[workspace-shell]]). */
+.app-content-stacked { flex-direction: column; }
+.app-content-stacked > .region-held { width: auto; }
 .region-body { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle-slot {
@@ -676,6 +680,7 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after, body.is
 /* two views at once. The divider is the shared resizable primitive every other pane uses. */
 .content-divider { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .55; }
 .content-divider:hover { opacity: 1; background: var(--blue); }
+.content-divider-h { cursor: row-resize; }
 /* the held region's band names ONE document, so its face is a tab's face without a tab's card: the same
    icon, status mark and label, sitting on the same band the strip draws across the window. */
 .tabstrip-held .tab-held { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 0 var(--space-4); color: var(--ink2); font-size: var(--type-control); }

@@ -4,6 +4,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { moveTab, setTabTitle, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
+import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey } from './sessionSurface.js'
@@ -167,6 +168,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [activeKey, tabs.length])
   const names = useDocumentNames()
+  const { setHeldSide } = useWorkspaceApi()
   const actions = useDocumentActions()
   useEffect(() => {
     for (const tab of tabs) {
@@ -363,13 +365,18 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            {/* the move is refused when this is the only tab — the strip would be left empty and the split
+            {/* TWO SEAMS, ONE MOVE ([[workspace-shell]]): the verb names the side it puts the document on,
+                because "horizontal" and "vertical" name opposite things in an editor and in a terminal
+                multiplexer, and a reader should not have to know which convention this window picked. The
+                move is refused when this is the only tab — the strip would be left empty and the split
                 would collapse right back — so the verb says it is unavailable instead of doing nothing. */}
-            <ContextMenuItem icon="panel-right" disabled={tabs.length < 2}
-              data-tip={tabs.length < 2 ? t('tabs.menuSplitOnly') : undefined}
-              onClick={(e) => { e.stopPropagation(); setMenu(null); hold(menu.tab) }}>
-              {t('tabs.menuSplit')}
-            </ContextMenuItem>
+            {[['right', 'panel-right', 'tabs.menuSplitRight'], ['bottom', 'panel-bottom', 'tabs.menuSplitDown']].map(([side, icon, key]) => (
+              <ContextMenuItem key={side} icon={icon} disabled={tabs.length < 2}
+                data-tip={tabs.length < 2 ? t('tabs.menuSplitOnly') : undefined}
+                onClick={(e) => { e.stopPropagation(); setMenu(null); setHeldSide(side); hold(menu.tab) }}>
+                {t(key)}
+              </ContextMenuItem>
+            ))}
           </ContextMenuGroup>
         </ContextMenu>
       )}

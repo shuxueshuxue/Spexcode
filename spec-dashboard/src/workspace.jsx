@@ -29,11 +29,15 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 
 // ---------------------------------------------------------------------------------------------------
 
-const WorkspaceState = createContext(null)  // { dock, dockMode, palette, lockedSource, helpOpen }
-const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, toggleHelp, closeHelp, setCompose, takeCompose, watchCompose, lockGraphTo }
+const WorkspaceState = createContext(null)  // { dock, dockMode, palette, heldSide, lockedSource, helpOpen }
+const WorkspaceApi = createContext(null)    // { setDock, setHeldSide, openPalette, closePalette, toggleHelp, closeHelp, setCompose, takeCompose, watchCompose, lockGraphTo }
 
 const DOCK_KEY = scopedKey('spexcode.dock')
 const DOCK_MODE_KEY = scopedKey('spexcode.dockMode')
+// WHERE the second region sits — beside the first, or under it. The document in it is the working set's
+// business ([[tab-strip]]); where the window puts that region is layout, like the dock's open state and the
+// region's own size, so it is remembered here and reused by the next split.
+const HELD_SIDE_KEY = scopedKey('spexcode.heldSide')
 
 export function WorkspaceProvider({ children }) {
   // The dock starts OPEN. It is how a reader finds a document without already knowing its address, and a
@@ -58,6 +62,9 @@ export function WorkspaceProvider({ children }) {
   // just to have somewhere to click, and that list is what this replaces. Not persisted: a lock is a way of
   // looking at the board right now, not a preference to inherit on the next boot.
   const [lockedSource, setLockedSource] = useState(null)
+  const [heldSide, setHeldSideState] = useState(() => {
+    try { return localStorage.getItem(HELD_SIDE_KEY) === 'bottom' ? 'bottom' : 'right' } catch { return 'right' }
+  })
   // Help is shell chrome, not graph-local state: the same registry-backed legend remains reachable after routing.
   const [helpOpen, setHelpOpen] = useState(false)
   // A one-shot handoff between views: a board chord composes text that the sessions view should open with.
@@ -97,11 +104,16 @@ export function WorkspaceProvider({ children }) {
       composeWatchers.current.add(fn)
       return () => { composeWatchers.current.delete(fn) }
     },
+    setHeldSide: (side) => setHeldSideState(() => {
+      const next = side === 'bottom' ? 'bottom' : 'right'
+      try { localStorage.setItem(HELD_SIDE_KEY, next) } catch { /* private mode */ }
+      return next
+    }),
     // toggle: asking again for the session that already owns the graph releases it.
     lockGraphTo: (source, { toggle = true } = {}) => setLockedSource((prev) => (toggle && prev === source ? null : source || null)),
   }), [])
 
-  const state = useMemo(() => ({ dock, dockMode, palette, lockedSource, helpOpen }), [dock, dockMode, palette, lockedSource, helpOpen])
+  const state = useMemo(() => ({ dock, dockMode, palette, heldSide, lockedSource, helpOpen }), [dock, dockMode, palette, heldSide, lockedSource, helpOpen])
   return (
     <WorkspaceApi.Provider value={api}>
       <WorkspaceState.Provider value={state}>{children}</WorkspaceState.Provider>

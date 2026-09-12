@@ -84,7 +84,7 @@ await page.locator('.tab[data-tab-key^="#/sessions/"]').first().click({ button: 
 const contextMenu = page.locator('[role="menu"]').last()
 await contextMenu.waitFor({ state: 'visible' })
 const contextItems = await contextMenu.locator('[role="menuitem"]').evaluateAll((els) => els.map((el) => el.textContent.trim()))
-assert.deepEqual(contextItems, ['Close', 'Close others', 'Send to split pane'], 'a session tab gets the ordinary tab menu')
+assert.deepEqual(contextItems, ['Close', 'Close others', 'Split right', 'Split down'], 'a session tab gets the ordinary tab menu')
 await page.screenshot({ path: join(out, 'session-tabstrip-layout.png'), fullPage: true })
 await context.close()
 await browser.close()

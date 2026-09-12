@@ -5,7 +5,7 @@
 //   1. On the Sessions document, right-click the session tab: the tab menu, not the session's lifecycle menu.
 //   2. Right-click the spec tab in that same strip: the identical menu.
 //   3. The shell strip (a spec route) offers the identical menu on the session tab.
-//   4. "Send to split pane" on a tab puts that document in the second pane.
+//   4. "Split right" on a tab moves that document into the held region.
 //   5. "Close others" on the session tab leaves only that tab.
 //   6. The session row in the forest still opens the session's own lifecycle menu (rename lives there).
 // Every scene screenshots before it judges, so the A side of a repair pair still leaves its picture.
@@ -66,7 +66,7 @@ const stop = async (child) => {
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 const node = (title, desc, body) => ['---', `title: ${title}`, 'status: active', 'hue: 180', `desc: ${desc}`, '---', `# ${title}`, '', ...body, ''].join('\n')
-const TAB_MENU = ['Close', 'Close others', 'Send to split pane']
+const TAB_MENU = ['Close', 'Close others', 'Split right', 'Split down']
 
 if (!existsSync(playwrightPath)) throw new Error(`Playwright is missing: ${playwrightPath}`)
 if (!existsSync(chromiumPath)) throw new Error(`Chromium is missing: ${chromiumPath}`)
@@ -194,7 +194,7 @@ try {
 
   // 4 — split: the session tab goes to the second pane from the shell strip
   await page.locator(`[role="tab"][data-tab-key="${sessionKey}"]:visible`).click({ button: 'right' })
-  const split = page.locator('.sess-menu:visible [role="menuitem"]', { hasText: 'Send to split pane' })
+  const split = page.locator('.sess-menu:visible [role="menuitem"]', { hasText: 'Split right' })
   const splitOffered = await split.count() > 0
   if (splitOffered) await split.click()
   const splitShown = splitOffered && await settle('.region-held .viewhost')

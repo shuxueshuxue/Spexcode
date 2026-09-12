@@ -10,6 +10,7 @@
 //   6. Holding the strip's only tab is refused rather than silently inert.
 //   7. Holding a second tab swaps: the first returns to the strip.
 //   8. A reload keeps the held document held, and never in both places.
+//   9. "Split down" puts the same region under the first, on a horizontal seam.
 // Every scene screenshots before it judges, so the A side of a repair pair still leaves its picture.
 // `SPEXCODE_DASHBOARD_ROOT` points Vite at another checkout of `spec-dashboard`; the backend stays current.
 import assert from 'node:assert/strict'
@@ -174,7 +175,8 @@ try {
     await page.locator(`.region-primary .tabstrip [role="tab"][data-tab-key="${key}"], .app-main > .tabstrip [role="tab"][data-tab-key="${key}"], .si-document > .tabstrip [role="tab"][data-tab-key="${key}"]`).first().click({ button: 'right' })
     await settle('.sess-menu', 5_000)
   }
-  const splitItem = () => page.locator('.sess-menu:visible [role="menuitem"]', { hasText: /Send to split pane|送入分屏/ }).first()
+  const splitItem = (side = 'right') => page.locator('.sess-menu:visible [role="menuitem"]',
+    { hasText: side === 'bottom' ? /Split down|分屏到下方/ : /Split right|分屏到右侧/ }).first()
 
   await page.addInitScript(({ key }) => {
     if (sessionStorage.getItem('split-region-seeded')) return
@@ -295,6 +297,41 @@ try {
     reloaded.split && reloaded.heldBandTitle === 'beta' && !reloaded.primaryTabs.includes('#/spec/beta')
     && reloaded.primaryTabs.includes('#/spec/alpha'),
     { primaryTabs: reloaded.primaryTabs, heldBandTitle: reloaded.heldBandTitle })
+
+  // 9 — the other seam: the same move, below instead of beside
+  await page.evaluate(() => {
+    localStorage.removeItem('spexcode.held.root')   // start from one region again
+    localStorage.setItem('spexcode.tabs.root', JSON.stringify([
+      { page: 'spec', param: 'alpha', query: null }, { page: 'spec', param: 'beta', query: null },
+    ]))
+  })
+  await page.goto(`${base}/#/spec/alpha`, { waitUntil: 'domcontentloaded' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await settle('.pane-doc')
+  await page.waitForTimeout(700)
+  await rightClickStripTab('#/spec/beta')
+  await splitItem('bottom').click()
+  await settle('.region-held', 8_000)
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: join(out, '7-split-down.png') })
+  const stacked = await page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector)?.getBoundingClientRect().toJSON() || null
+    const divider = document.querySelector('.content-divider')
+    return {
+      primary: box('.region-primary'), held: box('.region-held'),
+      dividerHorizontal: !!divider?.classList.contains('content-divider-h'),
+      dividerOrientation: divider?.getAttribute('aria-orientation') || null,
+      row: getComputedStyle(document.querySelector('.app-content-row')).flexDirection,
+    }
+  })
+  const heldBand = (await shape()).heldBandTitle
+  scene('split down puts the same region UNDER the first, on a horizontal seam',
+    stacked.row === 'column' && stacked.dividerHorizontal && stacked.dividerOrientation === 'horizontal'
+    && heldBand === 'beta'
+    && Math.round(stacked.held.top) >= Math.round(stacked.primary.bottom)
+    && Math.round(stacked.held.left) === Math.round(stacked.primary.left)
+    && Math.round(stacked.held.width) === Math.round(stacked.primary.width),
+    { row: stacked.row, heldBand, primary: stacked.primary, held: stacked.held, dividerOrientation: stacked.dividerOrientation })
 
   const kept = scenes.filter((s) => s.pass).length
   const report = { dashboardRoot, kept, probed: scenes.length, scenes, errors, sessionId }

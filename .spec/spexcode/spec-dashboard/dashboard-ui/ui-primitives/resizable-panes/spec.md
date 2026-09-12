@@ -35,6 +35,12 @@ split's own divider lit under the pointer. Two dividers with two answers to one 
 same accent now — nothing at rest, the accent on hover and for as long as a drag is live — so a seam that
 can be moved says so wherever it is, and a resting window still gains no visible handle.
 
+**The same mechanism carries a horizontal seam.** A pane can sit under its divider rather than beside it (the
+held region when a document is split DOWN, [[workspace-shell]]), so the hook measures the drag along the axis
+its caller names and the divider wears the matching resize cursor. It is one idea — a seam that can be moved —
+and one implementation; a second hook for "the same thing, but vertical" is how two seams end up clamping,
+persisting and resetting differently. Each axis keeps its own stored size, because a width is not a height.
+
 The session board's list ([[session-console]]) was the first pane on the mechanism. The session diff's
 changed-file panel ([[diff-document]]) is on it too, so a reader with deep paths widens the panel instead of
 reading clipped names. A future pane joins by mounting the same hook + divider, not by writing its own drag

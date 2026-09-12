@@ -273,12 +273,20 @@ such a document used to paint a second copy of the whole page — a second strip
 navigator, and both navigators folding together because they read one flag — which is three ways of saying
 the same defect: the second pane was rendering a PAGE where it should render a DOCUMENT.
 
+**A region sits BESIDE the first or UNDER it, and the verb names the side.** The tab menu offers both moves —
+split right, split down — and the window remembers which was used last, so the next split and the alt-click
+gesture land the same way. The labels name a DIRECTION rather than an axis on purpose: "horizontal" and
+"vertical" name opposite arrangements in an editor and in a terminal multiplexer, and a reader should not
+have to know which convention this window picked. The seam is the same mechanism on both axes
+([[resizable-panes]]) — the row turns into a column, the divider turns with it, and each axis keeps its own
+remembered size, so moving a document from beside to below never inherits a width as a height.
+
 **The held document is the working set's second position, not workspace state.** It lives with the working
 set ([[tab-strip]]'s held slot) because that is what it is: sending a tab right MOVES it out of the strip, so
 the window still says each document is in exactly one place, and the reader's way back is the region's own
 return control. Holding it here as a copied route is what let one document sit in the strip and in the second
-region at once. The window is still the thing that remembers there are two regions across a reload, and the
-held region's width is still a window preference.
+region at once. The window is still the thing that remembers there are two regions across a reload, and where that region
+sits and how large it is are still window preferences.
 
 **Each region answers context for its own document.** The dock a region draws describes the document that
 region holds — two spec nodes held side by side get two docks, each with its own node's issues and history —

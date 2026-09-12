@@ -56,7 +56,7 @@ const pickerOpened = await page.locator('.si-rp-fab[data-action="resource-picker
 if (pickerOpened) await page.keyboard.press('Escape')
 await page.locator('.tab[data-tab-key^="#/sessions/"]').first().click({ button: 'right' })
 const sessionTabMenu = await page.locator('[role="menu"]').last().locator('[role="menuitem"]').evaluateAll((els) => els.map((el) => el.textContent.trim())).catch(() => [])
-check('session tab context menu is the ordinary tab menu', JSON.stringify(sessionTabMenu) === JSON.stringify(['Close', 'Close others', 'Send to split pane']), sessionTabMenu)
+check('session tab context menu is the ordinary tab menu', JSON.stringify(sessionTabMenu) === JSON.stringify(['Close', 'Close others', 'Split right', 'Split down']), sessionTabMenu)
 await page.keyboard.press('Escape')
 await page.keyboard.press('Alt+I')
 const commandOpen = await page.locator('.si-command-layer').isVisible().catch(() => false)

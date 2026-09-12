@@ -80,8 +80,8 @@ list, so it draws the face a tab wears — kind icon, status mark, title — wit
 action column: that document's own registry actions ([[document-actions]], found at the address the region
 holds), and one control that returns the document to the strip. There is no second tab list anywhere in the
 window, because there is one working set and the strip is the row that shows it. The
-strip context menu provides close, close-others, and split through the workspace APIs, and it is the ONE menu
-a tab's right-click opens — for every kind of tab, session tabs included, in whichever strip draws it (the
+strip context menu provides close, close-others, and the two split moves — right and down ([[workspace-shell]])
+— through the workspace APIs, and it is the ONE menu a tab's right-click opens — for every kind of tab, session tabs included, in whichever strip draws it (the
 shell's, or the Sessions document's own column). A menu that depended on what the tab held or which strip drew
 it would make the same tab answer two ways. Session-specific lifecycle verbs belong to the session menu on the
 session's row, not to the strip.

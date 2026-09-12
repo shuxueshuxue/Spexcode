@@ -24,7 +24,7 @@ const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
-  assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
+  assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplitRight[\s\S]*tabs\.menuSplitDown/)
   assert.match(source, /onContextMenu=\{\(e\) => \{\s*if \(isClosing\) return\s*e\.preventDefault\(\)\s*setMenu\(\{ x: e\.clientX, y: e\.clientY, tab, key \}\)\s*\}\}/)
   // every tab gets the same tab menu; a session's lifecycle verbs stay on its row, never on the strip
   assert.doesNotMatch(source, /onSessionContextMenu/)
@@ -34,7 +34,10 @@ test('tab right-click opens the shared context menu instead of closing silently'
 test('tab menu actions are explicit and use the existing workspace APIs', () => {
   assert.match(source, /close\(menu\.tab\)/)
   assert.match(source, /closeOthers\(menu\.tab\)/)
-  assert.match(source, /hold\(menu\.tab\)/)
+  assert.match(source, /setHeldSide\(side\); hold\(menu\.tab\)/)
+  // the verb names the SIDE it puts the document on: "horizontal"/"vertical" name opposite things in an
+  // editor and in a terminal multiplexer, and the reader should not have to know which one this window meant
+  assert.match(source, /\['right', 'panel-right', 'tabs\.menuSplitRight'\], \['bottom', 'panel-bottom', 'tabs\.menuSplitDown'\]/)
   // the move is refused when it would empty the strip, and the verb says so instead of doing nothing
   assert.match(source, /disabled=\{tabs\.length < 2\}/)
   assert.match(source, /useEscLayer\(!!menu/)
@@ -252,9 +255,9 @@ test('the held slot is the working set\'s second position: a move, never a copy'
 })
 
 test('the frame is drawn once: a region holds a document, its band and its own context', () => {
-  assert.match(shell, /function DocumentRegion\(\{ primary = false, band, route, width = null, contextOpen, onToggleContext, children \}\)/)
+  assert.match(shell, /function DocumentRegion\(\{ primary = false, band, route, width = null, height = null, contextOpen, onToggleContext, children \}\)/)
   assert.match(shell, /<DocumentRegion primary route=\{\{ page, param, query \}\}/)
-  assert.match(shell, /<DocumentRegion route=\{held\} width=\{heldWidth\}/)
+  assert.match(shell, /<DocumentRegion route=\{held\} width=\{stacked \? null : heldWidth\} height=\{stacked \? heldHeight : null\}/)
   assert.match(shell, /<HeldBar specs=\{specs\} sessions=\{sessions\} tab=\{held\} onRelease=\{release\}/)
   // the held host draws the document and no frame chrome; the pool is the primary region's
   assert.match(shell, /<ViewHost page=\{held\.page\} param=\{held\.param\} query=\{held\.query\} inactive=\{inactive\} primary=\{false\} \/>/)
@@ -268,6 +271,12 @@ test('the frame is drawn once: a region holds a document, its band and its own c
   assert.match(source, /data-action="held-return"/)
   assert.match(css, /\.region \{[^}]*flex-direction: column;/s)
   assert.match(css, /\.region-body \{[^}]*display: flex;/s)
+  // both seams are one mechanism: the row stacks, the divider turns, and each axis keeps its own size
+  assert.match(css, /\.app-content-stacked \{ flex-direction: column; \}/)
+  assert.match(css, /\.content-divider-h \{ cursor: row-resize; \}/)
+  assert.match(shell, /const stacked = heldSide === 'bottom'/)
+  assert.match(shell, /useResizable\('spex\.splitHeight', 320, \{ min: 160, max: 1200, dir: -1, axis: 'y' \}\)/)
+  assert.match(workspace, /const HELD_SIDE_KEY = scopedKey\('spexcode\.heldSide'\)/)
   // the second region is not a second workspace: no second strip, and the retired copy-shaped chrome is gone
   assert.doesNotMatch(shell, /className="content-split"|className="content-second"|content-close/)
   assert.doesNotMatch(css, /\.content-split|\.content-second|\.content-close/)

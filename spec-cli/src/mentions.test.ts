@@ -108,3 +108,29 @@ test('stripRefSigil: only a FULL wrapper counts; a lone @ strips to empty (→ t
   assert.equal(stripRefSigil('[[x]]y'), '[[x]]y')   // not a pure wrapper — left alone
   assert.equal(stripRefSigil('@'), '')
 })
+
+// ---- quoted vs used: the grammar reads backticks the way the page does ----
+
+test('a directive QUOTED in prose is text — the sentence describing it can be delivered', () => {
+  // the failure this rule exists for: a task brief explaining the directive was rejected at create with
+  // `names no session: names`, because the parser read the sentence about the error as an instance of it.
+  const brief = '解析不到报 `session-create @parent: names no session: <sel>`。'
+  assert.deepEqual(parseParentDirective(brief), { selectors: [], text: brief }, 'quoted directive leaves the prose untouched')
+  assert.deepEqual(parseParentDirective('写成 ``@parent:x`` 这样').selectors, [], 'a double-backtick span quotes too')
+})
+
+test('a directive USED in prose still acts, before and after quoted text', () => {
+  assert.deepEqual(parseParentDirective('@parent:none top-level').selectors, ['none'])
+  assert.deepEqual(parseParentDirective('```\ncode\n```\n@parent:abc go').selectors, ['abc'],
+    'a closed fence quotes only itself')
+})
+
+test('@new inside a fence does not spawn: an issue body may show the action without taking it', () => {
+  assert.deepEqual(parseMentions('```\n@new do the thing\n```').sessions, [])
+  assert.ok(parseMentions('@new do the thing').sessions.includes('new'), 'plain prose still dispatches')
+})
+
+test('a node reference quoted as syntax is not a reference', () => {
+  assert.deepEqual(parseMentions('write it as `[[node-id]]`').nodes, [])
+  assert.ok(parseMentions('see [[mentions]]').nodes.includes('mentions'))
+})

@@ -2,7 +2,7 @@
 title: governed-cutover
 status: active
 hue: 280
-desc: The construction ledger for the Spex governed adopter cutover — what already runs on one database authority, what that landing never gated, and what the self-launch address seam still needs.
+desc: The construction ledger for the Spex governed adopter cutover — what already ran on one database authority before it was gated, the gates run after the fact, and the self-launch address seam that completes it.
 code:
   - docs/session-platform-m6-governed-cutover.md
 related:
@@ -20,7 +20,11 @@ landing honestly: the cutover the roadmap called M6 shipped as the production cu
 carried every governed session since, without a ledger of its own. A milestone that ran in production before it was
 gated is not undone by that order, but it is not closed by it either. The ledger therefore measures the landing after
 the fact — which legacy readers and writers are gone from source and from the live store, which fences were kept on
-purpose, which roots survive with no caller — and records the gates that never ran as open, not as passed.
+purpose, which roots survive with no caller — and runs the gates the landing skipped before it calls anything closed.
+The negative gate is its own node ([[governed-sabotage]]): the cut facilities planted back and poisoned, the real
+product run under a file-syscall tracer, the settled backend required to read none of them. Its first run found a
+way one stray unreadable legacy file could take the whole backend down, which is exactly what a gate that had never run
+could not have found.
 
 The second duty is direction. Self-launch reaches the message path through the protocol address it already owns, not
 through a governed record; giving it a record would make it governed, which the runtime composition forbids. The seam

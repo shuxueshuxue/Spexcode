@@ -5,7 +5,7 @@ import { CodeCopyContext } from './clipboard.js'
 // The only React entry to the prose token boundary. Consumers provide semantic handlers; they never
 // choose a parser or a rendering dialect beyond `softBreak`. `lineBase` is caller-owned provenance for
 // governed documents. A code block's copy control is not a consumer's choice: it comes from the root.
-export default function Prose({ children, className = '', lineBase = 0, softBreak, renderSpecRef, renderEvidence, renderTimeAnchor, renderFileRef }) {
+export default function Prose({ children, className = '', lineBase = 0, softBreak, renderSpecRef, renderEvidence, renderTimeAnchor, renderFileRef, renderWidgetRef }) {
   const CodeCopy = useContext(CodeCopyContext)
   const tokens = useMemo(() => {
     try { return parseProseTokens(children) } catch { return null }
@@ -34,6 +34,7 @@ export default function Prose({ children, className = '', lineBase = 0, softBrea
     renderEvidence: keyed(renderEvidence),
     renderTimeAnchor: keyed(renderTimeAnchor),
     renderFileRef: keyed(renderFileRef),
+    renderWidgetRef: keyed(renderWidgetRef),
     renderCodeCopy: CodeCopy ? (text) => createElement(CodeCopy, { text }) : undefined,
   }) : createElement('p', null, children == null ? '' : String(children))
   return createElement('div', { className }, content)

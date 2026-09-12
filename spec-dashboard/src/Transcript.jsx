@@ -9,6 +9,7 @@ import { readerIsSelecting } from './selectionController.js'
 import { CopyButton } from './CopyButton.jsx'
 import { Icon } from './icons.jsx'
 import { SessionFilesContext, fileRefAddress, filePreviewUrl, resolveFileRef } from './fileRefs.js'
+import { WidgetRef } from './SessionWidget.jsx'
 import { addressHash } from './address.js'
 
 // THE DASHBOARD'S BINDING of the transcript grammar. The components — the person quoted, the agent as the
@@ -43,6 +44,7 @@ function FileRef({ name, provenance }) {
 export function TimelineRichText({ children, className = '' }) {
   return <RichText className={className} softBreak="break"
     renderFileRef={(name, token, provenance) => <FileRef name={name} provenance={provenance} />}
+    renderWidgetRef={(name) => <WidgetRef name={name} />}
     renderSpecRef={(id, token, provenance) => {
       const href = routeHash('spec', id)
       return <a className="doc-link" href={href} {...provenance} onClick={(event) => newTabAnchor(event, href)}>{id}</a>

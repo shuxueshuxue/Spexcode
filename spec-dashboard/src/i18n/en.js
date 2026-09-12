@@ -924,4 +924,14 @@ export default {
     missing: 'not among this session’s posted files',
     ambiguous: ({ count }) => `matches ${count} posted files — name more of its path`,
   },
+  widget: {
+    missing: 'this session has no widget by that name',
+    olderMention: 'an earlier mention — the live one is further down',
+    pending: 'not sent yet',
+    send: 'send',
+    asText: 'open as text',
+    discard: 'discard',
+    bodyMissing: ({ reason }) => `widget document unavailable (${reason})`,
+    draftLabel: ({ name }) => `${name} · not sent`,
+  },
 }

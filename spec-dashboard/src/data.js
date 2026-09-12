@@ -609,10 +609,12 @@ export async function sendSessionText(id, text, { replyVia } = {}) {
 // Plain fetch, not apiFetch: the deadline's abort must surface at once as "unconfirmed", never be retried.
 // `replyVia:'note'` marks a terminal-free host (the Conversation footer): the server appends the note-reply
 // insert to the delivery, as it does for a text send.
-export async function sendSessionCommand(id, text, { deliveryId, signal, replyVia } = {}) {
+export async function sendSessionCommand(id, text, { deliveryId, signal, replyVia, widgets } = {}) {
   const res = await fetch(sessionUrl(id, 'input'), {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: 'command', text, ...(deliveryId ? { deliveryId } : {}), ...(replyVia === 'note' ? { replyVia: 'note' } : {}) }),
+    // `widgets` rides the send because a widget's state and the message are one gesture ([[widgets]]):
+    // the message is the event, the state the value it leaves behind.
+    body: JSON.stringify({ kind: 'command', text, ...(deliveryId ? { deliveryId } : {}), ...(replyVia === 'note' ? { replyVia: 'note' } : {}), ...(widgets?.length ? { widgets } : {}) }),
     signal,
   })
   const outcome = await res.json().catch(() => null)

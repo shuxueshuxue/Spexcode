@@ -116,6 +116,23 @@ const semanticPlugin = (md) => {
     return true
   })
 
+  // runs ahead of the node reference for the same reason as the file reference: `widget:<name>` would
+  // otherwise read as a node id. A widget name is the narrow ascii grammar the CLI accepts, so an
+  // unparseable one stays literal text rather than becoming an unresolvable door.
+  md.inline.ruler.before('prose_spec_ref', 'prose_widget_ref', (state, silent) => {
+    if (!state.src.startsWith('[[widget:', state.pos)) return false
+    const end = state.src.indexOf(']]', state.pos + 9)
+    const name = end < 0 ? '' : state.src.slice(state.pos + 9, end).trim()
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) return false
+    if (!silent) {
+      const token = state.push('prose_widget_ref', 'div', 0)
+      token.content = name
+      token.meta = { name }
+    }
+    state.pos = end + 2
+    return true
+  })
+
   // runs ahead of the node reference, which would otherwise read `file:<name>` as a node id
   md.inline.ruler.before('prose_spec_ref', 'prose_file_ref', (state, silent) => {
     if (!state.src.startsWith('[[file:', state.pos)) return false
@@ -269,6 +286,9 @@ const renderInline = (h, children = [], options) => {
     else if (token.type === 'prose_spec_ref') {
       const value = options.renderSpecRef?.(token.meta.id, token, attrs(token, options.lineBase))
       current().push(value ?? h('span', { ...attrs(token, options.lineBase), className: 'doc-ref', 'data-spec-id': token.meta.id }, token.meta.id))
+    } else if (token.type === 'prose_widget_ref') {
+      const value = options.renderWidgetRef?.(token.meta.name, token, attrs(token, options.lineBase))
+      current().push(value ?? h('span', { ...attrs(token, options.lineBase), className: 'doc-widget-ref', 'data-widget-ref': token.meta.name }, token.meta.name))
     } else if (token.type === 'prose_file_ref') {
       const value = options.renderFileRef?.(token.meta.name, token, attrs(token, options.lineBase))
       current().push(value ?? h('span', { ...attrs(token, options.lineBase), className: 'doc-file-ref', 'data-file-ref': token.meta.name }, token.meta.name))
@@ -318,6 +338,7 @@ const blockElement = (h, token, children, options) => {
  * where a newline the writer typed is part of the reply), anything else reflows it into a space (documents).
  * `renderCodeCopy(source, token)` supplies a code block's copy control; without it the block has none.
  * `renderFileRef(name, token, provenance)` is the door a `[[file:<name>]]` opens; without it the name is text.
+ * `renderWidgetRef(name, token, provenance)` draws a `[[widget:<name>]]` in place; without it the name is text.
  */
 export function renderProseTokens(tokens, options = {}) {
   const h = options.h

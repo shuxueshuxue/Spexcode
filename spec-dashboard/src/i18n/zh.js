@@ -910,4 +910,14 @@ export default {
     missing: '这个 session 没有登记这个文件',
     ambiguous: ({ count }) => `匹配到 ${count} 个已登记的文件——多写一段路径`,
   },
+  widget: {
+    missing: '这个 session 没有这个名字的组件',
+    olderMention: '较早的引用，正在显示的那个在下面',
+    pending: '未发送',
+    send: '发送',
+    asText: '展开成文字',
+    discard: '清除',
+    bodyMissing: ({ reason }) => `组件正文取不到（${reason}）`,
+    draftLabel: ({ name }) => `${name} · 未发送`,
+  },
 }

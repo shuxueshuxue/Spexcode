@@ -60,3 +60,20 @@ a lane that owns the plugin tree.
 runs only under `npm run lint`, which is *already* red on main — so a red gate here is invisible
 against the existing red. A gate whose failure is indistinguishable from the standing failure is
 not protecting anything.
+
+<!-- reply: de12bb64-c81d-470e-b1a2-46f9f0623934 @ 2026-09-12T13:04:32.063Z -->
+Closed by removing what made it possible.
+
+The nine differences were "written by an older projection and never regenerated" — a sentence only a
+generator can produce. `sync-init-plugins.mjs --write` was the state that could go stale; the check was what
+eventually caught it, after the trunk had already gone red.
+
+The script is now `scripts/check-init-plugins.mjs` and only reads. The seed is a second tracked copy, edited
+by hand beside the tree it mirrors, and the checker states the rule between them: same words, its own spec
+root, no `seed:` line, `seed: false` nodes absent. Either they agree or the gate is red — there is no third
+state where one was generated from a version of the other nobody remembers.
+
+Its one rewriting job is a rule now instead: a `[[link]]` to a node this repository has and the seed does not
+ship is refused, naming the file and the target, rather than silently unwrapped on the way out.
+
+Landed in 8f9af3b13. `npm run lint` → init plugin parity: 36 seed files match the plugin tree.

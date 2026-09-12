@@ -129,7 +129,7 @@ function templateSessions(nativeChosen: string[]): Record<string, any> | undefin
 // `spex init --pure`: the spec skeleton and nothing else — the root node from templates/pure and a config
 // holding only the template's lint section. No .plugins, no git hooks, no harness artifacts, no global store:
 // every byte it writes is under .spec. A tree that already exists is left exactly as it is.
-function pureInit(targetDir: string): void {
+function pureInit(targetDir: string, title?: string): void {
   const specDest = join(targetDir, '.spec')
   const cfgDest = join(specDest, 'spexcode.json')
   console.log(`spex init --pure → ${targetDir}`)
@@ -138,23 +138,25 @@ function pureInit(targetDir: string): void {
   } else {
     const planted = copyTreeNoClobber(join(TEMPLATES, 'pure'), specDest, targetDir)
     if (!existsSync(cfgDest)) {
-      const lint = (readJsonConfig(templateConfigPath) as Record<string, unknown> | null)?.lint
-      writeFileSync(cfgDest, JSON.stringify({ lint }, null, 2) + '\n')
+      // No governedRoots. A skeleton governs nothing YET by definition, so claiming the whole tree would ask
+      // coverage a question whose answer is every file in the repository — thousands of warnings that say only
+      // "this tree is young". Naming roots is the deliberate act that turns coverage on.
+      writeFileSync(cfgDest, JSON.stringify(title ? { dashboard: { title } } : {}, null, 2) + '\n')
       planted.push(relative(targetDir, cfgDest))
     }
     console.log(`✓ planted ${planted.join(', ')} — and nothing else: no .plugins, no git hooks, no agent config, no file outside .spec`)
   }
-  const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
   console.log(`
 Next steps:
   1. .spec/ is project source of truth: add and commit it (\`spex spec lint\` reports an untracked tree).
   2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
-  3. lint.governedRoots in .spec/spexcode.json (currently ${roots}) names what \`spex spec lint\` governs.
+  3. Coverage is off: name the directories whose files each want a spec in lint.governedRoots
+     (.spec/spexcode.json) when you want it. "." is the whole project.
   4. When you want SpexCode's workflow too (git hooks, sessions, agent wiring), run \`spex init --harness <id>\`:
      it adopts this tree as it is and adds the machinery beside it.`)
 }
 
-export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string, pure = false): Promise<void> {
+export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string, pure = false, title?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
 
   // --pure plants the spec skeleton and nothing else, so the flags that choose wiring have nothing to act on.
@@ -184,7 +186,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.error(`spex init: ${targetDir} is not a git repository. SpexCode is git-backed (git is the version database; the hooks live in .git). Run \`git init\` there first, then \`spex init\`.`)
     process.exit(1)
   }
-  if (pure) return pureInit(targetDir)
+  if (pure) return pureInit(targetDir, title)
 
   // the harness DELIVERY TARGET set ([[harness-select]]) is a REQUIRED, explicit choice — `--harness <ids>`
   // stamps it into .spec/spexcode.json; absent the flag, a pre-existing explicit `harnesses` field IS the choice.
@@ -282,13 +284,16 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     if (seeded) cfg.sessions = { ...(cfg.sessions ?? {}), ...seeded }
     const filledLint = !cfg.lint
     if (filledLint) cfg.lint = (readJsonConfig(templateConfigPath) as Record<string, any> | null)?.lint
-    if (flagRaw || stampedBranch || seeded || filledLint) {
+    const stampedTitle = !!title && !(cfg.dashboard as Record<string, unknown> | undefined)?.title
+    if (stampedTitle) cfg.dashboard = { ...(cfg.dashboard ?? {}), title }
+    if (flagRaw || stampedBranch || seeded || filledLint || stampedTitle) {
       writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
       console.log(`✓ stamped ${[
         flagRaw ? `"harnesses": ${JSON.stringify(flagRaw)}` : '',
         stampedBranch ? `"mainBranch": ${JSON.stringify(cfg.mainBranch)}` : '',
         seeded ? `launchers ${JSON.stringify(Object.keys(seeded.launchers ?? {}))} (default ${JSON.stringify(seeded.defaultLauncher)})` : '',
         filledLint ? `lint.governedRoots ${JSON.stringify(cfg.lint?.governedRoots ?? null)}` : '',
+        stampedTitle ? `"dashboard.title": ${JSON.stringify(title)}` : '',
       ].filter(Boolean).join(' and ')} into the existing .spec/spexcode.json (other fields untouched)`)
     } else {
       console.warn(`• .spec/spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
@@ -298,6 +303,9 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     cfg.harnesses = chosenHarnesses
     cfg.mainBranch = adoptionMainBranch(targetDir)
     cfg.sessions = templateSessions(nativeChosen)
+    // The name every page and board shows. Without it they fall back to the directory name, which is the
+    // project's name only by luck — a scratch clone called `repo` publishes a page titled that.
+    if (title) cfg.dashboard = { ...(cfg.dashboard ?? {}), title }
     writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
     const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
     console.log(`✓ planted .spec/spexcode.json — mainBranch ${JSON.stringify(cfg.mainBranch)}, harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)

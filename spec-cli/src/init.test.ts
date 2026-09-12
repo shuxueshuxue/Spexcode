@@ -428,7 +428,14 @@ test('--pure plants the spec skeleton and nothing else: no .plugins, nothing in 
   const out = spex('init', '.', '--pure')
 
   assert.deepEqual(filesUnder(proj), ['.spec/project/spec.md', '.spec/spexcode.json', 'README.md'], 'exactly the root node and the config')
-  assert.deepEqual(JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8')), { lint: TEMPLATE_LINT }, 'the config holds only the lint section')
+  // A skeleton names no governedRoots: it governs nothing yet, and claiming the whole tree would ask coverage
+  // a question whose answer is every file in the repository. Turning coverage on is a later, deliberate act.
+  assert.deepEqual(JSON.parse(readFileSync(join(proj, '.spec/spexcode.json'), 'utf8')), {}, 'the config claims nothing')
+
+  const titled = freshRepo()
+  titled.spex('init', '.', '--pure', '--title', 'Rocket Delta')
+  assert.deepEqual(JSON.parse(readFileSync(join(titled.proj, '.spec/spexcode.json'), 'utf8')), { dashboard: { title: 'Rocket Delta' } },
+    '--title is the one thing a skeleton config carries, so the page it publishes is not named after its directory')
   assert.equal(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), readFileSync(PURE_ROOT, 'utf8'), 'the root comes from the pure template')
   assert.doesNotMatch(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), /\.plugins/, 'the pure root does not describe machinery it lacks')
   assert.deepEqual(gitFootprint(proj), before, 'no hook, no filter, no exclude or attributes entry, no .git/spexcode')

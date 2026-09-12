@@ -3157,21 +3157,26 @@ body.is-session-dragging .si-pill.archive:hover {
    and by a slow sweep of light across them: the page's one moving thing while the agent works. The words
    count up every second between polls (TimelineChat anchors the clock to the server's Date header), so the
    number and the light agree that something is happening now. Reduced motion keeps the green and drops the sweep. */
-/* The sweep is the ordinary one every component library ships (ai-elements' TextShimmer, which z-code uses,
-   is the same three lines): a gradient wider than the line, clipped to the glyphs, moved across them. Its one
-   expense is that `background-position` is a paint property, so each change re-rasterizes the words — and a
-   browser will happily do that sixty times a second. It does not need to: over 2.4 seconds the light advances
-   a step at a time, twelve of them, which reads as the same sweep and asks for a twelfth of the repaints
-   (measured on a live conversation: 16.8% of a core against 6.7%, all processes). */
+/* @@@sweep-phase-is-a-number - the twelve positions below are the ordinary text shimmer every component
+   library ships (ai-elements' TextShimmer, which z-code uses, is the same three lines): a gradient wider
+   than the line, clipped to the glyphs, moved across them. What is not ordinary is who counts the steps.
+   `background-position` is a paint input, so only the main thread can compute it, and a CSS animation asks
+   the main thread for a value EVERY VSYNC — `steps(12)` discretises the OUTPUT, not the sampling. Measured
+   on a live conversation: 301 style recalculations, 301 prepaints, 301 layerizations and 301 commits in five
+   seconds to produce 25 repaints, each pass crossing the whole document's 897 clipping and 194 effect nodes.
+   That is why the same three lines that cost 1.5% of a core on a bare page cost 4.8% here — the technique is
+   fine, the sampling rate is not. So the phase is a number this stylesheet reads and the live seam's own
+   clock writes five times a second ([[conversation]]): same twelve positions, byte for byte, 1.3% of a core.
+   The spinner beside it needs none of this because `transform` is the compositor's to compute and never
+   wakes this thread — an effect is free exactly when the compositor can run it alone. */
 .m-seam-row.is-live .m-seam-lead {
   color: var(--green);
   background: linear-gradient(90deg, var(--green) 0 38%, color-mix(in srgb, var(--green) 40%, var(--ink2)) 50%, var(--green) 62% 100%);
-  background-size: 240% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  animation: m-seam-shimmer 2.4s steps(12) infinite;
+  background-size: 240% 100%; background-position: calc(120% - var(--sweep, 0) * 20%) 0;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
-@keyframes m-seam-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .m-seam-row.is-live .m-seam-lead { animation: none; background: none; -webkit-text-fill-color: currentColor; }
+  .m-seam-row.is-live .m-seam-lead { background: none; -webkit-text-fill-color: currentColor; }
 }
 /* one quiet line, no rule across the page: the work between two messages is a footnote to the exchange,
    said in the caption voice and lit only under the pointer, the way a reading surface folds its thinking. */

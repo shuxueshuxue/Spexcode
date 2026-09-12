@@ -152,8 +152,14 @@
 .tx-live { margin-top: var(--tx-space-2); min-width: 0; }
 .tx-live .tx-say-text { animation: tx-rise var(--tx-dur-rise) ease; }
 @keyframes tx-rise { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+/* @@@caret-blinks-on-opacity - the mark blinks for as long as a call is streaming, which is most of the time
+   anyone is watching, so which property carries it is not a detail. `visibility` is a paint input: only the
+   main thread can compute it, and a CSS animation asks the main thread for a value every vsync to draw two a
+   second, walking the document each time — measured 1.65% of a core. `opacity` is the compositor's, this
+   thread is never woken, and the same blink costs 0.02%. Both values are fully on or fully off, so the mark
+   is the same mark. */
 .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after { content: '▍'; margin-left: 2px; color: var(--tx-muted); animation: tx-caret 1s steps(2, start) infinite; }
-@keyframes tx-caret { to { visibility: hidden; } }
+@keyframes tx-caret { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .tx-live .tx-say-text, .tx-live.is-speaking > .tx-say:last-child .tx-say-text > :first-child > :last-child::after, .tx-spin, .tx-caret,
   .tx-fold, .tx-fold.is-opening, .tx-fold.is-closing, .tx-work.is-folding > .tx-work-row { animation: none; transition: none; }

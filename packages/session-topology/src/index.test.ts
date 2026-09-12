@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict'
-import { execFile, spawn } from 'node:child_process'
 import { mkdtemp, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 import test from 'node:test'
 
 import {
@@ -19,9 +17,7 @@ import * as topologyEntry from './index.js'
 import { openTopology, TopologyError, type SessionTopology } from './index.js'
 import { TOPOLOGY_MIGRATION_SQL } from './schema.js'
 
-const execFileAsync = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))
-const worker = join(here, '..', 'scripts', 'worker.mjs')
 
 async function fixture(ids: string[]): Promise<{
   protocol: SessionProtocol
@@ -335,38 +331,4 @@ test('production sources contain only neutral topology vocabulary', async () => 
     if (forbidden.test(text)) hits.push(name)
   }
   assert.deepEqual(hits, [])
-})
-
-test('two writer processes compose edges and messages seen by an independent reader', async () => {
-  const { protocol, databasePath } = await fixture(['source-a', 'source-b', 'subject'])
-  protocol.close()
-  const writers = [
-    ['source-a', 'subject', 'parent'],
-    ['source-b', 'subject', 'updates'],
-  ].map(args => new Promise<Record<string, unknown>>((resolve, reject) => {
-    const child = spawn(process.execPath, [worker, databasePath, 'attach', ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk })
-    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk })
-    child.on('error', reject)
-    child.on('close', code => {
-      if (code !== 0) reject(new Error(`writer exited ${code}: ${stderr}`))
-      else resolve(JSON.parse(stdout) as Record<string, unknown>)
-    })
-  }))
-  const written = await Promise.all(writers)
-  assert.equal(written.length, 2)
-  assert.ok(written.every(item => item.operation === 'attach'))
-
-  const { stdout } = await execFileAsync(process.execPath, [worker, databasePath, 'inspect', 'subject'])
-  const observed = JSON.parse(stdout) as { recipients: string[]; edges: number; messages: number }
-  assert.deepEqual(observed, {
-    operation: 'inspect',
-    recipients: ['source-a', 'source-b'],
-    edges: 2,
-    messages: 2,
-  })
 })

@@ -3040,7 +3040,13 @@ body.is-session-dragging .si-pill.archive:hover {
 /* THE RULER ([[conversation]]). Ordinary rows are a gutter and a cell: time lives in the gutter, tabular;
    user quotes reverse the two columns, while status/event times stay inline at the content start. */
 .m-ev, .m-day { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: 16px; }
-.m-ev { padding: var(--space-5) 0; }
+/* A CONVERSATION IS NOT ONE PAINTING. Every row is re-recorded whenever anything in the timeline repaints —
+   the live sweep, a streamed line, a hover — because they share one paint layer and that layer holds the whole
+   window. Measured with one shimmering line: 706ms of paint recording in eight seconds against 99ms for the
+   same CSS on an empty page, a sevenfold tax for owning a history. Containment scopes the recording to the row
+   that actually changed and brings it to 207ms, WITHOUT skipping layout — the geometry every Range in this
+   conversation is resolved against stays real, which is why `content-visibility` is refused right below. */
+.m-ev { padding: var(--space-5) 0; contain: content; }
 /* @@@no-content-visibility - skipping off-screen row layout looks free here and is not. This conversation
    selects across rows with Ranges it resolves by geometry (::highlight(timeline-sel), richTextFromRange),
    and a skipped row has no geometry to give them; the estimated height it reports would also be the height

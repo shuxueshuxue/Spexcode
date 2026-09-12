@@ -123,6 +123,14 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
         res.end(JSON.stringify({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', parent: null, title: 'peer launched' }))
         return
       }
+      if (req.url === `/s/${SESSION}/api/sessions/${SESSION}/files`) { res.end(JSON.stringify({ files: ['/far/evidence/report.html'] })); return }
+      if (req.url?.startsWith(`/s/${SESSION}/api/sessions/${SESSION}/files/download?`)) {
+        const wanted = new URL(req.url, 'http://peer').searchParams.get('path')
+        if (wanted !== '/far/evidence/report.html') { res.statusCode = 403; res.end(JSON.stringify({ error: 'that path was not posted by this session' })); return }
+        res.setHeader('content-type', 'text/html; charset=utf-8')
+        res.end('<h1>far bytes</h1>')
+        return
+      }
       if (req.method === 'GET') { res.end(JSON.stringify({ id: SESSION, title: 'remote detail' })); return }
       res.end(JSON.stringify({ ok: true }))
     })
@@ -178,6 +186,24 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
     assert.equal(missingTunnel.code, 1)
     assert.match(missingTunnel.stderr, /no communication tunnel/)
     assert.equal(received.length, 5, 'a missing peer cannot fall back to a local session create')
+    // a parent on THIS machine reads a child's handoff on the far one: the list and the bytes ride the far
+    // backend's own files routes through the same forward — the path stays the far machine's, the bytes travel
+    const farList = await runCli(['session', 'files', 'ls', '--ssh', 'peer-fixture', SESSION], env)
+    assert.deepEqual({ code: farList.code, stdout: farList.stdout }, { code: 0, stdout: '/far/evidence/report.html\n' })
+    const farBytes = await runCli(['session', 'files', 'get', '--ssh', 'peer-fixture', SESSION, 'report.html'], env)
+    assert.deepEqual({ code: farBytes.code, stdout: farBytes.stdout }, { code: 0, stdout: '<h1>far bytes</h1>' })
+    const farMissing = await runCli(['session', 'files', 'get', '--ssh', 'peer-fixture', SESSION, 'other.html'], env)
+    assert.equal(farMissing.code, 2)
+    assert.match(farMissing.stderr, /no posted file named "other.html"/)
+    const farShort = await runCli(['session', 'files', 'ls', '--ssh', 'peer-fixture', SESSION.slice(0, 8)], env)
+    assert.equal(farShort.code, 2)
+    assert.match(farShort.stderr, /--ssh requires a full session id, not a selector/)
+    assert.deepEqual(received.slice(5).map((r) => (r as { path: string }).path), [
+      `/s/${SESSION}/api/sessions/${SESSION}/files`,
+      `/s/${SESSION}/api/sessions/${SESSION}/files`,
+      `/s/${SESSION}/api/sessions/${SESSION}/files/download?path=${encodeURIComponent('/far/evidence/report.html')}`,
+      `/s/${SESSION}/api/sessions/${SESSION}/files`,
+    ])
     const absent = await runCli(['peer', 'disconnect', 'absent-peer'], env)
     assert.equal(absent.code, 1)
     assert.match(absent.stderr, /no communication tunnel/)

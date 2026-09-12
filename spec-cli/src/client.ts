@@ -455,6 +455,21 @@ export async function clientSendRawKeys(id: string, keys: string[]): Promise<boo
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+// A session's posted file list and one posted file's bytes ([[files]]), read across a machine peer. Both are the
+// dashboard's own routes addressed by /s/<session>: the far backend checks list membership, so the bytes a peer can
+// read are exactly the ones its human could download. The path string stays host-local; the bytes travel.
+export async function clientSessionFilesThroughPeer(sshAddress: string, id: string): Promise<string[]> {
+  const r = await peerFetch(sshAddress, id, `/api/sessions/${seg(id)}/files`)
+  if (!r.ok) throw new BackendError(`remote backend refused to list files of ${id}: ${await r.text()}`, r.status)
+  return (await r.json() as { files: string[] }).files
+}
+
+export async function clientSessionFileThroughPeer(sshAddress: string, id: string, path: string): Promise<Uint8Array> {
+  const r = await peerFetch(sshAddress, id, `/api/sessions/${seg(id)}/files/download?path=${encodeURIComponent(path)}`)
+  if (!r.ok) throw new BackendError(`remote backend refused ${path} of ${id}: ${await r.text()}`, r.status)
+  return new Uint8Array(await r.arrayBuffer())
+}
+
 // GET /api/sessions/:id — the session RECORD detail (`spex session show`): the board row plus the full
 // originating prompt. 404 → no such session.
 export type ShowResult = { ok: true; session: Session & { prompt: string | null } } | { ok: false; status: number }

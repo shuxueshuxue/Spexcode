@@ -174,6 +174,25 @@ test('offline and archive headers own the disclosure target without nested contr
   assert.doesNotMatch(source, /si-zone-need[^\n]*onClick|si-zone-run[^\n]*onClick/)
 })
 
+// THE PHONE LIST OBEYS THE SAME DISCLOSURE RULE, and this is the only place that says so now. The live-board
+// e2e that used to walk both lists in one flow was retired (it could not run without a board somebody was
+// really working in, so it silently went stale). What it uniquely covered is the structural half, and the
+// structural half is checkable here: one shared FoldPod is the disclosure control on BOTH surfaces, it is the
+// row's SIBLING rather than a button nested inside the row button, and the row itself carries no
+// `aria-expanded` — so opening a session can never be mistaken for unfolding it.
+test('the phone list discloses through the same shared pod, beside the row and never inside it', () => {
+  const mobile = readFileSync(new URL('./MobileApp.jsx', import.meta.url), 'utf8')
+  // one control, imported rather than re-implemented per surface
+  assert.match(mobile, /FoldPod/)
+  assert.match(sessionWindow, /export function FoldPod\(\{ expanded, rollup, kin, onToggle, inert = false \}\)/)
+  assert.match(sessionWindow, /aria-expanded=\{expanded\}/)
+  // the pod is the row's sibling: row button closes, THEN the pod
+  assert.match(mobile, /<\/button>\n\s*\{it\.expandable && <FoldPod expanded=\{it\.expanded\}[\s\S]{0,120}onToggle=\{\(\) => toggle\(s\.id\)\} \/>\}/)
+  // and the row that OPENS a session says nothing about folding
+  assert.doesNotMatch(mobile, /className="m-sess-row"[^>]*aria-expanded/)
+  assert.match(mobile, /<button type="button" className="m-sess-row" onClick=\{\(\) => setOpenId\(s\.id\)\}>/)
+})
+
 test('the navigator owns the shared keyboard walk and inert chrome boundary', () => {
   assert.match(forest, /import \{ useKeyboardScope \} from '\.\/KeyboardService\.jsx'/)
   assert.match(forest, /import \{ resolveSessionShortcut \} from '\.\/sessionShortcuts\.js'/)

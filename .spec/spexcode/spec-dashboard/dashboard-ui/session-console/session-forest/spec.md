@@ -10,7 +10,6 @@ related:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/sessionListState.js
   - spec-dashboard/src/session.js
-  - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/session-archive-zone.e2e.mjs
   - spec-dashboard/test/session-shortcuts.e2e.mjs

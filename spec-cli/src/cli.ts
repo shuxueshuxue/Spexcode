@@ -423,13 +423,15 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
 }
 
 // A send target is a governed session by selector, OR a registered address with no record at all — a self-launched
-// harness ([[self-launch-entry]]) — which only a FULL id can name, and which the local store answers for directly.
+// harness ([[self-launch-entry]]). Such an address is named EXACTLY (a harness's native id is whatever shape that harness
+// mints — a UUID for Claude and Codex, not necessarily for others), and only consulted after governed resolution found
+// nothing, so a branch name or id prefix can never be mistaken for one.
 async function resolveSendTarget(selector: string): Promise<string> {
   if (!selector) { console.error('spex: missing session selector (id | id-prefix | branch | . for self)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
   const r = await resolveClientSession(selector)
   if ('ok' in r) return r.ok.id
-  if ('none' in r && FULL_SESSION_ID.test(selector)) {
+  if ('none' in r) {
     const { configuredSessionApplication } = await import('./session-application.js')
     const address = configuredSessionApplication().readAddress(selector)
     if (address && address.retiredAtMs === null) return selector

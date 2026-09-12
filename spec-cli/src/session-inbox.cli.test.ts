@@ -158,5 +158,11 @@ test('send to a registered recordless address with no backend queues locally; an
     const refused = run(['send', STRANGER, 'nobody home'], { ...f.env, SPEXCODE_SESSION_ID: '' })
     assert.notEqual(refused.code, 0)
     assert.equal(f.app.readAddress(STRANGER), null, 'a refused send minted no address')
+    // a native id is whatever shape its harness mints; an exact registered address is accepted whatever it looks like
+    const odd = 'pi-thread_260912-2359'
+    f.app.protocol.initialize(odd)
+    const oddSend = run(['send', odd, 'to an odd-shaped address'], { ...f.env, SPEXCODE_SESSION_ID: '' })
+    assert.equal(oddSend.code, 0, oddSend.stderr)
+    assert.equal(JSON.parse(run(['dequeue', '--session', odd, '--json'], f.env).stdout).text, 'to an odd-shaped address')
   } finally { f.app.close(); rmSync(f.home, { recursive: true, force: true }) }
 })

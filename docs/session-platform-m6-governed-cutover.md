@@ -158,6 +158,13 @@ production-cutin spec 说残留吸收"runs the same migration entry point"，所
 | 裸地址 producer | `sessions.ts` `sendText`；`cli.ts` `resolveSendTarget` | 同上第 5 条 + YATU |
 | **顺手修的真缺陷** | `spec-cli/bin/spex.mjs` 启动器只镜像退出码、不转发信号：`kill <spex-pid>` 会把任何长跑动词的真实进程孤儿化（YATU 第一次跑到 stream 那一步就超时——被杀的是 launcher，`stream-dequeue` 还在读队列） | 现在转发 SIGINT/SIGTERM/SIGHUP 并按子进程方式退出；`launcher-midmerge.test.ts` 新增一条实测；节点 [[merge-tooling-resilience]] 正文补一段 |
 
+**活部署上的产品级证明（落地后，main `e904c1f96`，backend 子进程 23:32:30 重载）**：用主检出的 `spex` 走真实 `dispatch.sh`
+给一个 Claude 形状的原生 id 发 `SessionStart` → 活库出现地址、无 application 行；plain shell（无会话身份，默认 API 即活着的
+`:8787`）`spex session send <id> …` → backend 侧 `sendText` 的裸地址分支回 `sent`；以该 id 为 `CLAUDE_CODE_SESSION_ID`
+跑 `spex session dequeue --json` → 取到同一条。第一次用非 UUID 形状的 id 试时登记成功但 `send` 答 "no such session"——
+落地版 `resolveSendTarget` 只对 UUID 形状查本地地址；随即放宽为"governed 解析落空后，任何**精确**登记过的地址都接受"
+（原生 id 是各 harness 自己铸的形状），测试加了一个非 UUID 形状的用例。活库残留两个测试地址（见证据 `live-proof-2026-09-12.txt`）。
+
 **一条对 09-02 提交的更正**：`0cc9813ad` 声称给 `spex session send` 加了"够不到 backend 时退到本地 enqueue"。本次量到：
 仓库里没有任何测试走过那条分支；而且它依赖 `backendConnectionRefused` 在错误链里看到 `ECONNREFUSED`，我第一版测试用
 `127.0.0.1:9` 得到的是 undici 的 `bad port` 错误，分支根本不进。分支本身是对的，但"已交付"在 09-12 之前没有测量支撑。

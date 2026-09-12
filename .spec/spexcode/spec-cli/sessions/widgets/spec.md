@@ -15,9 +15,17 @@ That is the whole model, and every rule below follows from it.
 
 ## one name, one current version
 
+What the agent authors is one ordinary HTML file: a complete, self-contained document, written wherever the
+session keeps its scratch work, rewritten in place whenever the picture changes. Nothing about that file is
+special until it is put, and its path is not what is remembered.
+
 `spex session widget put <name> <path>` reads the file's bytes, stores them in the repository's
 content-addressed store ([[evidence-store]]), and points the name at that hash. Putting the same name
-again is an update: a new hash, the same name. The name is the identity a human and a rule can talk
+again is an update: a new hash, the same name. The session owns one `widgets.json` beside its `runtime.json`,
+the way it owns [[files]]' list, and that file is the whole durable index: each name maps to the body's hash
+and to the current state, the state inline because it is small and only its latest value is meant to survive.
+The document a browser receives exists only at render time — the body's bytes with the host's theme, the
+session's identity, the state and the one bridge function injected into it — and is never a file on disk. The name is the identity a human and a rule can talk
 about; the hash is what any reader actually renders, so an older reference keeps showing what it showed
 when it was written even after the agent has moved on.
 

@@ -91,12 +91,22 @@ itself is watched: switching theme redraws every open widget in the new palette 
 island in the old one.
 
 Being same-origin is also what keeps the mechanism small. The host does not need a message protocol to do
-its half of the work: it writes the dashboard's current theme tokens into the document, measures the
-document's own height to size the frame, and installs the one function below directly on its window. A
+its half of the work: it writes the dashboard's current theme tokens into the document, installs the one
+function below directly on its window, and has the document report its own height by calling back. A
 postMessage vocabulary would buy nothing here and would have to be versioned forever.
 
-The host sizes the frame to the content up to a bound, and scrolls beyond it, so a widget that grows without
-limit cannot push the conversation off the screen.
+THE HEIGHT IS REPORTED, NOT MEASURED FROM OUTSIDE, and that is a rule about lifetime rather than taste.
+Same-origin makes the outside version look free — the host can observe the frame's own body in one line and
+the widget needs no cooperation at all — and an observer registered across a document boundary makes BOTH
+documents run their full rendering lifecycle every vsync for as long as it is connected, whether or not
+anything ever resizes; one that outlives the document it watches goes on doing that forever. Measured on a
+live conversation carrying two widgets, with two such observers left behind on documents no frame owned any
+more: sixty style recalculations and sixty commits a second for a height that never changed, 7.4% of a core
+against 3.2% with them disconnected. The observer therefore belongs to the document it observes, where it
+is destroyed along with it — a new body, a reload or an unmount takes both, and no host-side lifetime is
+left to get wrong. The host still injects it, so a widget author writes nothing and one who forgets still
+sizes correctly. The host sizes the frame to what is reported up to a bound, and scrolls beyond it, so a
+widget that grows without limit cannot push the conversation off the screen.
 
 ## the only way to the agent is a draft the human sends
 

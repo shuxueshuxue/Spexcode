@@ -1,7 +1,7 @@
 ---
 concern: session-tree-disclosure.e2e.mjs cannot run against an isolated fixture — its board precondition outlives the fixture's own sessions
 by: 126dc196-0608-4468-861a-68a3d2dfbbf2
-status: open
+status: landed
 nodes: session-forest
 created: 2026-09-12T05:53:50.627Z
 ---

@@ -56,10 +56,26 @@ await page.addInitScript(() => {
 })
 
 await page.goto(`${ORIGIN}/index.html`, { waitUntil: 'load' })
+await page.waitForTimeout(1500)
+const loadErrors = [...errors]
+
+// POSITIVE CONTROL before the negative reading. "No page error" is an ABSENCE, and an absence is equally
+// produced by a healthy page and by a listener that never attached — so a probe that only ever reads zero
+// cannot tell the two apart, and would pass forever after the day it stopped listening. Make the page throw
+// on purpose and require that it is SEEN; only then does the zero above mean anything.
+errors.length = 0
+await page.evaluate(() => { setTimeout(() => { throw new Error('probe self-test: the listener is live') }) })
+await page.waitForFunction(() => true, null, { timeout: 5_000 })
+await page.waitForTimeout(600)
+assert.ok(
+  errors.some((e) => e.includes('probe self-test')),
+  'the page-error listener is not attached: a deliberate throw was not observed, so a zero here would prove nothing',
+)
+errors.length = 0
+
 // Errors first: a page whose script did not parse renders nothing, and "nothing appeared" is a far worse
 // report than the reason it did not. This is the exact failure a real Electron run saw.
-await page.waitForTimeout(1500)
-assert.equal(errors.length, 0, `the page must load with no error: ${errors.join(' | ')}`)
+assert.equal(loadErrors.length, 0, `the page must load with no error: ${loadErrors.join(' | ')}`)
 await page.waitForFunction(() => document.getElementById('atlas') && !document.getElementById('atlas').hidden, null, { timeout: 30_000 })
 
 const rowCount = await page.evaluate(() => document.querySelectorAll('.row').length)

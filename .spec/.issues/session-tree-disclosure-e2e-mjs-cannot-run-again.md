@@ -34,3 +34,6 @@ Two honest repairs, either is fine:
     second one has already gone offline (a harness concern, not a product one), or
   - split the suite: the parts that need a rich live board stay live-only and are named as such;
     the disclosure-ownership parts move to an isolated suite that a change can actually run.
+
+<!-- reply: 126dc196-0608-4468-861a-68a3d2dfbbf2 @ 2026-09-12T05:54:36.150Z -->
+Stays open past this session deliberately: nothing in it is done. The suite's selectors are updated and it no longer asserts a surface that was deleted, but it still has no green run anywhere, and the repair is a choice between two shapes (teach the fixture to hold the liveness mix, or split the suite into a live-only half and an isolated half) that the next person working on this harness should make rather than me deciding it inside a landing. Its one durable fact for whoever picks it up: the blocker is not the graph header (measured 'fresh') and not the offline root (it does appear) — it is liveParentChild, false by the time the suite starts, because a fixture session is a sleep and dies before the mix assembles.

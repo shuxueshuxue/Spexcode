@@ -23,7 +23,9 @@ This is one command, not a workflow: write an HTML file, put it under a name, me
   meaning changes, and keep the prose about what it MEANS.
 - **A comparison.** Two designs, three candidate seams, a before and after of a measurement.
 - **Supervision.** A view of the sessions you dispatched, their states, what each is waiting on. Read those
-  facts from the API rather than baking a list that is wrong a minute later.
+  facts from the API rather than baking a list that is wrong a minute later: `spex.api` is where the
+  dashboard reads them and `spex.session` is which one you are, both there before your first line runs.
+  `spex guide widget` carries this one worked out, including what it draws when the backend is gone.
 
 Prose stays prose. An explanation, a decision's reasoning, a report of what you did: those are sentences, and
 a widget around them only adds a frame.
@@ -33,7 +35,8 @@ a widget around them only adds a frame.
 1. **Write the page's content, not a document.** Markup, your own `<style>`, your own `<script>`. The
    dashboard supplies the doctype, the head, the theme and the bridge.
 2. **Use the host's tokens** so it looks like it belongs: `var(--fg)`, `var(--accent)`, `var(--line)`,
-   `var(--muted)`, `var(--ui-font-sans)`. Leave the background transparent; the frame sizes itself.
+   `var(--muted)`, `var(--ui-font-sans)`. Leave the background transparent; the frame sizes itself, up to
+   520px, and scrolls inside past that — so a long list is its first rows plus a count, never all of it.
 3. **Your buttons cannot send.** `spex.draft(text, state)` fills a block above the human's input box; they
    press send. So a click is always safe, and six ticks arrive as one message.
 4. **Draw yourself from `spex.state`**, which is what their last send committed. That is what makes a reload

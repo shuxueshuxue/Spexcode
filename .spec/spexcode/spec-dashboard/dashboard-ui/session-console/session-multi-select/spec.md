@@ -30,9 +30,11 @@ ellipsis, while close-selected is a danger-coloured trash icon and cancel is an 
 their localized tooltip and `aria-label`. Confirmation uses the same close endpoint as the single-row action and every
 request is reconciled by the board reload; graph marquee selection is unrelated and must not satisfy this contract.
 
-The same page owns row movement. A whole session row becomes a pointer drag after the shared six-pixel gesture
-threshold. The live source row dims, an inert projection follows the pointer at 75% scale, and a valid receiving
-row is highlighted. A nested row exposes a fixed top-level drop zone; self, descendant, and existing-parent
+The same panel owns row movement — the frame's navigator ([[dock-modes]]), so selection and movement are two
+gestures on one list rather than one page's privileges. A whole session row becomes a pointer drag after the
+shared six-pixel gesture threshold. The live source row dims, an inert projection follows the pointer at 75%
+scale, and a valid receiving row is highlighted. A nested row exposes a top-level drop zone below the last row,
+where it costs no layout ([[session-forest]]); self, descendant, and existing-parent
 landings are no-ops. A valid landing calls the existing `/api/sessions/reparent` endpoint with one child and
 the target parent (or `null` for top level), then opens the receiving parent and reloads the board. Escape,
 unmount, invalid targets, and below-threshold clicks do not mutate state.

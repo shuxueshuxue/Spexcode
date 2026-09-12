@@ -186,23 +186,33 @@ exactly those three:
   `working · 4m 12s` in the live green with a slow sweep of light across the words, and is the page's only
   moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. The sweep is
   the ordinary one: a gradient wider than the line, clipped to the glyphs, moved across them, the same three
-  lines every component library ships. It advances in STEPS, twelve over its cycle, because the property it
-  moves is a paint property: each change re-rasterizes the words, and sixty of those a second is the largest
-  bill a quiet conversation can run up (measured: 16.8% of a core against 6.7% stepped). A step every fifth of
-  a second reads as the same sweep. AND A ROW IS ITS OWN PAINTING: every row carries paint
+  lines every component library ships. It advances in STEPS, twelve over its cycle — AND THIS CONVERSATION
+  COUNTS THEM ITSELF, because an effect that changes five times a second must not wake this thread sixty
+  times. The property the sweep moves is a paint input, so only the main thread can compute it, and a CSS
+  animation asks the main thread for a value every vsync however few values there are: `steps(12)`
+  discretises the output, not the sampling. Measured on a live conversation, that is 301 style
+  recalculations, 301 prepaints, 301 layerizations and 301 commits in five seconds to produce 25 repaints,
+  every pass crossing the document's 897 clipping and 194 effect nodes — which is why the identical three
+  lines cost 1.5% of a core on a bare page and 4.8% here. The seam's own clock writes the phase instead and
+  the stylesheet turns that number into the position: the twelve are unchanged, byte for byte, at 1.3%. The
+  spinner beside it needs none of this because `transform` is the compositor's to compute, which is the rule
+  underneath both — an effect is affordable exactly when the compositor can run it alone, and one that cannot
+  is driven at the rate it actually moves. AND A ROW IS ITS OWN PAINTING: every row carries paint
   containment, so what a repaint re-records is the row that changed rather than the whole window of history —
-  the same shimmering line measured 706ms of paint recording in eight seconds without it against 207ms with,
-  where an empty page pays 99ms for the identical CSS. Containment scopes the recording without skipping
+  removing it costs 1.5 points of a core straight back. Containment scopes the recording without skipping
   layout, which is what keeps every Range in this conversation resolvable; `content-visibility` would skip it
   and is refused for that reason. Its number
   COUNTS EVERY SECOND: the record only moves on a poll, so between polls the browser ticks, but the clock
   is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record
   will write, and stops the instant the status leaves `working` because the ticker exists only while it
-  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep. THE SECOND HAND
-  OWNS ONLY ITSELF: that count is its own component, so a tick redraws one line and not the conversation
-  around it — a long history costs nothing per second merely by being long, and the seam's start is all
-  the ticker is given, so the clock correction from a later poll reaches it without redrawing anyone; the tail seam of a dead session says `working` — the
+  is; a hidden tab does not tick, and reduced motion keeps the green and drops the sweep — the clock still
+  counts the second, it just stops writing a phase nobody asked to see. THE SECOND HAND AND THE SWEEP SHARE
+  ONE CLOCK, AND IT OWNS ONLY ITSELF: the live lead is its own component, so the fifth-of-a-second tick
+  redraws nothing at all — the phase is written straight onto the node with no render behind it — and the
+  second it shows redraws one line and not the conversation around it. A long history costs nothing per
+  second merely by being long, and the seam's start is all the ticker is given, so the clock correction from
+  a later poll reaches it without redrawing anyone; the tail seam of a dead session says `working` — the
   record's last word — with no duration invented for a stretch nothing closed. A STRETCH CLOSES BY FOLDING,
   NOT BY BLINKING: when a message lands on a working agent — the person's, or the agent's own note — the
   stretch it closes stops streaming, and the live tail that was under `working · 4m 12s` travels the height

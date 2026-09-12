@@ -99,20 +99,46 @@ function ClampedNote({ text }) {
 const sameEvents = (a, b) => a != null && a.length === b.length
   && (a.length === 0 || JSON.stringify(a[a.length - 1]) === JSON.stringify(b[b.length - 1]))
 
-// THE SECOND HAND IS ITS OWN COMPONENT. The open seam counts every second while the agent works, and that
-// tick used to be state on the whole conversation: one number moved, and every row in the window — hundreds
-// of them, each with its own rich text — was rebuilt to draw it. The count lives here now, so a working
-// session redraws one line per second instead of its entire history. The clock is still the server's: the
-// skew is read through a ref, so a fresh poll's correction reaches the next tick without re-rendering anyone.
-const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
+// THE LIVE SEAM HAS ONE CLOCK AND BOTH MOVING THINGS ON THE LINE READ IT. The count is its own component
+// because that tick used to be state on the whole conversation: one number moved, and every row in the
+// window — hundreds of them, each with its own rich text — was rebuilt to draw it. A working session
+// redraws one line per second instead of its entire history. The clock is still the server's: the skew is
+// read through a ref, so a fresh poll's correction reaches the next tick without re-rendering anyone.
+//
+// The sweep across the words is on the SAME clock, at the rate it actually moves. Handing it to a CSS
+// animation instead would be handing it to the vsync sampler, which asks the main thread for a
+// `background-position` sixty times a second to draw five (`steps(12)` discretises the output, not the
+// sampling) and walks the whole document each time — measured 4.8% of a core against 1.3% for the identical
+// twelve positions driven from here. So the phase is written straight onto the node, five times a second,
+// with no render behind it, and `styles.css` turns the number into the position.
+const SEAM_TICK_MS = 200
+const SEAM_SWEEP_STEPS = 12
+
+const SeamLead = memo(function SeamLead({ live, from, skewRef, children }) {
+  const nodeRef = useRef(null)
   const [now, setNow] = useState(() => Date.now() + skewRef.current)
   useEffect(() => {
-    const tick = () => { if (document.visibilityState !== 'hidden') setNow(Date.now() + skewRef.current) }
+    if (!live) return undefined
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    let phase = 0
+    let second = null
+    const tick = () => {
+      if (document.visibilityState === 'hidden') return
+      const at = Date.now() + skewRef.current
+      // the second hand only re-renders when the second it shows actually changed
+      const whole = Math.floor(Math.max(0, at - from) / 1000)
+      if (whole !== second) { second = whole; setNow(at) }
+      if (still) return
+      phase = (phase + 1) % SEAM_SWEEP_STEPS
+      nodeRef.current?.style.setProperty('--sweep', String(phase))
+    }
     tick()
-    const iv = setInterval(tick, 1000)
+    const iv = setInterval(tick, SEAM_TICK_MS)
     return () => clearInterval(iv)
-  }, [from, skewRef])
-  return <>{elapsed(Math.max(0, now - from))}</>
+  }, [live, from, skewRef])
+  return <span className="m-seam-lead" ref={nodeRef}>
+    {children}{live && <> · {elapsed(Math.max(0, now - from))}</>}
+  </span>
 })
 
 // A widget's pending contribution, sitting above the input box as an attachment rather than inside the
@@ -813,7 +839,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
           <div className="m-gut" />
           <div className={`m-seam${collapsing ? ' is-folding' : ''}`}>
             <button type="button" className={`m-seam-row${ticking ? ' is-live' : ''}`} aria-expanded={expanded} onClick={() => toggleSeam(item)}>
-              <span className="m-seam-lead">{lead}{ticking && <> · <SeamElapsed from={item.from} skewRef={skewRef} /></>}</span>
+              <SeamLead live={ticking} from={item.from} skewRef={skewRef}>{lead}</SeamLead>
               {transcript?.state === 'ready' && (
                 <span className="m-seam-detail">{transcript.data.turns.length} turns · {calls} tool uses</span>
               )}

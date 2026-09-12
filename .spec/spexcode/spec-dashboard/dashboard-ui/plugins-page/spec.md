@@ -34,14 +34,18 @@ event carrying two hooks is where the order stops being decoration, and an event
 words. The other surfaces have no timeline and are not forced onto it — always-on prose and invocable
 verbs get a strip each, under the spine, which is also the honest shape: they are not lined up in time.
 
-## the health of the install is stated before the inventory
+## the health line counts sessions, not directories, and is silent when there are none
 
-The first thing on the board is not a list, it is one bar: of the project's worktrees, how many carry the
-declared hook contract, how many carry something else, and how many carry nothing at all. Each differing
-binding is then named with the number of trees carrying it. This is first because it is the half nobody
-could see anywhere else — a tree that was materialized before a contract changed goes on running the old
-set silently, and a tree with no manifest runs no hooks at all, Stop gate included. The numbers are the
-key to the bar; there is no second legend to read.
+The board opens with one bar: of the worktrees hosting a session right now, how many run the declared hook
+contract, how many run something else, and how many run nothing at all. Each differing binding is then
+named with the number of trees carrying it.
+
+The denominator is the point. Counted over every registered worktree the line is a census of dormant
+directories — a stale manifest in a worktree nobody will open again costs nobody anything, and a number
+built mostly of those invites action where none is warranted. Counted over the sessions, it says something
+a person can act on: an agent working right now under a hook the contract does not declare, or under no
+Stop gate at all. With no live session the section is not rendered, because a bar of zeros is a claim too.
+The numbers are the key to the bar; there is no second legend to read.
 
 ## one document, no dock
 

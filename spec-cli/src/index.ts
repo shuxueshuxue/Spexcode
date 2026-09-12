@@ -433,7 +433,7 @@ app.get('/api/slash-commands', (c) => {
 // — per worktree — what is actually installed there. Read from the SAME loaders that materialize it
 // ([[plugins-view]]); one source for both halves is the point, since a second reader would let the picture
 // and the truth drift apart exactly the way the trees already do.
-app.get('/api/plugins/surfaces', (c) => c.json(pluginsView(repoRoot())))
+app.get('/api/plugins/surfaces', async (c) => c.json(await pluginsView()))
 
 function uploadFailure(error: unknown): Response {
   if (!(error instanceof UploadError)) throw error

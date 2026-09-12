@@ -44,16 +44,20 @@ it is a reading device rather than data. An event a node binds that is NOT in th
 appended and flagged — because the surface's job is to account for every binding, and one that silently
 vanished from the page would be worse than one that looks out of place on it.
 
-## installed is a count, never a badge
+## installed is a count, and the denominator is the sessions
 
-A row cannot say "live" or "not live", because the answer differs per tree and the trees drift apart
-independently: a tree materialized before a contract changed keeps running the old set until something
-materializes it again. So the surface reports, over the project's registered worktrees, how many carry the
-declared manifest, how many carry a different one, and how many carry none at all — the last being the
-sharpest of the three, since a tree with no manifest runs NO hooks, including the Stop gate. It also
-reports each differing line with the number of trees carrying it, so a drift is named rather than merely
-counted. Measured on this repository the day the surface was written: 169 worktrees, 11 matching, 117
-differing, 41 never materialized.
+A row cannot say "live" or "not live": the answer differs per tree, because materialization writes one
+manifest into each registered worktree's slot and the trees drift apart independently — a tree materialized
+before a contract changed keeps running the old set until something materializes it again.
+
+But the denominator is NOT the registry. Counted over every registered worktree the number is a census of
+dormant directories: measured here, 169 trees with 11 matching, where 162 held no agent and the stale
+manifest inside cost nobody anything. It means something only for a worktree an agent is in RIGHT NOW,
+where a binding the contract does not declare is a hook actually running and a missing manifest is a
+session with no Stop gate. So the sessions on the board supply the trees — over the same seven, four ran
+the declared contract and three did not — and a project with no live session reports nothing rather than a
+number nobody should act on. Each differing line is reported with the number of trees carrying it, so a
+drift is named rather than merely counted.
 
 ## what it does not do
 

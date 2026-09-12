@@ -106,7 +106,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--html', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--candidate', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--html', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--candidate', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids', '--title'])
 const EXPLICIT_BACKEND_ROUTE_FLAGS = ['api', 'port', 'password', 'insecure'] as const
 const EXPLICIT_BACKEND_VALUE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
   .filter((name) => VALUE_FLAGS.has(`--${name}`))
@@ -775,7 +775,7 @@ if (cmd === 'serve') {
   // scaffold a repo to adopt SpexCode: copy the shipped DATA templates (seed spec tree + git hooks)
   // into <targetDir> (default cwd). spex init [targetDir] --harness <ids> [--preset <tier>] | --pure
   const { specInit } = await import('./init.js')
-  await specInit(positionals(3)[0], flag('preset'), flag('harness'), has('pure'))
+  await specInit(positionals(3)[0], flag('preset'), flag('harness'), has('pure'), flag('title'))
 } else if (cmd === 'uninstall') {
   // the surgical inverse of init: remove every SpexCode-generated artifact (harness shims/contract/trust, the
   // .gitignore block, the global store, any plugin bundle) — NEVER the user's .spec/.plugins data or their own

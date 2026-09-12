@@ -48,36 +48,41 @@ set, drawn the same way whether it arrived by a plain click, by ctrl/⌘-click, 
 replaced the same way. A tab that could not be replaced was a tab whose history the reader had to remember;
 the strip does not ask that of anyone.
 
-**The working set has a second position: the HELD SLOT.** It holds exactly one document, beside the strip's
-list rather than inside it, and the window draws it as its own region ([[workspace-shell]]). Sending a tab
-right is therefore a MOVE: the tab leaves the strip, so a document is in the strip or in the slot and never
-in both — the alternative, a copied address beside an untouched strip, put one document in two places and
-left the second region listing every tab the first one already had. Four rules complete it, and each is the
-same invariant seen from one more angle:
+**THE WORKING SET IS A TREE OF GROUPS.** One group is the ordinary workspace and behaves exactly as one
+strip always did. Splitting one makes a pair; splitting again makes a grid, because the tree is only two
+shapes and both nest:
 
-- **A document already in the slot returns to the strip** when another is sent right, in the place the new
-  one left. Sending right never discards anything.
-- **The slot's one control returns its document to the strip and focuses it** — the exact inverse of the
-  move. Closing it for good is then the ordinary tab close, on the tab it just became.
-- **Navigating to the held address brings it back.** The strip must contain the address the reader is on, and
-  one document cannot be in two places, so the slot releases rather than the strip cloning.
-- **An empty strip beside a held document is not a layout.** Holding the strip's only tab is refused (the
-  verb says it is unavailable rather than doing nothing), and closing the last remaining tab collapses the
-  split by bringing the held document back as the one open document.
+- a **GROUP** is a strip and the documents it holds, with one of them showing. Its band is a real tab strip,
+  so a document moved into a group lands in a list the reader can keep growing — not in a slot that holds one.
+- a **SPLIT** is two subtrees sharing one box, beside each other or above and below, at a ratio the reader
+  drags. It carries no documents of its own; collapse it and its surviving child takes the space.
 
-The slot survives a reload with the strip, and a reload that finds the invariant broken — an older release's
-copied address, a second window's write — repairs it before painting rather than showing the same document
-twice.
+**A document is in exactly one group.** That invariant is what every move here preserves, and it is why
+splitting is a MOVE rather than a copy — a document drawn twice would be two answers to "where is it", and
+the strip's own verbs (close others, the tab list) could not name which one they meant. Five rules complete
+the model, and each is that invariant seen from one more side:
 
-Three focused child contracts keep this node readable:
+- **Splitting moves the tab into a new group** beside (`row`) or below (`col`) the one it was in, and that
+  group takes focus: the reader pointed at that document, so that is where they now are. A group's ONLY tab
+  cannot be split off — the source would empty and the split would collapse in the same gesture — so the verb
+  says it is unavailable rather than doing nothing.
+- **A drag is the same move without a new place for it.** Dropping a tab on another group's strip moves it
+  there, at the position the pointer named; dropping it inside its own strip is the ordinary reorder.
+- **An emptied group collapses**, whether it emptied by a drag or by closing its last tab, and its space
+  returns to its sibling. The reader lands on that sibling's own document rather than on a blank half-window.
+- **Navigating to an address that is open in another group focuses that group** and shows it there. The
+  strip must contain the address the reader is on, and one document cannot be in two places, so the workspace
+  moves the reader rather than cloning the document.
+- **The focused group owns the address bar.** Its showing document IS the URL; moving focus names that
+  group's document with a replacing navigation, so the address never describes a cell the reader left.
 
-- [[tab-routing]] owns canonical identity, focus, placement, and the explicit new-tab gestures. Ordinary
-  navigation replaces only the focused tab of the same kind; an inactive tab is preserved and the new address is
-  appended. Session creation (the New Session composer, a prose-dispatch send to a new target) appends the
-  published session beside the tab the reader was on: a created document is a gesture, never a replacement.
-- [[tab-lifecycle]] owns close behavior, focus history, nearest-neighbor fallback, and resource/session return.
-- [[tab-layout]] owns the strip's one visible row, drag ordering, the clipped tail and its tab list, labels, seams,
-  and action-cluster geometry.
+A route that is NOT a document — the graph, the launch page, the empty workspace — is something the reader
+is looking at without holding, so the focused group shows it in place of its own document until a document
+address lands again. With no groups at all there is no tree: the routed place is drawn on its own.
+
+The tree survives a reload with the workspace, and a reload that finds the invariant broken — an older
+release's flat list, its held slot beside it, a second window's write — repairs it into a valid tree before
+painting rather than showing the same document twice.
 
 The cross-surface law is one mechanism: row surfaces use the shared new-tab predicate and tab APIs, while
 views write addresses through their host scope — a view's `hold` intent names an address, which joins the

@@ -21,8 +21,8 @@ buttons. Each registration has a document route key, a stable action id, an icon
 callback. The state context changes as documents register or dispose, while the API context remains stable so
 registrants do not loop when a neighbouring document changes.
 
-A BAND filters by the address ITS REGION holds — the strip by the active route key, the held region's band by
-the address it names ([[tab-layout]]) — so a document keeps its own controls wherever the workspace draws it,
+A BAND filters by the address ITS REGION is showing — every group's strip asks for the actions at its own
+showing document ([[tab-layout]]) — so a document keeps its own controls wherever the workspace draws it,
 and a document that is not being drawn contributes nothing. A document lives in exactly one region
 ([[tab-strip]]'s held slot is a move, not a copy), so one registration can never paint in two bands. A band
 renders no slot when no action is registered, and no action from an inactive document. A disabled action stays visible with the document's availability reason

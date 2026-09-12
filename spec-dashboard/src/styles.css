@@ -388,11 +388,12 @@ body {
 /* A REGION is one place to read a document ([[workspace-shell]]): its band, the document, and that
    document's own context dock. Both regions are the same box; only the held one takes a width. */
 .region { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
-.region-held { flex: 0 0 auto; }
-/* the second region sits BESIDE the first or UNDER it; the row stacks and the seam turns with it, and each
-   axis keeps its own remembered size ([[workspace-shell]]). */
-.app-content-stacked { flex-direction: column; }
-.app-content-stacked > .region-held { width: auto; }
+/* A SPLIT is two subtrees sharing one box at the reader's ratio, beside each other (`row`) or above and
+   below (`col`), with one divider between them ([[workspace-shell]]). Splitting again inside either side is
+   the same box again, which is what makes a grid out of one rule. */
+.region-split { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.region-col { flex-direction: column; }
+.region-slot { display: flex; min-width: 0; min-height: 0; }
 .region-body { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle-slot {

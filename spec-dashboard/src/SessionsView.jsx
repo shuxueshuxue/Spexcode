@@ -64,7 +64,6 @@ export default function SessionsView({ param, query }) {
       onOpenSearch={() => openPalette('sessions')}
       reload={reload}
       archiveRequested={query?.archive === '1'}
-      route={{ page: 'sessions', param, query }}
     />
   )
 }

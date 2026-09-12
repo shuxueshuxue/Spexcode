@@ -1,16 +1,14 @@
-// YATU proof for [[workspace-shell]]'s two regions and [[tab-strip]]'s held slot. One isolated backend over a
+// YATU proof for [[workspace-shell]]'s region tree and [[tab-strip]]'s groups. One isolated backend over a
 // fixture repository with two spec nodes and one real session (launcher `true`, so it costs nothing). The
 // browser does what a reader does with "send to split pane":
-//   1. The session tab MOVES: the strip loses it, the held region gains it. No second strip, no second
-//      forest, no second rail — the frame is drawn once.
-//   2. Folding the frame's sidebar leaves the held region alone (the two sidebars were one flag).
-//   3. A held document keeps its own controls: the held band carries the actions registered at its address.
-//   4. A held spec node carries its OWN context dock: two docks, two different nodes' history.
-//   5. The held band's one control returns the document to the strip and closes the split.
-//   6. Holding the strip's only tab is refused rather than silently inert.
-//   7. Holding a second tab swaps: the first returns to the strip.
-//   8. A reload keeps the held document held, and never in both places.
-//   9. "Split down" puts the same region under the first, on a horizontal seam.
+//   1. One group is one strip: the ordinary window, one navigator, no seam.
+//   2. Splitting MOVES the tab into a new group beside the first, which takes focus and the address bar.
+//   3. Splitting again makes a grid — three cells, each with its own strip and its own document.
+//   4. Each spec cell carries its own context dock, describing its own node.
+//   5. A tab dragged onto another cell's strip moves there; the cell it empties collapses.
+//   6. A session in a grid cell is the console alone: no second navigator, no second strip.
+//   7. A reload keeps the grid, with no document in two cells.
+//   8. Closing a cell's last tab collapses the cell.
 // Every scene screenshots before it judges, so the A side of a repair pair still leaves its picture.
 // `SPEXCODE_DASHBOARD_ROOT` points Vite at another checkout of `spec-dashboard`; the backend stays current.
 import assert from 'node:assert/strict'
@@ -152,28 +150,32 @@ try {
   const shape = () => page.evaluate(() => {
     const painted = (el) => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0
     const visible = (root, selector) => [...(root?.querySelectorAll(selector) || [])].filter(painted)
-    const region = (selector) => document.querySelector(selector)
-    const primary = region('.region-primary') || document.querySelector('.app-main')
-    const second = region('.region-held') || document.querySelector('.content-second')
-    const strip = (host) => visible(host, '.tabstrip').map((el) => visible(el, '[role="tab"][data-tab-key]').map((tab) => tab.dataset.tabKey))
+    const regions = visible(document, '.region').map((region) => ({
+      group: region.dataset.group || null,
+      focused: !!region.querySelector('.tabstrip-focused'),
+      tabs: visible(region.querySelector('.tabstrip'), '[role="tab"][data-tab-key]').map((tab) => tab.dataset.tabKey),
+      forest: visible(region, '.si-list').length,
+      strips: visible(region, ':scope > .tabstrip').length,
+      context: region.querySelector('.context-dock .ctx-node-id')?.textContent || null,
+      box: region.getBoundingClientRect().toJSON(),
+    }))
     return {
-      split: !!second,
-      primaryTabs: strip(primary).flat(),
-      heldTabs: strip(second).flat(),
-      heldBandTitle: second?.querySelector('.tabstrip-held .tab-label')?.textContent || null,
-      heldForest: visible(second, '.si-list').length,
-      heldStrips: visible(second, '.tabstrip:not(.tabstrip-held)').length,
-      primaryForest: visible(primary, '.si-list').length,
-      rails: visible(document, '.sidebar, .rail').length + document.querySelectorAll('nav.side-nav, .sidenav').length,
+      regions,
+      cells: regions.length,
+      rails: visible(document, '.sidebar, .rail').length,
       docks: visible(document, '.dock').length,
-      contextDocks: visible(document, '.context-dock').map((el) => el.querySelector('.ctx-node-id')?.textContent || ''),
-      heldActions: visible(second, '.tabstrip-actions [data-action]').map((el) => el.dataset.action),
-      primaryActions: visible(primary, '.tabstrip-actions [data-action]').map((el) => el.dataset.action),
+      dividers: visible(document, '.content-divider').length,
+      hash: location.hash,
     }
   })
   const rightClickStripTab = async (key) => {
-    await page.locator(`.region-primary .tabstrip [role="tab"][data-tab-key="${key}"], .app-main > .tabstrip [role="tab"][data-tab-key="${key}"], .si-document > .tabstrip [role="tab"][data-tab-key="${key}"]`).first().click({ button: 'right' })
-    await settle('.sess-menu', 5_000)
+    await page.locator(`.region .tabstrip [role="tab"][data-tab-key="${key}"]`).first().click({ button: 'right' })
+    const opened = await settle('.sess-menu', 5_000)
+    if (!opened) {
+      await page.screenshot({ path: join(out, `no-menu-${key.replace(/[^a-z0-9]+/gi, '-')}.png`) })
+      const seen = await page.locator('.region .tabstrip [role="tab"]').evaluateAll((els) => els.map((el) => el.dataset.tabKey))
+      throw new Error(`no tab menu for ${key}; strips hold ${JSON.stringify(seen)}`)
+    }
   }
   const splitItem = (side = 'right') => page.locator('.sess-menu:visible [role="menuitem"]',
     { hasText: side === 'bottom' ? /Split down|分屏到下方/ : /Split right|分屏到右侧/ }).first()
@@ -190,148 +192,120 @@ try {
   }, { key: sessionKey })
   await page.goto(`${base}/#/spec/alpha`, { waitUntil: 'domcontentloaded' })
   await settle('.pane-doc')
-  await page.waitForTimeout(800)
-  const before = await shape()
-
-  // 1 — the session tab moves into the held region, which draws no frame chrome
-  await rightClickStripTab(sessionKey)
-  await splitItem().click()
-  await settle('.region-held', 10_000)
-  await page.waitForTimeout(1200)
-  await page.screenshot({ path: join(out, '1-held-session.png') })
-  const held = await shape()
-  scene('sending a session tab right MOVES it, and the held region draws no second strip, forest or rail',
-    held.split && !held.primaryTabs.includes(sessionKey) && before.primaryTabs.includes(sessionKey)
-    && held.heldTabs.length === 0 && held.heldStrips === 0 && held.heldForest === 0
-    && held.rails === before.rails && held.primaryTabs.length === before.primaryTabs.length - 1
-    && (held.heldBandTitle || '').includes('split-probe'),
-    { before: before.primaryTabs, after: held.primaryTabs, held })
-
-  // 2 — the frame's sidebar folds alone
-  await page.locator('.dock-toggle, [data-tip*="idebar"], [aria-label*="idebar"]').first().click()
-  await page.waitForTimeout(800)
-  const folded = await shape()
-  await page.screenshot({ path: join(out, '2-folded.png') })
-  // the two sidebars were ONE flag: what proves they are not is that the held region never had a navigator
-  // to fold — folding the frame's must leave a region that was already free of it exactly as it was.
-  scene('folding the frame sidebar leaves the held region untouched',
-    folded.docks === 0 && folded.split && folded.heldForest === 0 && held.heldForest === 0,
-    { docks: folded.docks, heldForestBeforeFold: held.heldForest, heldForestAfterFold: folded.heldForest })
-  await page.locator('.dock-toggle, [data-tip*="idebar"], [aria-label*="idebar"]').first().click()
-  await page.waitForTimeout(600)
-
-  // 3 — the held document keeps its own controls
-  const heldActionShape = await shape()
-  scene('the held band carries that document\'s own controls and a way back',
-    heldActionShape.heldActions.includes('held-return'), { heldActions: heldActionShape.heldActions })
-
-  // 4 — two spec documents, two context docks, each describing its own node
-  await page.locator('.tabstrip [role="tab"][data-tab-key="#/spec/beta"]').first().click({ button: 'right' })
-  await settle('.sess-menu', 5_000)
-  await splitItem().click()
-  await waitFor(async () => (await shape()).heldBandTitle === 'beta', 'beta held', 8_000).catch(() => null)
-  await page.waitForTimeout(600)
-  for (const selector of ['.region-primary .context-toggle', '.region-held .context-toggle']) {
-    const toggle = page.locator(selector)
-    if (await toggle.count()) await toggle.first().click()
-    await page.waitForTimeout(400)
-  }
-  await settle('.region-held .context-dock', 8_000)
-  await page.waitForTimeout(800)
-  await page.screenshot({ path: join(out, '3-two-context-docks.png') })
-  const docks = await shape()
-  const heldHistory = await page.locator('.region-held .ctx-version .ctx-row-label').evaluateAll((els) => els.map((el) => el.textContent))
-  scene('a held spec node carries its own context dock, describing its own node',
-    JSON.stringify(docks.contextDocks) === JSON.stringify(['alpha', 'beta'])
-    && heldHistory.some((reason) => /second version/.test(reason)),
-    { contextDocks: docks.contextDocks, heldHistory })
-
-  // 5 — the held band returns the document to the strip
-  // the A side has no held band: its second pane closes through the old ⨯, which discards rather than returns
-  const returnControl = page.locator('.region-held [data-action="held-return"]')
-  if (await returnControl.count()) await returnControl.click()
-  else await page.locator('.content-close').first().click().catch(() => {})
-  await waitFor(async () => !(await shape()).split, 'the split closed', 8_000).catch(() => null)
-  await page.waitForTimeout(600)
-  await page.screenshot({ path: join(out, '4-returned.png') })
-  const returned = await shape()
-  scene('the held band returns its document to the strip and closes the split',
-    !returned.split && returned.primaryTabs.includes('#/spec/beta') && await hash() === '#/spec/beta',
-    { tabs: returned.primaryTabs, hash: await hash() })
-
-  // 6 — the only tab cannot be sent right
-  // the working set is a module store once the page is live, so a seeded list only takes effect on a reload
-  await page.evaluate(() => localStorage.setItem('spexcode.tabs.root', JSON.stringify([{ page: 'spec', param: 'alpha', query: null }])))
-  await page.goto(`${base}/#/spec/alpha`, { waitUntil: 'domcontentloaded' })
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await settle('.pane-doc')
-  await page.waitForTimeout(800)
-  await rightClickStripTab('#/spec/alpha')
-  const disabled = await splitItem().isDisabled().catch(() => false)
-  await page.screenshot({ path: join(out, '5-only-tab.png') })
-  if (!disabled) await splitItem().click().catch(() => {})
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(500)
-  const lonely = await shape()
-  scene('the strip\'s only tab cannot be sent right: the verb is unavailable, not inert',
-    disabled && !lonely.split, { disabled, split: lonely.split })
-
-  // 7 — holding a second document swaps the first back into the strip, and 8 — a reload keeps one copy
-  await page.evaluate(() => localStorage.setItem('spexcode.tabs.root', JSON.stringify([
-    { page: 'spec', param: 'alpha', query: null }, { page: 'spec', param: 'beta', query: null },
-  ])))
-  await page.goto(`${base}/#/spec/alpha`, { waitUntil: 'domcontentloaded' })
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await settle('.pane-doc')
-  await page.waitForTimeout(700)
-  await rightClickStripTab('#/spec/beta')
-  await splitItem().click()
-  await settle('.region-held', 8_000)
-  await page.waitForTimeout(600)
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await settle('.region-held', 10_000)
   await page.waitForTimeout(900)
-  await page.screenshot({ path: join(out, '6-after-reload.png') })
-  const reloaded = await shape()
-  scene('a reload keeps the held document held, and never in both places at once',
-    reloaded.split && reloaded.heldBandTitle === 'beta' && !reloaded.primaryTabs.includes('#/spec/beta')
-    && reloaded.primaryTabs.includes('#/spec/alpha'),
-    { primaryTabs: reloaded.primaryTabs, heldBandTitle: reloaded.heldBandTitle })
 
-  // 9 — the other seam: the same move, below instead of beside
-  await page.evaluate(() => {
-    localStorage.removeItem('spexcode.held.root')   // start from one region again
-    localStorage.setItem('spexcode.tabs.root', JSON.stringify([
-      { page: 'spec', param: 'alpha', query: null }, { page: 'spec', param: 'beta', query: null },
-    ]))
-  })
-  await page.goto(`${base}/#/spec/alpha`, { waitUntil: 'domcontentloaded' })
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  await settle('.pane-doc')
-  await page.waitForTimeout(700)
+  // 1 — one group is one strip: the ordinary window, unchanged
+  const one = await shape()
+  await page.screenshot({ path: join(out, '1-one-group.png') })
+  scene('a workspace with one group is one strip, one navigator, no seam',
+    one.cells === 1 && one.dividers === 0 && one.regions[0].strips === 1
+    && one.regions[0].tabs.length === 3 && one.regions[0].focused,
+    { cells: one.cells, tabs: one.regions[0]?.tabs, dividers: one.dividers })
+
+  // 2 — split right: the tab MOVES into a new group, which takes focus and the address bar
+  await rightClickStripTab(sessionKey)
+  await splitItem('right').click()
+  await waitFor(async () => (await shape()).cells === 2, 'two groups', 8_000)
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: join(out, '2-split-right.png') })
+  const two = await shape()
+  const [left, right] = two.regions
+  scene('splitting moves the tab into a new group beside the first, and that group takes focus',
+    two.cells === 2 && two.dividers === 1 && one.rails === two.rails && two.docks <= 1
+    && !left.tabs.includes(sessionKey) && right.tabs.length === 1 && right.tabs[0] === sessionKey
+    && right.focused && !left.focused && two.hash === sessionKey
+    && right.strips === 1 && right.forest === 0,
+    { left: left.tabs, right: right.tabs, hash: two.hash, focused: right.focused, forest: right.forest })
+
+  // 3 — a third cell: the grid is the same rule applied again
   await rightClickStripTab('#/spec/beta')
   await splitItem('bottom').click()
-  await settle('.region-held', 8_000)
-  await page.waitForTimeout(800)
-  await page.screenshot({ path: join(out, '7-split-down.png') })
-  const stacked = await page.evaluate(() => {
-    const box = (selector) => document.querySelector(selector)?.getBoundingClientRect().toJSON() || null
-    const divider = document.querySelector('.content-divider')
-    return {
-      primary: box('.region-primary'), held: box('.region-held'),
-      dividerHorizontal: !!divider?.classList.contains('content-divider-h'),
-      dividerOrientation: divider?.getAttribute('aria-orientation') || null,
-      row: getComputedStyle(document.querySelector('.app-content-row')).flexDirection,
-    }
-  })
-  const heldBand = (await shape()).heldBandTitle
-  scene('split down puts the same region UNDER the first, on a horizontal seam',
-    stacked.row === 'column' && stacked.dividerHorizontal && stacked.dividerOrientation === 'horizontal'
-    && heldBand === 'beta'
-    && Math.round(stacked.held.top) >= Math.round(stacked.primary.bottom)
-    && Math.round(stacked.held.left) === Math.round(stacked.primary.left)
-    && Math.round(stacked.held.width) === Math.round(stacked.primary.width),
-    { row: stacked.row, heldBand, primary: stacked.primary, held: stacked.held, dividerOrientation: stacked.dividerOrientation })
+  await waitFor(async () => (await shape()).cells === 3, 'three groups', 8_000)
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: join(out, '3-three-cells.png') })
+  const three = await shape()
+  const below = three.regions.find((region) => region.tabs.includes('#/spec/beta'))
+  const above = three.regions.find((region) => region.tabs.includes('#/spec/alpha'))
+  scene('splitting again makes a grid: three cells, each with its own strip and one document',
+    three.cells === 3 && three.dividers === 2 && three.rails === one.rails
+    && three.regions.every((region) => region.strips === 1)
+    && Math.round(below.box.top) >= Math.round(above.box.bottom)
+    && Math.round(below.box.left) === Math.round(above.box.left),
+    { cells: three.cells, boxes: three.regions.map((region) => ({ tabs: region.tabs, top: Math.round(region.box.top), left: Math.round(region.box.left) })) })
+
+  // 4 — each cell answers context for its own document
+  for (const region of three.regions) {
+    const toggle = page.locator(`.region[data-group="${region.group}"] .context-toggle`)
+    if (await toggle.count()) await toggle.first().click()
+    await page.waitForTimeout(300)
+  }
+  await page.waitForTimeout(700)
+  await page.screenshot({ path: join(out, '4-context-per-cell.png') })
+  const contexts = (await shape()).regions.map((region) => region.context).filter(Boolean).sort()
+  scene('a spec cell carries its own context dock, describing its own node',
+    JSON.stringify(contexts) === JSON.stringify(['alpha', 'beta']), { contexts })
+
+  // 5 — a tab dragged onto another cell's strip moves there
+  const dragTabTo = async (key, targetGroup) => {
+    const tab = await page.locator(`.tabstrip [role="tab"][data-tab-key="${key}"]`).first().boundingBox()
+    const strip = await page.locator(`.region[data-group="${targetGroup}"] .tabstrip-tabs`).first().boundingBox()
+    await page.mouse.move(tab.x + tab.width / 2, tab.y + tab.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(tab.x + tab.width / 2 + 12, tab.y + tab.height / 2, { steps: 3 })
+    await page.mouse.move(strip.x + strip.width - 8, strip.y + strip.height / 2, { steps: 12 })
+    await page.mouse.up()
+  }
+  const sessionCell = (await shape()).regions.find((region) => region.tabs.includes(sessionKey))
+  const alphaCell = (await shape()).regions.find((region) => region.tabs.includes('#/spec/alpha'))
+  await dragTabTo('#/spec/alpha', sessionCell.group)
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: join(out, '5-dragged-across.png') })
+  const dragged = await shape()
+  const target = dragged.regions.find((region) => region.group === sessionCell.group)
+  scene('a tab dragged onto another cell\'s strip moves there, and the cell it emptied collapses',
+    target?.tabs.includes('#/spec/alpha') && target?.tabs.includes(sessionKey)
+    && dragged.regions.every((region) => region.group === sessionCell.group || !region.tabs.includes('#/spec/alpha'))
+    && dragged.cells === 2 && !dragged.regions.some((region) => region.group === alphaCell.group),
+    { cells: dragged.cells, regions: dragged.regions.map((region) => region.tabs) })
+
+  // 6 — a session cell in a grid is the console alone
+  const sessionRegion = dragged.regions.find((region) => region.tabs.includes(sessionKey))
+  await page.locator(`.region[data-group="${sessionRegion.group}"] [role="tab"][data-tab-key="${sessionKey}"] .tab-face`).click()
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: join(out, '6-session-cell.png') })
+  const withSession = await shape()
+  const cell = withSession.regions.find((region) => region.tabs.includes(sessionKey))
+  scene('a session held in a grid cell is the console alone: no second navigator, no second strip',
+    cell.forest === 0 && cell.strips === 1 && withSession.hash === sessionKey,
+    { forest: cell.forest, strips: cell.strips, hash: withSession.hash })
+
+  // 7 — the grid survives a reload, and no document is in two cells
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await settle('.region .tabstrip', 10_000)
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: join(out, '7-after-reload.png') })
+  const reloaded = await shape()
+  const everyTab = reloaded.regions.flatMap((region) => region.tabs)
+  scene('a reload keeps the grid, and no document is in two cells',
+    reloaded.cells === dragged.cells && new Set(everyTab).size === everyTab.length
+    && everyTab.includes('#/spec/alpha') && everyTab.includes(sessionKey),
+    { cells: reloaded.cells, regions: reloaded.regions.map((region) => region.tabs) })
+
+  // 8 — closing the last tab of a cell collapses it
+  const lonely = reloaded.regions.find((region) => region.tabs.length === 1)
+  let closedOnFirstClick = null
+  if (lonely) {
+    const closeControl = page.locator(`.region[data-group="${lonely.group}"] [role="tab"] .tab-x`).first()
+    await closeControl.click()
+    await page.waitForTimeout(700)
+    closedOnFirstClick = (await shape()).cells === reloaded.cells - 1
+    if (!closedOnFirstClick && await closeControl.count()) { await closeControl.click(); await page.waitForTimeout(700) }
+  }
+  await page.screenshot({ path: join(out, '8-collapsed.png') })
+  const collapsed = await shape()
+  scene('closing a cell\'s last tab collapses the cell and gives its space back',
+    !!lonely && collapsed.cells === reloaded.cells - 1 && collapsed.dividers === reloaded.dividers - 1,
+    { before: reloaded.cells, after: collapsed.cells, dividers: collapsed.dividers, closedOnFirstClick })
 
   const kept = scenes.filter((s) => s.pass).length
   const report = { dashboardRoot, kept, probed: scenes.length, scenes, errors, sessionId }

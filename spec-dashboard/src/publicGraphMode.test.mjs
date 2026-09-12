@@ -84,7 +84,7 @@ test('remembered workspace state belongs to the tree the page was served from, n
   for (const [name, source] of [['tabs.js', tabs], ['workspace.jsx', workspace], ['specTreeState.js', specTreeState]]) {
     assert.doesNotMatch(source, /localStorage\.(get|set)Item\('/, `${name} keys storage through scopedKey, never a bare literal`)
   }
-  assert.match(tabs, /const KEY = scopedKey\('spexcode\.tabs'\)/)
+  assert.match(tabs, /const KEY = scopedKey\('spexcode\.layout'\)/)
   assert.match(workspace, /scopedKey\('spexcode\.dock'\)/)
   assert.match(specTreeState, /ledger\(scopedKey\('spex\.specTreeOpen'\)\)/)
 })

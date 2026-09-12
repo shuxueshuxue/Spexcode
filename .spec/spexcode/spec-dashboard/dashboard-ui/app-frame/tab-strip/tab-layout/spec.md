@@ -75,11 +75,16 @@ All tab faces share one geometry: control-size type, a kind icon or status mark,
 20px close target that shows on the active card and under the pointer; there is no second face for a
 replaceable tab, because every tab is replaceable. Resident pages keep their registry icon.
 
-**The held region's band is this band naming ONE document.** A region that holds a single document needs no
-list, so it draws the face a tab wears — kind icon, status mark, title — without the card, then the same
-action column: that document's own registry actions ([[document-actions]], found at the address the region
-holds), and one control that returns the document to the strip. There is no second tab list anywhere in the
-window, because there is one working set and the strip is the row that shows it. The
+**EVERY GROUP DRAWS THIS BAND.** A grid is several strips, one per cell, each naming its own group's working
+set and carrying that group's own document actions ([[document-actions]]) — the actions follow the document
+into whatever cell it is in, because the registry is keyed by address and a document is in exactly one place.
+The band of the focused group is marked as the focused one, so "which strip am I typing into" is answerable at
+a glance. A drag crosses bands: the strip a tab is over names both halves of the landing — which group, and
+where in that group's row — so dropping a tab on another cell's strip moves it there. A drop inside the
+group it came from reorders live under the pointer, as it always has; a drop into another group is committed
+on release, so a drag across the window never tears the document out mid-motion.
+
+The
 strip context menu provides close, close-others, and the two split moves — right and down ([[workspace-shell]])
 — through the workspace APIs, and it is the ONE menu a tab's right-click opens — for every kind of tab, session tabs included, in whichever strip draws it (the
 shell's, or the Sessions document's own column). A menu that depended on what the tab held or which strip drew

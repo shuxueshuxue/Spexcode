@@ -262,31 +262,36 @@ was already receiving its route rather than reading it. A reader sends a documen
 tab or through the tab menu: they are already pointing at the document they mean, so the gesture asks for no
 new vocabulary and no new surface.
 
-**A REGION is a place to read a document; it is never a second workspace.** Both regions mount the same
-component, which draws three things: the band naming what the region holds, the document, and that
-document's own context dock ([[context-dock]]). Everything else in the frame — the rail, the navigator
-sidebar, the status bar, the palette — belongs to the WINDOW and is drawn exactly once, by the frame, beside
-both regions. The rule has teeth in one direction that is easy to get wrong: a document that owns page
-chrome of its own (the Sessions console's forest and the workspace strip above it, [[session-console]])
-draws that chrome only in the region carrying the frame, so the pane tells it which region it is in. Holding
-such a document used to paint a second copy of the whole page — a second strip listing every tab, a second
-navigator, and both navigators folding together because they read one flag — which is three ways of saying
-the same defect: the second pane was rendering a PAGE where it should render a DOCUMENT.
+**A REGION is a place to read a document; it is never a second workspace.** Every region mounts the same
+component, which draws three things: the band naming the group it holds, that group's showing document, and
+that document's own context dock ([[context-dock]]). Everything else in the frame — the rail, the navigator
+sidebar, the status bar, the palette — belongs to the WINDOW and is drawn exactly once, beside every region.
+The rule has teeth in one direction that is easy to get wrong: a document that owns page chrome of its own
+(the Sessions console's forest, [[session-console]]) draws it only while the workspace is ONE group, so the
+pane tells it which kind of workspace it is in. A second region that rendered a PAGE where it should render a
+DOCUMENT is what painted a second strip listing every tab, a second navigator, and two navigators folding
+together because they read one flag.
 
-**A region sits BESIDE the first or UNDER it, and the verb names the side.** The tab menu offers both moves —
-split right, split down — and the window remembers which was used last, so the next split and the alt-click
+**The workspace is a TREE of regions, and the layout is that tree drawn.** A group is a region; a split is
+two subtrees sharing one box at a ratio the reader drags, with one divider between them — [[tab-strip]] owns
+the tree, this node only lays it out. Splitting again inside either side is the same box again, which is what
+makes a grid out of one rule: the shell needs no case for "two panes" and none for "nine". The ratio lives on
+the split node, so the arrangement survives a reload and a window resize together; a pixel width on a node
+that comes and goes as the reader splits and collapses would survive neither ([[resizable-panes]] keeps the
+pixel mechanism for the frame's own fixed panes).
+
+**Working in a cell is clicking in it.** Focus follows the CLICK rather than the press, so the click that
+moves focus still reaches whatever it was aimed at — a close control in an unfocused cell closes its tab on
+the first click instead of spending it on the cell. A right-click never moves focus: it is asking a tab a
+question, not choosing where to work. The focused group is the one whose document the address bar names
+([[tab-strip]]), which is also what keeps a reload landing where the reader left off.
+
+**A region sits BESIDE its sibling or UNDER it, and the verb names the side.** The tab menu offers both moves
+— split right, split down — and the window remembers which was used last, so the next split and the alt-click
 gesture land the same way. The labels name a DIRECTION rather than an axis on purpose: "horizontal" and
 "vertical" name opposite arrangements in an editor and in a terminal multiplexer, and a reader should not
-have to know which convention this window picked. The seam is the same mechanism on both axes
-([[resizable-panes]]) — the row turns into a column, the divider turns with it, and each axis keeps its own
-remembered size, so moving a document from beside to below never inherits a width as a height.
+have to know which convention this window picked.
 
-**The held document is the working set's second position, not workspace state.** It lives with the working
-set ([[tab-strip]]'s held slot) because that is what it is: sending a tab right MOVES it out of the strip, so
-the window still says each document is in exactly one place, and the reader's way back is the region's own
-return control. Holding it here as a copied route is what let one document sit in the strip and in the second
-region at once. The window is still the thing that remembers there are two regions across a reload, and where that region
-sits and how large it is are still window preferences.
 
 **Each region answers context for its own document.** The dock a region draws describes the document that
 region holds — two spec nodes held side by side get two docks, each with its own node's issues and history —

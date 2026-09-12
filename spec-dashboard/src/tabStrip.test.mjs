@@ -34,10 +34,10 @@ test('tab right-click opens the shared context menu instead of closing silently'
 test('tab menu actions are explicit and use the existing workspace APIs', () => {
   assert.match(source, /close\(menu\.tab\)/)
   assert.match(source, /closeOthers\(menu\.tab\)/)
-  assert.match(source, /setHeldSide\(side\); hold\(menu\.tab\)/)
+  assert.match(source, /setHeldSide\(dir === 'col' \? 'bottom' : 'right'\); split\(menu\.tab, dir\)/)
   // the verb names the SIDE it puts the document on: "horizontal"/"vertical" name opposite things in an
   // editor and in a terminal multiplexer, and the reader should not have to know which one this window meant
-  assert.match(source, /\['right', 'panel-right', 'tabs\.menuSplitRight'\], \['bottom', 'panel-bottom', 'tabs\.menuSplitDown'\]/)
+  assert.match(source, /\['row', 'panel-right', 'tabs\.menuSplitRight'\], \['col', 'panel-bottom', 'tabs\.menuSplitDown'\]/)
   // the move is refused when it would empty the strip, and the verb says so instead of doing nothing
   assert.match(source, /disabled=\{tabs\.length < 2\}/)
   assert.match(source, /useEscLayer\(!!menu/)
@@ -46,7 +46,9 @@ test('tab menu actions are explicit and use the existing workspace APIs', () => 
 test('ordinary navigation names the focused tab so an inactive tab cannot be replaced', () => {
   assert.match(tabs, /let focusedKey = null/)
   assert.match(tabs, /const priorKey = focusedKey\n    focusedKey = key/)
-  assert.match(tabs, /placeTab\(getTabs\(\), route, mode, priorKey\)/)
+  assert.match(tabs, /tabs: placeTab\(group\.tabs, route, mode, priorKey\), active: key/)
+  // an address already open in ANOTHER group focuses that group instead of opening a second copy
+  assert.match(tabs, /const holder = groupHolding\(held\.root, key\)/)
 })
 
 test('the strip is one clipping row, and the tab list is the way back to what the row cannot show', () => {
@@ -69,8 +71,12 @@ test('closing tabs retain their original visual slot while the live list updates
 })
 
 test('tab dragging reorders during motion and treats the strip tail as an end landing', () => {
-  assert.match(source, /const track = \(point\) => \{[\s\S]{0,260}if \(before !== undefined\) move\(key, before\)[\s\S]{0,180}setDrag/)
-  assert.match(source, /tabsHostRef\.current[\s\S]{0,500}getBoundingClientRect\(\)/)
+  assert.match(source, /const track = \(point\) => \{[\s\S]{0,460}if \(landing && landing\.group === group\) move\(key, landing\.before\)[\s\S]{0,220}setDrag/)
+  // a drag that ends over ANOTHER group's strip moves the document there ([[tab-layout]])
+  assert.match(source, /if \(landing\) move\(key, landing\.before, landing\.group\)/)
+  assert.match(source, /const targetGroup = host\?\.dataset\.group/)
+  // the strip a tab is over answers both halves of a landing — which group, and where in it
+  assert.match(source, /const host = el\.closest\('\.tabstrip-tabs'\)/)
 })
 
 test('tab tear-off captures the pointer so release outside the viewport reaches the gesture', () => {
@@ -154,9 +160,9 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
   // EACH REGION ANSWERS CONTEXT FOR ITS OWN DOCUMENT ([[context-dock]]): one dock per region, drawn by the
   // region, never one shell-level dock that only the routed document can ever describe.
-  assert.match(shell, /<ContextDock page=\{route\.page\} param=\{route\.param\} query=\{route\.query\} open=\{hasContext && contextOpen\} \/>/)
-  assert.match(shell, /\{hasContext && <div className="context-toggle-slot"><ContextToggle visible=\{contextOpen\} onToggle=\{onToggleContext\} \/><\/div>\}/)
-  assert.match(shell, /trailing=\{contextReservation\}/)
+  assert.match(shell, /<ContextDock page=\{route\?\.page\} param=\{route\?\.param\} query=\{route\?\.query\} open=\{hasContext && contextOpen\} \/>/)
+  assert.match(shell, /\{hasContext && <div className="context-toggle-slot"><ContextToggle visible=\{contextOpen\} onToggle=\{toggleContext\} \/><\/div>\}/)
+  assert.match(shell, /trailing=\{<span className="context-toggle-reservation" aria-hidden="true" \/>\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)
   assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 32px;[^}]*width:\s*32px;/s)
   assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*28px; height:\s*28px;[^}]*padding:\s*0;/s)
@@ -233,51 +239,44 @@ test('there is no hold chord: nothing in the binding registry or the shell pins 
 
 // THE SECOND REGION ([[workspace-shell]] / [[tab-strip]]'s held slot). Sending a tab right is a MOVE inside
 // one working set, and the region that receives it is a place to read a document — not a second workspace.
-test('the held slot is the working set\'s second position: a move, never a copy', () => {
-  // one document, one place: the slot's entry leaves the strip, and both halves move in one write
-  assert.match(tabs, /const putWorkingSet = \(tabs, held\) => \{/)
-  assert.match(tabs, /const remaining = prev\.filter\(\(_, n\) => n !== i\)/)
-  assert.match(tabs, /putWorkingSet\(restored, prev\[i\]\)/)
-  // the strip's only tab cannot be moved: the split would collapse right back
-  assert.match(tabs, /if \(i < 0 \|\| prev\.length < 2\) return/)
-  // navigating to the held address brings it back rather than letting the strip clone it
-  assert.match(tabs, /if \(heldNow && tabKey\(heldNow\) === key\) putWorkingSet\(\[\.\.\.getTabs\(\), heldNow\], null\)/)
-  // closing the last tab collapses the split instead of leaving "nothing open" beside a document
-  assert.match(tabs, /if \(!next\.length && heldNow\) \{[\s\S]{0,200}putWorkingSet\(\[heldNow\], null\)/)
-  // the reader's way back is the inverse of the move, so the gesture that ends the split discards nothing
-  assert.match(tabs, /const release = useCallback\(\(\) => \{[\s\S]{0,220}putWorkingSet\(\[\.\.\.getTabs\(\), current\], null\)/)
-  // a reload repairs the invariant rather than painting a document in two places
-  assert.match(tabs, /const withoutHeld = store\.filter\(\(tab\) => tabKey\(tab\) !== key\)/)
-  assert.match(tabs, /if \(!store\.length\) \{ store = \[heldStore\]; heldStore = null/)
-  // the retired split key held a copied ROUTE beside an untouched strip; it is read once and migrated
-  assert.match(tabs, /const LEGACY_SPLIT_KEY = scopedKey\('spexcode\.split'\)/)
+test('the workspace is a tree of groups, and every move takes a document out of the one it was in', () => {
+  // one store for the whole workspace, repaired at the read boundary and written as one tree
+  assert.match(tabs, /const KEY = scopedKey\('spexcode\.layout'\)/)
+  assert.match(tabs, /layout = normalizeLayout\(readRaw\(\), isDocument\)/)
+  // the retired shapes — a flat list, and a list beside a held slot — migrate rather than living on
+  assert.match(tabs, /const LEGACY_TABS_KEY = scopedKey\('spexcode\.tabs'\)/)
+  assert.match(tabs, /const LEGACY_HELD_KEY = scopedKey\('spexcode\.held'\)/)
+  assert.match(tabs, /if \(held\?\.page\) return \{ root: \{ dir: 'row', ratio: 0\.5, children: \[\{ tabs \}, \{ tabs: \[held\] \}\] \} \}/)
+  // splitting is a move into a new group; a drag into another group is that move without a new place
+  assert.match(tabs, /const next = splitGroup\(held\.root, owner\.id, key, dir\)/)
+  assert.match(tabs, /const moved = moveTabToGroup\(held\.root, key, target, before\)/)
+  // closing the last tab of a group collapses it; an emptied workspace lands on its explicit place
+  assert.match(tabs, /if \(!next\.root\) \{ navigate\('empty'\); return \}/)
+  // the focused group owns the address bar, so moving focus names that group's document
+  assert.match(tabs, /export function focusGroup\(id, \{ follow = true \} = \{\}\)/)
   assert.doesNotMatch(workspace, /splitTo|closeSplit|SPLIT_KEY/)
 })
 
 test('the frame is drawn once: a region holds a document, its band and its own context', () => {
-  assert.match(shell, /function DocumentRegion\(\{ primary = false, band, route, width = null, height = null, contextOpen, onToggleContext, children \}\)/)
-  assert.match(shell, /<DocumentRegion primary route=\{\{ page, param, query \}\}/)
-  assert.match(shell, /<DocumentRegion route=\{held\} width=\{stacked \? null : heldWidth\} height=\{stacked \? heldHeight : null\}/)
-  assert.match(shell, /<HeldBar specs=\{specs\} sessions=\{sessions\} tab=\{held\} onRelease=\{release\}/)
-  // the held host draws the document and no frame chrome; the pool is the primary region's
-  assert.match(shell, /<ViewHost page=\{held\.page\} param=\{held\.param\} query=\{held\.query\} inactive=\{inactive\} primary=\{false\} \/>/)
-  assert.match(shell, /address: entry\.address, active: showing, primary: true/)
-  assert.match(shell, /<PaneProvider value=\{\{ address, active: !inactive, primary \}\}>/)
+  assert.match(shell, /function DocumentRegion\(\{ group, single, specs, sessions, dock, foldable, inactive, showing = null \}\)/)
+  assert.match(shell, /function RegionTree\(\{ node, single, specs, sessions, dock, foldable, inactive, focus = null, showing = null \}\)/)
+  // a split is two subtrees sharing one box at the reader's own ratio, with one divider between them
+  assert.match(shell, /<div className=\{`region-split region-\$\{node\.dir\}`\}>/)
+  assert.match(shell, /resizeWorkspaceSplit\(node\.id, ratio\)/)
+  assert.match(shell, /<TabStrip specs=\{specs\} sessions=\{sessions\} route=\{route \|\| \{ page: 'empty', param: null, query: null \}\} group=\{group\.id\}/)
+  // every group keeps its own mounted documents, and only the workspace's ONE group may draw page chrome
+  assert.match(shell, /<ViewPool group=\{group\} override=\{showing\} inactive=\{inactive\} single=\{single\} \/>/)
+  // a route that is not a document — the graph, the launch page — shows in the FOCUSED cell
+  assert.match(shell, /showing=\{isDocument\(page, param\) \? null : \{ page, param, query \}\}/)
+  assert.match(shell, /primary: single/)
   assert.match(workspace, /export const usePanePrimary = \(\) => useContext\(Pane\)\?\.primary !== false/)
-  // one band vocabulary: the held band names ONE document and carries that document's own controls
-  assert.match(source, /export function HeldBar\(\{ specs, sessions, tab, onRelease, trailing = null \}\)/)
-  assert.match(source, /export const documentActionsAt = \(actions, address\)/)
-  assert.match(source, /heldActions\.map\(renderDocumentAction\)/)
-  assert.match(source, /data-action="held-return"/)
   assert.match(css, /\.region \{[^}]*flex-direction: column;/s)
   assert.match(css, /\.region-body \{[^}]*display: flex;/s)
-  // both seams are one mechanism: the row stacks, the divider turns, and each axis keeps its own size
-  assert.match(css, /\.app-content-stacked \{ flex-direction: column; \}/)
+  assert.match(css, /\.region-split \{[^}]*display: flex;/s)
+  assert.match(css, /\.region-col \{ flex-direction: column; \}/)
   assert.match(css, /\.content-divider-h \{ cursor: row-resize; \}/)
-  assert.match(shell, /const stacked = heldSide === 'bottom'/)
-  assert.match(shell, /useResizable\('spex\.splitHeight', 320, \{ min: 160, max: 1200, dir: -1, axis: 'y' \}\)/)
   assert.match(workspace, /const HELD_SIDE_KEY = scopedKey\('spexcode\.heldSide'\)/)
-  // the second region is not a second workspace: no second strip, and the retired copy-shaped chrome is gone
-  assert.doesNotMatch(shell, /className="content-split"|className="content-second"|content-close/)
+  // the second region is not a second workspace: the retired copy-shaped chrome is gone for good
+  assert.doesNotMatch(shell, /className="content-split"|className="content-second"|content-close|HeldBar/)
   assert.doesNotMatch(css, /\.content-split|\.content-second|\.content-close/)
 })

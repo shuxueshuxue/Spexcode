@@ -39,10 +39,8 @@ import { decodePrompt, encodePrompt } from './codeSelection.js'
 import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
-import TabStrip from './TabStrip.jsx'
 import ResourcePicker from './ResourcePicker.jsx'
 import { fileName, resourceCatalog, webName } from './resourceCatalog.js'
-import DockToggle from './DockToggle.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
 import { usePanePrimary, useWorkspace, useWorkspaceApi } from './workspace.jsx'
@@ -413,7 +411,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher, onSettings }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenArchive, onOpenSearch, reload, archiveRequested = false, surface = null, route = null }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenArchive, onOpenSearch, reload, archiveRequested = false, surface = null }) {
   const t = useT()
   const scope = useViewScope()
   const { notify } = useTransientNotice()
@@ -1198,12 +1196,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
       />}
       <div className="si-document">
-        {/* THE FRAME IS DRAWN ONCE ([[workspace-shell]]). This document owns page chrome — the forest and
-            the workspace strip above the console — and owns it only in the region that carries the frame.
-            Held beside another document it draws the console alone: the region already has a band naming it,
-            the window already has one navigator, and a second copy of either is a second workspace. */}
-        {primaryRegion && route && <TabStrip specs={specs} sessions={sessions} route={route}
-          leading={!forestOpen ? <DockToggle variant="strip" /> : null} />}
+        {/* THE BAND BELONGS TO THE REGION ([[workspace-shell]]). Every region draws one strip for the group
+            it holds, so this document draws none: it is the console, and its forest is page chrome it keeps
+            only while the workspace is ONE group — in a grid, a cell holding a session shows the session. */}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through

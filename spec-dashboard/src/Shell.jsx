@@ -4,7 +4,7 @@ import DockToggle from './DockToggle.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
-import TabStrip, { HeldBar, placeLabel } from './TabStrip.jsx'
+import TabStrip, { placeLabel } from './TabStrip.jsx'
 import Dock from './Dock.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
@@ -13,7 +13,6 @@ import { navigateAddress, routeAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { PaneProvider, useBoard, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { viewFor, viewRouteContract } from './views.jsx'
-import { useResizable } from './useResizable.js'
 import { Icon } from './icons.jsx'
 import { IdentityIcon } from './IdentityIcon.jsx'
 import { PROJECT_ID, hubHref, projectHref, scopedKey } from './project.js'
@@ -24,7 +23,9 @@ import ContextDock from './ContextDock.jsx'
 import { useKeyboardScope } from './KeyboardService.jsx'
 import { useEscLayer } from './escStack.js'
 import { firesEvent, firesKey, withShortcut } from './bindings.js'
-import { holdAddress, openNewTab, runTabCommand, useTabs } from './tabs.js'
+import { focusGroup, holdAddress, openNewTab, resizeWorkspaceSplit, runTabCommand, useWorkspaceLayout } from './tabs.js'
+import { groupsOf, isGroup, tabKey } from './tabModel.js'
+import { isDocument } from './viewCatalog.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
@@ -108,7 +109,14 @@ function ViewScopeHost({ page, param, query, active, children }) {
 // RENDER ORDER IS INSERTION ORDER, never recency. Reordering keyed children moves real DOM nodes, and a
 // moved node re-attaches its iframes and canvases — which is a reload wearing a different name. Recency
 // lives in a counter used only to pick the victim.
-function ViewPool({ page, param, query, inactive = false }) {
+function ViewPool({ group, override = null, inactive = false, single = true }) {
+  // A ROUTE THAT IS NOT A DOCUMENT still has to be somewhere: the graph, the launch page, the empty
+  // workspace are things the reader is LOOKING at without holding, so the focused group shows them in place
+  // of its own document until the reader lands on a document again ([[tab-strip]]).
+  const active = override || group.tabs.find((tab) => tabKey(tab) === group.active) || group.tabs[0]
+  const page = active.page
+  const param = active.param ?? null
+  const query = active.query ?? null
   const key = poolKey(page, param)
   const address = routeHash(page, param, query)
   const seq = useRef(0)
@@ -129,7 +137,7 @@ function ViewPool({ page, param, query, inactive = false }) {
       return next
     })
   }, [key, address])
-  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={!inactive && entry.key === key} />)
+  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={!inactive && entry.key === key} single={single} />)
 }
 
 // One mounted document. It is MEMOISED, and that is not a micro-optimization: the shell re-renders on
@@ -137,11 +145,12 @@ function ViewPool({ page, param, query, inactive = false }) {
 // of a workspace would scale with how many tabs the reader keeps, which is the one thing a pool must not
 // do. Pane props are stable between route changes, so a hidden pane re-renders only when it is shown or
 // its address moves. Its other half is the frozen board a hidden pane reads ([[workspace-shell]]).
-const PoolPane = memo(function PoolPane({ entry, showing }) {
+const PoolPane = memo(function PoolPane({ entry, showing, single = true }) {
   const t = useT()
   const { component: View, className } = viewFor(entry.page)
-  // the pool is the PRIMARY region's: it holds the routed document and the ones the reader keeps warm.
-  const pane = useMemo(() => ({ address: entry.address, active: showing, primary: true }), [entry.address, showing])
+  // `primary` says whether this document may also draw PAGE chrome of its own: only when the workspace is
+  // one group, because a grid draws one band per region and one navigator for the window ([[workspace-shell]]).
+  const pane = useMemo(() => ({ address: entry.address, active: showing, primary: single }), [entry.address, showing, single])
   return (
     <div className={`viewhost ${className}`} aria-hidden={showing ? undefined : 'true'}
       style={showing ? undefined : { display: 'none' }}>
@@ -426,18 +435,85 @@ function BoardStatus({ specs, sessions, page }) {
 // NOT is a second workspace — the rail, the navigator sidebar and the status bar are the window's and are
 // drawn once, by the frame. Both regions mount the same component, so a document sent right keeps its band,
 // its controls and its context instead of borrowing the chrome of whatever page it came from.
-function DocumentRegion({ primary = false, band, route, width = null, height = null, contextOpen, onToggleContext, children }) {
+function DocumentRegion({ group, single, specs, sessions, dock, foldable, inactive, showing = null }) {
+  const active = showing || group.tabs.find((tab) => tabKey(tab) === group.active) || group.tabs[0]
+  const route = active ? { page: active.page, param: active.param ?? null, query: active.query ?? null } : null
   // Context belongs to the DOCUMENT, so each region answers it for its own ([[context-dock]]) — the dock a
-  // region draws describes the document that region holds, and nothing else.
-  const hasContext = route.page === 'spec'
+  // region draws describes the document that region holds, and nothing else. The workspace's one group keeps
+  // the persisted habit; a group the reader split off starts closed, so splitting never spends width uninvited.
+  const [contextOpen, setContextOpen] = useState(() => {
+    if (!single) return false
+    try { return localStorage.getItem('spexcode.ctxOpen') === '1' } catch { return false }
+  })
+  const toggleContext = useCallback(() => setContextOpen((value) => {
+    const next = !value
+    if (single) { try { localStorage.setItem('spexcode.ctxOpen', next ? '1' : '0') } catch { /* private mode */ } }
+    return next
+  }), [single])
+  useEffect(() => registerContextToggle(single ? toggleContext : null), [single, toggleContext])
+  const hasContext = route?.page === 'spec'
+  // the fold switch stands at the strip's left edge only while the sidebar it folds is closed, and only in
+  // the group that stands against that sidebar — the first one.
+  const leading = single && foldable && !dock ? <DockToggle variant="strip" /> : null
+  // WORKING IN A CELL IS CLICKING IN IT ([[workspace-shell]]). Focus follows the CLICK rather than the press,
+  // so the press that moves focus still reaches whatever it was aimed at — a close control in an unfocused
+  // cell closes its tab on the first click instead of spending it on the cell.
   return (
-    <div className={`region${primary ? ' region-primary' : ' region-held'}`}
-      style={width ? { width } : height ? { height } : undefined}>
-      {band}
+    <div className="region" data-group={group.id} onClick={() => focusGroup(group.id)}>
+      <TabStrip specs={specs} sessions={sessions} route={route || { page: 'empty', param: null, query: null }} group={group.id}
+        leading={leading} trailing={<span className="context-toggle-reservation" aria-hidden="true" />} />
       <div className="region-body">
-        <div className="app-main">{children}</div>
-        <ContextDock page={route.page} param={route.param} query={route.query} open={hasContext && contextOpen} />
-        {hasContext && <div className="context-toggle-slot"><ContextToggle visible={contextOpen} onToggle={onToggleContext} /></div>}
+        <div className="app-main">
+          <ViewPool group={group} override={showing} inactive={inactive} single={single} />
+        </div>
+        <ContextDock page={route?.page} param={route?.param} query={route?.query} open={hasContext && contextOpen} />
+        {hasContext && <div className="context-toggle-slot"><ContextToggle visible={contextOpen} onToggle={toggleContext} /></div>}
+      </div>
+    </div>
+  )
+}
+// The context chord acts on the workspace's one group; with several, each region's own switch is the door.
+let contextToggleRef = null
+const registerContextToggle = (toggle) => { contextToggleRef = toggle }
+
+// THE WORKSPACE, LAID OUT ([[workspace-shell]]). A group is a region; a split is two subtrees sharing their
+// box at the reader's own ratio, with one divider between them. Nothing here knows what a document is.
+function RegionTree({ node, single, specs, sessions, dock, foldable, inactive, focus = null, showing = null }) {
+  const onDrag = useCallback((event) => {
+    if (isGroup(node)) return
+    event.preventDefault()
+    const box = event.currentTarget.parentElement.getBoundingClientRect()
+    const move = (moveEvent) => {
+      const ratio = node.dir === 'col'
+        ? (moveEvent.clientY - box.top) / box.height
+        : (moveEvent.clientX - box.left) / box.width
+      resizeWorkspaceSplit(node.id, ratio)
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('is-resizing')
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    document.body.classList.add('is-resizing')
+  }, [node])
+  if (isGroup(node)) {
+    return <DocumentRegion group={node} single={single} specs={specs} sessions={sessions}
+      dock={dock} foldable={foldable} inactive={inactive} showing={node.id === focus ? showing : null} />
+  }
+  const [first, second] = node.children
+  const share = (fraction) => ({ flexGrow: fraction, flexBasis: 0, minWidth: 0, minHeight: 0 })
+  return (
+    <div className={`region-split region-${node.dir}`}>
+      <div className="region-slot" style={share(node.ratio)}>
+        <RegionTree node={first} single={false} specs={specs} sessions={sessions} dock={dock} foldable={foldable} inactive={inactive} focus={focus} showing={showing} />
+      </div>
+      <div className={`content-divider${node.dir === 'col' ? ' content-divider-h' : ''}`} onMouseDown={onDrag}
+        onDoubleClick={() => resizeWorkspaceSplit(node.id, 0.5)}
+        role="separator" aria-orientation={node.dir === 'col' ? 'horizontal' : 'vertical'} />
+      <div className="region-slot" style={share(1 - node.ratio)}>
+        <RegionTree node={second} single={false} specs={specs} sessions={sessions} dock={dock} foldable={foldable} inactive={inactive} focus={focus} showing={showing} />
       </div>
     </div>
   )
@@ -480,7 +556,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     }
   }, [sessions, notify, t])
   const documentNames = useDocumentNames()
-  const { dock, dockMode, palette, heldSide, helpOpen } = useWorkspace()
+  const { dock, dockMode, palette, helpOpen } = useWorkspace()
   const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode } = useWorkspaceApi()
   useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
     tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
@@ -492,25 +568,9 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // toggle is one click away at the window's right edge and the choice persists. One shell slot paints it
   // over the strip while closed and over the dock head while open, so the reader can fold it back without
   // chasing a button that moved with the document column ([[context-dock]]).
-  const [contextOpen, setContextOpen] = useState(() => {
-    try { return localStorage.getItem('spexcode.ctxOpen') === '1' } catch { return false }
-  })
-  const toggleContext = () => setContextOpen((value) => {
-    const next = !value
-    try { localStorage.setItem('spexcode.ctxOpen', next ? '1' : '0') } catch {}
-    return next
-  })
-  const contextReservation = <span className="context-toggle-reservation" aria-hidden="true" />
-  // THE HELD DOCUMENT — the working set's second position ([[tab-strip]]), not a second workspace state. The
-  // shell reads it to know whether there are two regions; the strip owns the move that puts it there.
-  const { held, release } = useTabs()
-  const [heldContextOpen, setHeldContextOpen] = useState(false)
-  // ONE SEAM MECHANISM, TWO AXES ([[resizable-panes]]): the held region is sized along whichever axis it was
-  // put on, and each axis remembers its own size — moving a document from beside to below never inherits a
-  // width as a height.
-  const stacked = heldSide === 'bottom'
-  const [heldWidth, onHeldWidthDrag, resetHeldWidth] = useResizable('spex.splitWidth', 620, { min: 320, max: 1400, dir: -1 })
-  const [heldHeight, onHeldHeightDrag, resetHeldHeight] = useResizable('spex.splitHeight', 320, { min: 160, max: 1200, dir: -1, axis: 'y' })
+  // THE WORKSPACE TREE ([[tab-strip]]): the shell lays out what the working set says, and owns none of it.
+  const layout = useWorkspaceLayout()
+  const groups = useMemo(() => groupsOf(layout.root), [layout.root])
 
   // THE DOCK FOLLOWS THE FOCUSED TAB. The projection is derived from what the reader is holding, not
   // chosen once and left behind: moving to a session tab brings the session list, moving to a node or a
@@ -591,7 +651,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       setDockMode(next)
       return true
     }
-    if (!graphOnly && firesEvent('shell.contextToggle', event)) { event.preventDefault(); toggleContext(); return true }
+    if (!graphOnly && firesEvent('shell.contextToggle', event)) { event.preventDefault(); contextToggleRef?.(); return true }
     if (!graphOnly && firesEvent('shell.tabClose', event)) { event.preventDefault(); runTabCommand('closeActive'); return true }
     if (!graphOnly) {
       for (let ordinal = 1; ordinal <= 9; ordinal += 1) {
@@ -603,7 +663,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     if (!graphOnly && firesEvent('shell.tabNext', event)) { event.preventDefault(); runTabCommand('move', 1); return true }
     if (!graphOnly && firesEvent('shell.tabPrevious', event)) { event.preventDefault(); runTabCommand('move', -1); return true }
     if (!graphOnly && firesEvent('shell.tabSplit', event)) {
-      event.preventDefault(); runTabCommand('hold'); return true
+      event.preventDefault(); runTabCommand('split', 'row'); return true
     }
     // Settings is a shell destination even when the graph view is not mounted. The graph keeps its own
     // rebindable slash/info verbs; this global fallback is what restores comma on every routed surface.
@@ -624,7 +684,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
       return true
     }
     return false
-  }, [closeHelp, closePalette, dockProjection, documentKey, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, toggleHelp, contextOpen])
+  }, [closeHelp, closePalette, dockProjection, documentKey, graphOnly, helpOpen, inactive, openPalette, page, palette, setDock, setDockMode, toggleHelp])
   useKeyboardScope(onShellKey, inactive ? -1000 : -100)
 
   // A review surface keeps the workspace document pool warm, but its chrome must not exist in the review
@@ -633,7 +693,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   if (inactive) {
     return (
       <div style={{ display: 'none' }} aria-hidden="true">
-        <ViewPool page={page} param={param} query={query} inactive />
+        <ViewHost page={page} param={param} query={query} inactive />
         <ShellStatus />
         <BoardStatus specs={specs} sessions={sessions} page={page} />
       </div>
@@ -653,32 +713,24 @@ export default function Shell({ routeOverride = null, inactive = false }) {
           </ViewErrorBoundary>
         )}
         <div className="app-content-column">
-          <div className={`app-content-row${stacked && held ? ' app-content-stacked' : ''}`}>
-            {/* the strip IS the primary region's band — it used to be wrapped in a spacer that stood in for it
-                on every route without an open document, which is one band wearing two names. The fold switch
-                stands at its left edge only while the sidebar it folds is closed; open, it rides that
-                sidebar's own head row (DockToggle). A route with no sidebar has no switch. */}
-            <DocumentRegion primary route={{ page, param, query }}
-              contextOpen={contextOpen} onToggleContext={toggleContext}
-              band={page !== 'sessions' && <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }}
-                leading={foldable && !dock ? <DockToggle variant="strip" /> : null}
-                trailing={contextReservation} />}>
-              <ViewPool page={page} param={param} query={query} inactive={inactive} />
-            </DocumentRegion>
-            {held && (
-              <>
-                <div className={`content-divider${stacked ? ' content-divider-h' : ''}`}
-                  onMouseDown={stacked ? onHeldHeightDrag : onHeldWidthDrag}
-                  onDoubleClick={stacked ? resetHeldHeight : resetHeldWidth}
-                  role="separator" aria-orientation={stacked ? 'horizontal' : 'vertical'} />
-                <DocumentRegion route={held} width={stacked ? null : heldWidth} height={stacked ? heldHeight : null}
-                  contextOpen={heldContextOpen} onToggleContext={() => setHeldContextOpen((open) => !open)}
-                  band={<HeldBar specs={specs} sessions={sessions} tab={held} onRelease={release}
-                    trailing={contextReservation} />}>
-                  <ViewHost page={held.page} param={held.param} query={held.query} inactive={inactive} primary={false} />
-                </DocumentRegion>
-              </>
-            )}
+          <div className="app-content-row">
+            {/* THE WORKSPACE IS A TREE OF REGIONS ([[workspace-shell]]). One group is the ordinary window and
+                looks exactly as one strip always did; splitting makes a grid, and every cell is the same
+                region: its own strip, its own document, its own context. With nothing open at all there is
+                no tree — the routed place (the empty workspace) is drawn under a strip that names it. */}
+            {layout.root
+              ? <RegionTree node={layout.root} single={groups.length === 1} specs={specs} sessions={sessions}
+                  dock={dock} foldable={foldable} inactive={inactive} focus={layout.focus}
+                  showing={isDocument(page, param) ? null : { page, param, query }} />
+              : (
+                <div className="region">
+                  <TabStrip specs={specs} sessions={sessions} route={{ page, param, query }} group={null}
+                    leading={foldable && !dock ? <DockToggle variant="strip" /> : null} />
+                  <div className="region-body">
+                    <div className="app-main"><ViewHost page={page} param={param} query={query} inactive={inactive} /></div>
+                  </div>
+                </div>
+              )}
           </div>
           <ShellStatus />
           <BoardStatus specs={specs} sessions={sessions} page={page} />

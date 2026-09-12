@@ -5,7 +5,7 @@
 //   1. On the Sessions document, right-click the session tab: the tab menu, not the session's lifecycle menu.
 //   2. Right-click the spec tab in that same strip: the identical menu.
 //   3. The shell strip (a spec route) offers the identical menu on the session tab.
-//   4. "Split right" on a tab moves that document into the held region.
+//   4. "Split right" moves the document into a second region, and a drag brings it back.
 //   5. "Close others" on the session tab leaves only that tab.
 //   6. The session row in the forest still opens the session's own lifecycle menu (rename lives there).
 // Every scene screenshots before it judges, so the A side of a repair pair still leaves its picture.
@@ -166,14 +166,14 @@ try {
     ]))
   }, { sessionKey })
   await page.goto(`${base}/${sessionKey}`, { waitUntil: 'domcontentloaded' })
-  await settle(`.si-document [role="tab"][data-tab-key="${sessionKey}"]`)
+  await settle(`.region [role="tab"][data-tab-key="${sessionKey}"]`)
   await page.waitForTimeout(600)
 
   // 1 — the session tab on the Sessions document
   const sessionTabItems = await rightClickTab(sessionKey)
   await page.screenshot({ path: join(out, '1-session-tab-menu.png') })
   scene('the session tab answers a right-click with the tab menu, not the session lifecycle menu',
-    isTabMenu(sessionTabItems), { items: sessionTabItems, strip: 'sessions document' })
+    isTabMenu(sessionTabItems), { items: sessionTabItems, strip: 'the region holding it' })
   await dismiss()
 
   // 2 — the spec tab in the same strip
@@ -185,33 +185,48 @@ try {
 
   // 3 — the shell strip on a spec route, same session tab
   await page.locator('[role="tab"][data-tab-key="#/spec/alpha"]:visible .tab-face').click()
-  await waitFor(async () => await hash() === '#/spec/alpha' && await present('.region-primary > .tabstrip'), 'spec route with the shell strip', 5_000)
+  await waitFor(async () => await hash() === '#/spec/alpha' && await present('.region > .tabstrip'), 'spec route with the shell strip', 5_000)
   await page.waitForTimeout(400)
   const shellItems = await rightClickTab(sessionKey)
   await page.screenshot({ path: join(out, '3-shell-strip-session-tab.png') })
   scene('the shell strip offers the identical menu on the same session tab', isTabMenu(shellItems), { items: shellItems, hash: await hash() })
   await dismiss()
 
-  // 4 — split: the session tab goes to the second pane from the shell strip
-  await page.locator(`[role="tab"][data-tab-key="${sessionKey}"]:visible`).click({ button: 'right' })
+  // 4 — split: the session tab MOVES into a second region, and a drag brings it home again
+  await page.locator(`[role="tab"][data-tab-key="${sessionKey}"]:visible`).first().click({ button: 'right' })
   const split = page.locator('.sess-menu:visible [role="menuitem"]', { hasText: 'Split right' })
   const splitOffered = await split.count() > 0
   if (splitOffered) await split.click()
-  const splitShown = splitOffered && await settle('.region-held .viewhost')
-  await page.waitForTimeout(600)
-  await page.screenshot({ path: join(out, '4-split-pane.png') })
-  const secondPane = splitShown ? await page.locator('.region-held .viewhost').first().getAttribute('class') : null
+  const splitShown = splitOffered && await waitFor(async () => (await page.locator('.region').count()) > 1, 'a second region', 8_000).catch(() => false)
+  await page.waitForTimeout(700)
+  await page.screenshot({ path: join(out, '4-split-region.png') })
+  const secondPane = splitShown ? await page.locator('.region').last().locator('.viewhost').first().getAttribute('class') : null
   const strippedTabs = await tabs()
-  scene('send to split pane MOVES the tab into the held region', splitShown && /view-sessions/.test(secondPane || '')
-    && await hash() === '#/spec/alpha' && !strippedTabs.includes(sessionKey),
+  scene('split right MOVES the tab into a second region', splitShown && /view-sessions/.test(secondPane || '')
+    && strippedTabs.filter((key) => key === sessionKey).length === 1,
     { secondPane, hash: await hash(), tabs: strippedTabs })
-  if (await present('.region-held [data-action="held-return"]')) await page.locator('.region-held [data-action="held-return"]').click()
+
+  // drag it back: the region it empties collapses, and the workspace is one region again
+  const homeStrip = await page.locator('.region').first().locator('.tabstrip-tabs').boundingBox()
+  const movingTab = await page.locator(`.region:last-child [role="tab"][data-tab-key="${sessionKey}"]`).first().boundingBox()
+  if (homeStrip && movingTab) {
+    await page.mouse.move(movingTab.x + movingTab.width / 2, movingTab.y + movingTab.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(movingTab.x + movingTab.width / 2 + 12, movingTab.y + movingTab.height / 2, { steps: 3 })
+    await page.mouse.move(homeStrip.x + homeStrip.width - 8, homeStrip.y + homeStrip.height / 2, { steps: 12 })
+    await page.mouse.up()
+  }
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: join(out, '4b-dragged-home.png') })
+  const regionsAfterDrag = await page.locator('.region').count()
+  scene('dragging it back collapses the region it emptied', regionsAfterDrag === 1 && (await tabs()).includes(sessionKey),
+    { regions: regionsAfterDrag, tabs: await tabs() })
 
   // 5 — close others, from the session tab on the Sessions document
   await page.locator(`[role="tab"][data-tab-key="${sessionKey}"]:visible .tab-face`).click()
-  await settle(`.si-document [role="tab"][data-tab-key="${sessionKey}"]`)
+  await settle(`.region [role="tab"][data-tab-key="${sessionKey}"]`)
   await page.waitForTimeout(400)
-  await page.locator(`.si-document [role="tab"][data-tab-key="${sessionKey}"]`).click({ button: 'right' })
+  await page.locator(`.region [role="tab"][data-tab-key="${sessionKey}"]`).click({ button: 'right' })
   const closeOthers = page.locator('.sess-menu:visible [role="menuitem"]', { hasText: /^Close others$/ })
   const closeOffered = await closeOthers.count() > 0
   if (closeOffered) await closeOthers.click()

@@ -4,7 +4,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { moveTab, setTabTitle, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
-import { useWorkspaceApi } from './workspace.jsx'
+import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey } from './sessionSurface.js'
@@ -124,7 +124,7 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, leading = null, trailing = null }) {
+export default function TabStrip({ specs, sessions, route, group, leading = null, trailing = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
   // ONE ROW, AND A LIST FOR WHAT THE ROW CANNOT SHOW. Tabs shrink toward their floor and then the row
@@ -147,7 +147,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     window.setTimeout(() => setClosing((current) => current.filter((entry) => entry.key !== key)), duration)
   }, [])
   const tabsRef = useRef([])
-  const { tabs, activeKey, open, close, closeOthers, move, hold } = useTabs({ onCloseStart: startTabClose })
+  const { tabs, activeKey, focused, open, close, closeOthers, move, split } = useTabs(group, { onCloseStart: startTabClose })
   tabsRef.current = tabs
   useEffect(() => {
     const host = tabsHostRef.current
@@ -169,6 +169,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
   }, [activeKey, tabs.length])
   const names = useDocumentNames()
   const { setHeldSide } = useWorkspaceApi()
+  const { heldSide } = useWorkspace()
   const actions = useDocumentActions()
   useEffect(() => {
     for (const tab of tabs) {
@@ -214,42 +215,50 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
   // host's unoccupied right edge is that same end landing, so the reader never has to hit the last tab.
   // A landing that would not move anything is reported as none, so the marker only ever appears where a
   // move genuinely changes the order.
+  // A LANDING IS A GROUP AND A POSITION IN IT — `{ group, before }` — because a drag is how a reader
+  // rearranges the whole workspace, not just one row: dropping on ANOTHER group's strip moves the document
+  // there ([[tab-layout]]). The strip a tab is over answers both halves; the unoccupied stretch of a strip is
+  // that group's end position, so a reader never has to hit a tab to reach an empty group's row.
   const landingAt = (point, movingKey) => {
-    const currentTabs = tabsRef.current
     const el = elementAt(point.x, point.y, '.tab')
     if (el) {
-      const index = currentTabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
+      const host = el.closest('.tabstrip-tabs')
+      const targetGroup = host?.dataset.group
+      if (!targetGroup) return undefined
+      const siblings = [...host.querySelectorAll('.tab')].map((tab) => tab.dataset.tabKey)
+      const index = siblings.indexOf(el.dataset.tabKey)
       if (index < 0) return undefined
       const box = el.getBoundingClientRect()
       const after = point.x > box.left + box.width / 2
-      const before = after ? (currentTabs[index + 1] ? tabKey(currentTabs[index + 1]) : null) : el.dataset.tabKey
-      return moveTab(currentTabs, movingKey, before) === currentTabs ? undefined : before
+      const before = after ? (siblings[index + 1] ?? null) : el.dataset.tabKey
+      if (targetGroup === group && before === movingKey) return undefined
+      if (targetGroup === group && moveTab(tabsRef.current, movingKey, before) === tabsRef.current) return undefined
+      return { group: targetGroup, before }
     }
-
-    const host = tabsHostRef.current
-    if (!host || !currentTabs.length) return undefined
-    const hostBox = host.getBoundingClientRect()
-    if (point.x < hostBox.left || point.x > hostBox.right || point.y < hostBox.top || point.y > hostBox.bottom) return undefined
-    const rightEdge = Math.max(...[...host.querySelectorAll('.tab')].map((tab) => tab.getBoundingClientRect().right))
-    if (point.x < rightEdge) return undefined
-    return moveTab(currentTabs, movingKey, null) === currentTabs ? undefined : null
+    const host = elementAt(point.x, point.y, '.tabstrip-tabs') || elementAt(point.x, point.y, '.tabstrip')
+    const targetGroup = host?.dataset.group
+    if (!targetGroup) return undefined
+    if (targetGroup === group && moveTab(tabsRef.current, movingKey, null) === tabsRef.current) return undefined
+    return { group: targetGroup, before: null }
   }
 
   const startTabDrag = (event, tab) => {
     const key = tabKey(tab)
     const track = (point) => {
-      const before = landingAt(point, key)
-      if (before !== undefined) move(key, before)
-      setDrag((prev) => (prev && prev.key === key && prev.before === before ? prev : { key, before }))
+      const landing = landingAt(point, key)
+      // a landing inside THIS group reorders live under the pointer, as it always has; a landing in another
+      // group is committed on release, so a drag across the window does not tear the document out mid-motion
+      if (landing && landing.group === group) move(key, landing.before)
+      setDrag((prev) => (prev && prev.key === key && prev.before === landing?.before ? prev : { key, before: landing?.before ?? undefined }))
     }
     abandon.current = startDrag(event, {
       onStart: track,
       onMove: track,
       onDrop: (point) => {
-        const before = landingAt(point, key)
+        const landing = landingAt(point, key)
         setDrag(null)
         abandon.current = null
-        if (before !== undefined) move(key, before)
+        if (landing) move(key, landing.before, landing.group)
         else if (outsideViewport(point)) {
           const detached = tabsRef.current.find((item) => tabKey(item) === key)
           if (detached) {
@@ -271,9 +280,9 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
   // working set never grows the band; the band itself stays unclipped so a menu (an action's dropdown, the
   // tab list) can hang below it, and the action cluster keeps its own column that no tab can run under.
   return (
-    <div className="tabstrip">
+    <div className={`tabstrip${focused ? ' tabstrip-focused' : ''}`} data-group={group}>
       {leading}
-      <div ref={tabsHostRef} className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
+      <div ref={tabsHostRef} className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')} data-group={group}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
       {renderedTabs.map((tab, index) => {
         const key = tabKey(tab)
@@ -303,7 +312,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
                 drop marks. */}
             <div className="tab-inner">
               <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
-                onClick={(e) => { if (!isClosing) (e.altKey ? hold(tab) : open(tab)) }}>
+                onClick={(e) => { if (!isClosing) (e.altKey ? split(tab, heldSide === 'bottom' ? 'col' : 'row') : open(tab)) }}>
                 <TabKindIcon tab={tab} />
                 <TabDot tab={tab} specs={specs} sessions={sessions} />
                 <span className="tab-label">{tabLabel}</span>
@@ -370,10 +379,10 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
                 multiplexer, and a reader should not have to know which convention this window picked. The
                 move is refused when this is the only tab — the strip would be left empty and the split
                 would collapse right back — so the verb says it is unavailable instead of doing nothing. */}
-            {[['right', 'panel-right', 'tabs.menuSplitRight'], ['bottom', 'panel-bottom', 'tabs.menuSplitDown']].map(([side, icon, key]) => (
-              <ContextMenuItem key={side} icon={icon} disabled={tabs.length < 2}
+            {[['row', 'panel-right', 'tabs.menuSplitRight'], ['col', 'panel-bottom', 'tabs.menuSplitDown']].map(([dir, icon, key]) => (
+              <ContextMenuItem key={dir} icon={icon} disabled={tabs.length < 2}
                 data-tip={tabs.length < 2 ? t('tabs.menuSplitOnly') : undefined}
-                onClick={(e) => { e.stopPropagation(); setMenu(null); setHeldSide(side); hold(menu.tab) }}>
+                onClick={(e) => { e.stopPropagation(); setMenu(null); setHeldSide(dir === 'col' ? 'bottom' : 'right'); split(menu.tab, dir) }}>
                 {t(key)}
               </ContextMenuItem>
             ))}

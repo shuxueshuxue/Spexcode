@@ -255,12 +255,13 @@ The finding dock's session projection is [[dock-modes]]'s read-only glance over 
 The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
 terminal-input ownership; such shell changes do not create a second session-console surface.
 
-The Sessions document owns its frame chrome IN THE REGION THAT CARRIES THE FRAME ([[workspace-shell]]): the
-forest sidebar is the left sibling of a right-hand document column, and that column contains the shared
-workspace TabStrip above the console content. Held beside another document, this console draws neither —
-the region it sits in already has a band naming it, and the window already has one navigator. A page that
-drew its chrome wherever it was mounted put a second strip and a second forest in the second region, and
-made both forests fold on the one flag they share. The shell omits its
+The Sessions document draws NO tab strip: the band belongs to the region that holds the document
+([[workspace-shell]]), so a session in any cell of a grid is named by that cell's own strip. Its forest is
+page chrome it keeps only while the workspace is ONE group — the full-width Sessions page, where the forest
+is the left sibling of the console column exactly as before. Split the workspace and a cell holding a session
+shows the session: the window already has one navigator, and a page that drew its chrome wherever it was
+mounted put a second strip and a second forest in the second region, with both forests folding on the one
+flag they share. The shell omits its
 outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
 than allowing the strip to span above a list. The forest folds from the rail's panel control ([[side-nav]])
 through the workspace's one dock open/closed state — the console keeps no fold state of its own — and while

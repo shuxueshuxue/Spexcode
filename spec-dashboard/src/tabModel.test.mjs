@@ -277,3 +277,96 @@ test('focusTab resolves one-based ordinals and maps 9 to the last tab', () => {
   assert.equal(focusTab(tabs, 4), null)
   assert.equal(focusTab(tabs, 0), null)
 })
+
+// THE WORKSPACE AS A TREE ([[tab-strip]]). One group behaves exactly as one strip did; splitting makes a
+// pair and splitting again makes a grid. Every move below takes a document OUT of the group it was in —
+// that invariant is the whole model, and each of these tests is one way it used to be broken.
+import { groupOf, groupsOf, groupHolding, moveTabToGroup, normalizeLayout, resizeSplit, splitGroup, updateGroup } from './tabModel.js'
+
+let ids = 0
+const id = () => `g${(ids += 1)}`
+const layoutOf = (...tabsPerGroup) => normalizeLayout({
+  root: tabsPerGroup.length === 1
+    ? { tabs: tabsPerGroup[0] }
+    : { dir: 'row', children: tabsPerGroup.map((tabs) => ({ tabs })) },
+}, () => true, id)
+const groupKeys = (root) => groupsOf(root).map((group) => keys(group.tabs))
+
+test('a workspace with one group is one strip, and every read boundary produces a valid tree', () => {
+  const { root, focus } = normalizeLayout([file('a'), file('b')], () => true, id)
+  assert.deepEqual(groupKeys(root), [['#/file/a', '#/file/b']])
+  assert.equal(focus, groupsOf(root)[0].id, 'the only group is the focused one')
+  assert.equal(groupsOf(root)[0].active, '#/file/b', 'an unnamed active tab falls to the last one')
+  // a group that holds nothing is not a place, and a split with one surviving child is not a split
+  const pruned = normalizeLayout({ root: { dir: 'row', children: [{ tabs: [] }, { tabs: [file('a')] }] } }, () => true, id)
+  assert.deepEqual(groupKeys(pruned.root), [['#/file/a']])
+  // the same document cannot be in two groups: the read boundary keeps the first
+  const deduped = normalizeLayout({ root: { dir: 'row', children: [{ tabs: [file('a')] }, { tabs: [file('a'), file('b')] }] } }, () => true, id)
+  assert.deepEqual(groupKeys(deduped.root), [['#/file/a'], ['#/file/b']])
+})
+
+test('splitting moves the tab into a new group and focuses it; a group\'s only tab cannot be split off', () => {
+  const { root } = layoutOf([file('a'), file('b')])
+  const source = groupsOf(root)[0]
+  const split = splitGroup(root, source.id, '#/file/b', 'row', id)
+  assert.deepEqual(groupKeys(split.root), [['#/file/a'], ['#/file/b']])
+  assert.equal(groupOf(split.root, split.focus).active, '#/file/b', 'the new group shows the document that was sent there')
+  assert.equal(groupsOf(split.root)[0].active, '#/file/a', 'the source group falls back to a tab it still holds')
+  assert.equal(split.root.dir, 'row')
+  // the move would empty the source and collapse right back, so it is refused rather than done silently
+  const only = layoutOf([file('a')])
+  assert.equal(splitGroup(only.root, groupsOf(only.root)[0].id, '#/file/a', 'row', id), null)
+})
+
+test('a tab dragged into another group leaves the one it was in, and an emptied group collapses', () => {
+  const { root } = layoutOf([file('a'), file('b')], [session('s1')])
+  const [left, right] = groupsOf(root)
+  const moved = moveTabToGroup(root, '#/file/b', right.id)
+  assert.deepEqual(groupKeys(moved.root), [['#/file/a'], ['#/sessions/s1', '#/file/b']])
+  assert.equal(groupOf(moved.root, right.id).active, '#/file/b', 'the group that receives a document shows it')
+  assert.equal(moved.focus, right.id)
+  // dropping BEFORE a tab lands it at that position, not at the end
+  const ordered = moveTabToGroup(root, '#/file/b', right.id, '#/sessions/s1')
+  assert.deepEqual(groupKeys(ordered.root), [['#/file/a'], ['#/file/b', '#/sessions/s1']])
+  // moving the last tab out of a group collapses it — the grid rearranges, nothing is lost
+  const emptied = moveTabToGroup(moved.root, '#/sessions/s1', left.id)
+  assert.deepEqual(groupKeys(emptied.root), [['#/file/a', '#/sessions/s1'], ['#/file/b']])
+  const collapsed = moveTabToGroup(emptied.root, '#/file/b', left.id)
+  assert.deepEqual(groupKeys(collapsed.root), [['#/file/a', '#/sessions/s1', '#/file/b']])
+  assert.equal(groupsOf(collapsed.root).length, 1, 'the split is gone once one side is empty')
+})
+
+test('a group keeps its identity through edits elsewhere, so untouched documents stay mounted', () => {
+  const { root } = layoutOf([file('a'), file('b')], [session('s1')])
+  const [left, right] = groupsOf(root)
+  const next = updateGroup(root, left.id, (group) => ({ ...group, active: '#/file/a' }))
+  assert.equal(groupOf(next, right.id), right, 'the untouched group is the SAME object')
+  assert.notEqual(groupOf(next, left.id), left)
+})
+
+test('closing the last tab of a group collapses it, and the workspace can empty completely', () => {
+  const { root } = layoutOf([file('a')], [session('s1')])
+  const [left] = groupsOf(root)
+  const closed = updateGroup(root, left.id, (group) => ({ ...group, tabs: [], active: null }))
+  assert.deepEqual(groupKeys(closed), [['#/sessions/s1']])
+  const gone = updateGroup(closed, groupsOf(closed)[0].id, (group) => ({ ...group, tabs: [], active: null }))
+  assert.equal(gone, null, 'an empty workspace is no tree at all — the shell shows its empty place')
+})
+
+test('a divider names its split and clamps what either side can take', () => {
+  const { root } = layoutOf([file('a')], [file('b')])
+  assert.equal(resizeSplit(root, root.id, 0.3).ratio, 0.3)
+  assert.equal(resizeSplit(root, root.id, 0.02).ratio, 0.15)
+  assert.equal(resizeSplit(root, root.id, 0.99).ratio, 0.85)
+  assert.equal(groupHolding(root, '#/file/b').id, groupsOf(root)[1].id)
+})
+
+test('the retired one-strip and held-slot shapes migrate into the tree', () => {
+  // an older release's flat list
+  const flat = normalizeLayout([file('a'), session('s1')], () => true, id)
+  assert.deepEqual(groupKeys(flat.root), [['#/file/a', '#/sessions/s1']])
+  // and the held slot beside it: two groups, the held document in the second
+  const held = normalizeLayout({ root: { dir: 'row', children: [{ tabs: [file('a')] }, { tabs: [session('s1')] }] }, focus: 'missing' }, () => true, id)
+  assert.deepEqual(groupKeys(held.root), [['#/file/a'], ['#/sessions/s1']])
+  assert.equal(held.focus, groupsOf(held.root)[0].id, 'a focus naming no group falls back to the first')
+})

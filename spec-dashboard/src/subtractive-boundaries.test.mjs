@@ -80,8 +80,10 @@ test('the rail panel control folds the Sessions forest and is absent only where 
   // with the fold: the sidebar's own head row while open, the strip's first cell while closed. Bare review
   // and settings boards have neither sidebar, and only they have no switch at all.
   assert.match(shell, /const foldable = dockKind !== 'none' \|\| page === 'sessions'/)
-  assert.match(shell, /leading=\{foldable && !dock \? <DockToggle variant="strip" \/> : null\}/)
-  assert.match(sessionInterface, /leading=\{!forestOpen \? <DockToggle variant="strip" \/> : null\}/)
+  // the band is the REGION's now ([[workspace-shell]]); the fold switch rides the region's strip, and this
+  // document draws neither — it draws the console, and the forest while the workspace is one group.
+  assert.doesNotMatch(sessionInterface, /<TabStrip/)
+  assert.match(shell, /const leading = single && foldable && !dock \? <DockToggle variant="strip" \/> : null/)
   const dockSrc = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
   const forest = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
   assert.match(dockSrc, /<DockToggle className="dock-head-act" \/>\n\s*<\/span>/)
@@ -94,7 +96,6 @@ test('the rail panel control folds the Sessions forest and is absent only where 
   // ([[workspace-shell]]): held beside another document, this console is the console alone.
   assert.match(sessionInterface, /\{primaryRegion && forestMounted && <SessionForestPanel/)
   assert.match(sessionInterface, /const primaryRegion = usePanePrimary\(\)/)
-  assert.match(sessionInterface, /\{primaryRegion && route && <TabStrip/)
 })
 
 test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {

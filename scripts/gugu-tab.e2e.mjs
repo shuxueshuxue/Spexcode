@@ -109,7 +109,18 @@ await page.waitForFunction(() => window.__events.spawned !== null, null, { timeo
 const spawned = await page.evaluate(() => window.__events)
 assert.match(spawned.spawned.prompt, /Draw the SpexCode atlas of this repository/)
 assert.equal(spawned.errors.length, 0, 'no capability was reported missing')
-assert.match(await page.evaluate(() => document.getElementById('status').textContent), /agent/i)
+
+// The host ACCEPTING the request is not an agent working: a real run found an agent that died on its first
+// breath (403, "Churned for 0s") while the tab kept saying it was drawing. So until a write is observed the
+// status may only report what was asked, never what is happening.
+const asked = await page.evaluate(() => document.getElementById('status').textContent)
+assert.match(asked, /agent/i)
+assert.doesNotMatch(asked, /\bis (drawing|writing)\b/i,
+  `the status claims work is underway when the host has only accepted the request: ${asked}`)
+
+// A write under .spec/ is the earliest real evidence; only then may the wording change.
+await page.evaluate(() => window.__onFiles({ kind: 'change', changes: [{ path: '.spec/project/spec.md' }] }))
+await page.waitForFunction(() => /is writing/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
 assert.equal(errors.length, 0, `no error may appear at any point: ${errors.join(' | ')}`)
 
 console.log(`gugu tab e2e: ok — ${rowCount} node row(s), diagram node ${withDiagram ?? '(none in this tree)'}, agent started, 0 page errors`)

@@ -29,12 +29,15 @@ export const useBoardApi = () => useContext(BoardApi) || {}
 
 // ---------------------------------------------------------------------------------------------------
 
-const WorkspaceState = createContext(null)  // { dock, dockMode, palette, split, lockedSource, helpOpen }
-const WorkspaceApi = createContext(null)    // { setDock, openPalette, closePalette, toggleHelp, closeHelp, setCompose, takeCompose, watchCompose, splitTo, closeSplit, lockGraphTo }
+const WorkspaceState = createContext(null)  // { dock, dockMode, palette, heldSide, lockedSource, helpOpen }
+const WorkspaceApi = createContext(null)    // { setDock, setHeldSide, openPalette, closePalette, toggleHelp, closeHelp, setCompose, takeCompose, watchCompose, lockGraphTo }
 
 const DOCK_KEY = scopedKey('spexcode.dock')
 const DOCK_MODE_KEY = scopedKey('spexcode.dockMode')
-const SPLIT_KEY = scopedKey('spexcode.split')
+// WHERE the second region sits — beside the first, or under it. The document in it is the working set's
+// business ([[tab-strip]]); where the window puts that region is layout, like the dock's open state and the
+// region's own size, so it is remembered here and reused by the next split.
+const HELD_SIDE_KEY = scopedKey('spexcode.heldSide')
 
 export function WorkspaceProvider({ children }) {
   // The dock starts OPEN. It is how a reader finds a document without already knowing its address, and a
@@ -49,13 +52,9 @@ export function WorkspaceProvider({ children }) {
   // The search palette floats above whichever view is showing, so it is the shell's, not a view's. A view
   // that wants it says so; it does not own it, and a view being hidden can never swallow it.
   const [palette, setPalette] = useState(null)   // null | 'nodes' | 'sessions'
-  // The SECOND view. Two documents at once was the thing the old shape could not express at any price: every
-  // page read the global address, so there was only ever one answer to "what is showing". Now a view is
-  // handed its route, so a second one is a second route and a place to put it — a layout change, not a
-  // rewrite. It is workspace state because it is true of the window, not of either document in it.
-  const [split, setSplitState] = useState(() => {
-    try { const raw = JSON.parse(localStorage.getItem(SPLIT_KEY) || 'null'); return raw?.page ? raw : null } catch { return null }
-  })
+  // THE SECOND DOCUMENT IS NOT WORKSPACE STATE — it is the working set's second position, so it lives with
+  // the working set ([[tab-strip]]'s held slot) rather than beside it. It was a copied route here, which is
+  // exactly what let the same document sit in the strip and in the second region at once.
   // WHICH SESSION OWNS THE GRAPH. A lock scopes the board to one worktree: its nodes stay lit and every
   // other node dims. It is workspace state for the same reason the split is — it is true of the WINDOW, and
   // the surface that SETS it (a session row in the finding dock) is never the surface that shows it (the
@@ -63,6 +62,9 @@ export function WorkspaceProvider({ children }) {
   // just to have somewhere to click, and that list is what this replaces. Not persisted: a lock is a way of
   // looking at the board right now, not a preference to inherit on the next boot.
   const [lockedSource, setLockedSource] = useState(null)
+  const [heldSide, setHeldSideState] = useState(() => {
+    try { return localStorage.getItem(HELD_SIDE_KEY) === 'bottom' ? 'bottom' : 'right' } catch { return 'right' }
+  })
   // Help is shell chrome, not graph-local state: the same registry-backed legend remains reachable after routing.
   const [helpOpen, setHelpOpen] = useState(false)
   // A one-shot handoff between views: a board chord composes text that the sessions view should open with.
@@ -102,20 +104,16 @@ export function WorkspaceProvider({ children }) {
       composeWatchers.current.add(fn)
       return () => { composeWatchers.current.delete(fn) }
     },
-    splitTo: (route) => setSplitState(() => {
-      const next = route?.page ? { page: route.page, param: route.param ?? null, query: route.query ?? null } : null
-      try { localStorage.setItem(SPLIT_KEY, JSON.stringify(next)) } catch { /* private mode */ }
+    setHeldSide: (side) => setHeldSideState(() => {
+      const next = side === 'bottom' ? 'bottom' : 'right'
+      try { localStorage.setItem(HELD_SIDE_KEY, next) } catch { /* private mode */ }
       return next
-    }),
-    closeSplit: () => setSplitState(() => {
-      try { localStorage.removeItem(SPLIT_KEY) } catch { /* private mode */ }
-      return null
     }),
     // toggle: asking again for the session that already owns the graph releases it.
     lockGraphTo: (source, { toggle = true } = {}) => setLockedSource((prev) => (toggle && prev === source ? null : source || null)),
   }), [])
 
-  const state = useMemo(() => ({ dock, dockMode, palette, split, lockedSource, helpOpen }), [dock, dockMode, palette, split, lockedSource, helpOpen])
+  const state = useMemo(() => ({ dock, dockMode, palette, heldSide, lockedSource, helpOpen }), [dock, dockMode, palette, heldSide, lockedSource, helpOpen])
   return (
     <WorkspaceApi.Provider value={api}>
       <WorkspaceState.Provider value={state}>{children}</WorkspaceState.Provider>
@@ -136,6 +134,10 @@ export const useWorkspaceApi = () => useContext(WorkspaceApi) || {}
 //     pane will happily write its state over the visible one's.
 //   · `active` — whether this pane is the one showing. A hidden document must not hold the keyboard, and
 //     must not keep polling for a screen nobody is looking at.
+//
+// A document never asks which REGION it is in, and there is deliberately no such fact here. Frame chrome —
+// the navigator, each region's working-set band — is the frame's to draw; a document that had to know
+// whether it was the region carrying the chrome was a document drawing chrome it did not own.
 //
 // Absent (no provider) means "the whole window is this pane": the phone face, the projects hub, the cold
 // review fast-path and the sealed public build all render one view and nothing else.

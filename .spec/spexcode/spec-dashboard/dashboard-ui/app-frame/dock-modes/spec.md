@@ -2,7 +2,7 @@
 title: dock-modes
 status: active
 hue: 210
-desc: The left finding dock's explorer and sessions projections, selected by the rail.
+desc: The frame's one navigator, its explorer and session-forest projections, and how the band folds.
 code:
   - spec-dashboard/src/Dock.jsx
 related:
@@ -17,13 +17,23 @@ related:
   - spec-dashboard/src/dockBand.js
   - spec-dashboard/src/ContextDock.jsx
   - spec-dashboard/src/SessionForestPanel.jsx
+  - spec-dashboard/src/SessionContextMenu.jsx
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/projection-handover.e2e.mjs
+  - spec-dashboard/test/one-navigator.e2e.mjs
 ---
 # dock-modes
 
-The dock is one finding surface with two projections: **explorer** finds governed files and spec nodes;
-**sessions** finds active sessions.
+**THE WINDOW HAS ONE NAVIGATOR AND THE FRAME DRAWS IT.** It is one finding surface with two projections:
+**explorer** finds governed files and spec nodes; **sessions** finds sessions. Whichever is in force, the band
+is the frame's own — one element beside the document region, never a panel a page brings with it.
+
+The session projection is the **complete forest** ([[session-forest]]), the same component and the same rows
+on every route. **Historical:** the window once had TWO session lists — a complete forest owned by the Sessions
+page, and a thinner copy inside this dock that only a chord could reach — which is three costs for one
+capability: two implementations of row, zone, menu and keyboard behaviour to keep in step, a list that
+disappeared the moment the workspace was split into cells ([[workspace-shell]]), and a list the reader could
+not find. The thin copy is retired; one list answers everywhere.
 
 The explorer shows two SECTIONS — the spec tree ([[file-tree]]) and the real directory tree ([[disk-tree]]).
 They are two projections of the same project, identified by the session list's zone heads: a count pod, a label,
@@ -31,16 +41,14 @@ and a trailing hairline — the dock and the Sessions forest share one sidebar g
 disclose their own children, while the explorer head's collapse-folders door can clear both ledgers.
 
 **The sidebar is a property of the focused tab, not a setting the reader has to maintain** — both which
-projection it shows and whether it exists at all. A node or a governed file belongs with the explorer.
-**Bare issues and settings boards have no sidebar, while their object details retain the dock.** The
-Sessions route mounts no finding dock: the Sessions document draws its own forest sidebar
-([[session-console]]), and that forest folds from the same switch ([[side-nav]]) through the same open/closed state,
-so the reader has one fold rather than two. Projection selection is secondary state: the spec and graph
-route links select the explorer, while the sessions anchor selects no projection at all — its destination
-mounts no finding dock, so a projection written at click time could only dress the DEPARTING document's
-dock — and the rail light remains route-only. The one fold switch ([[side-nav]]) — the head row's last
-door while open, the strip's first cell while closed — is the only open/closed owner, and clicking the
-active route is idempotent. Explorer rows retain
+projection it shows and whether it exists at all. A node or a governed file belongs with the explorer; a
+session document belongs with the forest. **Bare issues and settings boards have no sidebar, while their
+object details retain the band.** Projection selection is secondary state: the spec and graph route links
+select the explorer, while the sessions anchor selects no projection at all — the route it lands on names its
+own, so a projection written at click time could only dress the DEPARTING document — and the rail light
+remains route-only. The one fold switch ([[side-nav]]) — the head row's last door while open, the strip's
+first cell while closed — is the only open/closed owner, and clicking the active route is idempotent.
+Explorer rows retain
 [[file-tree]]'s route behavior. Session rows reuse [[session-row]]'s projection and follow [[tab-strip]]:
 a plain click navigates to `sessions/<id>` in the focused tab, while ctrl/⌘-click opens it in a new tab. The row is chrome around the session document, so its pointer press suppresses the native
 button-focus side effect; clicking or dragging a row must not steal the xterm helper focus or an active IME
@@ -53,12 +61,11 @@ document is what ends the override — and routes with no opinion (graph, empty)
 last in force, persisted as `dockMode`, whose write is bookkeeping nothing rendered waits on. Deriving the
 rendered projection THROUGH that persisted state and correcting it from an effect painted whatever
 `dockMode` last held — a stale sessions projection on an arriving spec route, swapped one frame later — and
-letting the rail's sessions click write `dockMode` ahead of its own navigation committed a sessions
-projection on the departing document's dock: between the explorer and the Sessions forest a third,
-differently-dressed sessions sidebar flashed, mounted whole and thrown away one route tick later.
-`projection-handover.e2e.mjs` watches the commits themselves — not paints, which race vsync — and proves
-the band hands over dock⇄forest with zero intermediate sessions-projection mounts in both directions,
-including a fresh load carrying stale persisted `dockMode`.
+letting the rail's sessions click write `dockMode` ahead of its own navigation committed the forest on the
+departing document: the navigator changed on a document that had not changed, mounted whole and thrown away
+one route tick later. `projection-handover.e2e.mjs` watches the commits themselves — not paints, which race
+vsync — and proves the band hands over explorer⇄forest with zero forest mounts under a document address in
+either direction, including a fresh load carrying stale persisted `dockMode`.
 
 **The dock closes from the one fold switch, and the closing is a movement.** The switch is the last door of
 the dock's own head row while the dock is open, and stands in the tab strip while it is closed
@@ -80,8 +87,8 @@ Reduced-motion drops the animation and keeps both doors.
 **A FOLD IS NOT A HANDOVER, and only one of them is a width movement.** A panel can appear for two
 unrelated reasons: the reader unfolded it, or the route changed and this component is now the one drawing a
 band that was already on screen. The left band is the second case every time a reader moves between a
-Sessions document and a spec, because Sessions draws its own forest while document routes get the shell
-dock — the band persists, only its projection changes hands. Animating that as a fold is a lie about what
+session document and a spec, because the two projections are two components — the band persists, only its
+projection changes hands. Animating that as a fold is a lie about what
 happened, and it looked like one: the band collapsed to nothing and grew back, so switching documents read
 as the sidebar being torn down and rebuilt. A handover therefore dissolves in place — same width, same
 edge, new contents — and the fold keeps the width animation that actually means something.
@@ -97,7 +104,7 @@ of it.
 
 **The two arrivals are read in two places, because they happen in two places.** A fold is a state change and
 belongs to whoever owns the open/closed flag; a handover is a MOUNT, and only the panel element witnesses it.
-The shell stays mounted across the route switch that replaces its dock with the Sessions forest, so the
+The shell stays mounted across the route switch that swaps the explorer for the forest, so the
 shell's own fold state sees no transition there at all — reading the handover from it gives the swap a
 dissolve in the direction where the drawing component mounts and none in the direction where it does not.
 Every band panel therefore reads the handover from its own mount and the fold from the state that owns it.
@@ -109,8 +116,8 @@ whichever copy was touched last silently disagrees with the other — and here t
 moving the document column sideways at every switch. The legacy per-component keys are adopted ONCE and
 removed; a permanent read fallback would keep three sources of truth alive and let a stale one win.
 
-**THE FOLD IS ONE MECHANISM, AND EVERY FOLDABLE PANEL IN THE FRAME RUNS IT** — this dock, the Sessions
-document's own forest sidebar, and the spec document's right [[context-dock]]. They are the same gesture on
+**THE FOLD IS ONE MECHANISM, AND EVERY FOLDABLE PANEL IN THE FRAME RUNS IT** — both projections of this
+navigator and the spec document's right [[context-dock]]. They are the same gesture on
 the same `--dur-panel` token, so they are one `useFold` and one pair of keyframes, not three panels that each
 grew their own. The hard half is the LINGER: the mount has to outlive the state that hides it, and it must
 never be able to outlive its own timeout — a flag that could survive would strand a ghost panel the reader
@@ -129,12 +136,12 @@ the current key replaced, captured during the render that replaced it rather tha
 for the same one duration and under the same rule that it can never outlive its timer. One duration, one file,
 two things a fold can need held.
 
-**THE DOCK IS ONE BAND.** One header row serves both projections: the projection's name in sentence case,
-its tally, and the doors that projection owns. Switching projection changes what the dock LISTS, never how
-thick the dock is — which is the [[ui-state-model]] budget made structural rather than remembered. A
-projection may not mint a strip of its own. **Historical:** the explorer count row, sessions `+` row, and
-archive door were once three separate strips stacked around one list; that arrangement is retired in favor of
-this single header row.
+**THE NAVIGATOR IS ONE BAND.** Each projection draws exactly ONE header row above its list — what it is
+looking at, its tally, and the doors it owns — so switching projection changes what the band LISTS, never how
+thick the band is, which is the [[ui-state-model]] budget made structural rather than remembered. One row per
+projection is the whole allowance: a projection may not stack a second strip. **Historical:** the explorer
+count row, the sessions `+` row, and the archive door were once three separate strips around one list; that
+arrangement is retired.
 
 The header and zone tallies are last-good projections during a backend outage. They stay visible for context
 but carry the same translated `stale` marker as the status bar until the shared transport proves reachability
@@ -155,8 +162,8 @@ collapse-all view action — rather than beside either section ([[file-tree]]). 
 the static Specs and Files zone heads remain visible. The sessions head has no such door: its forest folds
 per family ([[session-forest]]).
 
-The dock's session projection is the **full session list beside every non-session document** in the desktop
-window. It consumes the board's active
+The session projection is the **full session list beside every document** in the desktop window, the Sessions
+route included. It consumes the board's active
 session set through `sessionForest`, including zone headings, nesting rails, fold pods, and status glyphs.
 `sessionForest` and each row consume the same `sessionDisplayState`:
 the status published by `/api/sessions` is ground truth. `asking`/`review`/`done`/`close-pending`/`error` form
@@ -165,24 +172,26 @@ records form the fourth archive zone and use the muted archive mark (`○`). Liv
 so a dead review or asking session stays in needs-you with its lifecycle glyph. Parentage follows the stored
 relationship across all status zones: a child never leaves its parent. **Glyph ≡ the session's own status; zone ≡
 the family's root status.** Each zone header counts every member of that zone (root plus all descendants); folding
-the family changes visibility, never the count. The header's `+` navigates to `sessions/new` and its archive
-door navigates to the sessions document's archive overlay. Both are finding-surface doors, while the archive
-overlay and all session content remain in the holding region. A CLICK on a row is navigation and nothing
-else: plain click replaces the current tab and ctrl/command-click opens a new one. The `+` door is a quiet
-24px rounded-square primary action: a blue hairline and centered shared plus mark at rest, a blue fill only on
-hover, and a two-pixel keyboard ring. It remains icon-only and keyboard-focusable while keeping the search and
-archive doors visually secondary. Moving a row is a
-separate gesture with its own section below, and it changes no address.
+the family changes visibility, never the count. The head's `+` navigates to `sessions/new` and its archive
+door navigates to the archive overlay the session document answers. Both are finding-surface doors, while the
+archive overlay and all session content remain in the holding region. A CLICK on a row is navigation and
+nothing else: plain click replaces the current tab and ctrl/command-click opens a new one. The three doors
+share the forest's row grammar ([[session-forest]]): New carries one short word and takes the row's spare
+width, archive and search are quiet fixed glyphs at its end, and the fold switch stands last at the corner.
+**Historical:** the retired thin list drew its own 24px blue-hairline `+` in the explorer's head row; one door
+with two implementations is one door that can disagree with itself about where `sessions/new` lands, and only
+the forest's survives. Moving a row is a separate gesture with its own section below, and it changes no
+address.
 
 Every zone heading uses the shared `--divider-rule` hairline for its trailing separator. The zone hue remains
 on the label and count pod, where it carries status meaning; the boundary itself has one token and one weight,
 matching the explorer's section heads and the tab/content seam.
-A focused session document means the Sessions route, which mounts no finding dock — so this projection never
-has an active row: the route-selected highlight, the parent-chain reveal, and the Option-arrow session walk
-all live with the Sessions document's own forest ([[session-forest]]), the one surface with a focused session
-to anchor them. **Historical:** the dock once rendered on the sessions route with its rows suppressed and
-carried an `activeSessionId` reveal and its own keyboard walk; when the route's dock was retired those could
-never fire again and are removed with it.
+**The projection marks the session being read, and only while one is being read.** On a session route the
+row whose id is in the address wears the selected band and its parent chain is revealed; on any other document
+there is no active row to mark, so none is marked. The Option-arrow session walk stays with the console
+([[session-console]]), which derives the order from this same visible forest — so the keys and the list cannot
+disagree about which rows exist. **Historical:** the retired thin list carried a second `activeSessionId`
+reveal and a second keyboard walk of its own; with one list there is one of each.
 
 The human ruling for cross-zone nesting is owned by [[session-row]]: it restores the parent relationship as the
 only nesting input and rejects both the old cross-zone split and the upward parent link. This dock follows that
@@ -196,11 +205,10 @@ lock itself is [[workspace-shell]] state so the two surfaces need not know about
 
 **Right-click on a session row opens that session's own menu** — rename, tmux attach, lock on graph, close —
 the same menu the selected session's document tools open from the actions slot. One menu, two ways in: the
-dock reaches ANY row, the actions slot reaches the one you are reading. The menu moved here with the rows
-when the console's own list was withdrawn; for one release it did not, and the rows carried a click and
-nothing else, which left rename and attach with no pointer route anywhere in the window. A finding row
-being a menu's anchor is not mutation state living in the dock: the row still only navigates, and every
-action the menu offers is performed by the menu.
+navigator reaches ANY row on ANY route, the actions slot reaches the one you are reading. The menu belongs to
+the surface that LISTS sessions, so the frame mounts it beside the list rather than a page mounting a copy.
+A finding row being a menu's anchor is not mutation state living in the navigator: the row still only
+navigates, and every action the menu offers is performed by the menu.
 
 Archive, close, and resume actions remain document-side; rename remains reachable from the selected session's
 document tools. On the routed Sessions document, the document owns the complete forest's explicit row
@@ -224,13 +232,13 @@ Three landings, and each is a place that was already on screen:
 - **Onto another row** — that row becomes the parent. Three landings refuse themselves and read as no
   landing at all: a row onto itself, a row onto a descendant of its own (which would make a cycle out of a
   tree), and a row onto the parent it already has.
-- **Into the list's own GAP, below the rows** — out of the subtree, to the top level. A tree has nowhere to
-  point at "no parent", so the empty space answers for it, and the list outlines itself while a nested row
-  is in hand. The outline is deliberate and so is what it replaced: the first version inserted a dashed
-  strip at the head of the list when a drag began, which pushed every row down by its own height at the
-  exact moment the reader was aiming at one — the row they were reaching for moved out from under the
-  pointer. An affordance for a move must not itself move anything.
-- **Onto the ARCHIVE DOOR in the header** — the same door that opens the archive takes what is dropped on
+- **Below the last row** — out of the subtree, to the top level. A tree has nowhere to point at "no parent",
+  so a labelled strip answers for it, offered only while a NESTED row is in hand because only then is there a
+  subtree to leave. **It stands AFTER the rows, and the position is the whole point:** offered above them it
+  appeared at the moment a row was picked up and pushed every row down by its own height — out from under the
+  pointer that was aiming at one. Below the last row it grows into space no row occupies. An affordance for a
+  move must not itself move anything.
+- **Onto the ARCHIVE DOOR in the head row** — the same door that opens the archive takes what is dropped on
   it. One door, one meaning ("where filed sessions go"), reached two ways; a separate drop strip would be a
   second answer to a question this button already answers. It arms itself while a session is carried and
   goes hot in the danger accent when the session is over it, because the drop removes a worktree.
@@ -246,12 +254,11 @@ ctrl/⌘-click-to-open-a-new-tab, alt-click-to-lock and the context menu are all
 emits after a real drag is eaten so a drop never also navigates. The move itself is the backend's existing
 reparent for both directions — the top level is the parent `null`, which is what it already was in the
 record, so there is no second notion of "detach" anywhere.
-When the dock is in sessions mode for a non-document finding surface, `SessionInterface` renders no `si-list`,
-board scrollport, list resizer, or 48px stub: the terminal or timeline owns the entire document content region.
-When a routed Sessions document is focused, the shell suppresses the dock's duplicate row projection and the
-document mounts the complete `si-list` forest described by [[session-console]]. This is the [[workspace-shell]]
-four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on the right, AMBIENT at
-the bottom — so one window cannot expose two competing navigation lists.
+`SessionInterface` renders no `si-list`, board scrollport, list resizer, or 48px stub on any route: the
+terminal or timeline owns the entire document content region, and the list beside it is this navigator. That is
+the [[workspace-shell]] four-region model made literal — FINDING on the left, HOLDING in the center, CONTEXT on
+the right, AMBIENT at the bottom — and it is what makes "one window, one navigation list" structural rather
+than a rule each surface has to remember.
 
 The dock mode is not a second navigation model and the DOCK does not read the global address: the shell
 derives the projection from the focused document and passes it down, exactly as it passes the board data.
@@ -264,22 +271,18 @@ header, the dock renders content only — the tree, or the session forest. There
 finding surface stays beside the document rather than competing with it. A reader who wants more drags it
 and that choice is what persists, so the default only decides what an unopinionated window looks like.
 
-## the session projection, as the console describes it
+## what a row shows
 
-**The finding dock's session projection** ([[dock-modes]]) is the read-only glance, built from the shared
-**`SessionRow`** face ([[session-activity]]) in the SAME **compact one-line, zone-grouped** layout as the
-console list: the session
-**headline** (the worker's live tmux self-summary once it exists, else a launch-prompt placeholder; a rename
-always wins) + a single colour-coded status **glyph** + pending-op count; the session's `launcher` remains
-durable data on the API payload but is not rendered as a per-row badge, keeping the glance clean. On one line,
-with a **monochrome
-inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the headline's end when the
-row is locked. It stays a
-**bounded** glance: the window never grows into a curtain — its height is capped (~80% of the viewport, and
-always stopping short of the bottom **stats strip**), and a long session list **scrolls** inside it rather
-than extending down over the board's stats bar. A single click **locks** the board onto
-that session (overlays light, rest grey, focus jumps to its first changed node, see [[keyboard-nav]]); a
-no-overlay session still locks un-greyed; a second click releases; **double-click opens** its board (mouse-side `⏎`). The **interface's own tabs** render the same `SessionRow` with different gestures:
-single click switches tab, while double-click has no separate meaning and therefore only leaves that tab
-selected. Locking from the console is the row's explicit **right-click → lock on graph** action above, not a
-hidden double-click gesture. 
+A session row is the shared **`SessionRow`** face ([[session-activity]]) in a **compact one-line,
+zone-grouped** layout: the session **headline** (the worker's live tmux self-summary once it exists, else a
+launch-prompt placeholder; a rename always wins) + a single colour-coded status **glyph** + pending-op count,
+with a **monochrome inline-SVG padlock** (the dashboard's own glyph vocabulary, not a colour emoji) at the
+headline's end when the row is locked. The session's `launcher` stays durable data on the API payload and is
+not drawn as a per-row badge, so the row says what the reader is choosing between and nothing more. A long
+list **scrolls inside the band** rather than growing the band.
+
+**Gestures are the ones named above and no others:** plain click navigates, ctrl/⌘-click opens a new tab,
+alt-click claims the graph, right-click opens the session's menu, and a drag moves the session in the tree.
+Double-click has no meaning of its own — its first click already navigated. **Historical:** an earlier
+floating session glance bound a single click to *lock the board* and a double-click to *open it*, with its own
+viewport-capped height; that popup is retired, and those two bindings are not this list's. 

@@ -385,6 +385,16 @@ body {
 .app { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; }
 .app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+/* A REGION is one place to read a document ([[workspace-shell]]): its band, the document, and that
+   document's own context dock. Both regions are the same box; only the held one takes a width. */
+.region { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+/* A SPLIT is two subtrees sharing one box at the reader's ratio, beside each other (`row`) or above and
+   below (`col`), with one divider between them ([[workspace-shell]]). Splitting again inside either side is
+   the same box again, which is what makes a grid out of one rule. */
+.region-split { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.region-col { flex-direction: column; }
+.region-slot { display: flex; min-width: 0; min-height: 0; }
+.region-body { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle-slot {
   position: absolute; top: var(--space-2); right: var(--space-2); z-index: 6;
@@ -465,20 +475,6 @@ body {
 .dock-head-act:hover:not(:disabled) { color: var(--ink2); background: var(--wash-hover); }
 /* a door with nothing behind it stays in place, quieter: the head keeps one shape ([[dock-modes]]) */
 .dock-head-act:disabled { opacity: .38; cursor: default; }
-.dock-head-act-new {
-  width: 24px; height: 24px; color: var(--blue); background: transparent;
-  border: 1px solid color-mix(in srgb, var(--blue) 72%, var(--line)); border-radius: var(--radius);
-  box-shadow: none; transition: color var(--dur-tab), background var(--dur-tab), border-color var(--dur-tab), box-shadow var(--dur-tab);
-}
-.dock-head-act-new:hover { color: var(--paper); background: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 22%, transparent); }
-/* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
-   is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
-   one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
-   instead of the head and the list sharing a piece of state to say "something is being carried". */
-body.is-session-dragging .dock-archive-door { color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
-body.is-session-dragging .dock-archive-door:hover {
-  color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
-}
 .ft-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 0 10px; scrollbar-gutter: auto; }
 .ft-graph-entry {
   flex: 0 0 30px; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 0 var(--space-3);
@@ -669,14 +665,13 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after, body.is
 .empty-door:hover { color: var(--ink2); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
 
 /* two views at once. The divider is the shared resizable primitive every other pane uses. */
-.content-split { flex: 1; min-height: 0; display: flex; overflow: hidden; }
-.content-split > .viewhost { flex: 1; min-width: 0; }
 .content-divider { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .55; }
 .content-divider:hover { opacity: 1; background: var(--blue); }
-.content-second { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; position: relative; border-left: 1px solid var(--line); }
-.content-second > .viewhost { flex: 1; min-height: 0; }
-.content-close { position: absolute; top: 4px; right: 6px; z-index: 3; display: inline-flex; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); cursor: pointer; }
-.content-close:hover { color: var(--ink2); background: var(--wash-hover); }
+.content-divider-h { cursor: row-resize; }
+/* the held region's band names ONE document, so its face is a tab's face without a tab's card: the same
+   icon, status mark and label, sitting on the same band the strip draws across the window. */
+.tabstrip-held .tab-held { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 0 var(--space-4); color: var(--ink2); font-size: var(--type-control); }
+.tabstrip-held .tab-held .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* [[spec-view]] — the document is full-width prose; files open at their own address. */
 .specview { flex: 1; min-height: 0; display: flex; overflow: hidden; }
@@ -1990,6 +1985,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
 .si-pill.new.on, .si-pill.archive.on { background: var(--wash-selected); color: var(--blue); }
 /* Archive is routed overlay state; Search is the momentary click twin of ⌥+/ ([[session-search]]). */
 .si-pill.archive, .si-pill.search { flex: none; width: 28px; padding: 0; justify-content: center; color: var(--muted); }
+/* THE ARCHIVE DOOR ARMS ITSELF while a session is in hand ([[dock-modes]]), and goes hot when the session
+   is over it — the drop is destructive, so the hot state speaks in the danger accent rather than the calm
+   one. The kind of drag is a body class ([[drag-gesture]]), which is what lets this door answer for itself
+   instead of the head and the list sharing a piece of state to say "something is being carried". */
+body.is-session-dragging .si-pill.archive { color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+body.is-session-dragging .si-pill.archive:hover {
+  color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); box-shadow: inset 0 0 0 1px var(--red);
+}
 
 
 /* ---- the shared review-page chrome ([[review-chrome]]) — the GitHub-style LIST page and DETAIL page

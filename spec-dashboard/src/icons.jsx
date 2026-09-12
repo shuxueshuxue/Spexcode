@@ -131,6 +131,8 @@ const ICONS = {
   'panel-left-close': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m16 15-3-3 3-3" /></> },
   'panel-left-open': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m14 9 3 3-3 3" /></> },
   'panel-right': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /></> },
+  // the third seam a document region can sit on: a pane stacked UNDER its divider (Lucide panel-bottom)
+  'panel-bottom': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 15h18" /></> },
   'panel-right-close': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /><path d="m8 9 3 3-3 3" /></> },
   'panel-right-open': { node: <><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /><path d="m10 15-3-3 3-3" /></> },
   // GitHub Primer Octicons `issue-opened-16` (MIT) — preserve the official filled ring + centre.

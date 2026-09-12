@@ -20,6 +20,7 @@ related:
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/textarea.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
+  - spec-dashboard/test/split-region.e2e.mjs
   - spec-dashboard/test/session-web.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
@@ -38,8 +39,8 @@ related:
 ## raw source
 
 `Enter` on the board opens the focused node's info popup; explicit session links and node-menu actions open the
-session interface. The finding dock's session projection is the at-a-glance summary. The dock and the console's
-working-session rows take lifecycle state from `/api/graph` (i.e. `spex graph --json`), while the console also uses
+session interface. The frame's session forest beside it is the at-a-glance summary ([[dock-modes]]). That list and
+the console's working-session rows take lifecycle state from `/api/graph` (i.e. `spex graph --json`), while the console also uses
 the documented archive index, retained-record, timeline/detail, and post-create transitional projections. Those
 secondary projections do not become a second lifecycle authority, so a human watching the dashboard and an agent
 driving the same sessions through the CLI see the same reported session state.
@@ -162,10 +163,9 @@ one terminal/conversation button replaces the URL and updates the remembered bas
 `git-compare` button replaces the URL with the diff face and uses `aria-pressed`; leaving diff returns to the remembered
 base face and leaves the session tab alone. Both are omitted when the session has only one available face (headless,
 offline, or archived). The slot does not carry the session's own **lifecycle menu** (rename, select, tmux
-attach, lock-on-graph, resume, quarantine, close). That menu opens from a right-click on the session's ROW —
-in the forest beside this document, or in the finding dock's session list on any other page ([[dock-modes]]):
-one menu, and its doors are the places that list sessions. Other document kinds register nothing, so their
-tab-row edge is blank.
+attach, lock-on-graph, resume, quarantine, close). That menu opens from a right-click on the session's ROW in
+the frame's forest ([[dock-modes]]) — one list on every route, so one menu with one door. Other document kinds
+register nothing, so their tab-row edge is blank.
 
 **The console cancels the native context menu nowhere.** It once cancelled it for the whole panel, which was
 survivable while a session list filled most of that panel and did own a right-click menu of its own; with the
@@ -199,8 +199,8 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
 action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert, batch-selection state, or bulk lifecycle action. Any future batch operation must be
-specified as an explicit selection mode owned by the dock session list.
+renders no action alert, batch-selection state, or bulk lifecycle action. Batch operations live where the rows
+do, as the forest's explicit selection mode ([[session-forest]]).
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
 stop or close would falsely claim the dashboard sent the agent a prompt.
@@ -249,13 +249,26 @@ tab never throws the reader into New Session. If the selected id is genuinely un
 deep link), the console falls back to New Session; a reader already moved to another valid tab keeps that switch.
 The same rule covers a session that ends or is closed elsewhere.
 
-The finding dock's session projection is [[dock-modes]]'s read-only glance over the same rows. Every row surface reads name, status colour, and glyph from one projection ([[session-row]]).
+**THIS DOCUMENT IS THE CONSOLE AND NOTHING ELSE.** It draws no session list and no working-set band: the list
+beside it is the frame's one navigator ([[dock-modes]]) and the band above it belongs to the region holding this
+document ([[workspace-shell]]). What the console still reads from that list is its ORDER — the Option-arrow
+session walk visits the rows a reader can see, derived from the same forest and the same shared disclosure
+store, so the keys and the visible list cannot disagree about which sessions exist. **Historical:** the console
+once owned a forest of its own, which is how the window came to have two session lists and a split workspace
+none; the forest moved to the frame and the console kept the console. Every row surface reads name, status
+colour, and glyph from one projection ([[session-row]]).
 
-The root may evolve shared frame mechanics while this console keeps the same document, dock, and explicit
+The root may evolve shared frame mechanics while this console keeps the same document and explicit
 terminal-input ownership; such shell changes do not create a second session-console surface.
 
-The Sessions document owns its frame chrome: the forest sidebar is the left sibling of a right-hand document
-column, and that column contains the shared workspace TabStrip above the console content. The shell omits its
+The Sessions document draws NO tab strip: the band belongs to the region that holds the document
+([[workspace-shell]]), so a session in any cell of a grid is named by that cell's own strip. Its forest is
+page chrome it keeps only while the workspace is ONE group — the full-width Sessions page, where the forest
+is the left sibling of the console column exactly as before. Split the workspace and a cell holding a session
+shows the session, and the window's own finding dock takes over the listing ([[dock-modes]]) so the reader
+still has a session list on screen. A page that drew its chrome wherever it was mounted put a second strip
+and a second forest in the second region, with both forests folding on the one flag they share; a page that
+drew none would have left a split workspace with no session list at all. The shell omits its
 outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
 than allowing the strip to span above a list. The forest folds from the rail's panel control ([[side-nav]])
 through the workspace's one dock open/closed state — the console keeps no fold state of its own — and while

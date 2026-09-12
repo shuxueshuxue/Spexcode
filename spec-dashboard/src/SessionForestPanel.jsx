@@ -20,7 +20,7 @@ const GHOST_SCALE = 0.75
 
 // The Sessions page owns the full mutable forest. The dock remains a compact finding projection; this panel
 // is the product surface where row selection, bulk close, and parent movement have one coherent owner.
-export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, folding = false, onSelect, onArchive, onSearch, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
+export default function SessionForestPanel({ sessions = [], activeId, archiveActive = false, closing = false, folding = false, onSelect, onArchive, onSearch, onArchiveDrop, reload, onContextMenu, onError, selectRequest = null, onSelectRequestConsumed }) {
   const t = useT()
   // the handover is read from this panel's own mount, like every band panel's ([[dock-modes]], `useArrival`).
   const arrival = useArrival(folding)
@@ -73,7 +73,11 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
     }
   }, [sessions, reload, onError])
 
+  // THE ARCHIVE DOOR IS ALSO A DROP DOOR ([[dock-modes]]): the same door that opens the archive takes what
+  // is dropped on it and asks the menu's own close confirm. It is asked first, because it is the one landing
+  // that is not a place in the tree.
   const landingAt = useCallback((point, held) => {
+    if (elementAt(point.x, point.y, '[data-session-archive-drop]')) return 'archive'
     const row = elementAt(point.x, point.y, '[data-session-drop-id]')
     if (row) {
       const id = row.dataset.sessionDropId
@@ -120,11 +124,12 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
       onDrop: (point) => {
         const target = landingAt(point, held)
         settle()
-        if (target !== undefined) void changeParent(held.id, target)
+        if (target === 'archive') onArchiveDrop?.(session)
+        else if (target !== undefined) void changeParent(held.id, target)
       },
       onCancel: settle,
     })
-  }, [changeParent, landingAt, selecting])
+  }, [changeParent, landingAt, onArchiveDrop, selecting])
 
   useEffect(() => () => dragAbort.current?.(), [])
 
@@ -169,7 +174,8 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
             <span className="si-pill-glyph"><Icon name="plus" size={14} /></span>
             <span className="si-pill-label">{t('session.newPill')}</span>
           </button>
-          <button type="button" className={`si-pill archive${archiveActive ? ' on' : ''}`} aria-label={t('session.archiveTitle')} data-tip={t('session.archiveTitle')} onClick={onArchive}>
+          <button type="button" className={`si-pill archive${archiveActive ? ' on' : ''}`} data-session-archive-drop
+            aria-label={t('session.archiveTitle')} data-tip={t('session.archiveTitle')} onClick={onArchive}>
             <span className="si-pill-glyph"><Icon name="archive" size={14} /></span>
           </button>
           <button type="button" className="si-pill search" aria-label={t('session.searchTitle')} data-tip={t('session.searchTitle')} onClick={onSearch}>
@@ -180,10 +186,6 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
         </div>
       )}
       <div className="si-session-scroll" data-session-scroll>
-        {rootDrop && <div className={`si-root-drop${drag.target === null ? ' on' : ''}`} data-session-root-drop data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
-          <Icon name="corner-up-left" size={14} />
-          <span>{t('session.rootDrop')}</span>
-        </div>}
         {forest.map((item) => {
           if (item.type === 'zone') {
             return <SessionZone key={`zone-${item.zone}`} item={item} baseClass="si-zone" onToggle={() => item.zone === 'offline' ? setSessionOfflineOpen(!offlineOpen) : undefined} />
@@ -208,6 +210,15 @@ export default function SessionForestPanel({ sessions = [], activeId, archiveAct
               'data-tip': session.ops?.length ? t('session.opsTitle') : t('session.lockTitle'),
             }} />
         })}
+        {/* THE WAY OUT OF A SUBTREE COSTS NO LAYOUT, and that is why it stands AFTER the rows. Offered above
+            them, it appeared at the exact moment a row was picked up and pushed every row down by its own
+            height — out from under the pointer that was aiming at one ([[drag-gesture]]). Below the last row
+            it grows into space no row occupies, so nothing the reader is aiming at moves. It is offered only
+            while a NESTED row is in hand, because only then is there a subtree to leave. */}
+        {rootDrop && <div className={`si-root-drop${drag.target === null ? ' on' : ''}`} data-session-root-drop data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
+          <Icon name="corner-up-left" size={14} />
+          <span>{t('session.rootDrop')}</span>
+        </div>}
       </div>
       {draggedItem && <SessionConsoleTreeRow item={draggedItem} activeId={activeId} selecting={selecting} picked={picked} inert
         style={{ width: drag.width, '--si-session-drag-ghost-scale': GHOST_SCALE, left: drag.x - drag.offsetX * GHOST_SCALE, top: drag.y - drag.offsetY * GHOST_SCALE }} />}

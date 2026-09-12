@@ -161,8 +161,12 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   // EACH REGION ANSWERS CONTEXT FOR ITS OWN DOCUMENT ([[context-dock]]): one dock per region, drawn by the
   // region, never one shell-level dock that only the routed document can ever describe.
   assert.match(shell, /<ContextDock page=\{route\?\.page\} param=\{route\?\.param\} query=\{route\?\.query\} open=\{hasContext && contextOpen\} \/>/)
-  assert.match(shell, /\{hasContext && <div className="context-toggle-slot"><ContextToggle visible=\{contextOpen\} onToggle=\{toggleContext\} \/><\/div>\}/)
-  assert.match(shell, /trailing=\{<span className="context-toggle-reservation" aria-hidden="true" \/>\}/)
+  // THE SLOT IS THE REGION'S, NOT THE BODY'S: it closes the region after the body, so its top-right corner is
+  // the band's right end (the column the strip's reservation keeps free), never a spot on the document.
+  assert.match(shell, /<ContextDock [^\n]*\/>\n\s*<\/div>\n\s*\{\/\*[\s\S]*?\*\/\}\n\s*\{hasContext && <div className="context-toggle-slot"><ContextToggle visible=\{contextOpen\} onToggle=\{toggleContext\} \/><\/div>\}\n\s*<\/div>/)
+  // and the band reserves that column only while there is a toggle to paint in it
+  assert.match(shell, /const reservation = hasContext \? <span className="context-toggle-reservation" aria-hidden="true" \/> : null/)
+  assert.match(shell, /trailing=\{reservation\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)
   assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 32px;[^}]*width:\s*32px;/s)
   assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*28px; height:\s*28px;[^}]*padding:\s*0;/s)

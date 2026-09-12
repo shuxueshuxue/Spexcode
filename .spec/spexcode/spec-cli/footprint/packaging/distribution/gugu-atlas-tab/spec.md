@@ -37,7 +37,18 @@ reason in its own slot and costs the node nothing else.
 **It follows, it does not write.** "Draw the atlas" starts an agent in the tab's task with the atlas instructions
 (the same text every package carries); the tab writes nothing itself. It re-reads the tree when the host reports a
 change under `.spec/`, once a burst of saves settles, so the tree grows while the agent works. A missing capability
-is said plainly, with where to grant it, never worked around.
+is said plainly, with where to grant it, never worked around. **The status line reports what the tab can observe,
+never what it hopes.** Handing the prompt over only proves the host accepted it: an agent can die on its first
+breath, and a tab that announced "drawing" at hand-off would keep announcing it over a workspace where nothing is
+happening. So a hand-off says a hand-off, and two independent facts move it from there: a write under `.spec/`,
+and what the host says about that one agent, asked for by the id `spawnAgent` returns. Whether the AGENT moved is
+the host's to say and is never inferred from files, which is why the tab asks for `agents:read` beside the
+`agents:control` that starts it. The field that carries it is `status`: an errored turn and a turn that never
+happened are projected as the same `lastStopReason: null`, so a branch keyed on that one could never run. And a
+`null` from the host means it CANNOT TELL — a closed panel, a terminal agent — never "no", so it falls back to
+reporting what was asked rather than announcing a verdict the tab was never given. Having written does not make an
+agent permanently present either: one that wrote and exited reports `completed`, and the line says it finished
+rather than going on claiming it is writing.
 
 The gugu shelf's shipped-example harness parses every `.js` file as a classic script, so the package's model, focus,
 and prompt helpers expose globals. Classic scripts share ONE global lexical scope, so each helper publishes its

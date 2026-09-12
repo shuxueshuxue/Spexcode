@@ -1,6 +1,7 @@
 // The SpexCode Atlas tab for gugu ([[gugu-atlas-tab]]). It reads the workspace's spec tree through the host's
 // workspace bridge, draws each node's diagram in the page with archify's own renderer, and starts an agent on the
 // atlas when asked. It writes nothing itself: the agent writes, and the tab follows the files it changes.
+;(() => {
 const { buildTree, renderMarkdown, SPEC_ROOT } = globalThis.SpexCodeAtlasModel
 const { focusDiagram, scopeIds } = globalThis.SpexCodeAtlasFocus
 const { ATLAS_PROMPT } = globalThis.SpexCodeAtlasPrompt
@@ -199,3 +200,4 @@ async function start() {
 }
 
 void start()
+})()

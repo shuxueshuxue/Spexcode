@@ -169,13 +169,20 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.match(css, /\.si-pill\s*\{[^}]*height:\s*28px;/s)
 })
 
-test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {
-  const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
-  assert.match(dock, /<IconButton icon="plus" size=\{15\}[\s\S]*className="dock-head-act dock-head-act-new"/)
+test('the new-session door is the navigator\'s own pill, and the dock head keeps no second copy', () => {
+  // ONE new-session door, on the surface that lists sessions ([[session-forest]]). The explorer head used to
+  // carry a thinner copy of it for the projection it no longer renders; a door with two implementations is a
+  // door that can disagree with itself about where `sessions/new` lands.
+  assert.match(forest, /className=\{`si-pill new\$\{activeId === 'new' \? ' on' : ''\}`\}/)
+  assert.match(forest, /<Icon name="plus" size=\{14\} \/>/)
+  assert.doesNotMatch(dock, /dock-head-act-new|icon="plus"/)
+  assert.doesNotMatch(css, /dock-head-act-new/)
   // keyboard focus is the one shared ring ([[typography]]); the door hand-writes no outline of its own
   assert.match(css, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/)
-  assert.doesNotMatch(css, /\.dock-head-act(?:-new)?:focus-visible\s*\{[^}]*outline:/)
-  assert.match(css, /\.dock-head-act-new\s*\{[\s\S]*width:\s*24px; height:\s*24px;[\s\S]*background:\s*transparent;[\s\S]*border:\s*1px solid color-mix\(in srgb, var\(--blue\) 72%, var\(--line\)\);[\s\S]*border-radius:\s*var\(--radius\)/)
+  assert.doesNotMatch(css, /\.(?:dock-head-act|si-pill):focus-visible\s*\{[^}]*outline:/)
+  // and it reads as the row's widest element, the two quiet glyphs beside it ([[dock-modes]])
+  assert.match(css, /\.si-pill\.new \{ flex: 1;/)
+  assert.match(css, /\.si-pill\.archive, \.si-pill\.search \{ flex: none; width: 28px;/)
 })
 
 // The strip's law says a second tab of a kind is born from ctrl/⌘-click or a document's own explicit
@@ -186,7 +193,9 @@ test('new-session dock door keeps a compact icon target with a visible keyboard 
 test('the new-tab gesture is ONE predicate every pointer row surface asks', () => {
   assert.match(tabs, /export const isNewTabGesture = \(event\) => event\.button === 0 && !event\.shiftKey && !event\.altKey/)
   assert.match(tabs, /export function newTabAnchor\(event, href\) \{\n  if \(!isNewTabGesture\(event\)\) return false/)
-  for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest], ['SpecSearch', palette]]) {
+  // every surface that LISTS workspace objects asks it. Dock is not one of them any more: it is the frame
+  // around the explorer tree, and the tree is what owns the rows.
+  for (const [name, src] of [['FileTree', fileTree], ['SessionForestPanel', forest], ['SpecSearch', palette]]) {
     assert.match(src, /isNewTabGesture\(/, `${name} does not ask the shared new-tab predicate`)
   }
   for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest]]) {
@@ -264,12 +273,16 @@ test('the frame is drawn once: a region holds a document, its band and its own c
   assert.match(shell, /<div className=\{`region-split region-\$\{node\.dir\}`\}>/)
   assert.match(shell, /resizeWorkspaceSplit\(node\.id, ratio\)/)
   assert.match(shell, /<TabStrip specs=\{specs\} sessions=\{sessions\} route=\{route \|\| \{ page: 'empty', param: null, query: null \}\} group=\{group\.id\}/)
-  // every group keeps its own mounted documents, and only the workspace's ONE group may draw page chrome
-  assert.match(shell, /<ViewPool group=\{group\} override=\{showing\} inactive=\{inactive\} single=\{single\} \/>/)
+  // every group keeps its own mounted documents
+  assert.match(shell, /<ViewPool group=\{group\} override=\{showing\} inactive=\{inactive\} \/>/)
   // a route that is not a document — the graph, the launch page — shows in the FOCUSED cell
   assert.match(shell, /showing=\{isDocument\(page, param\) \? null : \{ page, param, query \}\}/)
-  assert.match(shell, /primary: single/)
-  assert.match(workspace, /export const usePanePrimary = \(\) => useContext\(Pane\)\?\.primary !== false/)
+  // A DOCUMENT NEVER ASKS WHICH REGION IT IS IN. Frame chrome is the frame's to draw — the navigator once,
+  // a band per region — so the pane carries the two facts a mounted document cannot work out for itself and
+  // no third one. `primary` existed only for a document that drew chrome it did not own.
+  assert.match(shell, /const pane = useMemo\(\(\) => \(\{ address: entry\.address, active: showing \}\)/)
+  assert.doesNotMatch(shell, /primary: single|primary=\{/)
+  assert.doesNotMatch(workspace, /usePanePrimary|\?\.primary/)
   assert.match(css, /\.region \{[^}]*flex-direction: column;/s)
   assert.match(css, /\.region-body \{[^}]*display: flex;/s)
   assert.match(css, /\.region-split \{[^}]*display: flex;/s)

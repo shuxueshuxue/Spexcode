@@ -67,12 +67,13 @@ whole shell hangs off, re-derived from what the product is rather than from what
   mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
-  **The dock is a property of the focused tab** — both its projection and its existence. A node or a governed
-  file brings the explorer. A FULL-WIDTH Sessions surface brings no shell dock at all: it is a complete document that owns
-  its own forest and console ([[session-console]]), so a finding dock beside it would only repeat the same list
-  under an empty header. Once the workspace is split that forest is gone — page chrome belongs to a one-group
-  workspace — and the dock's sessions projection takes the listing over, so focusing a session cell never
-  leaves the reader without a list of sessions. Review surfaces and Settings have no dock anywhere in their address family — a detail
+  **The navigator is a property of the focused tab** — both its projection and its existence. A node or a
+  governed file brings the explorer; a session document brings the session forest. **It is ONE navigator for
+  the whole window, drawn here and nowhere else:** the same forest stands beside a session document, beside a
+  spec node, and beside a grid of cells, so no page carries a list of its own and no arrangement of the
+  workspace can leave the reader without one. **Historical:** the Sessions page used to bring its own forest
+  and the dock kept a thinner copy for every other route — two implementations of one list, the complete one
+  reachable from exactly one address, and neither surviving a split workspace. Review surfaces and Settings have no navigator anywhere in their address family — a detail
   route never inherits the previous Spec/Explorer projection from workspace state, which belongs to document
   routes only. Issues and Settings use the shared workspace/tab strip; Issues omits the
   activity rail while retaining the strip. Spec/file routes keep the Spec rail selection and derive the explorer
@@ -83,7 +84,7 @@ whole shell hangs off, re-derived from what the product is rather than from what
   active tab; everything held is an address — a node, a file, a session, or a resident Issues/Settings board.
   Board detail routes focus their corresponding resident tab.
   **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
-  区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
+  区，而不是左侧边栏。"* The rail is only a way to change destination and the navigator only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). With no document focus after closing the last session, the center lands on the explicit
   empty workspace (`#/empty`) and names the ways back in through the explorer/palette. The graph remains an
@@ -268,11 +269,13 @@ new vocabulary and no new surface.
 component, which draws three things: the band naming the group it holds, that group's showing document, and
 that document's own context dock ([[context-dock]]). Everything else in the frame — the rail, the navigator
 sidebar, the status bar, the palette — belongs to the WINDOW and is drawn exactly once, beside every region.
-The rule has teeth in one direction that is easy to get wrong: a document that owns page chrome of its own
-(the Sessions console's forest, [[session-console]]) draws it only while the workspace is ONE group, so the
-pane tells it which kind of workspace it is in. A second region that rendered a PAGE where it should render a
+**No document draws frame chrome at all**, which is why no document has to ask which region it is in: there
+is deliberately no such fact on the pane. A second region that rendered a PAGE where it should render a
 DOCUMENT is what painted a second strip listing every tab, a second navigator, and two navigators folding
-together because they read one flag.
+together because they read one flag. The first repair let a page keep its chrome and told it whether it was in
+the one-group workspace — which fixed the symptom and kept the cause: a page still owned a list the window was
+responsible for, so the list existed in one arrangement of the workspace and vanished in another. The navigator
+is the frame's ([[dock-modes]]), unconditionally, and a document is a document in every cell.
 
 **The workspace is a TREE of regions, and the layout is that tree drawn.** A group is a region; a split is
 two subtrees sharing one box at a ratio the reader drags, with one divider between them — [[tab-strip]] owns
@@ -297,9 +300,9 @@ have to know which convention this window picked.
 
 **Each region answers context for its own document.** The dock a region draws describes the document that
 region holds — two spec nodes held side by side get two docks, each with its own node's issues and history —
-and the region owns the open/closed state its toggle flips, at its own right edge. The primary region's
-choice is the persisted habit; the held region starts closed, so a document sent right never spends the
-other document's width until the reader asks it to.
+and the region owns the open/closed state its toggle flips, at its own right edge. The one-group workspace's
+choice is the persisted habit; a region born from a split starts closed, so a document sent beside another
+never spends its width until the reader asks it to.
 
 Measured with two live spec documents open: 0.02 seconds of script per 10 idle seconds.
 

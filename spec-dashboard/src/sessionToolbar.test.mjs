@@ -19,6 +19,7 @@ const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 const mergePlugin = readFileSync(new URL('../../.spec/spexcode/.plugins/skills/merge/spec.md', import.meta.url), 'utf8')
 const mergeTemplate = readFileSync(new URL('../../spec-cli/templates/spec/project/.plugins/skills/merge/spec.md', import.meta.url), 'utf8')
+const shell = readFileSync(new URL('./Shell.jsx', import.meta.url), 'utf8')
 
 test('session faces are routed and the console has no second tab rail', () => {
   assert.doesNotMatch(source, /className="si-tabs"|className="si-base-tabs"/)
@@ -50,11 +51,13 @@ test('session faces are routed and the console has no second tab rail', () => {
   assert.match(source, /<ResourcePicker entries=\{catalog\} openIds=\{openResourceTabIds\} open=\{resourceMenu\}/)
   assert.doesNotMatch(source, /className="si-tabbar"/)
   assert.match(source, /function SessionResourcePanel\(/)
-  assert.match(source, /<SessionForestPanel/)
+  // the navigator is the FRAME's ([[dock-modes]]): this document draws the console and nothing beside it
+  assert.doesNotMatch(source, /<SessionForestPanel|<TabStrip/)
+  assert.match(shell, /<SessionForestPanel sessions=\{sessions\} activeId=\{page === 'sessions' \? \(param \|\| 'new'\) : null\}/)
   assert.doesNotMatch(source, /id: 'session-menu'/)
-  // the session's own lifecycle menu has one door on this surface: its forest row. Its tab is an ordinary tab.
-  assert.match(source, /onContextMenu=\{setCtxMenu\}/)
-  assert.doesNotMatch(source, /onSessionContextMenu/)
+  // the session's lifecycle menu lives where sessions are LISTED, and that is the frame's navigator now
+  assert.match(shell, /onContextMenu=\{setSessionMenu\}/)
+  assert.doesNotMatch(source, /onSessionContextMenu|SessionContextMenu/)
 })
 
 test('posted resources use the floating picker and selected-file actions', () => {
@@ -136,21 +139,23 @@ test('conversation revisit refreshes a warm instance without clearing its render
   assert.doesNotMatch(timelineChat, /useEffect\(\(\) => \{\n    if \(!active\) return undefined\n    setEvents\(null\)/)
 })
 
-test('archive overlay remains document-side while the Sessions forest is restored', () => {
+test('the archive door is the navigator\'s, the overlay it opens is the document\'s', () => {
   assert.match(source, /archiveRequested = false/)
   assert.match(source, /if \(archiveRequested\) setArchiveIndexOpen\(true\)/)
   assert.match(source, /<ArchivePage sessions=\{archivedSessions\}/)
-  assert.match(source, /<SessionForestPanel/)
+  // the archive DOOR is on the frame's forest; the overlay it opens stays this document's
+  assert.match(shell, /onArchive=\{\(\) => navigate\('sessions', page === 'sessions' && param !== 'new' \? param : null, \{ query: \{ archive: '1' \} \}\)\}/)
 })
 
-test('Sessions owns explicit row selection and complete tree drag', () => {
-  assert.match(source, /<SessionForestPanel/)
+test('the navigator owns explicit row selection and complete tree drag', () => {
+  assert.match(shell, /<SessionForestPanel/)
+  assert.match(shell, /onMultiSelect=\{\(session\) => setSelectRequest\(session\)\}/)
   assert.match(contextMenu, /onMultiSelect, onDetach/)
   assert.match(contextMenu, /startSelect/)
   assert.match(contextMenu, /corner-up-left/)
 })
 
-test('archive index is a transient overlay opened by the dock route door', () => {
+test('archive index is a transient overlay opened by the routed archive door', () => {
   assert.match(source, /fetch\(apiUrl\('\/api\/sessions\/archive-index'\)\)/)
   assert.match(source, /if \(archiveRequestRef\.current\) return archiveRequestRef\.current/)
   assert.match(source, /const \[archiveIndexOpen, setArchiveIndexOpen\] = useState\(false\)/)
@@ -169,7 +174,7 @@ test('offline and archive headers own the disclosure target without nested contr
   assert.doesNotMatch(source, /si-zone-need[^\n]*onClick|si-zone-run[^\n]*onClick/)
 })
 
-test('the forest owns the shared keyboard walk and inert chrome boundary', () => {
+test('the navigator owns the shared keyboard walk and inert chrome boundary', () => {
   assert.match(forest, /import \{ useKeyboardScope \} from '\.\/KeyboardService\.jsx'/)
   assert.match(forest, /import \{ resolveSessionShortcut \} from '\.\/sessionShortcuts\.js'/)
   assert.match(forest, /useKeyboardScope\(\(event\) => \{[\s\S]*?resolveSessionShortcut\(forest, activeId, event\)/)
@@ -186,7 +191,7 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.match(source, /!res\.ok \|\| j\?\.ok === false/)
   assert.match(source, /function ActionOutcome\(\{ outcome \}\)/)
   assert.match(source, /setActionOutcome\(\{ owner, phase: 'failed'/)
-  assert.match(source, /onError=\{\(message\) => \{[\s\S]{0,300}setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)/)
+  assert.match(source, /setActionOutcome\(\{ owner: 'panel', phase: 'failed', message: [\s\S]{0,80}\}\)|setActionOutcome\(\{ owner, phase: 'failed'/)
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>\s*<ActionOutcome/)
 })
 

@@ -6,6 +6,8 @@ import StatusBar, { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
 import TabStrip, { placeLabel } from './TabStrip.jsx'
 import Dock from './Dock.jsx'
+import SessionForestPanel from './SessionForestPanel.jsx'
+import SessionContextMenu from './SessionContextMenu.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import ViewErrorBoundary from './ViewErrorBoundary.jsx'
 import { useRoute, navigate, routeHash } from './route.js'
@@ -28,6 +30,8 @@ import { groupsOf, isGroup, tabKey } from './tabModel.js'
 import { isDocument } from './viewCatalog.js'
 import { useDocumentNames } from './documentActions.jsx'
 import { useBackendHealth } from './BackendStatus.jsx'
+import { apiFetch } from './data.js'
+import { useBoardApi } from './workspace.jsx'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { useLaunchers } from './launch.js'
 import { harnessForId } from './harness.jsx'
@@ -50,17 +54,16 @@ import { createViewScope } from './viewScope.js'
 // it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Review and
 // settings surfaces have no sidebar, including their detail routes. `keep` is the third answer — graph,
 // empty, and the bare sessions board have no opinion and preserve the current projection.
-const dockFor = (page, single = true) => {
+const dockFor = (page) => {
   // Review surfaces are full-width throughout their address family. A detail route must not inherit the
   // previous Spec/Explorer projection from workspace state; that state belongs only to document routes.
   if (page === 'issues') return 'none'
   if (page === 'settings') return 'none'
-  // A FULL-WIDTH Sessions page is a complete document surface: it owns its forest and its console, so a
-  // finding dock beside it would only repeat the same list under an empty header. Split the workspace and
-  // that forest is gone — page chrome belongs to a one-group workspace ([[workspace-shell]]) — so the
-  // window's own dock is where the session list lives, or focusing a session cell would leave the reader
-  // with no list of sessions on screen at all.
-  if (page === 'sessions') return single ? 'none' : 'sessions'
+  // ONE NAVIGATOR, drawn by the frame ([[dock-modes]]). A session document brings the session forest; a node
+  // or a governed file brings the explorer. The console used to carry a forest of its own, which is how the
+  // window ended up with two session lists — a complete one inside one page, and a thinner copy beside every
+  // other page — and with none at all in a split workspace.
+  if (page === 'sessions') return 'sessions'
   if (page === 'spec' || page === 'file') return 'explorer'
   return 'keep'
 }
@@ -111,7 +114,7 @@ function ViewScopeHost({ page, param, query, active, children }) {
 // RENDER ORDER IS INSERTION ORDER, never recency. Reordering keyed children moves real DOM nodes, and a
 // moved node re-attaches its iframes and canvases — which is a reload wearing a different name. Recency
 // lives in a counter used only to pick the victim.
-function ViewPool({ group, override = null, inactive = false, single = true }) {
+function ViewPool({ group, override = null, inactive = false }) {
   // A ROUTE THAT IS NOT A DOCUMENT still has to be somewhere: the graph, the launch page, the empty
   // workspace are things the reader is LOOKING at without holding, so the focused group shows them in place
   // of its own document until the reader lands on a document again ([[tab-strip]]).
@@ -139,7 +142,7 @@ function ViewPool({ group, override = null, inactive = false, single = true }) {
       return next
     })
   }, [key, address])
-  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={!inactive && entry.key === key} single={single} />)
+  return pool.map((entry) => <PoolPane key={entry.key} entry={entry} showing={!inactive && entry.key === key} />)
 }
 
 // One mounted document. It is MEMOISED, and that is not a micro-optimization: the shell re-renders on
@@ -147,12 +150,10 @@ function ViewPool({ group, override = null, inactive = false, single = true }) {
 // of a workspace would scale with how many tabs the reader keeps, which is the one thing a pool must not
 // do. Pane props are stable between route changes, so a hidden pane re-renders only when it is shown or
 // its address moves. Its other half is the frozen board a hidden pane reads ([[workspace-shell]]).
-const PoolPane = memo(function PoolPane({ entry, showing, single = true }) {
+const PoolPane = memo(function PoolPane({ entry, showing }) {
   const t = useT()
   const { component: View, className } = viewFor(entry.page)
-  // `primary` says whether this document may also draw PAGE chrome of its own: only when the workspace is
-  // one group, because a grid draws one band per region and one navigator for the window ([[workspace-shell]]).
-  const pane = useMemo(() => ({ address: entry.address, active: showing, primary: single }), [entry.address, showing, single])
+  const pane = useMemo(() => ({ address: entry.address, active: showing }), [entry.address, showing])
   return (
     <div className={`viewhost ${className}`} aria-hidden={showing ? undefined : 'true'}
       style={showing ? undefined : { display: 'none' }}>
@@ -466,7 +467,7 @@ function DocumentRegion({ group, single, specs, sessions, dock, foldable, inacti
         leading={leading} trailing={<span className="context-toggle-reservation" aria-hidden="true" />} />
       <div className="region-body">
         <div className="app-main">
-          <ViewPool group={group} override={showing} inactive={inactive} single={single} />
+          <ViewPool group={group} override={showing} inactive={inactive} />
         </div>
         <ContextDock page={route?.page} param={route?.param} query={route?.query} open={hasContext && contextOpen} />
         {hasContext && <div className="context-toggle-slot"><ContextToggle visible={contextOpen} onToggle={toggleContext} /></div>}
@@ -558,8 +559,13 @@ export default function Shell({ routeOverride = null, inactive = false }) {
     }
   }, [sessions, notify, t])
   const documentNames = useDocumentNames()
+  const { reload } = useBoardApi()
+  // the session row menu belongs to the surface that LISTS sessions ([[session-console]]), which is the frame
+  const [sessionMenu, setSessionMenu] = useState(null)
+  const [selectRequest, setSelectRequest] = useState(null)   // the menu's "select…" hands the list a row
+  const [closeRequest, setCloseRequest] = useState(null)     // a row dropped on the archive door, awaiting its confirm
   const { dock, dockMode, palette, helpOpen } = useWorkspace()
-  const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode } = useWorkspaceApi()
+  const { closePalette, openPalette, toggleHelp, closeHelp, setDock, setDockMode, lockGraphTo } = useWorkspaceApi()
   useStatusItem({ id: 'help', side: 'left', priority: -Infinity, text: '?',
     tooltip: withShortcut(t('hud.helpTitle'), 'graph.help'), onClick: toggleHelp })
   // THE CONTEXT DOCK STARTS CLOSED, and that is a measurement rather than a taste. At 1440 with the
@@ -580,7 +586,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // selects a projection by hand — that override simply lasts until the reader moves to another DOCUMENT,
   // which is what makes it an override rather than a second setting. The effect is keyed on the document,
   // not the address, so switching a session's own face is not a focus change.
-  const dockKind = dockFor(page, groups.length <= 1)
+  const dockKind = dockFor(page)
   // THE RAIL'S FOLD CONTROL EXISTS WHEREVER THERE IS A SIDEBAR TO FOLD ([[side-nav]]). The shell's dock is
   // one such sidebar; the Sessions document's own forest is the other and follows the same open/closed
   // state — so the bare review and settings boards, which have neither, are the only frames without it.
@@ -710,10 +716,39 @@ export default function Shell({ routeOverride = null, inactive = false }) {
         <SideBar page={page} graphOnly={graphOnly} needsYou={needsYou} />
         {dockMounted && dockKind !== 'none' && (
           <ViewErrorBoundary resetKey="dock">
-            <Dock closing={closingDock} folding={foldingDock} mode={dockProjection} specs={specs} sessions={sessions}
-              focusId={page === 'spec' ? param : null} />
+            {dockProjection === 'sessions'
+              ? <SessionForestPanel sessions={sessions} activeId={page === 'sessions' ? (param || 'new') : null}
+                  closing={closingDock} folding={foldingDock}
+                  archiveActive={page === 'sessions' && query?.archive === '1'}
+                  onSelect={(id, options) => {
+                    if (options?.newTab && id !== 'new') openNewTab('sessions', id)
+                    else navigate('sessions', id)
+                  }}
+                  onArchive={() => navigate('sessions', page === 'sessions' && param !== 'new' ? param : null, { query: { archive: '1' } })}
+                  onSearch={() => openPalette('sessions')}
+                  onArchiveDrop={setCloseRequest}
+                  reload={reload}
+                  onContextMenu={setSessionMenu}
+                  selectRequest={selectRequest}
+                  onSelectRequestConsumed={() => setSelectRequest(null)}
+                  onError={(message) => notify(message, { kind: 'error' })} />
+              : <Dock closing={closingDock} folding={foldingDock} specs={specs} sessions={sessions}
+                  focusId={page === 'spec' ? param : null} />}
           </ViewErrorBoundary>
         )}
+        {/* the session row menu belongs to the surface that LISTS sessions ([[session-console]]), and that
+            surface is now the frame's own navigator — one list, one menu, on every route. */}
+        <SessionContextMenu menu={sessionMenu} onClose={() => setSessionMenu(null)} onChanged={reload}
+          closeRequest={closeRequest} onCloseRequestDone={() => setCloseRequest(null)}
+          onError={(message) => notify(message, { kind: 'error' })}
+          onLock={(session) => lockGraphTo(session.source, { toggle: false })}
+          onMultiSelect={(session) => setSelectRequest(session)}
+          onDetach={(session) => {
+            void apiFetch('/api/sessions/reparent', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ children: [session.id], parent: null }),
+            }).then(() => reload?.())
+          }} />
         <div className="app-content-column">
           <div className="app-content-row">
             {/* THE WORKSPACE IS A TREE OF REGIONS ([[workspace-shell]]). One group is the ordinary window and

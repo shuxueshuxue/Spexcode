@@ -19,14 +19,15 @@ the human described: "一个 session 的视图可以在 terminal 和 conversatio
 
 This is the route/view adapter child of [[session-console]], not a second session surface. `session-console`
 owns the interface behavior; this child owns only how the routed view derives its selection and receives workspace
-compose handoffs. The archive header pill writes the existing `archive=1` query through this adapter; the console
-reads that query to open its transient archive overlay and clears it on close, so the doorway and browser address
-cannot disagree.
+compose handoffs. The archive `archive=1` query is written by the door on the frame's navigator
+([[dock-modes]]) — the surface that LISTS sessions owns the door — and the console reads that query to open its
+transient archive overlay and clears it on close, so the doorway and browser address cannot disagree. This
+adapter therefore hands the console its address and its compose seed, and no list props at all.
 
 The live console, mounted as a view. Every behaviour it had, it kept; what changed is where its state lives.
 The bare `#/sessions` route is a finding surface and is never a top-strip document; a selected session
 `#/sessions/<id>` is the object document. Its `surface` query (`conversation` or `terminal`) is passed into
-the console as route state. Opening a session object from the dock with no active object slot appends its
+the console as route state. Opening a session object from the navigator with no active object slot appends its
 first tab.
 
 **Its selection used to be held by the component that also held the graph's camera and every other page's

@@ -2,7 +2,7 @@
 title: session-forest
 status: active
 hue: 280
-desc: The console's forest sidebar — one row grammar with two doors, four triage zones with the offline and archive folds, the archive index overlay, drag-to-reparent with the row's own ghost, and the keyboard walk that never steals a typing sink.
+desc: The window's one session navigator — one row grammar with its doors, four triage zones with the offline and archive folds, the archive index overlay, drag-to-reparent with the row's own ghost, and the keyboard walk that never steals a typing sink.
 code:
   - spec-dashboard/src/SessionForestPanel.jsx
 related:
@@ -14,15 +14,23 @@ related:
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/session-archive-zone.e2e.mjs
   - spec-dashboard/test/session-shortcuts.e2e.mjs
+  - spec-dashboard/test/session-row-dock.e2e.mjs
+  - spec-dashboard/test/one-navigator.e2e.mjs
 ---
 
 # session-forest
 
-The left sidebar of the [[session-console]] is the mutable home of the session forest: the complete list a human
-triages, moves, folds, and walks. Its rows are [[session-row]]'s shared face; this node owns what the LIST does
+This panel is the window's session navigator — the complete list a human triages, moves, folds, and walks — and
+the FRAME draws it, as one of the two projections of its single left band ([[dock-modes]]). It therefore stands
+beside every document, not only beside the console: a reader looking at a spec node, or at a grid of cells, has
+the same list in the same place. Its rows are [[session-row]]'s shared face; this node owns what the LIST does
 with them — grouping, disclosure, the archive's fourth zone and its index, the reparent gesture, and the keys.
 
-**The forest sidebar speaks one row grammar**: its top row is the frame's top band (`--line-top` tall,
+**Historical:** it was once the [[session-console]] document's own sidebar, which gave the window two session
+lists (this one, plus a thinner copy inside the finding dock) and gave a split workspace none at all. It is one
+list now, and the page it used to belong to draws no list.
+
+**The navigator speaks one row grammar**: its top row is the frame's top band (`--line-top` tall,
 level with the tab strip) and holds three doors plus the fold switch ([[side-nav]]) at its far end —
 `＋ New` carrying one short word (its full name, New Session, is the door's accessible label), then
 quiet archive and search glyphs — and those doors are rows
@@ -34,8 +42,8 @@ line at every fold depth: a thread carried by the indented row body stepped righ
 reading as one line at all. The tree's connector rails stay uncoloured — the thread is the list's edge, the
 rails are the shape of the tree, and neither has to borrow the other's job.
 
-The console renders the row in its **compact, avatar-less** variant
-(`showAvatar={false} compact`): the console's own left list is a dense one-line-per-session list at rest, with
+It renders the row in its **compact, avatar-less** variant
+(`showAvatar={false} compact`): the list is dense, one line per session at rest, with
 a resizable width — 204px by default, bounded to 180–480px, persisted per browser, dragged on its separator and
 reset by a double-click — and meta-size row text; the selected headline may expand
 in place to **at most three lines**, with its complete text retained in the tooltip/accessibility name. The
@@ -83,10 +91,8 @@ default with its fold choice persisted locally. When open it shows the newest
 closed rows (bounded to a small fixed number so it cannot drown the working list), then one `View all N` row. The
 closed rows are ordinary session rows with the same hover and selected treatment; selecting one opens its read-only
 Conversation. `View all N` is a keyboard-reachable button that follows the same row geometry, ink, bottom rule, and
-hover wash as a session row, with the shared search glyph in the nesting-lead column; it has no selected state. Dropping
-a working row on the visible archive heading performs the one reversible close transition without confirmation.
-While a drag approaches an off-screen archive heading, the working-board scrollport advances to reveal it; the
-sidebar still owns exactly one scroll container.
+hover wash as a session row, with the shared search glyph in the nesting-lead column; it has no selected state.
+The list owns exactly one scroll container.
 
 The top archive glyph and `View all N` open the same transient archive index overlay through the routed
 `archive=1` doorway, not a third right-pane mode. The overlay is scoped only to
@@ -118,11 +124,15 @@ first paint. This overlay is the only archive-search entry; the global palette n
 hints at hidden archive matches. Esc/backdrop closes it, and choosing a row returns to that session's ordinary
 Conversation in the right pane.
 
-The console list is the mutable home of its session forest ([[session-nesting]]). The forest panel attaches the
-same `inertChromePress` capture boundary as the rest of the console chrome, and registers the shared window
-keyboard service walk for its visible rows; the finding dock uses that same resolver for its projection. Dragging a row moves a
+This panel is the mutable home of the session forest ([[session-nesting]]). It attaches the
+same `inertChromePress` capture boundary as the rest of the frame's chrome, and registers the shared window
+keyboard service walk for its visible rows; the console derives its own Option-arrow order from the same
+visible forest, so one list answers both. Dragging a row moves a
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
-a top-level drop zone. The ghost is the same console tree-row presentation as its source, derived again from
+a top-level drop zone **below the last row**, because an affordance that appears mid-drag must cost no layout:
+offered above the rows it arrived the instant a row was picked up and pushed every row down by its own height,
+moving the row the reader was aiming at out from under the pointer. The ghost takes no pointer events, so the
+hit test still names the row underneath it. It is the same tree-row presentation as its source, derived again from
 the current forest item rather than from a hand-copied appearance record: selection reveal, headline line boxes,
 right-side status marker, nesting lead, and fold pod therefore retain their exact internal layout. To keep a
 selected row's expanded headline readable without covering the receiving object, the pointer-owned ghost
@@ -132,13 +142,16 @@ The gesture is deliberately ordinary pointer drag rather than a tiny dedicated h
 will move, so the feedback must visibly be that row. Right-click keeps the complementary
 explicit `remove from parent` action for a nested row. Both paths call the one reparent endpoint and leave
 selection, terminal focus, and invalid/no-op drops alone.
-Dropping a working row on the visible archive zone heading instead performs the row's one reversible `close` transition:
-the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
-close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
+**ARCHIVING BY DRAG HAS ONE TARGET AND ONE CONFIRM: the archive DOOR in the head row** ([[dock-modes]]). The
+door that opens the archive takes what is dropped on it, arms itself while a session is carried, goes hot in the
+danger accent while the session is over it, and then asks the SAME prompt the menu's close asks — because it is
+the same removal, and a worktree removal is not made less destructive by arriving through a more deliberate
+gesture. **Historical:** an earlier rule made the archive ZONE heading a second drop target that closed with no
+confirm at all, on the reasoning that a retained record makes close reversible; that is two targets and two
+answers for one destruction, and only the door remains.
 
-The [[dock-modes]] sessions projection remains the desktop's at-a-glance finding list. The routed Sessions
-document also mounts the same `SessionConsoleTreeRow` forest as its complete mutable list; the terminal or
-timeline occupies the remaining content width. The document owns explicit row multi-select and the bulk close
+This panel IS the desktop's at-a-glance finding list and its complete mutable list — there is no second copy to
+reconcile ([[dock-modes]]). It owns explicit row multi-select and the bulk close
 bar, while row movement uses the full-row tree gesture. Graph marquee selection is never a substitute for
 session selection.
 

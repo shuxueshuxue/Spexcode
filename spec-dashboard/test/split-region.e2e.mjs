@@ -163,9 +163,12 @@ try {
       cells: regions.length,
       rails: visible(document, '.sidebar, .rail').length,
       docks: visible(document, '.dock').length,
+      // the frame's ONE navigator, whichever projection it is showing: the explorer panel or the session
+      // forest. Both are the frame's own sibling, never a panel inside a region.
+      navigator: visible(document, '.app > .dock, .app > .si-list').length,
+      sessionRows: visible(document, '.app > .si-list [data-sid]').length,
       dividers: visible(document, '.content-divider').length,
       hash: location.hash,
-    shell: window.__dockDebug || null,
     }
   })
   const rightClickStripTab = async (key) => {
@@ -275,10 +278,10 @@ try {
   await page.screenshot({ path: join(out, '6-session-cell.png') })
   const withSession = await shape()
   const cell = withSession.regions.find((region) => region.tabs.includes(sessionKey))
-  const frameSessionList = await page.locator('.dock .si-item, .dock [data-sid]').count()
   scene('a session held in a grid cell is the console alone — and the window still lists sessions beside it',
-    cell.forest === 0 && cell.strips === 1 && withSession.hash === sessionKey && frameSessionList > 0,
-    { forest: cell.forest, strips: cell.strips, hash: withSession.hash, frameSessionList })
+    cell.forest === 0 && cell.strips === 1 && withSession.hash === sessionKey
+    && withSession.navigator === 1 && withSession.sessionRows > 0,
+    { forest: cell.forest, strips: cell.strips, hash: withSession.hash, navigator: withSession.navigator, sessionRows: withSession.sessionRows })
 
   // 7 — the grid survives a reload, and no document is in two cells
   await page.reload({ waitUntil: 'domcontentloaded' })

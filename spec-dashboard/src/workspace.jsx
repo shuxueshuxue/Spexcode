@@ -134,10 +134,10 @@ export const useWorkspaceApi = () => useContext(WorkspaceApi) || {}
 //     pane will happily write its state over the visible one's.
 //   · `active` — whether this pane is the one showing. A hidden document must not hold the keyboard, and
 //     must not keep polling for a screen nobody is looking at.
-//   · `primary` — whether this pane is the region that carries the frame's chrome. The workspace draws its
-//     navigator and its working-set band ONCE, in the primary region; a document that owns page chrome of
-//     its own (the Sessions forest and its strip) must draw it only there, or holding that document beside
-//     another paints a second copy of the frame and two sidebars that fold together.
+//
+// A document never asks which REGION it is in, and there is deliberately no such fact here. Frame chrome —
+// the navigator, each region's working-set band — is the frame's to draw; a document that had to know
+// whether it was the region carrying the chrome was a document drawing chrome it did not own.
 //
 // Absent (no provider) means "the whole window is this pane": the phone face, the projects hub, the cold
 // review fast-path and the sealed public build all render one view and nothing else.
@@ -162,4 +162,3 @@ export function PaneProvider({ value, children }) {
 // the two questions with their no-provider answers, so callers do not each invent a default.
 export const usePaneActive = () => useContext(Pane)?.active !== false
 export const usePaneAddress = () => useContext(Pane)?.address ?? null
-export const usePanePrimary = () => useContext(Pane)?.primary !== false

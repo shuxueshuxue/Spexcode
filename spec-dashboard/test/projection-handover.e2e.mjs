@@ -1,14 +1,14 @@
-// [[dock-modes]] THE HANDOVER IS ONE SWAP: moving between a document route and Sessions replaces which
-// component draws the left band — shell dock ⇄ the Sessions forest — and NOTHING ELSE may show in between.
-// The defect this probe exists to catch: the shell dock flipping to its SESSIONS projection on the
-// DEPARTING document for the frames between the rail click and the route landing (the click wrote
-// `dockMode` synchronously while the hashchange is a later task), and the mirror image on arrival — a
-// document route first painting the dock's sessions projection out of stale persisted `dockMode` and only
-// then being corrected by a post-paint effect.
+// [[dock-modes]] THE HANDOVER IS ONE SWAP: the frame draws ONE navigator, and moving between a document
+// route and Sessions replaces which projection it draws — the explorer tree ⇄ the session forest — with
+// NOTHING ELSE in between. The defect this probe exists to catch: the navigator changing on the DEPARTING
+// document for the frames between the rail click and the route landing (the click wrote `dockMode`
+// synchronously while the hashchange is a later task), and the mirror image on arrival — a document route
+// first painting the forest out of stale persisted `dockMode` and only then being corrected by a post-paint
+// effect.
 //
-// The probe watches COMMITS, not paints: a MutationObserver on the app records every appearance of the
-// dock's session body. Paint timing is a vsync race; the mount is deterministic — and the mount is also
-// the waste (a full SessionDock built and thrown away one route tick later).
+// The probe watches COMMITS, not paints: a MutationObserver on the app records every session forest that
+// enters the DOM while the address is a document. Paint timing is a vsync race; the mount is deterministic —
+// and the mount is also the waste (a full forest built and thrown away one route tick later).
 //
 //   BASE=http://127.0.0.1:5199 OUT=/tmp/handover node spec-dashboard/test/projection-handover.e2e.mjs
 //
@@ -39,19 +39,20 @@ const browser = await chromium.launch()
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: OUT } })
 const page = await context.newPage()
 
-// The witness: from document start, record every element carrying the dock's session-projection body that
-// ever enters the DOM, with the hash it entered under. Painted frames are sampled too (rAF) as a bonus
+// The witness: from document start, record every session forest that enters the DOM UNDER A DOCUMENT
+// ADDRESS, with the hash it entered under. A forest on a session route is the handover landing; a forest on
+// a spec route is the flash this probe exists to forbid. Painted frames are sampled too (rAF) as a bonus
 // record, but the assertion rides the mutations.
 await page.addInitScript(() => {
   window.__handover = { mounts: [], frames: [] }
+  const onDocument = () => !location.hash.startsWith('#/sessions')
   const saw = (why) => {
     window.__handover.mounts.push({ why, hash: location.hash, t: performance.now() })
   }
   const scan = (root, why) => {
     if (!(root instanceof Element)) return
-    if (root.matches?.('.dock .dock-session-body, .dock-session-body') || root.querySelector?.('.dock-session-body')) {
-      if (root.closest?.('.dock') || root.querySelector?.('.dock-session-body')) saw(why)
-    }
+    const forest = root.matches?.('.si-list') || root.querySelector?.('.si-list')
+    if (forest && onDocument()) saw(why)
   }
   const mo = new MutationObserver((records) => {
     for (const record of records) for (const added of record.addedNodes) scan(added, 'mutation')
@@ -62,9 +63,9 @@ await page.addInitScript(() => {
     const tick = () => {
       window.__handover.frames.push({
         t: performance.now(), hash: location.hash,
-        dockSessions: !!document.querySelector('.dock .dock-session-body'),
+        forestOnDocument: !!document.querySelector('.si-list') && onDocument(),
         dockExplorer: !!document.querySelector('.dock .filetree'),
-        forest: !!document.querySelector('.si-list'),
+        forest: !!document.querySelector('.app > .si-list'),
       })
       requestAnimationFrame(tick)
     }
@@ -86,10 +87,10 @@ await page.waitForSelector('.dock .filetree', { timeout: 45_000 })
 await page.waitForTimeout(400)
 await page.evaluate(() => { window.__handover.mounts = [] })
 
-// FORWARD: click the rail's Sessions anchor from the spec document. The band must hand over dock→forest
-// with no sessions-projection dock committed on the way.
+// FORWARD: click the rail's Sessions anchor from the spec document. The one panel must hand over
+// explorer→forest with no forest committed on the departing document on the way.
 await page.click('.side-rail a[href="#/sessions"]')
-await page.waitForSelector('.si-list', { timeout: 45_000 })
+await page.waitForSelector('.app > .si-list', { timeout: 45_000 })
 await page.waitForTimeout(600)
 const forward = await page.evaluate(() => window.__handover)
 await page.screenshot({ path: join(OUT, 'forward-sessions.png') })
@@ -116,8 +117,8 @@ await browser.close()
 
 const forwardFlash = forward.mounts
 const reverseFlash = [...sameDocMounts, ...reverse.mounts]
-const paintedForward = forward.frames.filter((f) => f.dockSessions).length
-const paintedReverse = reverse.frames.filter((f) => f.dockSessions).length
+const paintedForward = forward.frames.filter((f) => f.forestOnDocument).length
+const paintedReverse = reverse.frames.filter((f) => f.forestOnDocument).length
 const report = {
   spec: specHash,
   forward: { flashMounts: forwardFlash, paintedFlashFrames: paintedForward, forestSettled: forward.frames.at(-1)?.forest === true },
@@ -131,9 +132,9 @@ writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2))
 console.log(JSON.stringify(report, null, 2))
 
 const failures = []
-if (forwardFlash.length > 0) failures.push(`forward: shell dock committed its sessions projection ${forwardFlash.length}× during the spec→sessions handover`)
-if (!report.forward.forestSettled) failures.push('forward: the Sessions forest never settled')
-if (reverseFlash.length > 0) failures.push(`reverse: a document route committed the dock's sessions projection ${reverseFlash.length}× out of stale dockMode`)
+if (forwardFlash.length > 0) failures.push(`forward: the forest was committed on the departing document ${forwardFlash.length}× during the spec→sessions handover`)
+if (!report.forward.forestSettled) failures.push('forward: the session forest never settled')
+if (reverseFlash.length > 0) failures.push(`reverse: a document route committed the session forest ${reverseFlash.length}× out of stale dockMode`)
 if (!report.reverse.explorerSettled) failures.push('reverse: the explorer dock never settled')
 if (failures.length) {
   console.error('FAIL\n' + failures.map((f) => `  - ${f}`).join('\n'))

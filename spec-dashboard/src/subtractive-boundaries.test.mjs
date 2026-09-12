@@ -33,13 +33,18 @@ test('Sessions keeps multi-select and tree movement on the real row surface', ()
 
 test('Sessions archive pill opens the existing routed archive overlay', () => {
   const panel = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
-  const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
+  const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
   const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
   assert.match(panel, /className=\{`si-pill archive\$\{archiveActive \? ' on' : ''\}`\}/)
   assert.match(panel, /aria-label=\{t\('session\.archiveTitle'\)\}/)
-  assert.match(sessionsView, /onOpenArchive=\{\(\) => scope\.open\(\{[\s\S]{0,160}query: \{ archive: '1' \}/)
-  assert.match(sessionInterface, /archiveActive=\{archiveRequested\}/)
-  assert.match(sessionInterface, /onArchive=\{onOpenArchive\}/)
+  // the door belongs to the surface that LISTS sessions, which is the frame's navigator on every route;
+  // the overlay it opens is still the same routed query the console already answers
+  assert.match(shell, /onArchive=\{\(\) => navigate\('sessions',[\s\S]{0,120}query: \{ archive: '1' \}/)
+  assert.match(shell, /archiveActive=\{page === 'sessions' && query\?\.archive === '1'\}/)
+  // the console still ANSWERS that address — it opens the archive overlay when the query asks — it just no
+  // longer owns the pill that writes it
+  assert.match(sessionInterface, /if \(archiveRequested\) setArchiveIndexOpen\(true\)/)
+  assert.doesNotMatch(sessionInterface, /onOpenArchive/)
 })
 
 test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {
@@ -47,57 +52,56 @@ test('live rail exposes every resident board, including Spec, but not retired gr
   assert.equal(RAIL_PAGES.includes('graph'), false)
 })
 
-test('sessions document owns the only forest and rail labels resolve through i18n', () => {
+test('the frame owns the only forest and rail labels resolve through i18n', () => {
   const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
   const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
   const sideBar = readFileSync(join(srcDir, 'SideBar.jsx'), 'utf8')
   const en = readFileSync(join(srcDir, 'i18n', 'en.js'), 'utf8')
   const zh = readFileSync(join(srcDir, 'i18n', 'zh.js'), 'utf8')
-  // The ownership boundary is structural: the Sessions route mounts no finding dock at all (`dockFor`),
-  // so the dock needs no row-suppression flag, no active-session highlight, and no second keyboard walk —
-  // that machinery belonged to the era when the dock rendered ON the sessions route with its rows hidden.
+  // The ownership boundary is structural: there is exactly ONE session list in the window and the FRAME
+  // draws it, so the Sessions route selects the sessions projection like any other document route and the
+  // explorer dock carries no session rows, no suppression flag, and no second keyboard walk at all.
   assert.doesNotMatch(dock, /suppressRows|suppressSessionRows/)
-  assert.doesNotMatch(shell, /suppressSessionRows|activeSessionId/)
-  assert.doesNotMatch(dock, /data-session-list-projection="document"/)
-  // the full-width Sessions page owns the only session list; split the workspace and that list is the
-  // window's own dock, because page chrome belongs to a one-group workspace ([[workspace-shell]])
-  assert.match(shell, /if \(page === 'sessions'\) return single \? 'none' : 'sessions'/)
+  assert.doesNotMatch(shell, /suppressSessionRows/)
+  assert.doesNotMatch(dock, /sessionForest|SessionRow|data-session-list-projection/)
+  assert.match(shell, /if \(page === 'sessions'\) return 'sessions'/)
+  // and the projection the frame mounts IS that full forest — the same component the Sessions page used to
+  // own — never a thinner copy of it ([[session-forest]])
+  assert.match(shell, /\? <SessionForestPanel sessions=\{sessions\} activeId=\{page === 'sessions' \? \(param \|\| 'new'\) : null\}/)
   assert.match(shell, /if \(page === 'issues'\) return 'none'/)
   // The rail's sessions anchor unfolds the band and returns to the held session; it pre-selects NO dock
   // projection — writing one painted a transient sessions-projection dock on the DEPARTING document.
   assert.doesNotMatch(sideBar, /setDockMode\?\.\('sessions'\)/)
-  // The rendered projection is derived during render, never corrected after paint.
+  // The rendered projection is derived during render, never corrected after paint — and it selects a
+  // COMPONENT rather than a mode flag passed into one panel that would then have to branch internally.
   assert.match(shell, /const dockProjection = dockKind === 'sessions' \|\| dockKind === 'explorer'/)
-  assert.match(shell, /mode=\{dockProjection\}/)
+  assert.match(shell, /\{dockProjection === 'sessions'\n/)
+  assert.doesNotMatch(shell, /mode=\{dockProjection\}/)
   assert.match(sideBar, /const ENTRIES = RAIL_PAGES/)
   assert.match(en, /nav:\s*\{[\s\S]*?spec:\s*'Spec'/)
   assert.match(zh, /nav:\s*\{[\s\S]*?spec:\s*'规格'/)
 })
 
-test('the rail panel control folds the Sessions forest and is absent only where no sidebar exists', () => {
+test('the rail panel control folds the one navigator and is absent only where no sidebar exists', () => {
   const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
   const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
-  // Sessions mounts no shell dock, yet its document draws its own forest sidebar — so the fold switch is
-  // mounted there too and folds that forest through the one workspace open/closed boolean. The switch moves
-  // with the fold: the sidebar's own head row while open, the strip's first cell while closed. Bare review
-  // and settings boards have neither sidebar, and only they have no switch at all.
+  // ONE sidebar, ONE fold. Both projections are the frame's panel, so both fold on the frame's single
+  // open/closed boolean and outlive it by the one shared panel duration ([[dock-modes]]). The switch moves
+  // with the fold: the panel's own head row while open, the strip's first cell while closed. Bare review
+  // and settings boards have no sidebar, and only they have no switch at all.
   assert.match(shell, /const foldable = dockKind !== 'none' \|\| page === 'sessions'/)
-  // the band is the REGION's now ([[workspace-shell]]); the fold switch rides the region's strip, and this
-  // document draws neither — it draws the console, and the forest while the workspace is one group.
-  assert.doesNotMatch(sessionInterface, /<TabStrip/)
+  assert.match(shell, /const \[dockMounted, closingDock, foldingDock\] = useFold\(dock\)/)
   assert.match(shell, /const leading = single && foldable && !dock \? <DockToggle variant="strip" \/> : null/)
   const dockSrc = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
   const forest = readFileSync(join(srcDir, 'SessionForestPanel.jsx'), 'utf8')
   assert.match(dockSrc, /<DockToggle className="dock-head-act" \/>\n\s*<\/span>/)
   assert.match(forest, /<DockToggle className="si-pill" \/>\n\s*<\/div>/)
-  assert.match(sessionInterface, /const \{ dock: forestOpen \} = useWorkspace\(\)/)
-  // it is still ONE boolean; the forest just folds on it through the shared fold, so the mount outlives
-  // the flag by one panel duration instead of blinking out ([[dock-modes]]).
-  assert.match(sessionInterface, /const \[forestMounted, forestClosing, forestFolding\] = useFold\(forestOpen\)/)
-  // the forest is the SESSIONS PAGE's navigator, so it is drawn only by the region that carries the frame
-  // ([[workspace-shell]]): held beside another document, this console is the console alone.
-  assert.match(sessionInterface, /\{primaryRegion && forestMounted && <SessionForestPanel/)
-  assert.match(sessionInterface, /const primaryRegion = usePanePrimary\(\)/)
+  // the band is the REGION's and the navigator is the FRAME's ([[workspace-shell]]), so the console draws
+  // neither: no strip, no forest, and no fold state of its own to drift out of step.
+  assert.doesNotMatch(sessionInterface, /<TabStrip/)
+  assert.doesNotMatch(sessionInterface, /<SessionForestPanel/)
+  assert.doesNotMatch(sessionInterface, /useFold\(/)
+  assert.doesNotMatch(sessionInterface, /usePanePrimary/)
 })
 
 test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {
@@ -111,13 +115,13 @@ test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosure
 })
 
 test('session row clicks are plain navigation; the strip alone decides focus-or-replace', () => {
-  const dock = readFileSync(join(srcDir, 'Dock.jsx'), 'utf8')
+  const shell = readFileSync(join(srcDir, 'Shell.jsx'), 'utf8')
   const sessionsView = readFileSync(join(srcDir, 'SessionsView.jsx'), 'utf8')
-  const sessionInterface = readFileSync(join(srcDir, 'SessionInterface.jsx'), 'utf8')
-  assert.match(dock, /else navigate\('sessions', item\.s\.id\)/)
+  // a row writes an address and says nothing about placement; the explicit new-tab gesture is the only
+  // thing that asks for a second tab, and the strip decides the rest ([[tab-routing]])
+  assert.match(shell, /if \(options\?\.newTab && id !== 'new'\) openNewTab\('sessions', id\)\n\s*else navigate\('sessions', id\)/)
   assert.match(sessionsView, /const route = \{ page: 'sessions', param: id, query: null \}/)
   assert.match(sessionsView, /return scope\.open\(route\)/)
-  assert.match(sessionInterface, /onSelect=\{\(id, options\) => onPickSession \? onPickSession\(id, options\)/)
 })
 
 test('Sessions selection is the routed address, never a mirrored local state', () => {

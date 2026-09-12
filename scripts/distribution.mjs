@@ -14,8 +14,14 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
 // While the line is a prerelease, the verbs these packages use exist only under npm's `next` tag.
 const tag = version.includes('-') ? '@next' : ''
-const spex = `npx -y -p spexcode${tag} spex`
-const spexWithPage = `npx -y -p spexcode${tag} -p @spexcode/spec-dashboard${tag} spex`
+// `--registry` is not belt and braces. npx reads npm's config from the CWD, and the CWD here is the
+// repository being drawn — a company monorepo routinely ships an `.npmrc` pinning an internal registry that
+// has never heard of spexcode, so the very first command of this skill dies on `ECONNRESET` against a host
+// the reader cannot reach. Naming the public registry for THIS fetch changes nothing about how the
+// repository installs its own dependencies.
+const REGISTRY = '--registry=https://registry.npmjs.org'
+const spex = `npx -y ${REGISTRY} -p spexcode${tag} spex`
+const spexWithPage = `npx -y ${REGISTRY} -p spexcode${tag} -p @spexcode/spec-dashboard${tag} spex`
 // A penguin plugin's version is the date of its content, by that host's convention; bump it when the skill changes.
 const PENGUIN_VERSION = '2026.09.10.1'
 
@@ -48,6 +54,9 @@ This skill draws with SpexCode's command line and needs nothing installed or con
   Use \`--pure\`, not a bare \`spex init\`: a bare one adopts the repository into SpexCode's whole workflow, which is
   not what drawing a picture asks for.
 - \`spex guide diagram\` is the manual for the diagram format and the loop; read it once.
+- Write the tree in the LANGUAGE THE PERSON ASKED IN — node titles, \`desc\`, bodies, diagram labels and the
+  report. The atlas is something a human reads, and an English tree handed to someone who asked in another
+  language is a translation job you left them.
 
 `
 const page = `
@@ -159,7 +168,8 @@ async function archifyBundle() {
 
 const claudeCode = 'distribution/claude-code/atlas'
 const zcode = 'distribution/zcode/atlas'
-const codex = 'distribution/codex/atlas'
+const codexRoot = 'distribution/codex'
+const codex = `${codexRoot}/plugins/atlas`
 const gugu = 'distribution/gugu/spexcode-atlas'
 const penguin = 'distribution/penguin/use-spexcode'
 // A classic script's top-level declarations land in the page's ONE global scope, so a helper publishes its
@@ -177,6 +187,24 @@ const files = new Map([
   [`${claudeCode}/skills/atlas/SKILL.md`, skillFile('atlas', trigger, genericSkill)],
   // Codex reads the same shape under its own dotted directory: a plugin.json beside a skills/ folder whose
   // SKILL.md carries `name` and `description`. Same skill text, different envelope.
+  //
+  // But Codex does not install a bare plugin directory. `codex plugin add` resolves a plugin out of a
+  // MARKETPLACE, and a marketplace is a root carrying `.agents/plugins/marketplace.json` that lists its
+  // plugins by relative path — point it at the plugin itself and it refuses: "marketplace root does not
+  // contain a supported manifest". So the codex package IS that root, with the plugin under `plugins/`,
+  // and an adopter's two commands are `codex plugin marketplace add <dir>` then `codex plugin add atlas@spexcode`.
+  [`${codexRoot}/.agents/plugins/marketplace.json`, json({
+    name: 'spexcode',
+    interface: { displayName: 'SpexCode' },
+    plugins: [{
+      name: 'atlas',
+      source: { source: 'local', path: './plugins/atlas' },
+      // ON_USE, not NONE: the enum Codex accepts is ON_INSTALL | ON_USE, and this plugin needs no auth at all,
+      // so the later of the two is the honest one.
+      policy: { installation: 'AVAILABLE', authentication: 'ON_USE', products: ['CODEX'] },
+      category: 'Developer Tools',
+    }],
+  })],
   [`${codex}/.codex-plugin/plugin.json`, json({
     name: 'atlas', version, description, author, homepage, repository, license: 'MIT',
     keywords: ['spec', 'architecture', 'diagram', 'spexcode'], skills: './skills/',

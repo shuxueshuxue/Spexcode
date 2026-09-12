@@ -37,7 +37,8 @@ consulted first and win wherever they exist, because the session verbs carry blo
 scope, and edge semantics that no projection of a drawer paragraph can be trusted to reproduce. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
 the three inbox verbs' distinct process shapes (`dequeue` returns now, `wait-dequeue` is a background command whose
-exit is the wake-up, `stream-dequeue` is a never-exiting monitor — [[inbox]]), send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule (including that `--thread` is an adapter-native
+exit is the wake-up, `stream-dequeue` is a never-exiting monitor; all three read the caller's own address unless
+`--session <FULL-ID>` names another — [[inbox]]), send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule (including that `--thread` is an adapter-native
 conversation id rather than the SpexCode session id, and is omitted for Claude), selector grammar, and project-bound write warning cannot drift between a drawer
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
 projection change only. The declaration entries project [[state]]'s current vocabulary rather than inventing
@@ -51,6 +52,8 @@ name is the new record's initial display override; it does not enter, replace, o
 It also lists `--base <commit-ish>`, which pins the new worktree's fork point instead of taking the
 source-of-truth branch's current head ([[sessions-core]]); help names the input and its refusal-before-creation
 guarantee, and leaves the resolution contract to that owner.
+The prompt's `@parent:<SEL>` directive may attach the row under a retained supervisor; `@parent:none` settles a
+top-level row only when the ordinary resolver finds no exact id, unique prefix, or branch named `none`.
 
 Live-reference entries keep the same map: `session files add|ls|get|retract` names live file paths — `add`/`retract`
 are the worker's own writers, `ls [SEL]`/`get <SEL> <name>` let a parent read what a child posted, locally or

@@ -23,7 +23,11 @@ test('public graph and workspace status mounts are mutually exclusive and comple
   assert.doesNotMatch(app, /<ReviewSurface|surface\s*===\s*['"]review['"]/)
   assert.match(root, /<StatusBarProvider>/)
   assert.match(shellSource, /<StatusBar \/>/)
-  assert.match(graphView, /graphOnly && <PublicGraphAbout \/>/)
+  // The published tree's disclosure hangs off the status bar's project identity — the one door that
+  // chip can lead to when there is no hub and no catalog behind it — so it mounts inside that slot
+  // and nowhere else. A second mount would put two About panels on one page.
+  assert.match(shell, /graphOnly && <PublicGraphAbout \/>/)
+  assert.doesNotMatch(graphView, /PublicGraphAbout/)
 })
 
 test('band and keep-alive budgets are executable contracts, not prose-only numbers', () => {

@@ -19,6 +19,7 @@ import { viewRouteContract } from './views.jsx'
 // column by [[review-chrome]]'s CSS.
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const Settings = lazy(() => import('./Settings.jsx'))
+const PluginsView = lazy(() => import('./PluginsView.jsx'))
 
 // the desktop pane keys → their localized tab labels (panesFor hands back English labels; we relabel so
 // the mobile tabs read in the active language like the rest of the UI).
@@ -239,11 +240,14 @@ export default function MobileApp({ specs, sessions, issuesStamp, _reloadBoard, 
   // the desktop's per-tab draft cache).
   const [creating, setCreating] = useState(false)
   const [newDraft, setNewDraft] = useState('')
-  // the phone honors the [[side-nav]] route family for the Issues page ([[mobile-ui]]): an #/issues
-  // address renders the SAME routed page the desktop mounts. Specs/Sessions stay the phone-local planes.
-  // The host owns the address. Mobile is a view of the same routed surface, not a second router.
+  // the phone honors the [[side-nav]] route family for the routed pages ([[mobile-ui]]): an #/issues,
+  // #/settings or #/plugins address renders the SAME page the desktop mounts. Specs/Sessions stay the
+  // phone-local planes. The host owns the address. Mobile is a view of the same routed surface, not a
+  // second router — a rail destination absent from this list is silently unreachable on a phone, which is
+  // how [[plugins-page]] shipped.
   const { page = 'graph', param = null } = route
-  const plane = page === 'issues' || page === 'settings' ? page : tab
+  const ROUTED = ['issues', 'settings', 'plugins']
+  const plane = ROUTED.includes(page) ? page : tab
   // Review pages are the same scoped views as desktop. The phone shell has no ViewHost component, so it
   // provides the route-owned scope at this boundary instead of weakening the views' required hook.
   const reviewScope = useMemo(() => createViewScope({
@@ -298,13 +302,13 @@ export default function MobileApp({ specs, sessions, issuesStamp, _reloadBoard, 
   return (
     <div className="m-app">
       <main className="m-main">
-        {plane === 'issues' || plane === 'settings' ? (
+        {ROUTED.includes(plane) ? (
           <div className="m-review">
             <ViewScopeProvider scope={reviewScope.scope}>
               <Suspense fallback={<div className="m-empty">{t('common.loading')}</div>}>
-                {plane === 'settings'
-                  ? <Settings />
-                  : <IssuesPage param={param} query={route.query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />}
+                {plane === 'settings' ? <Settings />
+                  : plane === 'plugins' ? <PluginsView />
+                    : <IssuesPage param={param} query={route.query} specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />}
               </Suspense>
             </ViewScopeProvider>
           </div>

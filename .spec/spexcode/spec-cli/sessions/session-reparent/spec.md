@@ -30,6 +30,12 @@ rejects a child that is its own parent or would make a parent cycle, and names a
 ungoverned session loudly. One child can be active or in a harness turn: reparent changes neither its
 process nor authored lifecycle, and its next record transition simply observes the new watcher set.
 
+The CLI reparent verb keeps its required `--to <parent-SEL>` spelling; creation-time top-level parentage is a
+separate prompt concern owned by [[session-create-authority]]. `spex session new` consumes `@parent:none` before
+the transaction and publishes a null parent directly, so it does not create a temporary child for this manager
+operation. The `none` sentinel is considered only after the shared selector resolver finds no exact id, prefix,
+or branch match, preserving a real session named `none`.
+
 The same manager API also accepts `parent: null` for an explicit move to the top level. That is a detach,
 not an invented root session: the child has no parent pointer and no target-owned `parent` source afterwards.
 An independent manual watch remains its own relation. The

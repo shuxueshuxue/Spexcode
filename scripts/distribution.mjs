@@ -39,8 +39,10 @@ This skill draws with SpexCode's command line and needs nothing installed or con
 - Run SpexCode through npx: \`${spex} <command>\` (Node 22 or newer). Wherever a step below says
   \`spex …\`, run it that way; a \`spex\` already on the PATH works the same.
 - A diagram draws one node of the repository's spec tree, the \`.spec/\` folder. If the repository has none,
-  \`spex init --pure\` plants one and stops there: \`.spec/spexcode.json\` and a root \`.spec/<project>/spec.md\`, no
-  hooks, no agent configuration, nothing outside \`.spec/\`. Then rewrite that root to describe THIS project and add
+  \`spex init --pure --title <the project's name>\` plants one and stops there: \`.spec/spexcode.json\` and a root
+  \`.spec/<name>/spec.md\`, no hooks, no agent configuration, nothing outside \`.spec/\`. Pass the project's REAL
+  name — the checkout directory is often \`repo\` or \`tmp\`, and without a title both the root node and the page
+  end up called that. Then rewrite that root to describe THIS project and add
   one folder beside it per part worth a box, each with its own \`spec.md\` — a \`title:\` and a \`code:\` line naming
   the file it is about in the frontmatter, a sentence or two below. \`spex guide spec\` has the full file format.
   Use \`--pure\`, not a bare \`spex init\`: a bare one adopts the repository into SpexCode's whole workflow, which is
@@ -56,9 +58,9 @@ const page = `
 every picture — as one self-contained page that opens in any browser, straight from disk. Offer it with the report;
 it is a product of the tree, not part of it, so leave it uncommitted.
 
-The page names the project after \`dashboard.title\` in \`.spec/spexcode.json\`, and falls back to the name of the
-directory it was run in. A scratch checkout called \`repo\` or \`tmp\` therefore publishes a page titled that, which
-is wrong on the one artifact a person is meant to read. Set the title when the directory is not the project's name.
+The page names the project after \`dashboard.title\` in \`.spec/spexcode.json\` and falls back to the directory it
+was run in, so a scratch checkout called \`repo\` publishes a page titled that — wrong on the one artifact a person
+is meant to read. \`--title\` at init sets it; on a tree that already exists, add \`dashboard.title\` to that file.
 
 The page opens on the whole-tree overview, so a node's drawing is one click in. Say which node to open when you
 hand it over, or the first thing the reader sees is a map rather than the picture they asked for.

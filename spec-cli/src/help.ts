@@ -95,6 +95,8 @@ worktree and, when that node exists, points the worker at its spec.
 (exclusive with the inline prompt). --name sets the session's initial display name without changing the prompt.
 --base <commit-ish> pins the fork point instead of the source-of-truth branch's current head, so a run can be
 reproduced against a frozen commit; a base that names no commit is refused before anything is created.
+The prompt may carry @parent:<SEL> to attach the new row under a retained supervisor; @parent:none creates
+it at top level when no session selector named none resolves (an exact id, unique prefix, or branch still wins).
 The successful receipt names what to read, monitor, and reply on. --ssh uses an existing gateway-to-gateway
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
 prompt carries a runnable reply path over that same tunnel.`, ['project-bound']],

@@ -45,6 +45,16 @@ test('resolveSession: an exact full id wins even when it also prefixes a longer 
   assert.deepEqual(resolveSession('dead', [x, y]), { ok: x })   // exact wins, not ambiguous
 })
 
+test('resolveSession: a real id named none wins over the create-time orphan sentinel', () => {
+  const namedNone = mk('none', 'node/none')
+  assert.deepEqual(resolveSession('none', [namedNone]), { ok: namedNone })
+})
+
+test('resolveSession: a branch named none remains a normal selector match', () => {
+  const branchNone = mk('not-none', 'none')
+  assert.deepEqual(resolveSession('none', [branchNone]), { ok: branchNone })
+})
+
 test('resolveSession: no match is none', () => {
   assert.deepEqual(resolveSession('nope', board), { none: true })
 })

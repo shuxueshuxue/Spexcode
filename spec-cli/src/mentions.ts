@@ -7,6 +7,45 @@ const NODE_RE = /\[\[([^\]\s]+)\]\]/g
 
 const uniq = (xs: string[]): string[] => [...new Set(xs)]
 
+// @@@quoted-is-not-used - a token written inside a fence or backticks is being SHOWN, not used, and this
+// grammar has to agree with the page it is read on. Without that, prose about the grammar cannot be
+// delivered at all: a task brief explaining the `@parent:` directive was rejected at create with
+// `names no session: names` — the parser had read the sentence describing the error as an instance of it,
+// and there is no escape to write instead. Worse for the actions: a `@new` quoted inside a code block in an
+// issue body spawns a real worker. Backticks are how a person already quotes a token instead of invoking it,
+// so the fix is to read them, not to invent an escape nobody would remember.
+//
+// Ranges, not masking: a match is dropped when it STARTS inside one. Masking the code out would invent
+// matches that the original text does not contain — `\`code\`@new` has no whitespace before the `@`, and
+// blanking the backtick would manufacture the boundary the grammar requires.
+function codeRanges(text: string): [number, number][] {
+  const ranges: [number, number][] = []
+  const fence = /^[ \t]*(`{3,}|~{3,})[^\n]*$/gm
+  let open: { index: number; mark: string } | null = null
+  for (const m of text.matchAll(fence)) {
+    if (!open) { open = { index: m.index!, mark: m[1][0] }; continue }
+    if (m[1][0] === open.mark) { ranges.push([open.index, m.index! + m[0].length]); open = null }
+  }
+  if (open) ranges.push([open.index, text.length])          // an unclosed fence quotes the rest
+  const fenced = (i: number) => ranges.some(([a, b]) => i >= a && i < b)
+  // inline spans: a run of N backticks closes on the next run of exactly N ([[commonmark]]'s rule)
+  const runs = [...text.matchAll(/`+/g)].filter((m) => !fenced(m.index!))
+  for (let i = 0; i < runs.length; i += 1) {
+    const openRun = runs[i]
+    const close = runs.findIndex((m, j) => j > i && m[0].length === openRun[0].length)
+    if (close === -1) continue
+    ranges.push([openRun.index!, runs[close].index! + runs[close][0].length])
+    i = close
+  }
+  return ranges
+}
+
+// The one question every reader of this grammar asks of a match: was it written, or was it quoted?
+export function quoted(text: string): (index: number) => boolean {
+  const ranges = codeRanges(text)
+  return (index: number) => ranges.some(([a, b]) => index >= a && index < b)
+}
+
 // In free text a sigil separates a reference from prose. A CLI argument is already a
 // reference, so it tolerates either sigil without widening its normal matching grammar.
 export function stripRefSigil(token: string): string {
@@ -18,8 +57,9 @@ export function stripRefSigil(token: string): string {
 export function parseMentions(text: string): { sessions: string[]; nodes: string[] } {
   const sessions: string[] = []
   const nodes: string[] = []
-  for (const m of text.matchAll(SESSION_RE)) sessions.push(m[1])
-  for (const m of text.matchAll(NODE_RE)) nodes.push(m[1])
+  const isQuoted = quoted(text)
+  for (const m of text.matchAll(SESSION_RE)) if (!isQuoted(m.index!)) sessions.push(m[1])
+  for (const m of text.matchAll(NODE_RE)) if (!isQuoted(m.index!)) nodes.push(m[1])
   return { sessions: uniq(sessions), nodes: uniq(nodes) }
 }
 
@@ -35,7 +75,12 @@ const PARENT_DIRECTIVE = /(?<=^|\s)@parent:[ \t]*(\S+)[ \t]*/gu
 // decides what two different parents in one text mean. Without a directive the text is returned unchanged.
 export function parseParentDirective(text: string): { selectors: string[]; text: string } {
   const selectors: string[] = []
-  const stripped = text.replace(PARENT_DIRECTIVE, (_match, selector: string) => { selectors.push(selector); return '' })
+  const isQuoted = quoted(text)
+  const stripped = text.replace(PARENT_DIRECTIVE, (match, selector: string, offset: number) => {
+    if (isQuoted(offset)) return match                       // shown, not used — leave the prose alone
+    selectors.push(selector)
+    return ''
+  })
   return selectors.length ? { selectors: uniq(selectors), text: stripped.trim() } : { selectors: [], text }
 }
 

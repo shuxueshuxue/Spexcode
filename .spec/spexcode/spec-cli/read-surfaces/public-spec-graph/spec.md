@@ -92,7 +92,12 @@ or terminal transports, and normalizes every hash outside `PUBLIC_PAGES` back to
 attachments, a launcher list: each resolves from `PUBLIC_GRAPH_ONLY` at its one definition, so a surface
 that never heard of publishing is still right in both builds. A call site that has to remember to pass a
 flag is a call site that will eventually forget, and forgetting means a static page firing a request only a
-backend could answer. Where a published tree genuinely has no data — the source files under the explorer's
+backend could answer. That is not a harmless 404: a failed read is what raises the
+offline banner, so a page with no backend by design ends up telling its reader the backend is unavailable and
+offering a retry for something that was never meant to exist. Which build a page is stays legible even when
+the CHUNKING changes: a lazy chunk the directory build never fetches is inlined and live in the single-file
+page, so a surface that is merely unreachable there is mounted here, and only the guard at the one definition
+holds in both. Where a published tree genuinely has no data — the source files under the explorer's
 Files section — the surface is not rendered at all rather than rendered empty. The artifact is therefore safe to serve from an ordinary static host and never reuses the
 `spexcode.net` documentation root. Public boot reads the graph index once; static graph and document JSON use
 conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an
@@ -118,8 +123,14 @@ deployment configuration and lives with the deployment. The current SpexCode row
 `shuxueshuxue/spexcode` to `spexcode.spexcode.net`. `herdr.spexcode.net` is a retired trial alias and may only
 redirect to the registered SpexCode host; it must never keep serving SpexCode content as if Herdr owned it.
 
-The About panel's trigger rides the status bar, but the PANEL is a viewport overlay and has to be positioned
-and styled as one. A status strip clips each item's overflow and sets `white-space: nowrap` — both correct for
+The About panel hangs off the status bar's PROJECT IDENTITY, because in a published tree that chip is a door
+to nowhere: there is no hub to reach and no backend to list a catalog from, so the name sat there as a dead
+link while a second "About" chip crowded in beside the tallies. What a reader of a published page wants behind
+the project's name IS this panel — identity, revision, what the surface carries and what it does not — so the
+identity chip opens it and the strip keeps one door instead of two. The panel also says what DREW it: a
+published tree travels to readers who have never seen the tool, and no other line on the page names it, so the
+credit belongs on the one surface that is about the page rather than about the repository. The panel is a
+viewport overlay and has to be positioned and styled as one. A status strip clips each item's overflow and sets `white-space: nowrap` — both correct for
 a one-line status, both fatal for a 250px panel of prose parented inside one: it lays out, measures correctly,
 and paints nothing, which is exactly how it was found. Being a descendant of the strip is a DOM fact; being an
 overlay is what it is.

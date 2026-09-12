@@ -52,8 +52,17 @@ one-column reflow (side metadata above the main column — GitHub's own 390px or
 Issues entry (tapping navigates the route, the active page lights its tab), and Back is the
 browser's history exactly as on desktop. Their spec-node facts remain the same real `graphNodeAddress`
 anchors as desktop, not phone-specific focus callbacks. A direct `#/settings` address mounts the same [[settings]] page
-and [[page-scroll]] above that tab bar even though Settings is not a fifth primary tab. Specs/Sessions
-stay the phone-local planes below. Because these routed pages require a view scope, `MobileApp` hosts them
+and [[page-scroll]] above that tab bar even though Settings is not a fifth primary tab, and a direct
+`#/plugins` address mounts the same [[plugins-page]] board the same way. Specs/Sessions
+stay the phone-local planes below.
+
+WHICH routed pages the phone honors is an EXPLICIT LIST, and the list is the contract's weak point rather
+than a detail of the implementation. `MobileApp` matches the captured route against a fixed set of page
+names and falls back to the phone-local tab for anything outside it, so a destination added to [[side-nav]]
+and never added here is not degraded on a phone — it is silently unreachable, with the rail entry gone and
+the address falling back to Specs. That is how [[plugins-page]] shipped. So a new rail destination is
+finished only once it is in that list, and the list is stated here to be checkable: Issues, Settings,
+Plugins. Because these routed pages require a view scope, `MobileApp` hosts them
 with a route-owned `ViewScopeProvider` carrying the same project route contract as the desktop host; the
 pages retain the throwing required hook, so a missing scope remains a visible integration failure rather than
 silently rendering an optional or incorrect scope.

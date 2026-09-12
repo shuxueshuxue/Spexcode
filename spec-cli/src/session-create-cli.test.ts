@@ -82,6 +82,14 @@ test('session new keeps name and base values out of positional prompt intake', (
   }
 })
 
+test('session new help documents the create-time top-level parent spelling', () => {
+  const result = spawnSync('tsx', [cli, 'session', 'new', '--help'], {
+    cwd: pkgRoot, encoding: 'utf8', env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /@parent:none creates[\s\S]*exact id, unique prefix, or branch still wins/)
+})
+
 function writeGovernedSession(home: string, id: string, parent = ''): string {
   const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)

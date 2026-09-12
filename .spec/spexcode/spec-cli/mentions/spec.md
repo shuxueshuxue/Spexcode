@@ -16,6 +16,24 @@ related:
 
 # mentions
 
+## quoted is not used
+
+A token written inside a fenced block or an inline code span is being SHOWN, not used, and this grammar
+reads it the way the page does. There is no escape character to learn, because backticks are already how a
+person quotes a token instead of invoking it — inventing a second convention would mean teaching it, and a
+convention nobody remembers is one the parser enforces against its readers.
+
+The rule is not a nicety. Prose ABOUT the grammar could not be delivered at all: a task brief explaining
+the `@parent:` directive was refused at create with `names no session: names`, because the parser read the
+sentence describing that error as an instance of it, and nothing could be written instead. For the actions
+it is worse than awkward — a `@new` shown inside a code block in an issue body spawned a real worker.
+
+A match is dropped when it STARTS inside a quoted range; the ranges are not masked out of the text. Masking
+would invent matches the text does not contain, because blanking a closing backtick manufactures exactly the
+whitespace boundary the grammar requires before an `@`. An unclosed fence quotes the rest of the text, which
+is what a reader sees too.
+
+
 ## raw source
 
 Referring to things inside prose should be one grammar everywhere - issue threads, the New Session box, and
@@ -51,6 +69,9 @@ grammar it wears a reserved qualified token, so reading a draft tells you which 
   at most one supervisor: two different selectors, an unknown one, and an ambiguous prefix each fail the
   create loudly rather than landing a worker at top level where nobody would notice the miss.
   `@parent:` moves a session at BIRTH; [[session-reparent]] moves one that already exists.
+  The literal `@parent:none` is the create-time top-level spelling only when the ordinary selector resolver
+  finds no exact id, unique prefix, or branch named `none`; a real match keeps its normal parent target and an
+  ambiguous match fails loudly. The directive is still consumed from the prompt in either case.
 - **`[[file:<name>]]` is a passive reference to a file its session posted** ([[files]]). The `file:` qualifier keeps
   it out of the node vocabulary — `:` is no id character — so it never resolves or expands as a node. It resolves
   only against the posted list of the session whose text holds it, and in the dashboard it opens that file wherever

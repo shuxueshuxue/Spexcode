@@ -436,6 +436,20 @@ test('--pure plants the spec skeleton and nothing else: no .plugins, nothing in 
   titled.spex('init', '.', '--pure', '--title', 'Rocket Delta')
   assert.deepEqual(JSON.parse(readFileSync(join(titled.proj, '.spec/spexcode.json'), 'utf8')), { dashboard: { title: 'Rocket Delta' } },
     '--title is the one thing a skeleton config carries, so the page it publishes is not named after its directory')
+  // and the name reaches the ROOT NODE, whose id is its directory. A seeded tree rooted at a node literally
+  // called "project" publishes a graph whose top says "project" no matter what the project is.
+  assert.equal(existsSync(join(titled.proj, '.spec/rocket-delta/spec.md')), true, 'the root node is named after the project')
+  assert.equal(existsSync(join(titled.proj, '.spec/project')), false, 'the neutral seed name does not survive a title')
+  const rootBody = readFileSync(join(titled.proj, '.spec/rocket-delta/spec.md'), 'utf8')
+  assert.match(rootBody, /^title: rocket-delta$/m)
+  assert.match(rootBody, /^# rocket-delta$/m)
+
+  // A title the ID vocabulary cannot take ([[spec-lint]]'s id-format) keeps the neutral root rather than
+  // minting an illegal id — the config still carries the title, so the page is still named.
+  const odd = freshRepo()
+  odd.spex('init', '.', '--pure', '--title', '***')
+  assert.equal(existsSync(join(odd.proj, '.spec/project/spec.md')), true, 'an unusable title leaves the seed root alone')
+  assert.deepEqual(JSON.parse(readFileSync(join(odd.proj, '.spec/spexcode.json'), 'utf8')), { dashboard: { title: '***' } })
   assert.equal(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), readFileSync(PURE_ROOT, 'utf8'), 'the root comes from the pure template')
   assert.doesNotMatch(readFileSync(join(proj, '.spec/project/spec.md'), 'utf8'), /\.plugins/, 'the pure root does not describe machinery it lacks')
   assert.deepEqual(gitFootprint(proj), before, 'no hook, no filter, no exclude or attributes entry, no .git/spexcode')

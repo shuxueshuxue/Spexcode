@@ -14,7 +14,6 @@ const publicMode = text('public-mode.js')
 const about = text('PublicGraphAbout.jsx')
 const route = text('route.js')
 const specContent = text('specContent.js')
-const launch = text('launch.js')
 const fileTree = text('FileTree.jsx')
 const project = text('project.js')
 const tabs = text('tabs.js')
@@ -68,7 +67,7 @@ test('a published tree runs the workspace shell over static input, opening only 
 
   // The live-only reads are answered, not fired: no backend exists behind a published tree.
   assert.match(data, /if \(PUBLIC_GRAPH_ONLY\) return \[\]/)
-  assert.match(launch, /if \(PUBLIC_GRAPH_ONLY\) return Promise\.resolve\(\{ launchers: \[\] \}\)/)
+  assert.match(data, /export async function loadSettings\(\) \{[\s\S]*?if \(PUBLIC_GRAPH_ONLY\) return \{ launchers: \[\] \}/)
   assert.match(fileTree, /!PUBLIC_GRAPH_ONLY && \(/)
 
   assert.match(dashboard, /onNodeContextMenu=\{graphOnly \? undefined/)

@@ -66,5 +66,10 @@ an ahead check, no lint and no conflict projection, because a declaration must n
 
 **`mergeSession` hands the work back.** The landing is done by the session's own agent in its own worktree
 — sync, resolve conflicts, re-run the proof, one `--no-ff` merge, verify — because that is the only place
-the proof can be re-run. The server dispatches `MERGE_PROMPT` and reports whether the dispatch landed.
-Only a governed session standing at `proposal=merge` may receive it.
+the proof can be re-run. What the server dispatches is the `merge` plugin's own body, read live — not a
+constant here. There was a constant here, three steps beside the plugin's six, and it had never learned the
+step that matters most: a landing must not touch the source checkout's unrelated dirty work. Two copies of
+one instruction drift, and the copy this verb actually sent was the poorer one. The plugin's closing line
+says this verb sends that workflow; reading it is what makes the sentence true, and a project without the
+node fails the dispatch loudly rather than falling back to a second opinion about how to land. Only a
+governed session standing at `proposal=merge` may receive it.

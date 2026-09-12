@@ -1,4 +1,5 @@
 // @@@ import direction - this module reads sessions.ts; sessions.ts must never import it back.
+import { loadSkillConfig } from '@spexcode/spec-core'
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -401,11 +402,18 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   }
 }
 
-const MERGE_PROMPT = `Merge your branch into main, then settle the session honestly.
-
-1. In your own worktree, merge the latest main into your branch. Resolve any conflicts there and re-run the tests.
-2. Atomic landing: main only receives the completed branch as one no-ff merge. Never resolve conflicts in the shared main checkout.
-3. Verify main advanced cleanly with no merge left in progress. If this task is settled, run \`spex session done --propose close\` as your FINAL action; otherwise declare the state that is true.`
+// @@@one-merge-workflow - the dispatched text IS the `merge` skill's body, not a copy of it. There used to
+// be a three-step constant here beside the skill's six, and the two drifted exactly as two copies of one
+// instruction do: the constant never learned that a landing must not touch the source checkout's dirty work,
+// which is the step the skill exists to teach. The skill's own closing line already says this verb sends that
+// workflow, so reading it is what makes that sentence true. A project without the node fails loudly rather
+// than falling back to a second opinion about how to land.
+const MERGE_SKILL = 'merge'
+function mergePrompt(): string {
+  const skill = loadSkillConfig().find((p) => p.name === MERGE_SKILL)
+  if (!skill?.body.trim()) return ''
+  return skill.body.trim()
+}
 
 export type MergeSessionResult =
   | { dispatched: true }
@@ -414,7 +422,9 @@ export type MergeSessionResult =
 export async function mergeSession(id: string): Promise<MergeSessionResult> {
   const wt = await findWorktree(id)
   if (!wt?.branch) return { dispatched: false, reason: 'no such mergeable session' }
-  const r = await sendText(id, MERGE_PROMPT, undefined, {
+  const prompt = mergePrompt()
+  if (!prompt) return { dispatched: false, reason: `no \`surface: skill\` plugin named '${MERGE_SKILL}' — the landing workflow this verb dispatches has no body to send` }
+  const r = await sendText(id, prompt, undefined, {
     deferDrain: true,
   })
   if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }

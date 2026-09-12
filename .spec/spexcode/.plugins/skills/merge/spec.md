@@ -35,5 +35,6 @@ Land the current SpexCode session's branch; do not dispatch another merge reques
    no decision remains, run `spex session done --propose close` as the final action. Never close your own
    session directly. If a real decision or external wake-up remains, declare the truthful alternative instead.
 
-`spex session merge <SEL>` is the supervisor-facing dispatcher that sends this workflow to another session.
-Inside the target session, execute the workflow above; do not call `spex session merge .` recursively.
+`spex session merge <SEL>` is the supervisor-facing dispatcher, and what it sends IS the body above — it reads
+this node rather than carrying its own copy of the steps. Inside the target session, execute the workflow;
+do not call `spex session merge .` recursively.

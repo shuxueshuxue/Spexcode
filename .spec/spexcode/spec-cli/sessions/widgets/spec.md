@@ -128,11 +128,15 @@ prose — not to give every widget a schema.
 
 ## a name holds two layers, and each has one writer
 
-A widget name holds a BODY and a STATE. The body is the document the agent drew and is the agent's to
-write. The state is what the human chose and is written by the send. Both are stored in the repository, in
-the same content-addressed store as everything else about a widget, and neither lives in a browser: a
-person's choice survives their refresh, their laptop, and the closing of the session, because it is kept
-where the rest of the project's record is kept.
+A widget name holds a BODY and a STATE. The body is the document the agent drew and is the agent's to write:
+it is the blob the last put stored, addressed by its hash. The state is what the human chose and is written
+by the send: it is the value inline under that name in the session's `widgets.json`. The asymmetry is the
+write pattern, not an accident — a body is a whole document that is replaced wholesale and worth keeping each
+version of, while a state is a few dozen bytes overwritten on every click, and storing each of those as
+another copy of the document would be waste with no reader.
+
+Neither lives in a browser. A person's choice survives their refresh, their laptop, and the closing of the
+session, because it is kept where the rest of the project's record is kept.
 
 The rendered document is the body with its state handed to it, exactly the way the theme is. The widget
 reads its own state and draws itself accordingly, which is what makes "A is ticked" survive a reload without

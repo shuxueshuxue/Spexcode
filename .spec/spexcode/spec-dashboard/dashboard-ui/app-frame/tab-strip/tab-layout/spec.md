@@ -9,6 +9,7 @@ related:
   - spec-dashboard/test/divider-geometry.e2e.mjs
   - spec-dashboard/test/tab-overflow-list.e2e.mjs
   - spec-dashboard/test/tab-context-menu.e2e.mjs
+  - spec-dashboard/test/split-region.e2e.mjs
   - spec-dashboard/src/TabStrip.jsx
   - spec-dashboard/src/SideBar.jsx
   - spec-dashboard/src/tabs.js
@@ -72,7 +73,13 @@ only by opening a document, and the empty workspace's doors are that gesture's h
 
 All tab faces share one geometry: control-size type, a kind icon or status mark, a 12px lead, and a round
 20px close target that shows on the active card and under the pointer; there is no second face for a
-replaceable tab, because every tab is replaceable. Resident pages keep their registry icon. The
+replaceable tab, because every tab is replaceable. Resident pages keep their registry icon.
+
+**The held region's band is this band naming ONE document.** A region that holds a single document needs no
+list, so it draws the face a tab wears — kind icon, status mark, title — without the card, then the same
+action column: that document's own registry actions ([[document-actions]], found at the address the region
+holds), and one control that returns the document to the strip. There is no second tab list anywhere in the
+window, because there is one working set and the strip is the row that shows it. The
 strip context menu provides close, close-others, and split through the workspace APIs, and it is the ONE menu
 a tab's right-click opens — for every kind of tab, session tabs included, in whichever strip draws it (the
 shell's, or the Sessions document's own column). A menu that depended on what the tab held or which strip drew

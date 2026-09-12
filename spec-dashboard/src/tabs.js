@@ -36,6 +36,12 @@ export const setTabTitle = (tabOrKey, title) => {
 // ([[dashboard-shell]]'s `scopedKey`) — the gateway serves every project from one origin, and a bare key
 // made every project's strip one strip.
 const KEY = scopedKey('spexcode.tabs')
+// THE HELD SLOT — the working set's second position ([[tab-strip]]). One document, beside the strip's list
+// rather than inside it: sending a tab right MOVES it, so a document is in the strip or in the slot, never
+// in both. The old `spexcode.split` key held a copied ROUTE beside an untouched strip; it is read once and
+// migrated, because that shape is what put the same document in two places.
+const HELD_KEY = scopedKey('spexcode.held')
+const LEGACY_SPLIT_KEY = scopedKey('spexcode.split')
 
 const read = () => {
   try {
@@ -51,6 +57,20 @@ const read = () => {
   } catch { return [] }
 }
 const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
+const readHeld = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HELD_KEY) || localStorage.getItem(LEGACY_SPLIT_KEY) || 'null')
+    const [entry] = raw?.page ? normalizeTabs([raw], isDocument) : []
+    return entry || null
+  } catch { return null }
+}
+const writeHeld = (held) => {
+  try {
+    localStorage.removeItem(LEGACY_SPLIT_KEY)
+    if (held) localStorage.setItem(HELD_KEY, JSON.stringify(held))
+    else localStorage.removeItem(HELD_KEY)
+  } catch { /* private mode */ }
+}
 
 // Which routes are worth a tab is the VIEW REGISTRY's answer, not a second list here. It was a second list
 // for one commit, and in that commit the strip could not hold the document addresses the registry had
@@ -62,15 +82,41 @@ const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) 
 // module (⌥⇧X, a menu action) updated whichever copy had registered last, and the strip kept
 // drawing the other. The store is the list; every caller subscribes to it.
 let store = null
+let heldStore = null
 const listeners = new Set()
-const getTabs = () => (store ??= read())
+// ONE hydration for both halves, because their invariant is mutual: the held document is NOT in the strip,
+// and a held document with an empty strip is not a layout — a reload that finds either (an older release, a
+// second window, the retired split key) repairs it here rather than painting it.
+let hydrated = false
+const hydrate = () => {
+  if (hydrated) return
+  hydrated = true
+  store = read()
+  heldStore = readHeld()
+  if (!heldStore) return
+  const key = tabKey(heldStore)
+  const withoutHeld = store.filter((tab) => tabKey(tab) !== key)
+  if (withoutHeld.length !== store.length) { store = withoutHeld; write(store) }
+  if (!store.length) { store = [heldStore]; heldStore = null; write(store); writeHeld(null) }
+}
+const getTabs = () => { hydrate(); return store }
+const getHeld = () => { hydrate(); return heldStore }
+const emit = () => { for (const listener of [...listeners]) listener({ tabs: store, held: heldStore }) }
 const putTabs = (next) => {
   const stable = next
   if (stable === getTabs()) return stable
   store = stable
   write(stable)
-  for (const listener of [...listeners]) listener(stable)
+  emit()
   return stable
+}
+// the two halves move together whenever a document crosses between them, so one write, one notification.
+const putWorkingSet = (tabs, held) => {
+  hydrate()
+  if (tabs === store && held === heldStore) return
+  if (tabs !== store) { store = tabs; write(store) }
+  if (held !== heldStore) { heldStore = held; writeHeld(held) }
+  emit()
 }
 
 // THE STRIP'S FOCUS HISTORY — tab keys, most recent first, in memory only. It is the reader's movement, not
@@ -167,14 +213,15 @@ export function focusLatestTab(match) {
 
 export function useTabs({ onCloseStart } = {}) {
   const route = useRoute()
-  const [tabs, setTabs] = useState(getTabs)
+  const [working, setWorking] = useState(() => ({ tabs: getTabs(), held: getHeld() }))
   const onCloseStartRef = useRef(onCloseStart)
   useEffect(() => { onCloseStartRef.current = onCloseStart }, [onCloseStart])
   useEffect(() => {
-    listeners.add(setTabs)
-    setTabs(getTabs())
-    return () => { listeners.delete(setTabs) }
+    listeners.add(setWorking)
+    setWorking({ tabs: getTabs(), held: getHeld() })
+    return () => { listeners.delete(setWorking) }
   }, [])
+  const { tabs, held } = working
 
   // The current address is always present in the strip, because a strip that claimed to show what is open
   // while the reader looked at something absent from it would be lying. Every caller runs this and the
@@ -185,6 +232,10 @@ export function useTabs({ onCloseStart } = {}) {
     focusedKey = key
     if (appendKey && appendKey !== key) appendKey = null
     if (!isDocument(route.page, route.param)) return
+    // NAVIGATING TO THE HELD DOCUMENT BRINGS IT BACK. The strip must contain the address the reader is on,
+    // and one document cannot be in two places — so the slot releases it rather than the strip cloning it.
+    const heldNow = getHeld()
+    if (heldNow && tabKey(heldNow) === key) putWorkingSet([...getTabs(), heldNow], null)
     const mode = appendKey === key ? 'append' : 'slot'
     appendKey = null
     putTabs(placeTab(getTabs(), route, mode, priorKey))
@@ -207,13 +258,51 @@ export function useTabs({ onCloseStart } = {}) {
     if (i < 0) return
     onCloseStartRef.current?.(tab)
     const next = prev.filter((_, n) => n !== i)
-    putTabs(next)
     recent = recent.filter((k) => k !== key)
+    // AN EMPTY STRIP BESIDE A HELD DOCUMENT IS NOT A LAYOUT: closing the last tab collapses the split and
+    // the held document comes back as the one open document, rather than leaving "nothing open" beside it.
+    const heldNow = getHeld()
+    if (!next.length && heldNow) {
+      putWorkingSet([heldNow], null)
+      navigate(heldNow.page, heldNow.param, { query: heldNow.query })
+      return
+    }
+    putTabs(next)
     if (key === activeKey) {
       const destination = closeDestination(tab, next, i, recent)
       navigate(destination.page, destination.param, { query: destination.query })
     }
   }, [activeKey])
+
+  // SENDING A TAB TO THE SLOT IS A MOVE. It leaves the strip, so the working set still says each document is
+  // in exactly one place; a document already in the slot returns to the strip in the slot the new one left
+  // (a swap, not a discard). Holding the strip's only tab is refused: the move would leave the strip empty,
+  // and the split would collapse right back — the caller shows the verb as unavailable rather than inert.
+  const hold = useCallback((tab) => {
+    const key = tabKey(tab)
+    const prev = getTabs()
+    const i = prev.findIndex((t) => tabKey(t) === key)
+    if (i < 0 || prev.length < 2) return
+    const previous = getHeld()
+    const remaining = prev.filter((_, n) => n !== i)
+    const restored = previous ? [...remaining.slice(0, i), previous, ...remaining.slice(i)] : remaining
+    putWorkingSet(restored, prev[i])
+    recent = recent.filter((k) => k !== key)
+    if (key === activeKey) {
+      const destination = closeDestination(tab, restored, i, recent)
+      navigate(destination.page, destination.param, { query: destination.query })
+    }
+  }, [activeKey])
+
+  // The slot's one control returns its document to the strip and focuses it — the exact inverse of the move,
+  // so nothing is discarded by the gesture that ends the split. Closing it for good is then the ordinary tab
+  // close, on the tab it just became.
+  const release = useCallback(() => {
+    const current = getHeld()
+    if (!current) return
+    putWorkingSet([...getTabs(), current], null)
+    navigate(current.page, current.param, { query: current.query })
+  }, [])
 
   const closeOthers = useCallback((tab) => {
     const key = tabKey(tab)
@@ -233,6 +322,12 @@ export function useTabs({ onCloseStart } = {}) {
       const active = getTabs().find((tab) => tabKey(tab) === activeKey)
       if (active) close(active)
     },
+    hold: (tab) => {
+      const target = tab || getTabs().find((item) => tabKey(item) === activeKey)
+      if (target) hold(target)
+    },
+    release,
+    held: () => getHeld(),
     move: (dir) => {
       const list = getTabs()
       const index = list.findIndex((tab) => tabKey(tab) === activeKey)
@@ -244,7 +339,27 @@ export function useTabs({ onCloseStart } = {}) {
       if (target) open(target)
     },
     active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
-  }), [activeKey, open, close])
+  }), [activeKey, open, close, hold, release])
 
-  return useMemo(() => ({ tabs, activeKey, open, close, closeOthers, move }), [tabs, activeKey, open, close, closeOthers, move])
+  return useMemo(() => ({ tabs, held, activeKey, open, close, closeOthers, move, hold, release }),
+    [tabs, held, activeKey, open, close, closeOthers, move, hold, release])
+}
+
+// The [[workspace-shell]] intent behind `scope.hold(address)`: a view names an ADDRESS, not a tab, so the
+// address joins the working set first (appended, never replacing what the reader is on) and is then moved
+// into the slot by the one move above.
+export function holdAddress(route) {
+  if (!route?.page || !isDocument(route.page, route.param ?? null)) return false
+  const entry = { page: route.page, param: route.param ?? null, query: route.query ?? null }
+  const key = tabKey(tabRoute(entry))
+  const held = getHeld()
+  if (held && tabKey(held) === key) return true
+  const tabs = getTabs()
+  const present = tabs.find((tab) => tabKey(tab) === key)
+  const list = present ? tabs : [...tabs, entry]
+  if (list.length < 2) return false
+  const index = list.findIndex((tab) => tabKey(tab) === key)
+  const remaining = list.filter((_, n) => n !== index)
+  putWorkingSet(held ? [...remaining.slice(0, index), held, ...remaining.slice(index)] : remaining, list[index])
+  return true
 }

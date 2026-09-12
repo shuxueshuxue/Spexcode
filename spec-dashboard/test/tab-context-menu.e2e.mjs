@@ -185,7 +185,7 @@ try {
 
   // 3 — the shell strip on a spec route, same session tab
   await page.locator('[role="tab"][data-tab-key="#/spec/alpha"]:visible .tab-face').click()
-  await waitFor(async () => await hash() === '#/spec/alpha' && await present('.app-main > .tabstrip'), 'spec route with the shell strip', 5_000)
+  await waitFor(async () => await hash() === '#/spec/alpha' && await present('.region-primary > .tabstrip'), 'spec route with the shell strip', 5_000)
   await page.waitForTimeout(400)
   const shellItems = await rightClickTab(sessionKey)
   await page.screenshot({ path: join(out, '3-shell-strip-session-tab.png') })
@@ -197,13 +197,15 @@ try {
   const split = page.locator('.sess-menu:visible [role="menuitem"]', { hasText: 'Send to split pane' })
   const splitOffered = await split.count() > 0
   if (splitOffered) await split.click()
-  const splitShown = splitOffered && await settle('.content-second .viewhost')
+  const splitShown = splitOffered && await settle('.region-held .viewhost')
   await page.waitForTimeout(600)
   await page.screenshot({ path: join(out, '4-split-pane.png') })
-  const secondPane = splitShown ? await page.locator('.content-second .viewhost').first().getAttribute('class') : null
-  scene('send to split pane puts the tab in the second pane', splitShown && /view-sessions/.test(secondPane || '') && await hash() === '#/spec/alpha',
-    { secondPane, hash: await hash() })
-  if (await present('.content-second .content-close')) await page.locator('.content-second .content-close').click()
+  const secondPane = splitShown ? await page.locator('.region-held .viewhost').first().getAttribute('class') : null
+  const strippedTabs = await tabs()
+  scene('send to split pane MOVES the tab into the held region', splitShown && /view-sessions/.test(secondPane || '')
+    && await hash() === '#/spec/alpha' && !strippedTabs.includes(sessionKey),
+    { secondPane, hash: await hash(), tabs: strippedTabs })
+  if (await present('.region-held [data-action="held-return"]')) await page.locator('.region-held [data-action="held-return"]').click()
 
   // 5 — close others, from the session tab on the Sessions document
   await page.locator(`[role="tab"][data-tab-key="${sessionKey}"]:visible .tab-face`).click()

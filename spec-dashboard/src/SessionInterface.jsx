@@ -45,7 +45,7 @@ import { fileName, resourceCatalog, webName } from './resourceCatalog.js'
 import DockToggle from './DockToggle.jsx'
 import { useStatusItem } from './StatusBar.jsx'
 import { useFold } from './useFold.js'
-import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
+import { usePanePrimary, useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 import { useSessionListState } from './sessionListState.js'
 
@@ -422,6 +422,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // does ([[side-nav]]): the same workspace open/closed boolean, read here rather than a second fold state
   // the console would have to keep in step.
   const { dock: forestOpen } = useWorkspace()
+  // which REGION draws this console ([[workspace-shell]]): the primary one carries the frame's chrome.
+  const primaryRegion = usePanePrimary()
   // the Sessions document's own left sidebar. It folds on the SAME workspace flag the shell's dock does, so
   // it folds the same way ([[dock-modes]]) — it used to be the one panel in the frame that blinked out.
   const [forestMounted, forestClosing, forestFolding] = useFold(forestOpen)
@@ -1177,7 +1179,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
-      {forestMounted && <SessionForestPanel
+      {primaryRegion && forestMounted && <SessionForestPanel
         closing={forestClosing}
         folding={forestFolding}
         sessions={sessions}
@@ -1196,7 +1198,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
       />}
       <div className="si-document">
-        {route && <TabStrip specs={specs} sessions={sessions} route={route}
+        {/* THE FRAME IS DRAWN ONCE ([[workspace-shell]]). This document owns page chrome — the forest and
+            the workspace strip above the console — and owns it only in the region that carries the frame.
+            Held beside another document it draws the console alone: the region already has a band naming it,
+            the window already has one navigator, and a second copy of either is a second workspace. */}
+        {primaryRegion && route && <TabStrip specs={specs} sessions={sessions} route={route}
           leading={!forestOpen ? <DockToggle variant="strip" /> : null} />}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen

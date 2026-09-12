@@ -385,6 +385,11 @@ body {
 .app { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; }
 .app-content-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .app-content-row { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+/* A REGION is one place to read a document ([[workspace-shell]]): its band, the document, and that
+   document's own context dock. Both regions are the same box; only the held one takes a width. */
+.region { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.region-held { flex: 0 0 auto; }
+.region-body { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .context-toggle-slot {
   position: absolute; top: var(--space-2); right: var(--space-2); z-index: 6;
@@ -669,14 +674,12 @@ body.is-resizing .ft-resize::after, body.is-resizing .ctx-resize::after, body.is
 .empty-door:hover { color: var(--ink2); border-color: var(--blue); background: color-mix(in srgb, var(--blue) 10%, transparent); }
 
 /* two views at once. The divider is the shared resizable primitive every other pane uses. */
-.content-split { flex: 1; min-height: 0; display: flex; overflow: hidden; }
-.content-split > .viewhost { flex: 1; min-width: 0; }
 .content-divider { flex: 0 0 5px; cursor: col-resize; background: var(--line); opacity: .55; }
 .content-divider:hover { opacity: 1; background: var(--blue); }
-.content-second { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; position: relative; border-left: 1px solid var(--line); }
-.content-second > .viewhost { flex: 1; min-height: 0; }
-.content-close { position: absolute; top: 4px; right: 6px; z-index: 3; display: inline-flex; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); cursor: pointer; }
-.content-close:hover { color: var(--ink2); background: var(--wash-hover); }
+/* the held region's band names ONE document, so its face is a tab's face without a tab's card: the same
+   icon, status mark and label, sitting on the same band the strip draws across the window. */
+.tabstrip-held .tab-held { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 0 var(--space-4); color: var(--ink2); font-size: var(--type-control); }
+.tabstrip-held .tab-held .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* [[spec-view]] — the document is full-width prose; files open at their own address. */
 .specview { flex: 1; min-height: 0; display: flex; overflow: hidden; }

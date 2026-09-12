@@ -90,7 +90,11 @@ test('the rail panel control folds the Sessions forest and is absent only where 
   // it is still ONE boolean; the forest just folds on it through the shared fold, so the mount outlives
   // the flag by one panel duration instead of blinking out ([[dock-modes]]).
   assert.match(sessionInterface, /const \[forestMounted, forestClosing, forestFolding\] = useFold\(forestOpen\)/)
-  assert.match(sessionInterface, /\{forestMounted && <SessionForestPanel/)
+  // the forest is the SESSIONS PAGE's navigator, so it is drawn only by the region that carries the frame
+  // ([[workspace-shell]]): held beside another document, this console is the console alone.
+  assert.match(sessionInterface, /\{primaryRegion && forestMounted && <SessionForestPanel/)
+  assert.match(sessionInterface, /const primaryRegion = usePanePrimary\(\)/)
+  assert.match(sessionInterface, /\{primaryRegion && route && <TabStrip/)
 })
 
 test('Explorer keeps one fixed Spec graph entry below its Specs/Files disclosures', () => {

@@ -65,7 +65,7 @@ const geometry = await page.evaluate(() => {
   return {
     viewport: { width: innerWidth, height: innerHeight },
     list, documentColumn, strip, panel, content,
-    shellStrip: Boolean(document.querySelector('.app-main > .tabstrip')),
+    shellStrip: Boolean(document.querySelector('.region-primary > .tabstrip')),
     clip: { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth },
     errors: [],
   }

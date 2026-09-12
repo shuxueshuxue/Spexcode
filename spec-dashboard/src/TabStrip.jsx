@@ -4,7 +4,6 @@ import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { moveTab, setTabTitle, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
-import { useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey } from './sessionSurface.js'
@@ -86,6 +85,31 @@ function TabKindIcon({ tab }) {
   return icon ? <Icon name={icon} size={13} className="tab-kind-icon" /> : null
 }
 
+// THE DOCUMENT'S OWN CONTROLS, wherever that document is drawn. The registry is keyed by ADDRESS
+// ([[document-actions]]) and a document lives in exactly one region ([[tab-strip]]'s held slot is a move,
+// not a copy), so a region asks for the actions at the address it holds and both bands render them the same
+// way. A held document keeps every control it has in the strip — that is the whole of "the region is
+// self-contained" — rather than leaving them behind in a band that no longer names it.
+export const documentActionsAt = (actions, address) => [...actions.values()]
+  .filter((action) => action.document === address)
+  .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
+
+export function renderDocumentAction(action) {
+  const label = action.disabled ? (action.disabledReason || action.label) : action.label
+  return (
+    <div key={action.key || `${action.document}:${action.id}`} className="document-action">
+      {action.node || <IconButton icon={action.icon} size={14} label={label}
+        className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
+        data-action={action.id}
+        aria-pressed={action.pressed}
+        aria-haspopup={action.haspopup ? 'menu' : undefined}
+        disabled={action.disabled}
+        onClick={action.onClick} />}
+      {action.menu}
+    </div>
+  )
+}
+
 // WHERE AM I is the same question whether or not a document is open, so the strip answers it in both cases:
 // tabs when there are tabs, the routed place's own name when there are none. Naming the place is also what
 // earns the strip its unconditional row — the shell used to wrap it in a spacer div that rendered a blank
@@ -122,7 +146,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     window.setTimeout(() => setClosing((current) => current.filter((entry) => entry.key !== key)), duration)
   }, [])
   const tabsRef = useRef([])
-  const { tabs, activeKey, open, close, closeOthers, move } = useTabs({ onCloseStart: startTabClose })
+  const { tabs, activeKey, open, close, closeOthers, move, hold } = useTabs({ onCloseStart: startTabClose })
   tabsRef.current = tabs
   useEffect(() => {
     const host = tabsHostRef.current
@@ -143,7 +167,6 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [activeKey, tabs.length])
   const names = useDocumentNames()
-  const { splitTo } = useWorkspaceApi()
   const actions = useDocumentActions()
   useEffect(() => {
     for (const tab of tabs) {
@@ -237,9 +260,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     })
   }
   const activeAddress = routeHash(route.page, route.param, route.query)
-  const activeActions = [...actions.values()]
-    .filter((action) => action.document === activeAddress)
-    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
+  const activeActions = documentActionsAt(actions, activeAddress)
   const renderedTabs = [...tabs]
   closing.filter((entry) => !tabs.some((tab) => tabKey(tab) === entry.key))
     .sort((a, b) => a.index - b.index)
@@ -280,7 +301,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
                 drop marks. */}
             <div className="tab-inner">
               <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
-                onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
+                onClick={(e) => { if (!isClosing) (e.altKey ? hold(tab) : open(tab)) }}>
                 <TabKindIcon tab={tab} />
                 <TabDot tab={tab} specs={specs} sessions={sessions} />
                 <span className="tab-label">{tabLabel}</span>
@@ -307,21 +328,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
               <Icon name="chevron-down" size={14} />
             </button>
           )}
-          {activeActions.map((action) => {
-            const label = action.disabled ? (action.disabledReason || action.label) : action.label
-            return (
-              <div key={action.key || `${action.document}:${action.id}`} className="document-action">
-                {action.node || <IconButton icon={action.icon} size={14} label={label}
-                  className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
-                  data-action={action.id}
-                  aria-pressed={action.pressed}
-                  aria-haspopup={action.haspopup ? 'menu' : undefined}
-                  disabled={action.disabled}
-                  onClick={action.onClick} />}
-                {action.menu}
-              </div>
-            )
-          })}
+          {activeActions.map(renderDocumentAction)}
           {trailing}
         </div>
       )}
@@ -356,12 +363,46 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            <ContextMenuItem icon="panel-right" onClick={(e) => { e.stopPropagation(); setMenu(null); splitTo(menu.tab) }}>
+            {/* the move is refused when this is the only tab — the strip would be left empty and the split
+                would collapse right back — so the verb says it is unavailable instead of doing nothing. */}
+            <ContextMenuItem icon="panel-right" disabled={tabs.length < 2}
+              data-tip={tabs.length < 2 ? t('tabs.menuSplitOnly') : undefined}
+              onClick={(e) => { e.stopPropagation(); setMenu(null); hold(menu.tab) }}>
               {t('tabs.menuSplit')}
             </ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenu>
       )}
+    </div>
+  )
+}
+
+// THE HELD REGION'S BAND ([[tab-layout]]). The second region holds exactly one document, so its band names
+// that document instead of listing a working set: the same face a tab wears (kind icon, status mark, title),
+// the document's own controls in the same action column the strip has, and one control that RETURNS it to
+// the strip. There is no second working set here, so there is no second strip — the row the reader scans for
+// "what is open" stays one row, in one place.
+export function HeldBar({ specs, sessions, tab, onRelease, trailing = null }) {
+  const t = useT()
+  const names = useDocumentNames()
+  const actions = useDocumentActions()
+  const heldActions = documentActionsAt(actions, routeHash(tab.page, tab.param, tab.query))
+  const title = label(tab, { specs, sessions, names, t })
+  return (
+    <div className="tabstrip tabstrip-held">
+      <div className="tabstrip-tabs">
+        <span className="tab-held" data-tab-key={tabKey(tab)} data-tip={title}>
+          <TabKindIcon tab={tab} />
+          <TabDot tab={tab} specs={specs} sessions={sessions} />
+          <span className="tab-label">{title}</span>
+        </span>
+      </div>
+      <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
+        {heldActions.map(renderDocumentAction)}
+        <IconButton icon="corner-up-left" size={14} className="document-action-button held-return"
+          data-action="held-return" label={t('tabs.heldReturn')} onClick={onRelease} />
+        {trailing}
+      </div>
     </div>
   )
 }

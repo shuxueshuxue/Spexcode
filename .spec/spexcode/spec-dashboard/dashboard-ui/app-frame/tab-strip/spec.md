@@ -43,10 +43,31 @@ navigation path, so the strip, deep links, and browser history agree. Session ba
 session tab; published resources are separate file-class tabs. The shell owns the strip's position in the
 frame and the document-actions slot at its right edge; documents do not render a second tab rail.
 
-Every tab is an ordinary tab. There is no pinned, held, or preview state: a tab is an address in the working
+Every tab is an ordinary tab. There is no pinned or preview state: a tab is an address in the working
 set, drawn the same way whether it arrived by a plain click, by ctrl/⌘-click, or by creating a session, and
 replaced the same way. A tab that could not be replaced was a tab whose history the reader had to remember;
 the strip does not ask that of anyone.
+
+**The working set has a second position: the HELD SLOT.** It holds exactly one document, beside the strip's
+list rather than inside it, and the window draws it as its own region ([[workspace-shell]]). Sending a tab
+right is therefore a MOVE: the tab leaves the strip, so a document is in the strip or in the slot and never
+in both — the alternative, a copied address beside an untouched strip, put one document in two places and
+left the second region listing every tab the first one already had. Four rules complete it, and each is the
+same invariant seen from one more angle:
+
+- **A document already in the slot returns to the strip** when another is sent right, in the place the new
+  one left. Sending right never discards anything.
+- **The slot's one control returns its document to the strip and focuses it** — the exact inverse of the
+  move. Closing it for good is then the ordinary tab close, on the tab it just became.
+- **Navigating to the held address brings it back.** The strip must contain the address the reader is on, and
+  one document cannot be in two places, so the slot releases rather than the strip cloning.
+- **An empty strip beside a held document is not a layout.** Holding the strip's only tab is refused (the
+  verb says it is unavailable rather than doing nothing), and closing the last remaining tab collapses the
+  split by bringing the held document back as the one open document.
+
+The slot survives a reload with the strip, and a reload that finds the invariant broken — an older release's
+copied address, a second window's write — repairs it before painting rather than showing the same document
+twice.
 
 Three focused child contracts keep this node readable:
 
@@ -59,7 +80,8 @@ Three focused child contracts keep this node readable:
   and action-cluster geometry.
 
 The cross-surface law is one mechanism: row surfaces use the shared new-tab predicate and tab APIs, while
-views write addresses through their host scope. The strip itself owns no session lifecycle actions beyond the shared
+views write addresses through their host scope — a view's `hold` intent names an address, which joins the
+working set before it is moved into the slot. The strip itself owns no session lifecycle actions beyond the shared
 tab close menu; session rename/archive/close remains the session document or row menu's concern.
 
 ## Desktop-realised affordances

@@ -15,14 +15,17 @@ related:
   - packages/spec-core/src/review/reviewQuery.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/spec-history-dock.e2e.mjs
+  - spec-dashboard/test/split-region.e2e.mjs
 ---
 # context-dock
 
-The right-hand CONTEXT region answers “what surrounds this thing?”. It is a property of the document being
-read, not a second finding surface and not another tab. The dock therefore follows the shell's routed
-`{page, param}` for the **primary** document. In a split layout it deliberately continues to follow the
-primary route and never follows the second pane: context answers the document the reader routed to, while
-the second pane is an independently held document.
+The right-hand CONTEXT panel answers “what surrounds this thing?”. It is a property of the document being
+read, not a second finding surface and not another tab — so it belongs to a REGION rather than to the window
+([[workspace-shell]]): each region draws its own dock for its own document, at its own right edge, with its
+own open/closed state. Two spec nodes read side by side therefore get two docks, each describing its own
+node. The dock used to follow the routed document only, which left a held document with no context at all;
+"context is a property of the document" and "there is one dock, and it belongs to the address bar" cannot
+both be true, and the first is the one worth keeping.
 
 The dock exists only for `#/spec/<id>`. Other route kinds have no context projection, so they render no dock
 and no empty placeholder.
@@ -80,9 +83,11 @@ demand — the same 383px problem with no toggle. A pane that is closed costs no
 its rows get a full 276px of their own rather than competing with the sentence beside them.
 
 The dock width uses `useResizable('spex.ctxWidth', ...)` and keeps the same min/max and release-time
-localStorage persistence as the other shell panes. Panel disclosure and the dock's open state are local
-preferences in localStorage; the dock defaults CLOSED and each section defaults expanded, so asking for
-context once gets the reader everything rather than a second round of clicks. A closed dock renders nothing
+localStorage persistence as the other shell panes. Panel disclosure and the PRIMARY region's open state are
+local preferences in localStorage; a held region's dock starts closed and remembers only while that document
+is held, because a document sent right must not spend the other document's width uninvited. The dock defaults
+CLOSED and each section defaults expanded, so asking for context once gets the reader everything rather than
+a second round of clicks. A closed dock renders nothing
 — no rail, no collapsed spine — so it adds no band to [[ui-state-model]]'s budget when it is not showing.
 Getting there is a MOVEMENT, on the frame's one shared fold ([[dock-modes]]): the dock outlives the closed
 state by exactly one `--dur-panel` and slides out, then unmounts, so the resting cost is still nothing while
@@ -90,8 +95,8 @@ the gesture is still visible. Because the fold animates width, the dock clips it
 panels therefore scroll together inside it — the alternative to that scroller is not "no scroller", it is a
 long issue list clipped out of reach. The resize grip stays outside the scroller so it cannot scroll away
 from the edge it drags.
-The open/close control belongs to the document area and stays at the window's right edge: one shell-owned slot
-paints it over the tab strip while the dock is closed and over the context head while the dock is open. The
+The open/close control belongs to the document area and stays at its REGION's right edge: one slot per region
+paints it over that region's band while the dock is closed and over the context head while the dock is open. The
 same `28px` target stays mounted through the dock's width animation, with the same `4px` right inset, so
 opening and closing keep the pointer over the control without a replacement flash. The
 workspace-shell rule says a control belongs to the region whose question it answers, and context is neither
@@ -104,7 +109,8 @@ flipping right-dock switch would have to draw `panel-left` — a panel on the re
 "closed". A glyph that names the dock is readable in every combination; a glyph that pictures the wrong side
 is not.
 
-The component receives `{page, param, query}` from `Shell`; it never reads the global address. The query
+The component receives `{page, param, query}` from its region; it never reads the global address, which is
+what lets the held region hand it a document the address bar does not name. The query
 selects nothing in the dock — the dock is the same for every face of the node — it only says which version
 row the document is showing. Its API context and state context remain separate by using the existing
 board/workspace hooks rather than introducing a mixed context. A failed issues or history request is shown

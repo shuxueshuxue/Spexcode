@@ -139,6 +139,8 @@ export default {
     menuClose: 'Close',
     menuCloseOthers: 'Close others',
     menuSplit: 'Send to split pane',
+    menuSplitOnly: 'the only tab — the strip would be left empty',
+    heldReturn: 'return this document to the tab strip',
     surfaceTerminal: 'terminal',
     surfaceConversation: 'conversation',
     surfaceDiff: 'diff',

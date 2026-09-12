@@ -135,6 +135,8 @@ export default {
     menuClose: '关闭',
     menuCloseOthers: '关闭其他',
     menuSplit: '送入分屏',
+    menuSplitOnly: '只有这一个标签，移走会让标签栏空掉',
+    heldReturn: '收回到标签栏',
     surfaceTerminal: '终端',
     surfaceConversation: '对话',
     surfaceDiff: '差异',

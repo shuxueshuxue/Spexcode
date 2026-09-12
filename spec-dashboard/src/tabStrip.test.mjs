@@ -11,6 +11,7 @@ const catalog = readFileSync(new URL('./viewCatalog.js', import.meta.url), 'utf8
 const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
+const workspace = readFileSync(new URL('./workspace.jsx', import.meta.url), 'utf8')
 const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
 const dockToggleSource = readFileSync(new URL('./DockToggle.jsx', import.meta.url), 'utf8')
 const fileTree = readFileSync(new URL('./FileTree.jsx', import.meta.url), 'utf8')
@@ -33,7 +34,9 @@ test('tab right-click opens the shared context menu instead of closing silently'
 test('tab menu actions are explicit and use the existing workspace APIs', () => {
   assert.match(source, /close\(menu\.tab\)/)
   assert.match(source, /closeOthers\(menu\.tab\)/)
-  assert.match(source, /splitTo\(menu\.tab\)/)
+  assert.match(source, /hold\(menu\.tab\)/)
+  // the move is refused when it would empty the strip, and the verb says so instead of doing nothing
+  assert.match(source, /disabled=\{tabs\.length < 2\}/)
   assert.match(source, /useEscLayer\(!!menu/)
 })
 
@@ -146,9 +149,11 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
-  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} query=\{query\} open=\{contextOpen\} \/>/)
-  assert.match(shell, /<div className="context-toggle-slot">\{contextToggle\}<\/div>/)
-  assert.match(shell, /trailing=\{contextToggleReservation\}/)
+  // EACH REGION ANSWERS CONTEXT FOR ITS OWN DOCUMENT ([[context-dock]]): one dock per region, drawn by the
+  // region, never one shell-level dock that only the routed document can ever describe.
+  assert.match(shell, /<ContextDock page=\{route\.page\} param=\{route\.param\} query=\{route\.query\} open=\{hasContext && contextOpen\} \/>/)
+  assert.match(shell, /\{hasContext && <div className="context-toggle-slot"><ContextToggle visible=\{contextOpen\} onToggle=\{onToggleContext\} \/><\/div>\}/)
+  assert.match(shell, /trailing=\{contextReservation\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)
   assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 32px;[^}]*width:\s*32px;/s)
   assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*28px; height:\s*28px;[^}]*padding:\s*0;/s)
@@ -216,9 +221,54 @@ test('the palette opens a new tab by pointer and by its keyboard twin', () => {
 
 test('there is no hold chord: nothing in the binding registry or the shell pins a tab', () => {
   assert.doesNotMatch(keymap, /tabHold/)
-  assert.doesNotMatch(shell, /tabHold|runTabCommand\('hold'\)/)
+  assert.doesNotMatch(shell, /tabHold/)
   assert.doesNotMatch(tabs, /hold: \(\) => \{/)
   for (const [name, dict] of [['en', en], ['zh', zh]]) {
     assert.doesNotMatch(dict, /tabHold: '/, `${name} still has a legend line for the retired hold chord`)
   }
+})
+
+// THE SECOND REGION ([[workspace-shell]] / [[tab-strip]]'s held slot). Sending a tab right is a MOVE inside
+// one working set, and the region that receives it is a place to read a document — not a second workspace.
+test('the held slot is the working set\'s second position: a move, never a copy', () => {
+  // one document, one place: the slot's entry leaves the strip, and both halves move in one write
+  assert.match(tabs, /const putWorkingSet = \(tabs, held\) => \{/)
+  assert.match(tabs, /const remaining = prev\.filter\(\(_, n\) => n !== i\)/)
+  assert.match(tabs, /putWorkingSet\(restored, prev\[i\]\)/)
+  // the strip's only tab cannot be moved: the split would collapse right back
+  assert.match(tabs, /if \(i < 0 \|\| prev\.length < 2\) return/)
+  // navigating to the held address brings it back rather than letting the strip clone it
+  assert.match(tabs, /if \(heldNow && tabKey\(heldNow\) === key\) putWorkingSet\(\[\.\.\.getTabs\(\), heldNow\], null\)/)
+  // closing the last tab collapses the split instead of leaving "nothing open" beside a document
+  assert.match(tabs, /if \(!next\.length && heldNow\) \{[\s\S]{0,200}putWorkingSet\(\[heldNow\], null\)/)
+  // the reader's way back is the inverse of the move, so the gesture that ends the split discards nothing
+  assert.match(tabs, /const release = useCallback\(\(\) => \{[\s\S]{0,220}putWorkingSet\(\[\.\.\.getTabs\(\), current\], null\)/)
+  // a reload repairs the invariant rather than painting a document in two places
+  assert.match(tabs, /const withoutHeld = store\.filter\(\(tab\) => tabKey\(tab\) !== key\)/)
+  assert.match(tabs, /if \(!store\.length\) \{ store = \[heldStore\]; heldStore = null/)
+  // the retired split key held a copied ROUTE beside an untouched strip; it is read once and migrated
+  assert.match(tabs, /const LEGACY_SPLIT_KEY = scopedKey\('spexcode\.split'\)/)
+  assert.doesNotMatch(workspace, /splitTo|closeSplit|SPLIT_KEY/)
+})
+
+test('the frame is drawn once: a region holds a document, its band and its own context', () => {
+  assert.match(shell, /function DocumentRegion\(\{ primary = false, band, route, width = null, contextOpen, onToggleContext, children \}\)/)
+  assert.match(shell, /<DocumentRegion primary route=\{\{ page, param, query \}\}/)
+  assert.match(shell, /<DocumentRegion route=\{held\} width=\{heldWidth\}/)
+  assert.match(shell, /<HeldBar specs=\{specs\} sessions=\{sessions\} tab=\{held\} onRelease=\{release\}/)
+  // the held host draws the document and no frame chrome; the pool is the primary region's
+  assert.match(shell, /<ViewHost page=\{held\.page\} param=\{held\.param\} query=\{held\.query\} inactive=\{inactive\} primary=\{false\} \/>/)
+  assert.match(shell, /address: entry\.address, active: showing, primary: true/)
+  assert.match(shell, /<PaneProvider value=\{\{ address, active: !inactive, primary \}\}>/)
+  assert.match(workspace, /export const usePanePrimary = \(\) => useContext\(Pane\)\?\.primary !== false/)
+  // one band vocabulary: the held band names ONE document and carries that document's own controls
+  assert.match(source, /export function HeldBar\(\{ specs, sessions, tab, onRelease, trailing = null \}\)/)
+  assert.match(source, /export const documentActionsAt = \(actions, address\)/)
+  assert.match(source, /heldActions\.map\(renderDocumentAction\)/)
+  assert.match(source, /data-action="held-return"/)
+  assert.match(css, /\.region \{[^}]*flex-direction: column;/s)
+  assert.match(css, /\.region-body \{[^}]*display: flex;/s)
+  // the second region is not a second workspace: no second strip, and the retired copy-shaped chrome is gone
+  assert.doesNotMatch(shell, /className="content-split"|className="content-second"|content-close/)
+  assert.doesNotMatch(css, /\.content-split|\.content-second|\.content-close/)
 })

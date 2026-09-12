@@ -12,6 +12,7 @@ related:
   - distribution/gugu/spexcode-atlas/manifest.json
   - scripts/distribution.mjs
   - scripts/distribution.test.mjs
+  - scripts/gugu-tab.e2e.mjs
 ---
 
 # gugu-atlas-tab
@@ -38,9 +39,15 @@ reason in its own slot and costs the node nothing else.
 change under `.spec/`, once a burst of saves settles, so the tree grows while the agent works. A missing capability
 is said plainly, with where to grant it, never worked around.
 
-**Proof.** gugu's own manifest schema accepts the manifest. The tab is driven in a real browser against a stub of
-the documented `window.gugu` surface over this repository's spec tree: the tree, a node's body and its diagram
-render, a mention and a double-click navigate, and "Draw the atlas" hands the prompt to `spawnAgent`.
+**Proof.** Two halves, and the split is the point. What can be checked without a browser runs with the suite:
+gugu's own manifest schema accepts the manifest, the folder tree reads as a spec tree, a body renders escaped,
+every `diagram.json` draws byte for byte as archify's Node renderer draws it, and the page's classic scripts parse
+TOGETHER in the order the page loads them. Running the page needs a browser, so `scripts/gugu-tab.e2e.mjs` serves
+the package from a real origin — `file://` cannot resolve the page's relative dynamic import — and drives it
+against a stub of the documented `window.gugu` surface over a real spec tree: the tree lists, a node shows its
+body, a node carrying a diagram draws its boxes, and "Draw the atlas" hands the prompt to `spawnAgent`. That probe
+asserts "no page error" FIRST, because a page whose script did not parse renders nothing, and "nothing appeared"
+is a far worse report than the reason it did not.
 
 The gugu shelf's shipped-example harness parses every `.js` file as a classic script, so the package's model, focus,
 and prompt helpers expose globals. Classic scripts share ONE global lexical scope, so each helper publishes its

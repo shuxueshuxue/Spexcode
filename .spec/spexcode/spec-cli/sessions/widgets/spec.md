@@ -104,9 +104,27 @@ rather than leaving it to guess. Fetching changes what the widget is: it stops b
 starts depending on a backend that may be down, or on a session that has since been closed. Live data is
 worth that only when being current is the point, as in a supervisor's view of a running fleet.
 
-There is no widget store and no widget memory. What the human chose is in the session's messages, where every
-other decision is; the agent reads them and draws the next picture. A widget that kept its own state would
-give the same question two answers, and the one nobody can audit would be the one on screen.
+## three kinds of state, three places
+
+What the agent computed is in the picture, stored with it, and re-computed only when the agent draws again.
+
+What the human decided is in the session's messages, where every other decision is. That is the ground
+truth: the agent acts on it, the CLI prints it, another agent can read it, and it is still there a year
+later. The send gesture is the line. Before it nothing has been decided, which is why six ticks do not
+become six messages, and why the widget itself is never the record of what was chosen.
+
+What the human is in the middle of — ticks not yet sent, a sentence half typed — is a draft, and it belongs
+to the browser doing it. The host keeps it there under the session and widget name, and hands it back when
+that frame loads again, along with the version it was saved under; a widget that can restore itself does so
+from it, and one that cannot ignores it. `spex.save(state)` and the state handed in at load are that
+mechanism, and they exist for one reason: a page refresh must not cost a human the clicks they have not sent
+yet. It is deliberately per-viewer and not durable state: a draft has nothing to audit, two people are not
+filling one form, and the moment anything matters it is sent and becomes a message.
+
+An agent that redraws a widget while a human has an unsent draft in it does not swap under them. The host
+keeps showing the version they are working in and offers the newer one; their own send, or discarding the
+draft, is what lets it through. Replacing a form mid-edit to show fresher numbers trades the thing being
+done for the thing being displayed.
 
 ## what this contract does not cover
 

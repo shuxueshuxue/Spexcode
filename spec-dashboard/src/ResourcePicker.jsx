@@ -6,8 +6,8 @@ import { returnFocus } from './focus.js'
 import { useFold } from './useFold.js'
 import { ALL_FILTER, UPLOADED_FILTER, matchResources, resourceFilters } from './resourceCatalog.js'
 
-// The JS half of `--dur-drawer`: how long the closing drawer stays mounted while it slides back in.
-const DRAWER_MS = 240
+// How long the closing drawer stays mounted: the close is a fade (`--dur-rise`), not the drawer in reverse.
+const CLOSE_MS = 140
 
 const TYPE_MARK = {
   html: ['file-code', 'orange'], pdf: ['file-text', 'red'], markdown: ['file-text', 'blue'],
@@ -30,7 +30,7 @@ const uploadTime = (time, lang) => {
 export default function ResourcePicker({ entries, openIds, open, onOpenChange, onPick, onDownload, onCopy }) {
   const { t, lang } = useI18n()
   const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const [mounted, closing] = useFold(open, reducedMotion ? 0 : DRAWER_MS)
+  const [mounted, closing] = useFold(open, reducedMotion ? 0 : CLOSE_MS)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState(ALL_FILTER)
   const [cursor, setCursor] = useState(0)

@@ -2609,10 +2609,13 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; user-select:
   transition: transform var(--dur-drawer) cubic-bezier(.2, .8, .25, 1);
 }
 @starting-style { .si-rp-drawer { transform: translateY(-100%); } }
-/* shorter than the unmount linger, so the drawer is fully back in its slot before it leaves the tree */
+/* CLOSING IS A FADE, NOT THE DRAWER IN REVERSE. Retracting through the slot sweeps the panel's own bottom
+   shadow up the page as a dark line, which is the one thing the reader notices about the whole gesture. Fading
+   in place keeps the shadow still. The transform transition stays, so a close that interrupts the opening
+   settles into its resting place while it fades rather than jumping there. */
 .si-rp-drawer.closing {
-  pointer-events: none; transform: translateY(-100%);
-  transition-duration: calc(var(--dur-drawer) * .75); transition-timing-function: cubic-bezier(.4, 0, .9, .5);
+  pointer-events: none; opacity: 0;
+  transition: transform var(--dur-drawer) cubic-bezier(.2, .8, .25, 1), opacity var(--dur-rise) ease;
 }
 .si-rp-head { padding: var(--space-5) var(--space-6) var(--space-3); color: var(--ink2); font-size: var(--type-control); font-weight: var(--weight-semibold); }
 .si-rp-search {

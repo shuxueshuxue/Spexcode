@@ -96,7 +96,7 @@ const sampleDrawer = (page, ms = 600, presses = []) => page.evaluate(([duration,
     if (drawer) {
       const rect = drawer.getBoundingClientRect()
       const slot = drawer.parentElement.getBoundingClientRect().top
-      frames.push({ t: Math.round(t), shown: Math.round(Math.max(0, rect.bottom - Math.max(rect.top, slot))), slot: Math.round(slot), closing: drawer.classList.contains('closing') })
+      frames.push({ t: Math.round(t), shown: Math.round(Math.max(0, rect.bottom - Math.max(rect.top, slot))), slot: Math.round(slot), opacity: Number(getComputedStyle(drawer).opacity), closing: drawer.classList.contains('closing') })
     } else frames.push({ t: Math.round(t), gone: true })
     if (t < duration) requestAnimationFrame(tick); else done(frames)
   }
@@ -262,15 +262,19 @@ try {
   await page.keyboard.press('Escape')
   const closeFrames = drawn(await closeRun)
   const lastShown = closeFrames.at(-1)
-  check('the drawer is back in its slot before it leaves the page',
-    lastShown.closing && lastShown.shown <= 2 && new Set(closeFrames.map((frame) => frame.slot)).size === 1, closeFrames.slice(-4))
+  // closing must not retract through the slot: that sweeps the panel's own shadow up the page as a dark line
+  check('closing fades in place, without moving the drawer or its shadow',
+    lastShown.closing && lastShown.opacity <= 0.15
+    && new Set(closeFrames.map((frame) => `${frame.slot}:${frame.shown}`)).size === 1
+    && closeFrames[0].opacity > closeFrames.at(-1).opacity, closeFrames.slice(-4))
   await drawer.waitFor({ state: 'detached' })
   const interruptFrames = drawn(await sampleDrawer(page, 700, [0, 90]))
   const opened = interruptFrames.filter((frame) => !frame.closing)
-  const reversal = interruptFrames.findIndex((frame) => frame.closing)
-  check('a close during the opening reverses from where the drawer is',
-    reversal > 0 && interruptFrames[reversal].shown <= Math.max(...opened.map((frame) => frame.shown)) + 40 && interruptFrames.at(-1).shown <= 2,
-    { peak: Math.max(...opened.map((frame) => frame.shown)), firstClosing: interruptFrames[reversal]?.shown, last: interruptFrames.at(-1)?.shown })
+  const shutting = interruptFrames.filter((frame) => frame.closing)
+  const settles = shutting.every((frame, index) => index === 0 || frame.shown >= shutting[index - 1].shown - 2)
+  check('a close during the opening settles in place while it fades, never jumping back',
+    shutting.length > 0 && shutting[0].shown >= opened.at(-1).shown - 4 && settles && shutting.at(-1).opacity <= 0.2,
+    { lastOpening: opened.at(-1)?.shown, firstClosing: shutting[0]?.shown, lastOpacity: shutting.at(-1)?.opacity })
   await drawer.waitFor({ state: 'detached' })
 
   await page.goto(`${BASE}/#/sessions/${SESSION}?surface=diff`, { waitUntil: 'domcontentloaded' })

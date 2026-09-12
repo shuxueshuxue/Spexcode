@@ -34,15 +34,27 @@ event carrying two hooks is where the order stops being decoration, and an event
 words. The other surfaces have no timeline and are not forced onto it — always-on prose and invocable
 verbs get a strip each, under the spine, which is also the honest shape: they are not lined up in time.
 
+## every row says what it is for, and opens
+
+A name and a number is a fact nobody asked for. The question a person brings to this board is what a thing
+does and why it is allowed to refuse, and both answers are already written: a node's `desc` is its one line
+and its body is the rest. So each plugin is a card carrying that line, and the card IS the link to the node —
+the ordinary `#/spec/<id>` address, read by the same reader the rest of the dashboard uses. Nothing here
+restates a body or keeps a second description of anything.
+
+The seven hooks had no `desc` at all when this board first drew them, which is how it shipped as a grid of
+names and numbers explaining nothing. They have one now, because a plugin that cannot say what it is for in
+one line is a plugin nobody can review.
+
+## the profile is the switch, and it is read here, never written
+
+Every core hook's body opens by saying the startup `SPEX_PROFILE` list may disable it with a clean no-op, so
+that list is this surface's configuration and a board that omits it shows seven things that may or may not be
+running. It is shown as the state it is — which profile is active, how many hooks it keeps, which it turns
+off, with a disabled hook greyed in place rather than hidden. The board does not write it: the profile is an
+environment variable of the process an agent launches under, not a project setting this page owns.
+
 ## the board says what the automation IS, never how a branch is doing
-
-The board opened, for a while, with a bar comparing each session worktree's installed hook manifest against
-the trunk's. It is gone. A worktree's manifest is compiled from its own `.spec`, so an old branch's
-"disagreement" is only its age, and the bar dressed that up as something broken — three sessions it flagged
-were re-materialized and flagged identically afterwards, because nothing was wrong with them. An inventory
-of what plugs in where has no business reporting on the age of somebody's branch; if a session is running
-with no hooks at all, that is session health and belongs where session health lives.
-
 ## one document, no dock
 
 The board names no object, projects no navigator, and holds one full-width document. It is `resident`, so

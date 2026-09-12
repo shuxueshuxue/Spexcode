@@ -1,4 +1,5 @@
 import { loadAgentConfig, loadConfig, loadHookConfig, loadSkillConfig, loadSystemConfig } from '@spexcode/spec-core'
+import { ALL_CORE_HOOKS, resolveCliProfile } from './help.js'
 import type { ConfigPreset } from '@spexcode/spec-core'
 
 // @@@the-lifecycle-an-agent-actually-walks - the spine's order is a READING order, not data: the harness
@@ -33,7 +34,13 @@ export type PluginRow = {
 
 export type SpineSlot = { event: string; offSpine: boolean; hooks: { name: string; order: number; block: boolean }[] }
 
-export type PluginsView = { rows: PluginRow[]; spine: SpineSlot[] }
+// @@@the-switch-that-exists - every core hook's body opens by saying the startup `SPEX_PROFILE` list may
+// disable it with a clean no-op, so that list IS this surface's configuration, and a board that shows the
+// hooks without it shows seven things that may or may not be running. It is read, never written: the profile
+// is an environment variable of the process an agent launches under, not a project setting the page owns.
+export type Profile = { name: string; retains: string[]; disables: string[] }
+
+export type PluginsView = { rows: PluginRow[]; spine: SpineSlot[]; profile: Profile }
 
 // One node reaches the view once, carrying every surface it declares. Loading per surface and merging by
 // name is what makes a dual-surface node legible — a folder tree can only show it in one place, which is
@@ -68,7 +75,15 @@ function buildSpine(rows: PluginRow[]): SpineSlot[] {
   return [...slots.values()]
 }
 
+function readProfile(): Profile {
+  try {
+    const resolved = resolveCliProfile()
+    const retains = ALL_CORE_HOOKS.filter((name: string) => resolved.hooks.has(name))
+    return { name: resolved.name, retains, disables: ALL_CORE_HOOKS.filter((name: string) => !resolved.hooks.has(name)) }
+  } catch { return { name: 'full', retains: [...ALL_CORE_HOOKS], disables: [] } }
+}
+
 export function pluginsView(): PluginsView {
   const rows = collectRows()
-  return { rows, spine: buildSpine(rows) }
+  return { rows, spine: buildSpine(rows), profile: readProfile() }
 }

@@ -3,6 +3,7 @@ title: idle
 surface: hook
 status: active
 hue: 200
+desc: Catches the undeclared stop the stop-gate misses: on an idle-prompt notification it marks the session `idle`, so one that quietly ran out of work stops reading as active.
 events:
 - Notification
 order: 10

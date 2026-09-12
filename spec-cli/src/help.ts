@@ -22,7 +22,7 @@ export type CliProfile = Readonly<{
 }>
 
 const REPO_COMMANDS = ['spec', 'diagram', 'graph', 'guide', 'init', 'materialize', 'doctor', 'issue', 'help'] as const
-const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
+export const ALL_CORE_HOOKS = ['spec-first', 'spec-of-file', 'comment-altitude', 'idle', 'mark-active', 'session-fail', 'session-listen', 'stop-gate'] as const
 const REPO_HOOKS = new Set(['spec-first', 'spec-of-file', 'comment-altitude'])
 
 function profileError(message: string): never {

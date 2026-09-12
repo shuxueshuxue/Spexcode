@@ -12,27 +12,6 @@ import { useT } from './i18n/index.jsx'
 // event, a deterministic order inside it, and whether the script may refuse. The other surfaces are not
 // event-driven and are not forced onto it — always-on prose and invocable verbs each get their own strip.
 
-function LiveBar({ live, t }) {
-  const total = live.trees || 1
-  const seg = (n) => `${(n / total) * 100}%`
-  return (
-    <div className="pg-live">
-      <div className="pg-live-bar" role="img"
-        aria-label={t('plugins.liveAria', { matching: live.matching, trees: live.trees })}>
-        <span className="pg-seg is-ok" style={{ width: seg(live.matching) }} />
-        <span className="pg-seg is-drift" style={{ width: seg(live.differing) }} />
-        <span className="pg-seg is-none" style={{ width: seg(live.unmaterialized) }} />
-      </div>
-      <div className="pg-live-key">
-        <span><b>{live.matching}</b> {t('plugins.matching')}</span>
-        <span className="is-drift"><b>{live.differing}</b> {t('plugins.differing')}</span>
-        <span className="is-none"><b>{live.unmaterialized}</b> {t('plugins.unmaterialized')}</span>
-        <span className="pg-live-total">{t('plugins.ofTrees', { trees: live.trees })}</span>
-      </div>
-    </div>
-  )
-}
-
 export default function PluginsView() {
   const t = useT()
   const [view, setView] = useState(null)
@@ -50,7 +29,7 @@ export default function PluginsView() {
   if (error) return <div className="pg pg-error">{t('plugins.failed', { reason: error })}</div>
   if (!view) return <div className="pg pg-loading" />
 
-  const { rows, spine, live } = view
+  const { rows, spine } = view
   const bySurface = (s) => rows.filter((r) => r.surfaces.includes(s))
   const invoked = rows.filter((r) => r.surfaces.includes('skill') || r.surfaces.includes('command'))
   const unused = ['hook', 'system', 'command', 'skill', 'agent'].filter((s) => bySurface(s).length === 0)
@@ -61,25 +40,6 @@ export default function PluginsView() {
         <h1 className="pg-title">{t('plugins.title')}</h1>
         <p className="pg-sub">{t('plugins.sub', { nodes: rows.length, surfaces: rows.reduce((n, r) => n + r.surfaces.length, 0) })}</p>
       </header>
-
-      <section className="pg-section">
-        <h2 className="pg-h">{t('plugins.installed')}</h2>
-        <LiveBar live={live} t={t} />
-        {live.diffs.length > 0 && (
-          <ul className="pg-diffs">
-            {live.diffs.map((d) => (
-              <li key={`${d.kind}${d.event}${d.script}`} className={d.kind === 'extra' ? 'is-extra' : 'is-missing'}>
-                <span className="pg-diff-count">{d.trees}</span>
-                <span className="pg-diff-what">
-                  {t(d.kind === 'extra' ? 'plugins.diffExtra' : 'plugins.diffMissing')}
-                  {' '}<code>{d.event}</code> {t('plugins.order')} {d.order}{d.block ? ` · ${t('plugins.blocks')}` : ''}
-                  {' '}<code>{d.script.split('/').pop()}</code>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <section className="pg-section">
         <h2 className="pg-h">{t('plugins.spine')}</h2>

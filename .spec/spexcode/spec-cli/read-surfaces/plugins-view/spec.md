@@ -44,20 +44,16 @@ it is a reading device rather than data. An event a node binds that is NOT in th
 appended and flagged — because the surface's job is to account for every binding, and one that silently
 vanished from the page would be worse than one that looks out of place on it.
 
-## installed is a count, and the denominator is the sessions
+## it reports what is declared, and nothing about where it is installed
 
-A row cannot say "live" or "not live": the answer differs per tree, because materialization writes one
-manifest into each registered worktree's slot and the trees drift apart independently — a tree materialized
-before a contract changed keeps running the old set until something materializes it again.
-
-But the denominator is NOT the registry. Counted over every registered worktree the number is a census of
-dormant directories: measured here, 169 trees with 11 matching, where 162 held no agent and the stale
-manifest inside cost nobody anything. It means something only for a worktree an agent is in RIGHT NOW,
-where a binding the contract does not declare is a hook actually running and a missing manifest is a
-session with no Stop gate. So the sessions on the board supply the trees — over the same seven, four ran
-the declared contract and three did not — and a project with no live session reports nothing rather than a
-number nobody should act on. Each differing line is reported with the number of trees carrying it, so a
-drift is named rather than merely counted.
+An earlier version of this surface also compared each worktree's materialized `hooks-manifest` against the
+compiled one and reported how many trees agreed. Every framing of that number was wrong, and the last one
+was wrong in a way worth writing down: a worktree's manifest is compiled from THAT WORKTREE'S OWN `.spec`,
+so a session working on a base from three weeks ago has a manifest that faithfully matches the contract its
+tree declares. Comparing it to the trunk's contract measures how far behind the branch is, not whether
+anything is misconfigured — and the trees disagreed exactly as much after being re-materialized as before,
+because there was nothing to repair. A tree carrying NO manifest would be a real fault, but that belongs
+with session health, not with an inventory of what the plugins are.
 
 ## what it does not do
 

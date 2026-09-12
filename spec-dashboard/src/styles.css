@@ -4030,24 +4030,6 @@ body.is-session-dragging .si-pill.archive:hover {
 .pg-h { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); margin: 0 0 var(--space-3); }
 .pg-note { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--type-meta); }
 
-/* how much of the project is actually running what it says it runs. One bar, three spans, no legend to read
-   twice: the numbers ARE the key. */
-.pg-live-bar { display: flex; height: 6px; border-radius: var(--radius); overflow: hidden; background: var(--edge); }
-.pg-seg { display: block; }
-.pg-seg.is-ok { background: var(--green); }
-.pg-seg.is-drift { background: var(--orange); }
-.pg-seg.is-none { background: var(--red); }
-.pg-live-key { display: flex; gap: var(--space-5); flex-wrap: wrap; margin: var(--space-3) 0 0; color: var(--muted); font-size: var(--type-meta); }
-.pg-live-key b { color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
-.pg-live-key .is-drift b { color: var(--orange); }
-.pg-live-key .is-none b { color: var(--red); }
-.pg-live-total { margin-left: auto; }
-.pg-diffs { list-style: none; margin: var(--space-4) 0 0; padding: 0; font-size: var(--type-meta); }
-.pg-diffs li { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-top: 1px solid var(--edge); color: var(--ink2); }
-.pg-diff-count { flex: none; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-.pg-diffs .is-extra .pg-diff-count { color: var(--orange); }
-.pg-diffs .is-missing .pg-diff-count { color: var(--red); }
-.pg-diffs code { font-family: var(--mono); font-size: var(--type-caption); background: var(--raised); padding: 1px 5px; border-radius: var(--radius); }
 
 /* the lifecycle spine: the event names are the rail, the hooks hang off them in order */
 .pg-spine { list-style: none; margin: 0; padding: 0; }

@@ -123,8 +123,14 @@ deployment configuration and lives with the deployment. The current SpexCode row
 `shuxueshuxue/spexcode` to `spexcode.spexcode.net`. `herdr.spexcode.net` is a retired trial alias and may only
 redirect to the registered SpexCode host; it must never keep serving SpexCode content as if Herdr owned it.
 
-The About panel's trigger rides the status bar, but the PANEL is a viewport overlay and has to be positioned
-and styled as one. A status strip clips each item's overflow and sets `white-space: nowrap` — both correct for
+The About panel hangs off the status bar's PROJECT IDENTITY, because in a published tree that chip is a door
+to nowhere: there is no hub to reach and no backend to list a catalog from, so the name sat there as a dead
+link while a second "About" chip crowded in beside the tallies. What a reader of a published page wants behind
+the project's name IS this panel — identity, revision, what the surface carries and what it does not — so the
+identity chip opens it and the strip keeps one door instead of two. The panel also says what DREW it: a
+published tree travels to readers who have never seen the tool, and no other line on the page names it, so the
+credit belongs on the one surface that is about the page rather than about the repository. The panel is a
+viewport overlay and has to be positioned and styled as one. A status strip clips each item's overflow and sets `white-space: nowrap` — both correct for
 a one-line status, both fatal for a 250px panel of prose parented inside one: it lays out, measures correctly,
 and paints nothing, which is exactly how it was found. Being a descendant of the strip is a DOM fact; being an
 overlay is what it is.

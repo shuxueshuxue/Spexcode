@@ -197,6 +197,7 @@ export default {
     settings: 'Settings',
     projectChip: 'project: {name} — switch project',
     projectChipLogin: 'project: {name} — sign in to manage projects',
+    projectChipAbout: 'project: {name} — about this published tree',
     projectOnline: 'online',
     projectOffline: 'offline',
     allProjects: 'All projects',

@@ -3,6 +3,8 @@ import SideBar from './SideBar.jsx'
 import DockToggle from './DockToggle.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import StatusBar, { useStatusItem } from './StatusBar.jsx'
+import PublicGraphAbout, { closePublicAbout, togglePublicAbout, usePublicAboutOpen } from './PublicGraphAbout.jsx'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { useFold } from './useFold.js'
 import TabStrip, { placeLabel } from './TabStrip.jsx'
 import Dock from './Dock.jsx'
@@ -204,23 +206,28 @@ function ShellStatus() {
   const t = useT()
   const { identity, catalog } = useBoard()
   const [open, setOpen] = useState(false)
+  const aboutOpen = usePublicAboutOpen()
+  const graphOnly = PUBLIC_GRAPH_ONLY
   useEscLayer(open, () => setOpen(false))
   const catalogOk = catalog?.state === 'ok'
   const denied = catalog?.state === 'denied'
   const projects = catalogOk ? catalog.projects : null
   const label = identity?.title || PROJECT_ID || 'spexcode'
   const triggerLabel = denied ? t('nav.projectChipLogin', { name: label }) : t('nav.projectChip', { name: label })
+  const aboutLabel = t('nav.projectChipAbout', { name: label })
 
   useEffect(() => {
-    if (!open) return
+    if (!open && !aboutOpen) return
     const onDown = (event) => {
-      if (!event.target.closest?.('[data-status-project], .status-project-menu')) setOpen(false)
+      if (event.target.closest?.('[data-status-project], .status-project-menu, .public-about')) return
+      setOpen(false)
+      closePublicAbout()
     }
     document.addEventListener('mousedown', onDown, true)
     return () => {
       document.removeEventListener('mousedown', onDown, true)
     }
-  }, [open])
+  }, [open, aboutOpen])
 
   const triggerBody = (
     <>
@@ -228,7 +235,17 @@ function ShellStatus() {
       <span className="sb-project-name">{label}</span>
     </>
   )
-  const trigger = projects ? (
+  // A PUBLISHED tree's identity button has nowhere to lead: there is no hub, and no backend to list a
+  // catalog from. What a reader of one actually wants behind the project's name is what the page IS —
+  // so here the identity chip is the About door, and About stops being a second chip crowding the strip.
+  const trigger = graphOnly ? (
+    <button type="button" className={aboutOpen ? 'sb-project-trigger open' : 'sb-project-trigger'}
+      data-status-project="" data-tip={aboutLabel} aria-label={aboutLabel}
+      aria-haspopup="dialog" aria-expanded={aboutOpen} aria-controls={aboutOpen ? 'public-graph-about' : undefined}
+      onClick={togglePublicAbout}>
+      {triggerBody}
+    </button>
+  ) : projects ? (
     <button type="button" className={open ? 'sb-project-trigger open' : 'sb-project-trigger'}
       data-status-project="" data-tip={triggerLabel} aria-label={triggerLabel}
       aria-haspopup="menu" aria-expanded={open}
@@ -271,8 +288,8 @@ function ShellStatus() {
 
   // The menu is part of the registered slot so its absolute position is relative to the trigger itself.
   useStatusItem({
-    id: 'project', side: 'left', priority: 1000, kind: 'prominent', overflow: open,
-    node: <span className="sb-project-slot">{trigger}{menu}</span>,
+    id: 'project', side: 'left', priority: 1000, kind: 'prominent', overflow: open || aboutOpen,
+    node: <span className="sb-project-slot">{trigger}{menu}{graphOnly && <PublicGraphAbout />}</span>,
   })
   return null
 }

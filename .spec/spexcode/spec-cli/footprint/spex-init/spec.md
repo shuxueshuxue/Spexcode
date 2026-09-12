@@ -110,7 +110,13 @@ and none to trust.
 **`--title` names the project, so its pages are not named after a directory.** Every board and every published
 page titles a project from `dashboard.title`, falling back to the directory's own name — which is the project's
 name only by luck, so a scratch clone called `repo` publishes a page titled that. `spex init --title <name>`
-writes it, for a pure skeleton and a full adoption alike, and never overwrites a title the config already has.
+writes it, for a pure skeleton and a full adoption alike, and never overwrites a title the config already has. It also
+names the ROOT NODE, whose id is its directory: a seeded tree is rooted at `.spec/project/`, so without a title
+every adopted repository's graph is topped by a node literally called "project" — the first thing a reader of a
+published page sees, and never the project. A title reaching only the status bar names the frame and leaves the
+picture inside it anonymous. The id vocabulary is the only limit ([[spec-lint]]'s id-format): a title that
+slugs to a legal id becomes the root, and one that cannot keeps the neutral seed rather than minting something
+the lint would reject on the next commit.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read what was actually
 written back from the just-planted (or pre-existing) file and interpolate it — never a string literal restated

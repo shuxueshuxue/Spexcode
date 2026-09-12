@@ -7,7 +7,6 @@ import NodeView, { panesFor } from './NodeView.jsx'
 import ProseActions from './ProseActions.jsx'
 import { LockGlyph, SessionWindow } from './SessionWindow.jsx'
 import GraphStats from './GraphStats.jsx'
-import PublicGraphAbout from './PublicGraphAbout.jsx'
 import {
   graphTitles, layout, singleLayerFrontier, viewportForFocus, X_GAP, Y_GAP,
   GRAPH_MIN_ZOOM, GRAPH_MAX_ZOOM, GRAPH_TILE_SIZE,
@@ -613,7 +612,6 @@ function GraphCanvas({ param, page: routePage = 'graph' }) {
           onPick={(session) => lockGraphTo(session.source)} onOpenSession={openSession}
           onNew={() => startNew(`[[${focus.id}]] `)} />}
 
-        {graphOnly && <PublicGraphAbout />}
 
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}

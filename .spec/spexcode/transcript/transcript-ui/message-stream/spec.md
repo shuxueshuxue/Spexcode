@@ -51,9 +51,10 @@ caret and a spinner, and nothing else: the caret sits INLINE at the end of the n
 while that prose is the newest thing in the turn — once a call follows it the words are finished and a caret
 blinking on its own line under them, above a tool row, would mark nothing — and the spinner sits on a running
 call, a call being running exactly while the harness has recorded no result for it; reduced motion stills both.
-Both move the cheap way: a rotation and a visibility step on a small mark measure under a point of a core
-together, because the compositor moves them. Motion that repaints text on every frame is what costs, and none
-of it belongs here. Output stays folded until asked, each
+Both move the cheap way, and both move in STEPS. A transform and a visibility toggle never repaint, but a
+smooth rotation still asks for sixty composited frames a second for as long as a call runs, which is the
+largest single cost a quiet conversation has. A dozen steps a second is the same turning mark to a reader and
+a fifth of the frames. Motion a reader cannot distinguish is motion not worth drawing. Output stays folded until asked, each
 call opening inline and independently; a refresh of the same interval keeps what the reader opened, because
 disclosure is keyed to the transcript's own ids, and a new seam starts closed.
 

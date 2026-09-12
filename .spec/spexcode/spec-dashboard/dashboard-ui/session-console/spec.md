@@ -259,9 +259,10 @@ The Sessions document draws NO tab strip: the band belongs to the region that ho
 ([[workspace-shell]]), so a session in any cell of a grid is named by that cell's own strip. Its forest is
 page chrome it keeps only while the workspace is ONE group — the full-width Sessions page, where the forest
 is the left sibling of the console column exactly as before. Split the workspace and a cell holding a session
-shows the session: the window already has one navigator, and a page that drew its chrome wherever it was
-mounted put a second strip and a second forest in the second region, with both forests folding on the one
-flag they share. The shell omits its
+shows the session, and the window's own finding dock takes over the listing ([[dock-modes]]) so the reader
+still has a session list on screen. A page that drew its chrome wherever it was mounted put a second strip
+and a second forest in the second region, with both forests folding on the one flag they share; a page that
+drew none would have left a split workspace with no session list at all. The shell omits its
 outer TabStrip on the Sessions route, so the forest's width pushes the strip and content right together rather
 than allowing the strip to span above a list. The forest folds from the rail's panel control ([[side-nav]])
 through the workspace's one dock open/closed state — the console keeps no fold state of its own — and while

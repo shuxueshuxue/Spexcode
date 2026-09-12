@@ -6,7 +6,7 @@
 //   3. Splitting again makes a grid — three cells, each with its own strip and its own document.
 //   4. Each spec cell carries its own context dock, describing its own node.
 //   5. A tab dragged onto another cell's strip moves there; the cell it empties collapses.
-//   6. A session in a grid cell is the console alone: no second navigator, no second strip.
+//   6. A session in a grid cell is the console alone — and the window's own dock lists sessions beside it.
 //   7. A reload keeps the grid, with no document in two cells.
 //   8. Closing a cell's last tab collapses the cell.
 // Every scene screenshots before it judges, so the A side of a repair pair still leaves its picture.
@@ -142,7 +142,6 @@ try {
   page.on('console', (message) => { if (message.type() === 'error' && !/404/.test(message.text())) errors.push(`console.error: ${message.text()}`) })
   const base = `http://127.0.0.1:${uiPort}`
   const sessionKey = `#/sessions/${sessionId}`
-  const hash = () => page.evaluate(() => location.hash)
   const settle = (selector, timeout = 15_000) => page.locator(`${selector}:visible`).first().waitFor({ state: 'visible', timeout }).then(() => true, () => false)
   const scenes = []
   const scene = (name, pass, facts) => scenes.push({ scene: name, pass: !!pass, ...facts })
@@ -166,6 +165,7 @@ try {
       docks: visible(document, '.dock').length,
       dividers: visible(document, '.content-divider').length,
       hash: location.hash,
+    shell: window.__dockDebug || null,
     }
   })
   const rightClickStripTab = async (key) => {
@@ -275,9 +275,10 @@ try {
   await page.screenshot({ path: join(out, '6-session-cell.png') })
   const withSession = await shape()
   const cell = withSession.regions.find((region) => region.tabs.includes(sessionKey))
-  scene('a session held in a grid cell is the console alone: no second navigator, no second strip',
-    cell.forest === 0 && cell.strips === 1 && withSession.hash === sessionKey,
-    { forest: cell.forest, strips: cell.strips, hash: withSession.hash })
+  const frameSessionList = await page.locator('.dock .si-item, .dock [data-sid]').count()
+  scene('a session held in a grid cell is the console alone — and the window still lists sessions beside it',
+    cell.forest === 0 && cell.strips === 1 && withSession.hash === sessionKey && frameSessionList > 0,
+    { forest: cell.forest, strips: cell.strips, hash: withSession.hash, frameSessionList })
 
   // 7 — the grid survives a reload, and no document is in two cells
   await page.reload({ waitUntil: 'domcontentloaded' })

@@ -50,15 +50,17 @@ import { createViewScope } from './viewScope.js'
 // it exists at all. Session documents derive sessions; nodes and governed files derive explorer. Review and
 // settings surfaces have no sidebar, including their detail routes. `keep` is the third answer — graph,
 // empty, and the bare sessions board have no opinion and preserve the current projection.
-const dockFor = (page) => {
+const dockFor = (page, single = true) => {
   // Review surfaces are full-width throughout their address family. A detail route must not inherit the
   // previous Spec/Explorer projection from workspace state; that state belongs only to document routes.
   if (page === 'issues') return 'none'
   if (page === 'settings') return 'none'
-  // Sessions is a complete document surface: SessionInterface owns its forest/list and console. Keeping a
-  // finding dock here (even with rows suppressed) leaves an empty dock header beside the same list.
-  // Explorer is reached through the Spec/File/Graph surfaces, where it has an actual document to describe.
-  if (page === 'sessions') return 'none'
+  // A FULL-WIDTH Sessions page is a complete document surface: it owns its forest and its console, so a
+  // finding dock beside it would only repeat the same list under an empty header. Split the workspace and
+  // that forest is gone — page chrome belongs to a one-group workspace ([[workspace-shell]]) — so the
+  // window's own dock is where the session list lives, or focusing a session cell would leave the reader
+  // with no list of sessions on screen at all.
+  if (page === 'sessions') return single ? 'none' : 'sessions'
   if (page === 'spec' || page === 'file') return 'explorer'
   return 'keep'
 }
@@ -578,7 +580,7 @@ export default function Shell({ routeOverride = null, inactive = false }) {
   // selects a projection by hand — that override simply lasts until the reader moves to another DOCUMENT,
   // which is what makes it an override rather than a second setting. The effect is keyed on the document,
   // not the address, so switching a session's own face is not a focus change.
-  const dockKind = dockFor(page, param)
+  const dockKind = dockFor(page, groups.length <= 1)
   // THE RAIL'S FOLD CONTROL EXISTS WHEREVER THERE IS A SIDEBAR TO FOLD ([[side-nav]]). The shell's dock is
   // one such sidebar; the Sessions document's own forest is the other and follows the same open/closed
   // state — so the bare review and settings boards, which have neither, are the only frames without it.

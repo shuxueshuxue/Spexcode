@@ -59,7 +59,9 @@ test('sessions document owns the only forest and rail labels resolve through i18
   assert.doesNotMatch(dock, /suppressRows|suppressSessionRows/)
   assert.doesNotMatch(shell, /suppressSessionRows|activeSessionId/)
   assert.doesNotMatch(dock, /data-session-list-projection="document"/)
-  assert.match(shell, /if \(page === 'sessions'\) return 'none'/)
+  // the full-width Sessions page owns the only session list; split the workspace and that list is the
+  // window's own dock, because page chrome belongs to a one-group workspace ([[workspace-shell]])
+  assert.match(shell, /if \(page === 'sessions'\) return single \? 'none' : 'sessions'/)
   assert.match(shell, /if \(page === 'issues'\) return 'none'/)
   // The rail's sessions anchor unfolds the band and returns to the held session; it pre-selects NO dock
   // projection — writing one painted a transient sessions-projection dock on the DEPARTING document.

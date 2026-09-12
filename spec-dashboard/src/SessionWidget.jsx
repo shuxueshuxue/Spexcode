@@ -51,7 +51,6 @@ export function WidgetRef({ name }) {
 
 function WidgetFrame({ nodeRef, widget, scope }) {
   const t = useT()
-  const frameRef = useRef(null)
   const [body, setBody] = useState(null)
   const [error, setError] = useState(null)
   const [height, setHeight] = useState(96)
@@ -90,32 +89,11 @@ function WidgetFrame({ nodeRef, widget, scope }) {
         pending.current = { ...pending.current, state }
         scope.onDraft?.(widget.name, pending.current.text, state)
       },
+      // the frame's own observer calls this ([[widgets]]); a widget author never has to
+      resize(px) { setHeight(Math.min(MAX_FRAME_HEIGHT, Math.max(48, Math.ceil(px) || 48))) },
     })
     return () => { bridges.delete(instance) }
   }, [instance, widget.name, widget.state, scope])
-
-  // Same-origin means the host measures the document rather than asking it to report: a widget needs no
-  // resize call of its own, and one that forgets to make one still sizes correctly.
-  useEffect(() => {
-    const frame = frameRef.current
-    if (!frame || body == null) return undefined
-    let observer = null
-    const measure = () => {
-      const doc = frame.contentDocument
-      if (!doc?.body) return
-      setHeight(Math.min(MAX_FRAME_HEIGHT, Math.max(48, Math.ceil(doc.body.scrollHeight))))
-    }
-    const attach = () => {
-      measure()
-      const doc = frame.contentDocument
-      if (!doc?.body || typeof ResizeObserver === 'undefined') return
-      observer = new ResizeObserver(measure)
-      observer.observe(doc.body)
-    }
-    frame.addEventListener('load', attach)
-    attach()
-    return () => { frame.removeEventListener('load', attach); observer?.disconnect() }
-  }, [body, reloadKey])
 
   // The palette's own `color-scheme` is read from the root rather than guessed from the theme's NAME: the
   // presets are called notion, gruvbox, dracula, and which of them are light is not in their names. The theme
@@ -155,7 +133,7 @@ function WidgetFrame({ nodeRef, widget, scope }) {
       ? <span className="wg-error">{t('widget.bodyMissing', { reason: error })}</span>
       : srcDoc == null
         ? <span className="wg-loading" />
-        : <iframe key={reloadKey} ref={frameRef} className="wg-frame" title={widget.name} srcDoc={srcDoc} style={{ height }} />}
+        : <iframe key={reloadKey} className="wg-frame" title={widget.name} srcDoc={srcDoc} style={{ height }} />}
   </span>
 }
 

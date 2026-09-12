@@ -915,7 +915,6 @@ export default {
     olderMention: '较早的引用，正在显示的那个在下面',
     pending: '未发送',
     send: '发送',
-    asText: '展开成文字',
     discard: '清除',
     bodyMissing: ({ reason }) => `组件正文取不到（${reason}）`,
     draftLabel: ({ name }) => `${name} · 未发送`,

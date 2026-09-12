@@ -649,8 +649,8 @@ sentence the agent reads, the state is what the picture needs to draw itself. Sa
 \`const ui = window.spex || { state: null, draft() {} }\` at the top, so the same file still renders when it is
 opened outside the dashboard.
 
-A WIDGET CANNOT SEND. draft() fills a block above the human's input box, with send, open-as-text and discard
-controls mirrored on the frame; nothing reaches you until they press send. Their send commits both halves at
+A WIDGET CANNOT SEND. draft() fills a block above the human's input box, with send and discard controls
+mirrored on the frame; nothing reaches you until they press send. Their send commits both halves at
 once: you receive the text as an ordinary message, and the state becomes this widget's state. So six ticks
 arrive as one decision, not six messages.
 

@@ -455,6 +455,9 @@ function DocumentRegion({ group, single, specs, sessions, dock, foldable, inacti
   }), [single])
   useEffect(() => registerContextToggle(single ? toggleContext : null), [single, toggleContext])
   const hasContext = route?.page === 'spec'
+  // the band keeps the toggle's column free only while there is a toggle to paint there; a document without
+  // context leaves the band's right end to its own actions instead of a blank the width of nothing.
+  const reservation = hasContext ? <span className="context-toggle-reservation" aria-hidden="true" /> : null
   // the fold switch stands at the strip's left edge only while the sidebar it folds is closed, and only in
   // the group that stands against that sidebar — the first one.
   const leading = single && foldable && !dock ? <DockToggle variant="strip" /> : null
@@ -464,14 +467,16 @@ function DocumentRegion({ group, single, specs, sessions, dock, foldable, inacti
   return (
     <div className="region" data-group={group.id} onClick={() => focusGroup(group.id)}>
       <TabStrip specs={specs} sessions={sessions} route={route || { page: 'empty', param: null, query: null }} group={group.id}
-        leading={leading} trailing={<span className="context-toggle-reservation" aria-hidden="true" />} />
+        leading={leading} trailing={reservation} />
       <div className="region-body">
         <div className="app-main">
           <ViewPool group={group} override={showing} inactive={inactive} />
         </div>
         <ContextDock page={route?.page} param={route?.param} query={route?.query} open={hasContext && contextOpen} />
-        {hasContext && <div className="context-toggle-slot"><ContextToggle visible={contextOpen} onToggle={toggleContext} /></div>}
       </div>
+      {/* the slot is positioned by the REGION, not by its body, so its top-right corner is the band's right end
+          — the column the strip's trailing reservation keeps free. Inside the body it would land on the document. */}
+      {hasContext && <div className="context-toggle-slot"><ContextToggle visible={contextOpen} onToggle={toggleContext} /></div>}
     </div>
   )
 }
@@ -527,8 +532,8 @@ function RegionTree({ node, single, specs, sessions, dock, foldable, inactive, f
 // `panel-right-open` while closed), exactly as the left dock's switch does with the panel-left family. A
 // switch that flipped to the LEFT panel to mean "the right dock is closed" pictured the wrong region.
 // State is also `aria-pressed` plus the `.on` tint. The shell keeps one instance of this control in a
-// right-edge slot; moving it between the tab strip and the animated dock would briefly expose the dock's
-// zero-width first frame and make the button flash.
+// right-edge slot over the region's band, in both states; moving it between the tab strip and the animated
+// dock would briefly expose the dock's zero-width first frame and make the button flash.
 function ContextToggle({ visible, onToggle }) {
   const t = useT()
   const label = withShortcut(t(visible ? 'contextDock.close' : 'contextDock.open'), 'shell.contextToggle')

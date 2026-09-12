@@ -9,7 +9,7 @@ description: "Use when the user wants pictures of the spec tree — draw the atl
 
 This skill draws with SpexCode's command line and needs nothing installed or configured on this machine.
 
-- Run SpexCode through npx: `npx -y -p spexcode@next spex <command>` (Node 22 or newer). Wherever a step below says
+- Run SpexCode through npx: `npx -y --registry=https://registry.npmjs.org -p spexcode@next spex <command>` (Node 22 or newer). Wherever a step below says
   `spex …`, run it that way; a `spex` already on the PATH works the same.
 - A diagram draws one node of the repository's spec tree, the `.spec/` folder. If the repository has none,
   `spex init --pure --title <the project's name>` plants one and stops there: `.spec/spexcode.json` and a root
@@ -21,6 +21,9 @@ This skill draws with SpexCode's command line and needs nothing installed or con
   Use `--pure`, not a bare `spex init`: a bare one adopts the repository into SpexCode's whole workflow, which is
   not what drawing a picture asks for.
 - `spex guide diagram` is the manual for the diagram format and the loop; read it once.
+- Write the tree in the LANGUAGE THE PERSON ASKED IN — node titles, `desc`, bodies, diagram labels and the
+  report. The atlas is something a human reads, and an English tree handed to someone who asked in another
+  language is a translation job you left them.
 
 Draw the spec tree's pictures: one `diagram.json` beside each node's `spec.md` that is worth one.
 The format, the rules and the loop for a single diagram live in `spex guide diagram` — read it before drawing.
@@ -55,7 +58,7 @@ This skill is the campaign around that loop.
 
 ## Hand over the page
 
-`npx -y -p spexcode@next -p @spexcode/spec-dashboard@next spex graph --public --html spexcode-atlas.html` writes the whole tree — every body and
+`npx -y --registry=https://registry.npmjs.org -p spexcode@next -p @spexcode/spec-dashboard@next spex graph --public --html spexcode-atlas.html` writes the whole tree — every body and
 every picture — as one self-contained page that opens in any browser, straight from disk. Offer it with the report;
 it is a product of the tree, not part of it, so leave it uncommitted.
 

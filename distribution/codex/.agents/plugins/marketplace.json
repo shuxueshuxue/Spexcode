@@ -1,0 +1,23 @@
+{
+  "name": "spexcode",
+  "interface": {
+    "displayName": "SpexCode"
+  },
+  "plugins": [
+    {
+      "name": "atlas",
+      "source": {
+        "source": "local",
+        "path": "./plugins/atlas"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE",
+        "products": [
+          "CODEX"
+        ]
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -63,7 +63,22 @@ without it `spex spec lint` falls back to built-in `governedRoots` that name Spe
 a foreign repository is told it governs nothing. Measured on a fresh home directory, that path leaves npm's own
 package cache and, from `spex spec lint`, a history cache of a few kilobytes under `~/.spexcode/projects/`;
 `spex init --harness none` would add about thirty seeded `.plugins` files, six git hooks and a project store. The page the skill ends with
-needs the dashboard package too, and npx fetches it for that one command.
+needs the dashboard package too, and npx fetches it for that one command. Which REGISTRY that fetch names is part of
+the instruction, not an assumption: npx reads npm's config from the working directory, and the working
+directory is the repository being drawn — a company monorepo routinely ships an `.npmrc` pinning an internal
+registry that has never heard of SpexCode, so the skill's first command dies against a host the reader cannot
+reach. Every package names the public registry for its own fetch, which says nothing about how that repository
+installs its own dependencies.
+
+**A package is installable by the command its host actually offers.** Matching a host's file shape is only half
+of it: Codex resolves a plugin out of a MARKETPLACE, never a bare plugin directory, so the Codex package IS a
+marketplace root — a manifest naming its plugins by relative path, with the plugin beneath it — and an adopter
+runs the two commands that host documents. A package whose layout is right and whose install path does not
+exist has not been packaged for that host at all.
+
+**The tree is written in the language the person asked in.** Titles, descriptions, bodies, diagram labels and
+the report: an atlas is read by a human, and one handed over in a language they did not use is a translation
+job left for them.
 
 **Generated from one source, written by hand where a person decides.** `npm run build:distribution` writes every
 manifest and every `SKILL.md` from the atlas preset in `.plugins`, read through the same projection that writes

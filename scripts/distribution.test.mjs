@@ -128,6 +128,23 @@ test('the gugu page\'s classic scripts share one global scope without colliding'
 
 test('every package names only files that exist, and the ZCode skill points at the workflow it ships', () => {
   const zcodeSkill = readFileSync(join(root, 'distribution/zcode/atlas/skills/atlas/SKILL.md'), 'utf8')
+  // npx reads npm's config from the CWD, and the CWD is the repository being drawn — a monorepo that pins an
+  // internal registry in its own `.npmrc` sends the skill's FIRST command to a host that has never heard of
+  // spexcode (measured: ECONNRESET against a company registry). Every package names the public registry for
+  // its own fetch, and says nothing about how the repository installs its own dependencies.
+  const shippedSkills = {
+    'claude-code': 'distribution/claude-code/atlas/skills/atlas/SKILL.md',
+    codex: 'distribution/codex/plugins/atlas/skills/atlas/SKILL.md',
+    penguin: 'distribution/penguin/use-spexcode/skills/atlas/SKILL.md',
+    zcode: 'distribution/zcode/atlas/skills/atlas/SKILL.md',
+  }
+  for (const [name, path] of Object.entries(shippedSkills)) {
+    const body = readFileSync(join(root, path), 'utf8')
+    for (const line of body.split('\n').filter((l) => l.includes('npx -y'))) {
+      assert.match(line, /--registry=https:\/\/registry\.npmjs\.org/, `${name}: ${line.trim().slice(0, 80)}`)
+    }
+    assert.match(body, /LANGUAGE THE PERSON ASKED IN/, `${name} says which language the tree is written in`)
+  }
   assert.match(zcodeSkill, /\$\{ZCODE_SKILL_DIR\}\/atlas\.dwf\.ts/)
   assert.ok(existsSync(join(root, 'distribution/zcode/atlas/skills/atlas/atlas.dwf.ts')))
   const manifest = JSON.parse(readFileSync(join(root, 'distribution/gugu/spexcode-atlas/manifest.json'), 'utf8'))
@@ -136,9 +153,23 @@ test('every package names only files that exist, and the ZCode skill points at t
   const html = readFileSync(join(root, 'distribution/gugu/spexcode-atlas', manifest.entry), 'utf8')
   for (const [, ref] of html.matchAll(/(?:src|href)="([^"]+)"/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode-atlas', ref)), ref)
   // Codex reads the same shape as Claude Code under its own dotted directory; its manifest points at the folder.
-  const codex = JSON.parse(readFileSync(join(root, 'distribution/codex/atlas/.codex-plugin/plugin.json'), 'utf8'))
-  assert.ok(existsSync(join(root, 'distribution/codex/atlas', codex.skills)), codex.skills)
-  assert.ok(existsSync(join(root, 'distribution/codex/atlas/skills/atlas/SKILL.md')))
+  // Codex installs a plugin out of a MARKETPLACE, never a bare plugin directory: the package is a marketplace
+  // root whose manifest names its plugins by relative path, so an adopter runs `codex plugin marketplace add
+  // <dir>` then `codex plugin add atlas@spexcode`. Pointed at the plugin itself, Codex refuses with
+  // "marketplace root does not contain a supported manifest".
+  const market = JSON.parse(readFileSync(join(root, 'distribution/codex/.agents/plugins/marketplace.json'), 'utf8'))
+  assert.equal(market.name, 'spexcode')
+  const entry = market.plugins.find((p) => p.name === 'atlas')
+  assert.ok(entry, 'the marketplace lists the atlas plugin')
+  assert.equal(entry.source.source, 'local')
+  // ON_INSTALL | ON_USE are the only values Codex parses; anything else fails the manifest outright.
+  assert.ok(['ON_INSTALL', 'ON_USE'].includes(entry.policy.authentication), entry.policy.authentication)
+  const codexPlugin = join(root, 'distribution/codex', entry.source.path)
+  assert.ok(existsSync(codexPlugin), entry.source.path)
+  const codex = JSON.parse(readFileSync(join(codexPlugin, '.codex-plugin/plugin.json'), 'utf8'))
+  assert.ok(existsSync(join(codexPlugin, codex.skills)), codex.skills)
+  assert.ok(existsSync(join(codexPlugin, 'skills/atlas/SKILL.md')))
+  assert.equal(existsSync(join(root, 'distribution/codex/atlas')), false, 'the bare-plugin layout Codex cannot install is gone')
   for (const pkg of ['distribution/penguin/use-spexcode']) {
     const listed = JSON.parse(readFileSync(join(root, pkg, 'package.json'), 'utf8')).files
     for (const file of listed) assert.ok(existsSync(join(root, pkg, file)), `${pkg}/${file}`)

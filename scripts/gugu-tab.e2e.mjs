@@ -45,13 +45,21 @@ await page.exposeBinding('__listFiles', (_s, dir) => readdirSync(join(REPO, dir)
 await page.exposeBinding('__readFile', (_s, path) => readFileSync(join(REPO, path), 'utf8'))
 await page.addInitScript(() => {
   window.__events = { spawned: null, errors: [] }
+  window.__agents = []
   window.gugu = {
-    getContext: async () => ({ capabilities: ['workspace:read', 'agents:control'], themeMode: 'dark' }),
+    getContext: async () => ({ capabilities: ['workspace:read', 'agents:read', 'agents:control'], themeMode: 'dark' }),
     onContextChanged: () => {}, onCommand: (cb) => { window.__onCommand = cb }, onFilesChanged: (cb) => { window.__onFiles = cb },
+    onAgentsChanged: (cb) => { window.__onAgents = cb },
     listFiles: (dir) => window.__listFiles(dir), readFile: (path) => window.__readFile(path),
-    spawnAgent: async (prompt, name) => { window.__events.spawned = { name, prompt: String(prompt) }; return true },
+    listAgents: async () => window.__agents,
+    spawnAgent: async (prompt, name) => { window.__events.spawned = { name, prompt: String(prompt) }; return { agentId: 'atlas-1' } },
     reportError: async (message) => { window.__events.errors.push(message) },
     openBrowserTab: () => {},
+  }
+  // Drive the host's agent view the way the bridge would: set the row, then say only that the id moved.
+  window.__agentSays = async (row) => {
+    window.__agents = row ? [{ agentId: 'atlas-1', title: 'SpexCode atlas', ...row }] : []
+    window.__onAgents(['atlas-1'])
   }
 })
 
@@ -118,9 +126,30 @@ assert.match(asked, /agent/i)
 assert.doesNotMatch(asked, /\bis (drawing|writing)\b/i,
   `the status claims work is underway when the host has only accepted the request: ${asked}`)
 
-// A write under .spec/ is the earliest real evidence; only then may the wording change.
+// An agent that DIED reports `status: 'error'` while `lastStopReason` stays null — the host projects an errored
+// turn and "no turn has ended yet" as the same null, so a tab keyed on lastStopReason would never say this. That
+// is the exact shape a real run produced (403 at birth), so it is the shape asserted here.
+await page.evaluate(() => window.__agentSays({ status: 'error', isGenerating: null, lastStopReason: null }))
+await page.waitForFunction(() => /stopped with an error/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
+
+// `null` everywhere is "cannot be told", never "no": fall back to what was asked, never to a verdict.
+await page.evaluate(() => window.__agentSays({ status: null, isGenerating: null, lastStopReason: null }))
+await page.waitForFunction(() => /Nothing written yet/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
+assert.doesNotMatch(await page.evaluate(() => document.getElementById('status').textContent), /stopped|finished/i,
+  'a host that cannot tell us must not be rendered as a verdict')
+
+// Running, and then an actual write.
+await page.evaluate(() => window.__agentSays({ status: 'working', isGenerating: true, lastStopReason: null }))
+await page.waitForFunction(() => /is running/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
 await page.evaluate(() => window.__onFiles({ kind: 'change', changes: [{ path: '.spec/project/spec.md' }] }))
 await page.waitForFunction(() => /is writing/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
+
+// Wrote, then exited: still "is writing" would announce a state nobody is in. Having written does not make
+// the agent permanently present.
+await page.evaluate(() => window.__agentSays({ status: 'completed', isGenerating: false, lastStopReason: 'end_turn' }))
+await page.waitForFunction(() => /finished; its writes/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
+await page.evaluate(() => window.__agentSays({ status: 'error', isGenerating: null, lastStopReason: null }))
+await page.waitForFunction(() => /stopped with an error; what it wrote/i.test(document.getElementById('status').textContent), null, { timeout: 10_000 })
 assert.equal(errors.length, 0, `no error may appear at any point: ${errors.join(' | ')}`)
 
 console.log(`gugu tab e2e: ok — ${rowCount} node row(s), diagram node ${withDiagram ?? '(none in this tree)'}, agent started, 0 page errors`)

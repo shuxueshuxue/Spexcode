@@ -416,7 +416,7 @@ test('one side-rail value primitive renders every detail metadata row on both pa
   // the issue detail names its own id under a localized Issue label; nodes/store/permalink/forge-by all
   // ride SideValue — the page keeps no parallel inline variant (fv-by / fv-chip / fv-link are gone)
   assert.match(issues, /<SideSection label=\{t\('detail\.sideIssue'\)\}>\s*<SideValue text=\{th\.id\} mono \/>/)
-  assert.match(issues, /<SideValue key=\{id\} text=\{id\} mono tip=\{t\('session\.issuesFocusNode'\)\} href=\{addressHash\(graphNodeAddress\(id\)\)\} \/>/)
+  assert.match(issues, /<SideValue key=\{id\} text=\{id\} mono tip=\{t\('session\.issuesFocusNode'\)\} href=\{addressHash\(specAddress\(id\)\)\} \/>/)
   assert.doesNotMatch(issues, /fv-by|fv-chip|fv-link|ds-side-line/)
   assert.doesNotMatch(css, /\.fv-by|\.fv-chip|\.fv-link \{|\.ds-side-line|\.fv-originator-who/)
   // localized type labels exist in both dictionaries
@@ -437,7 +437,7 @@ test('list metadata keeps native controls beside the real detail anchor', () => 
   assert.match(css, /\.rl-row-grid \{ position: relative; z-index: 1;[\s\S]*pointer-events: none;/)
   assert.match(css, /\.rl-row-grid a, \.rl-row-grid button \{ pointer-events: auto; \}/)
   assert.match(issues, /IssueLabels labels=\{th\.labels\} onSelect=\{\(name\) => surgery\('label', name\)\}/)
-  assert.match(issues, /<a className="rl-tag node" href=\{addressHash\(graphNodeAddress\(th\.nodes\[0\]\)\)\}>/)
+  assert.match(issues, /<a className="rl-tag node" href=\{addressHash\(specAddress\(th\.nodes\[0\]\)\)\}>/)
   assert.match(issues, /ISSUE_QUERY_KEYS = \['is', 'state', 'store', 'author', 'node', 'label', 'session'\]/)
 })
 

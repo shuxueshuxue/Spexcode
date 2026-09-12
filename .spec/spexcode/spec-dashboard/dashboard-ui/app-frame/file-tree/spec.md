@@ -7,6 +7,7 @@ code:
   - spec-dashboard/src/FileTree.jsx
 related:
   - spec-dashboard/src/DiskTree.jsx
+  - spec-dashboard/src/ExplorerContextMenu.jsx
   - spec-dashboard/src/Shell.jsx
   - spec-dashboard/src/GraphView.jsx
   - spec-dashboard/src/useResizable.js
@@ -132,8 +133,8 @@ A tree row's verbs were reachable only by a gesture a reader had to already know
 in its own tab, and nothing announced it. A right-click is where a workspace is
 asked what it can do with the thing under the cursor, so every explorer row answers one: a spec node offers
 the same vocabulary it offers on the graph ([[node-graph]]'s node menu) — send the node through the shared
-prose composer, open in a new tab, reveal on the graph, copy its link, copy its id — and a file offers open
-in a new tab, copy its link, copy its path, and
+prose composer, open in a new tab, open the node in the resident Spec document, copy its link, copy its id —
+and a file offers open in a new tab, copy its link, copy its path, and
 **reveal owning node** only when some node's `code:` actually claims that path. A directory offers the one
 verb it has, because a folder is not a document ([[disk-tree]]).
 

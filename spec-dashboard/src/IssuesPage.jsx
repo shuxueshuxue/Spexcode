@@ -11,7 +11,7 @@ import { reviewActorName } from '@spexcode/spec-core/review'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { routeHash } from './route.js'
-import { addressHash, detailBackHash, graphNodeAddress } from './address.js'
+import { addressHash, detailBackHash, specAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import IssueLabels from './IssueLabels.jsx'
 import { useLaunchers } from './launch.js'
@@ -105,7 +105,7 @@ export function IssuesListPage({ data, loading, error, query, onQueryText }) {
               <>
                 {(th.replies?.length ?? 0) > 0 && <span className="rl-comments" data-tip={t('session.issuesReplies', { n: th.replies.length })}><Icon name="message-square" size={14} />{th.replies.length}</span>}
                 {stores.length > 1 && <span className={`rl-tag fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
-                {th.nodes?.[0] && <a className="rl-tag node" href={addressHash(graphNodeAddress(th.nodes[0]))}>{th.nodes[0]}</a>}
+                {th.nodes?.[0] && <a className="rl-tag node" href={addressHash(specAddress(th.nodes[0]))}>{th.nodes[0]}</a>}
               </>
             )}
           />
@@ -241,7 +241,7 @@ export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onW
           {nodes.length > 0 && (
             <SideSection label={t('detail.sideNodes')}>
               {nodes.map((id) => (
-                <SideValue key={id} text={id} mono tip={t('session.issuesFocusNode')} href={addressHash(graphNodeAddress(id))} />
+                <SideValue key={id} text={id} mono tip={t('session.issuesFocusNode')} href={addressHash(specAddress(id))} />
               ))}
             </SideSection>
           )}

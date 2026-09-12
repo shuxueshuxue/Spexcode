@@ -662,7 +662,7 @@ export default {
     issuesEmpty: 'No issues yet.',
     issuesNoMatch: 'No issues match this view.',
     issuesLoading: 'loading issues…',
-    issuesFocusNode: 'focus this node on the graph',
+    issuesFocusNode: 'open this node in Spec',
     issuesReplies: ({ n }) => `${n} ${n === 1 ? 'reply' : 'replies'}`,
     issuesOpenOnStore: 'Open on {store} ↗',
     // the human write path ([[issues-view]]) — a reply composer + the New issue COMPOSE PAGE (#/issues/new).

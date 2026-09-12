@@ -2,6 +2,9 @@
 // page, so the whole reading is testable without a host. A node is a folder under .spec/ holding a spec.md; its id
 // is the folder's name; the tree is the folder tree. This is a reader, not SpexCode's assembly — no drift, no lint.
 
+// One classic script shares the page's global scope with every other, so this file publishes its
+// namespace and nothing else: the wrapper keeps its own declarations off that shared scope.
+;(() => {
 const SPEC_ROOT = '.spec'
 // SpexCode's own seeded machinery (skills, hooks) lives here in an adopted repository; it is not the project.
 const MACHINERY = '.plugins'
@@ -125,3 +128,4 @@ function renderMarkdown(markdown, known = () => false) {
 }
 
 globalThis.SpexCodeAtlasModel = { SPEC_ROOT, parseSpec, buildTree, renderMarkdown }
+})()

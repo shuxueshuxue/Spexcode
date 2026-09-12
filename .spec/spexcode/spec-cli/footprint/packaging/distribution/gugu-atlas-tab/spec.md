@@ -43,6 +43,10 @@ the documented `window.gugu` surface over this repository's spec tree: the tree,
 render, a mention and a double-click navigate, and "Draw the atlas" hands the prompt to `spawnAgent`.
 
 The gugu shelf's shipped-example harness parses every `.js` file as a classic script, so the package's model, focus,
-and prompt helpers expose globals. The archify renderer keeps its top-level-await ESM bundle as `archify.mjs`, loaded
+and prompt helpers expose globals. Classic scripts share ONE global lexical scope, so each helper publishes its
+namespace object from inside a wrapper and leaks nothing else: a helper whose own `buildTree` reached that scope
+would make the page's `const { buildTree } = …` a redeclaration, and the browser would refuse to parse the page's
+script at all — the tab would render nothing, with every button dead. Checking each file on its own cannot see this,
+because the collision exists only between files; the proof parses them together, in the order the page loads them. The archify renderer keeps its top-level-await ESM bundle as `archify.mjs`, loaded
 by the classic page through a local dynamic import. The page calls the bridge as explicit `window.gugu.*` methods; the
 distribution parity test still compares the resulting SVG byte for byte with archify's Node renderer.

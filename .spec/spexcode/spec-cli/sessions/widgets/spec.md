@@ -75,10 +75,10 @@ message, so the agent receives a whole decision rather than six fragments.
 
 Removing the block means this message will not carry that widget's contribution. It is not an undo of what
 was clicked, and the host does not try to edit the widget's own interface, because only the widget can draw
-it. Instead the host reloads the frame, which returns the document to exactly the picture the agent drew;
-the reader sees an interface that agrees with the empty input box again. Sending does not reload: the
-interface stays where the human left it, showing what they just sent, until the agent draws its next
-version.
+it. Instead the host reloads the frame, which returns the document to the body plus its last committed
+state; the reader sees an interface that agrees with the empty input box again. Sending does not reload:
+the interface stays where the human left it, now backed by the state that send committed, until the agent
+draws its next version.
 
 An "open as text" control turns the block into ordinary text in the input box. From then on it is the
 human's sentence: editable, no longer tracking the widget.
@@ -108,9 +108,8 @@ it needs answered, what it judges the options to be. No query produces those, an
 widget is worth having at all. Such a picture is baked in at put time and goes stale until the agent draws
 again, which is honest: it says what the agent knew when it said it.
 
-What the human is doing right now is held by the browser, as below. It does not need the agent to redraw for
-the interface to keep agreeing with the human's clicks; the agent redraws when the MEANING changes, not to
-repaint a checkbox.
+What the human chose is stored with the widget, as below, so the interface keeps agreeing with their clicks
+without the agent having to redraw. The agent redraws when the MEANING changes, not to repaint a checkbox.
 
 The reason the record stays prose rather than a structure the host could replay into the widget's fields is
 that a replayable structure requires every widget to declare its fields, their types and their identities.
@@ -119,22 +118,37 @@ only say what the language can express. Prose is what the agent acts on anyway. 
 know a chosen value as data, the narrow move is to let one sent message carry a small payload beside its
 prose — not to give every widget a schema.
 
-## three kinds of state, three places
+## a name holds two layers, and each has one writer
 
-What the agent computed is in the picture, stored with it, and re-computed only when the agent draws again.
+A widget name holds a BODY and a STATE. The body is the document the agent drew and is the agent's to
+write. The state is what the human chose and is written by the send. Both are stored in the repository, in
+the same content-addressed store as everything else about a widget, and neither lives in a browser: a
+person's choice survives their refresh, their laptop, and the closing of the session, because it is kept
+where the rest of the project's record is kept.
 
-What the human decided is in the session's messages, where every other decision is. That is the ground
-truth: the agent acts on it, the CLI prints it, another agent can read it, and it is still there a year
-later. The send gesture is the line. Before it nothing has been decided, which is why six ticks do not
-become six messages, and why the widget itself is never the record of what was chosen.
+The rendered document is the body with its state handed to it, exactly the way the theme is. The widget
+reads its own state and draws itself accordingly, which is what makes "A is ticked" survive a reload without
+the agent doing anything. The state's shape is the widget's business and the host never interprets it; the
+host stores the bytes and gives them back. That is what keeps this from becoming the interface language this
+contract refuses to invent.
 
-What the human is in the middle of — ticks not yet sent, a sentence half typed — is a draft, and it belongs
-to the browser doing it. The host keeps it there under the session and widget name, and hands it back when
-that frame loads again, along with the version it was saved under; a widget that can restore itself does so
-from it, and one that cannot ignores it. `spex.save(state)` and the state handed in at load are that
-mechanism, and they exist for one reason: a page refresh must not cost a human the clicks they have not sent
-yet. It is deliberately per-viewer and not durable state: a draft has nothing to audit, two people are not
-filling one form, and the moment anything matters it is sent and becomes a message.
+Sending commits both halves in one gesture: the message goes to the agent as prose, and the state the widget
+handed over with `spex.save(state)` becomes the widget's new state. Storing the state rather than a whole new
+copy of the document is deliberate: a body is tens of kilobytes and a choice is a few dozen bytes, and the
+store does not reclaim.
+
+The two are not two answers to one question. The message is the EVENT, and it is the ground truth: it is what
+the agent acts on, what the CLI prints, what another agent reads, and what is still legible a year later. The
+state is the VALUE that event left behind, kept next to the picture so the picture can render it. If they ever
+disagree, the messages are right and the state is stale.
+
+The agent may write the state too — it reads the current state, and when it redraws it either carries the
+state forward, which is the default, or clears it because its new picture asks a different question.
+
+What has NOT been sent is not stored anywhere. Ticks made and not sent are a draft, like a half-typed
+sentence, and a reload returns the frame to the body plus its committed state, which is also exactly what
+removing the draft block does. Persisting an unsent choice would make a durable record out of something the
+human never said.
 
 An agent that redraws a widget while a human has an unsent draft in it does not swap under them. The host
 keeps showing the version they are working in and offers the newer one; their own send, or discarding the
@@ -143,7 +157,9 @@ done for the thing being displayed.
 
 ## what this contract does not cover
 
-There is no shared state between viewers, no widget-to-widget communication, no way for a widget to call a
-tool or change a session's state, and no pinning of a widget outside the conversation. Each of those needs
-its own reason and its own contract; none is required by the two things a widget is for, which are showing
-the human what is happening and letting them answer in one gesture.
+Committed state is shared by everyone who opens the widget, but nothing here makes two people editing one
+widget a live experience: a second viewer sees a choice when their frame next loads, and the last send wins.
+There is also no widget-to-widget communication, no way for a widget to call a tool or change a session's
+state, and no pinning of a widget outside the conversation. Each of those needs its own reason and its own
+contract; none is required by the two things a widget is for, which are showing the human what is happening
+and letting them answer in one gesture.

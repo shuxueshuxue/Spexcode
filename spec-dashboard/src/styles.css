@@ -4014,3 +4014,62 @@ body.is-session-dragging .si-pill.archive:hover {
 .m-widget-draft-text.is-open { white-space: pre-wrap; overflow: visible; }
 .m-widget-draft-act { border: 0; background: none; color: var(--muted); font-size: var(--type-caption); cursor: pointer; }
 .m-widget-draft-act:hover { color: var(--ink); }
+
+/* THE PLUGINS PAGE ([[plugins-page]]) — the automation drawn as what it does. The spine is the hook surface
+   and only the hook surface: an event, a deterministic order inside it, and whether the script may refuse.
+   Everything here is keyed on palette tokens rather than blends between two inks, because a colour whose
+   contrast is defined against another ink flips direction between light and dark palettes and can collapse
+   to invisible on one of them — the live seam's sweep lost a whole theme that way. */
+.pg { width: min(860px, 94%); margin: 0 auto; padding: var(--space-7) 0 60px; }
+.pg-loading { min-height: 40vh; }
+.pg-error { color: var(--red); padding: var(--space-7) 0; }
+.pg-head { margin: 0 0 var(--space-7); }
+.pg-title { font-size: var(--type-display); font-weight: var(--weight-semibold); line-height: var(--leading-tight); color: var(--ink2); margin: 0 0 var(--space-2); }
+.pg-sub { margin: 0; color: var(--muted); font-size: var(--type-meta); }
+.pg-section { margin: 0 0 var(--space-7); }
+.pg-h { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); margin: 0 0 var(--space-3); }
+.pg-note { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--type-meta); }
+
+/* how much of the project is actually running what it says it runs. One bar, three spans, no legend to read
+   twice: the numbers ARE the key. */
+.pg-live-bar { display: flex; height: 6px; border-radius: var(--radius); overflow: hidden; background: var(--edge); }
+.pg-seg { display: block; }
+.pg-seg.is-ok { background: var(--green); }
+.pg-seg.is-drift { background: var(--orange); }
+.pg-seg.is-none { background: var(--red); }
+.pg-live-key { display: flex; gap: var(--space-5); flex-wrap: wrap; margin: var(--space-3) 0 0; color: var(--muted); font-size: var(--type-meta); }
+.pg-live-key b { color: var(--ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.pg-live-key .is-drift b { color: var(--orange); }
+.pg-live-key .is-none b { color: var(--red); }
+.pg-live-total { margin-left: auto; }
+.pg-diffs { list-style: none; margin: var(--space-4) 0 0; padding: 0; font-size: var(--type-meta); }
+.pg-diffs li { display: flex; gap: var(--space-3); align-items: baseline; padding: var(--space-2) 0; border-top: 1px solid var(--edge); color: var(--ink2); }
+.pg-diff-count { flex: none; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.pg-diffs .is-extra .pg-diff-count { color: var(--orange); }
+.pg-diffs .is-missing .pg-diff-count { color: var(--red); }
+.pg-diffs code { font-family: var(--mono); font-size: var(--type-caption); background: var(--raised); padding: 1px 5px; border-radius: var(--radius); }
+
+/* the lifecycle spine: the event names are the rail, the hooks hang off them in order */
+.pg-spine { list-style: none; margin: 0; padding: 0; }
+.pg-slot { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--space-4); align-items: baseline;
+  padding: var(--space-3) 0; border-left: 2px solid var(--line); padding-left: var(--space-5); }
+.pg-slot.is-empty { border-left-color: var(--edge); }
+.pg-event { font-family: var(--mono); font-size: var(--type-meta); color: var(--ink); }
+.pg-event em { font-style: normal; color: var(--red); margin-left: 6px; font-size: var(--type-caption); }
+.pg-hooks { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: baseline; }
+.pg-nothing { color: var(--muted); font-size: var(--type-meta); font-style: italic; }
+.pg-hook { display: inline-flex; align-items: baseline; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 2px 9px; font-size: var(--type-meta); color: var(--ink); background: var(--raised); }
+.pg-hook.blocks { border-color: var(--orange); }
+.pg-order { font-style: normal; color: var(--muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
+.pg-blocks { font-style: normal; color: var(--orange); font-size: var(--type-caption); }
+
+/* the two surfaces that have no timeline — one strip each, never forced onto the spine */
+.pg-strip { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.pg-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 3px 10px; font-size: var(--type-meta); color: var(--ink); background: var(--raised); }
+.pg-chip em { font-style: normal; color: var(--muted); font-size: var(--type-caption); }
+/* a node that plugs into two surfaces at once — the one thing a folder tree structurally cannot show */
+.pg-chip.is-both { border-color: var(--blue); }
+.pg-chip.is-both em { color: var(--blue); }
+.pg-unused { margin: 0; color: var(--muted); font-size: var(--type-meta); font-style: italic; }

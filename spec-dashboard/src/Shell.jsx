@@ -59,6 +59,7 @@ const dockFor = (page) => {
   // previous Spec/Explorer projection from workspace state; that state belongs only to document routes.
   if (page === 'issues') return 'none'
   if (page === 'settings') return 'none'
+  if (page === 'plugins') return 'none'
   // ONE NAVIGATOR, drawn by the frame ([[dock-modes]]). A session document brings the session forest; a node
   // or a governed file brings the explorer. The console used to carry a forest of its own, which is how the
   // window ended up with two session lists — a complete one inside one page, and a thinner copy beside every

@@ -18,11 +18,11 @@ import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 // nowhere to be addressed from and reading one meant opening a popup over whatever page was showing.
 // `empty` is the workspace holding NOTHING — an address because the state must be landable, reloadable and
 // leaveable. It is not a rail destination or document; only closing the last tab mints it ([[tab-strip]]).
-export const PAGES = ['graph', 'spec', 'file', 'sessions', 'issues', 'settings', 'empty']
+export const PAGES = ['graph', 'spec', 'file', 'sessions', 'issues', 'plugins', 'settings', 'empty']
 // The rail is the workspace's top-level board bar. Spec is a resident board destination; a node or file
 // route projects back onto it instead of making the selected top-level board disappear. Graph remains
 // directly addressable for legacy links but is no longer a workspace destination or rail entry.
-export const RAIL_PAGES = ['spec', 'sessions', 'issues', 'settings']
+export const RAIL_PAGES = ['spec', 'sessions', 'issues', 'plugins', 'settings']
 // The pages a static publication can actually answer. A published tree carries the spec index and one
 // document per node and nothing else, so Spec (with File and Graph as its neighbours) is the whole of what
 // it can serve — the live-only destinations have no data behind them here.
@@ -61,7 +61,7 @@ export function parseRoute(hash) {
   // carries a repo path, so the tail rejoins on '/'. An UNKNOWN first segment carries no selector either:
   // its tail was written for a page that does not exist, and handing it to the fallback page would mint an
   // object address for an object nobody named.
-  const param = !known || page === 'settings' || page === 'empty'
+  const param = !known || page === 'settings' || page === 'plugins' || page === 'empty'
     ? null
     : (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
   return { page, param, query }

@@ -48,7 +48,7 @@ test('Sessions archive pill opens the existing routed archive overlay', () => {
 })
 
 test('live rail exposes every resident board, including Spec, but not retired graph destination', () => {
-  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'issues', 'settings'])
+  assert.deepEqual(RAIL_PAGES, ['spec', 'sessions', 'issues', 'plugins', 'settings'])
   assert.equal(RAIL_PAGES.includes('graph'), false)
 })
 

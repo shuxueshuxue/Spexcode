@@ -93,7 +93,7 @@ try {
   ], 'A remains held while B is focused')
   assert.equal(focused.dockBody, false, 'Sessions document does not render an empty dock body')
   assert.equal(focused.projectionBody, false, 'retired document projection marker is absent')
-  assert.deepEqual(focused.rail.map(({ href }) => href), ['#/spec', '#/sessions', '#/issues', '#/settings'])
+  assert.deepEqual(focused.rail.map(({ href }) => href), ['#/spec', '#/sessions', '#/issues', '#/plugins', '#/settings'])
   assert.equal(focused.rail[0].label, 'Spec', 'Spec rail label is localized')
   assert.equal(focused.rail[0].tip, 'Spec', 'Spec tooltip is localized')
   assert.match(focused.title, /Session B/, 'document title follows B')
@@ -118,7 +118,7 @@ try {
   assert.equal(spec.tip, 'Concrete Spec Document')
   assert.equal(spec.label, 'Concrete Spec Document')
   assert.equal(spec.icon, true, 'a spec tab keeps the Spec kind icon')
-  assert.deepEqual(spec.rail, ['#/spec', '#/sessions', '#/issues', '#/settings'])
+  assert.deepEqual(spec.rail, ['#/spec', '#/sessions', '#/issues', '#/plugins', '#/settings'])
   await page.screenshot({ path: join(out, 'spec-detail-title.png'), fullPage: true })
 
   await page.goto(`${base}/#/file/src/app.js`, { waitUntil: 'domcontentloaded' })

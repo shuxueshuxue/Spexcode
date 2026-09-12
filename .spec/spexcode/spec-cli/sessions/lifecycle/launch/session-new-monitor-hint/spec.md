@@ -51,8 +51,9 @@ It also lists `--base <commit-ish>`, which pins the new worktree's fork point in
 source-of-truth branch's current head ([[sessions-core]]); help names the input and its refusal-before-creation
 guarantee, and leaves the resolution contract to that owner.
 
-Worker-only live-reference entries keep the same map: `session files add|ls|retract` names live file paths and
-`session web add|ls|retract` names live loopback web URLs ([[files]] / [[web]]). Their own nouns own format and
+Live-reference entries keep the same map: `session files add|ls|get|retract` names live file paths — `add`/`retract`
+are the worker's own writers, `ls [SEL]`/`get <SEL> <name>` let a parent read what a child posted, locally or
+`--ssh` across a peer — and `session web add|ls|retract` names live loopback web URLs ([[files]] / [[web]]). Their own nouns own format and
 gateway policy; this shared drawer tells an agent the capability exists without turning help into another guide.
 
 The manager recovery entry, `session reparent <child-SEL...> --to <parent-SEL>`, names its required destination

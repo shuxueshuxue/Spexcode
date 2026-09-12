@@ -509,14 +509,20 @@ const FILES = `spex guide files — hand an agent artifact back to the human
 
 Use the session's file list when an artifact belongs in the human's hands:
 
-  spex session files add <path>      publish one current file path
-  spex session files ls              read your published paths
-  spex session files retract <path>  withdraw one path
+  spex session files add <path>               publish one current file path
+  spex session files ls [SEL]                 read published paths — yours, or any session's by selector
+  spex session files get <SEL> <name> [-o f]  the bytes of one posted file (its [[file:<name>]] tail or path)
+  spex session files retract <path>           withdraw one path
+
+A parent reads a child's handoff the same way the human does: the child's note names \`[[file:<name>]]\`, the
+parent runs \`spex session files get <child> <name>\` (or \`ls <child>\` for the whole list). On this host that is a
+disk read; for a child on a peered machine, \`ls|get --ssh <address> <FULL-SESSION-ID>\` fetches through the same
+tunnel and route the dashboard downloads by — the path string stays the far machine's, the bytes travel.
 
 Posting resolves a relative path from your current directory and records its absolute path beside the global
 session record only after confirming it is a readable regular file. It copies, moves, stages, and uploads NOTHING. The path is live: editing the file after
-posting changes what the human downloads. The reference is host-local; opening the session elsewhere cannot
-make its path point at another machine's file.
+posting changes what the human downloads. The reference is host-local: a copied record on another machine cannot
+make its path point at a local file — read it through the owning machine's backend (\`get --ssh\`) instead.
 
 Point at a posted file from anything you write — a declaration note, a reply, a message — as
 \`[[file:<name>]]\`, where <name> is the file's name, or as much of the end of its path as no other posted file

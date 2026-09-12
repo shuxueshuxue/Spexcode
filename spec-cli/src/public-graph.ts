@@ -126,6 +126,26 @@ export function publicGraphHtml(shell: string, artifact: PublicGraphArtifact): s
   }
   // `<` never appears raw inside the element, so no string in any spec body can close it early.
   const element = `<script type="application/json" id="${PUBLIC_PAYLOAD_ELEMENT_ID}">${JSON.stringify(payload).replace(/</g, '\\u003c')}</script>`
-  if (!shell.includes('</head>')) throw new Error('public graph page: the single-file shell has no </head>')
-  return shell.replace('</head>', () => `${element}\n</head>`)
+  const close = headClose(shell)
+  if (close < 0) throw new Error('public graph page: the single-file shell has no </head>')
+  return `${shell.slice(0, close)}${element}\n${shell.slice(close)}`
+}
+
+// Where the shell's head really closes. The single-file build inlines the whole dashboard bundle, so most
+// HTML landmarks in that file are a program's DATA rather than its markup — the widget runtime builds an
+// iframe document out of a template literal that spells `</head><body>`, a megabyte before the page's own
+// head ends. Splicing at the first textual match lands inside that string and tears the inlined <script>
+// in half: the browser ends the bundle at the injected element's `</script>`, spills the rest of the
+// program into the page as visible text, and nothing runs. So read the file the way a browser does — a
+// script element runs to its first `</script`, and only a landmark outside every such span is markup.
+function headClose(shell: string): number {
+  for (let at = 0; ; ) {
+    const head = shell.indexOf('</head>', at)
+    const open = shell.indexOf('<script', at)
+    if (head >= 0 && (open < 0 || head < open)) return head
+    if (open < 0) return -1
+    const end = shell.indexOf('</script', open)
+    if (end < 0) return -1
+    at = end + '</script'.length
+  }
 }

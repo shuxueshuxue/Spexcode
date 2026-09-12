@@ -14,7 +14,6 @@ const publicMode = text('public-mode.js')
 const about = text('PublicGraphAbout.jsx')
 const route = text('route.js')
 const specContent = text('specContent.js')
-const launch = text('launch.js')
 const fileTree = text('FileTree.jsx')
 const project = text('project.js')
 const tabs = text('tabs.js')
@@ -52,7 +51,10 @@ test('a published tree runs the workspace shell over static input, opening only 
   assert.deepEqual(PUBLIC_PAGES, ['spec', 'file', 'graph'])
   assert.match(route, /PUBLIC_GRAPH_ONLY/)
   assert.match(route, /if \(PUBLIC_PAGES\.includes\(face\.page\)\) return face/)
-  assert.match(route, /replaceState\(null, '', '#\/spec'\)/)
+  assert.match(route, /replaceHash\('#\/spec'\)/)
+  // An address a document refuses to restate — an `srcdoc` frame, a sandboxed preview — must cost the
+  // reader the address bar, never the page: this runs inside a render-time state initializer.
+  assert.match(route, /function replaceHash[\s\S]*?try \{[\s\S]*?replaceState[\s\S]*?\} catch \{ return false \}/)
   assert.match(sideBar, /disabled=\{graphOnly && !PUBLIC_PAGES\.includes\(p\)\}/)
   assert.match(sideBar, /aria-disabled="true"/)
 
@@ -65,7 +67,7 @@ test('a published tree runs the workspace shell over static input, opening only 
 
   // The live-only reads are answered, not fired: no backend exists behind a published tree.
   assert.match(data, /if \(PUBLIC_GRAPH_ONLY\) return \[\]/)
-  assert.match(launch, /if \(PUBLIC_GRAPH_ONLY\) return Promise\.resolve\(\{ launchers: \[\] \}\)/)
+  assert.match(data, /export async function loadSettings\(\) \{[\s\S]*?if \(PUBLIC_GRAPH_ONLY\) return \{ launchers: \[\] \}/)
   assert.match(fileTree, /!PUBLIC_GRAPH_ONLY && \(/)
 
   assert.match(dashboard, /onNodeContextMenu=\{graphOnly \? undefined/)

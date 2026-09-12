@@ -69,6 +69,9 @@ grammar it wears a reserved qualified token, so reading a draft tells you which 
   at most one supervisor: two different selectors, an unknown one, and an ambiguous prefix each fail the
   create loudly rather than landing a worker at top level where nobody would notice the miss.
   `@parent:` moves a session at BIRTH; [[session-reparent]] moves one that already exists.
+  The literal `@parent:none` is the create-time top-level spelling only when the ordinary selector resolver
+  finds no exact id, unique prefix, or branch named `none`; a real match keeps its normal parent target and an
+  ambiguous match fails loudly. The directive is still consumed from the prompt in either case.
 - **`[[file:<name>]]` is a passive reference to a file its session posted** ([[files]]). The `file:` qualifier keeps
   it out of the node vocabulary — `:` is no id character — so it never resolves or expands as a node. It resolves
   only against the posted list of the session whose text holds it, and in the dashboard it opens that file wherever

@@ -7,6 +7,7 @@ code:
   - spec-cli/src/sessions.ts#sessionCreateRequest
 related:
   - spec-cli/src/session-create-cli.test.ts
+  - spec-cli/src/session-create-orphan.yatu.test.ts
   - spec-cli/src/client.ts
   - spec-cli/src/session-selectors.ts
   - spec-cli/src/mentions.ts
@@ -82,6 +83,11 @@ same-key retry of the same raw prompt hashes identically; the resolved parent is
 retry whose named supervisor has since vanished is a different request and is refused rather than silently
 reparented. The launch text tells the child the truth about which of the two it is: created by a spawner, or
 attached under a supervisor that did not create it.
+
+The reserved selector `none` is the one explicit top-level escape at birth. The create boundary first asks the
+ordinary resolver for an exact id, id-prefix, or branch; only a true no-match for the literal `none` settles
+`parent: null` with directive provenance. Thus a real session id or branch named `none` remains addressable, a
+prefix/branch collision remains ambiguous, and every other no-match still returns the ordinary `400`.
 
 **A node branch never tracks the base branch.** Creation passes `--no-track` when forking from any start point,
 including a remote-tracking ref, because landing explicitly merges the base and the node has no business upstream.

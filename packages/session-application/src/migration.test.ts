@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -291,4 +291,42 @@ test('residue migration refuses a retired envelope with no canonical row instead
   writeFileSync(join(recordsRoot, 'ghost', 'timeline.ndjson'), line({ kind: 'status', status: 'active', proposal: null, note: null }))
   assert.throws(() => migrateJsonSessionRecords({ databasePath, recordsRoot, locality: () => {} }), /retired envelope .*ghost\/runtime\.json has no canonical application state/)
   assert.equal(existsSync(join(recordsRoot, 'ghost', 'timeline.ndjson')), true)
+})
+
+// After the marker, a legacy artifact that cannot be parsed is quarantined and named, never imported and never fatal:
+// before it, the same bytes still fail the one-time import loudly.
+test('unreadable residue beside a marked store is quarantined and reported, not a permanent refusal', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-json-unreadable-'))
+  const { recordsRoot, databasePath } = oldImporterStore(root, [{ id: 'live', status: 'awaiting' }])
+  mkdirSync(join(recordsRoot, 'live', 'timeline'), { recursive: true })
+  writeFileSync(join(recordsRoot, 'live', 'runtime.json'), JSON.stringify({ session_id: 'live', governed: true }))
+  writeFileSync(join(recordsRoot, 'live', 'watchers.json'), JSON.stringify({ watchers: ['not-an-array-shape'] }))
+  writeFileSync(join(recordsRoot, 'live', 'pending.json'), '{"pending":[{"text":"POISON"')
+  writeFileSync(join(recordsRoot, 'live', 'timeline', '000000000001.ndjson'), '{ garbage')
+  const report = migrateJsonSessionRecords({ databasePath, recordsRoot, locality: () => {} })
+  assert.deepEqual(report.quarantined?.map(q => q.split(' (')[0]), ['live'])
+  assert.match(report.quarantined![0], /watchers file is not an array/)
+  assert.equal(report.residue, undefined, 'nothing readable was left to import')
+  for (const name of ['watchers.json', 'pending.json']) assert.equal(existsSync(join(recordsRoot, 'live', name)), false, `${name} retired from the tree`)
+  assert.equal(existsSync(join(recordsRoot, 'live', 'runtime.json')), true, 'the runtime envelope is untouched')
+  assert.equal(existsSync(join(root, 'old-backup', 'residue', 'unreadable', 'live', 'pending.json')), true, 'the bytes are kept in quarantine')
+  assert.equal(legacyResidueExists(recordsRoot), false, 'the tree settles: the next access does not rescan')
+  const app = openProjectSessionApplication({ databasePath, locality: () => {} })
+  assert.equal(app.readState('live')?.status, 'awaiting', 'canonical state is unaffected')
+  assert.equal(app.readPendingMessages('live').length, 0, 'the poisoned queue injected nothing')
+  app.close()
+  // second run: nothing to do, nothing thrown
+  const again = migrateJsonSessionRecords({ databasePath, recordsRoot, locality: () => {} })
+  assert.equal(again.quarantined, undefined)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('the same unreadable input still fails a first (pre-marker) import loudly', () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-json-unreadable-first-'))
+  const recordsRoot = join(root, 'sessions')
+  mkdirSync(join(recordsRoot, 'live'), { recursive: true })
+  writeFileSync(join(recordsRoot, 'live', 'session.json'), JSON.stringify(record('live', 'active')))
+  writeFileSync(join(recordsRoot, 'live', 'watchers.json'), JSON.stringify({ watchers: ['not-an-array-shape'] }))
+  assert.throws(() => migrateJsonSessionRecords({ databasePath: join(root, 'sessions.sqlite'), recordsRoot, locality: () => {} }), /watchers file is not an array/)
+  rmSync(root, { recursive: true, force: true })
 })

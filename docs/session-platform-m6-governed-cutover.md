@@ -71,6 +71,12 @@ migrate-session-json、session-live-cutover 全部改 import。零消费者的 `
 删除，不迁；hook 改调 `$SPEX internal session-register`。M4 D-16 那道"spec-cli 不 import 协议栈"的边界，本来就是 M6
 的接入消解的，这次只是让包的形状跟上事实。已发布包名的退役随下一次 release 记录。
 
+**D-25（本账定，2026-09-13，由 sabotage 门逼出）：marker 之后解析不了的残留是隔离，不是拒绝。** 第一次跑 governed
+sabotage，一个畸形的 `watchers.json` 让 residue 吸收器在**每一次** canonical 访问上抛错——整个 backend 变成 500，直到有人
+手删那个文件。一次性导入（marker 之前）遇到坏输入必须大声失败，因为那时的替代是一个残缺的目标库；marker 之后没有残缺
+目标可言，而"每个请求都 500"比"丢掉一段谁也投不出去的字节"糟得多。现在 migrator 把解析不了的目录当作"无人认领"处理：
+文件拷进 backup 的 `residue/unreadable/`、从树里 unlink、报告里点名并附解析错误。marker 之前的行为不变，两半各有测试。
+
 **D-23（本账定）：证明脚本的存活判据。** 台账引用的每一个证明脚本，要么在 `npm test` / CI 路径里，要么在台账里
 挂着**最后一次绿的 commit**；两者皆无的脚本不得被任何台账当作"已证明"引用。理由见 §4.1：两个证明脚本在 main 上
 红了 10 天和 3 周，没有人知道。
@@ -176,7 +182,7 @@ production-cutin spec 说残留吸收"runs the same migration entry point"，所
 | 脚本 | worktree | main `d140cca18` | 归因 |
 |---|---|---|---|
 | `scripts/m4-self-launch-yatu.mjs` | **红**：8 ok → `SyntaxError: Unexpected end of JSON input`（:142） | **红**，同点 | 断言的是 D-17 的投递；`0cc9813ad`（09-02）删了投递却没改脚本。脚本最后一次实质修改 `b2b0c6df6`（08-20），此后仅 lint（`a6dba095e` 08-31）。**不在任何 spec 节点的 `code:`/`related:` 里，`scripts/` 不在 governedRoots**，所以 lint 看不见它 |
-| `scripts/session-production-cutover-yatu.mjs` | **红 8/10**（连跑两次同样两条） | **红 8/10**，同两条：`multiple watchers receive one ordered stream`（期望 2 条 state.changed，得 `[]`）、`ordered batch delivery is FIFO and at-most-once` | 断言的是"状态转移直接给 watcher 入队"；owning spec `production-cutin-yatu` 现在写的是"backend 把 cursor 对账成队列消息后再 dequeue"。脚本最后修改 `53e225443`（08-22），语义此后变了。它是该节点的 `related:`，不是 `code:` |
+| `scripts/session-production-cutover-yatu.mjs`（**已退役 2026-09-13**，人类选 lane G 的 (a)；owning 节点正文记了退役理由） | ~~红 8/10~~ | 退役前 main 上红 8/10，同两条：`multiple watchers receive one ordered stream`（期望 2 条 state.changed，得 `[]`）、`ordered batch delivery is FIFO and at-most-once` | 断言的是"状态转移直接给 watcher 入队"；owning spec `production-cutin-yatu` 现在写的是"backend 把 cursor 对账成队列消息后再 dequeue"。脚本最后修改 `53e225443`（08-22），语义此后变了。它是该节点的 `related:`，不是 `code:` |
 | `spec-cli/src/session-production-cutover.yatu.test.ts`（`npm test` 会跑的那份） | **绿 1/1** | — | 最后修改 `3ecf24e09`（09-11），跟着契约走 |
 | `spec-cli/src/hook-dispatch.test.ts` | **绿 30/30**（含 session-listen 两条） | — | — |
 | `scripts/session-application-yatu.mjs` | **NOT-MEASURED**：`npm install` 五个打包 tarball 返回 status 254、stdout/stderr 皆空 | — | 未定位（可能是 `--silent` 吞掉的网络或沙箱错误）；不当作红，也不当作绿 |
@@ -196,22 +202,31 @@ D-23 由此而来。
 | 活库 binding namespace | 仅 `spex-governed`（469 行；claude 21 / codex 213 / codex-headless 230 / opencode 3 / zcode 2） |
 | schema 版本 | application 4 · events 2 · protocol 1 · runtime-bindings 1 · topology 1 |
 
-### 4.3 本里程碑**没有**做的门
+### 4.3 Sabotage 与 Delete（2026-09-13 补齐）
 
-- **Sabotage 未做。** 路线图 M6 的负向证明（旧 queue 缺失/损坏、旧 timeline 投毒、cursor 缺失、旧关系冲突、锁目录只读、
-  observer 关闭）一条都没在 head 上跑过。原先的 `spikes/legacy-sabotage/gate.sh` 随 `8fb1cfed4`（08-24）一起删除；
-  M5 的 `scripts/zswarm-sabotage/` 是 ZSwarm 形状的，不覆盖 governed 路径。这是 lane I 的全部内容。
-- **Delete 未按判据关闭。** 判据同 M4："被 governed 消费 **且** 已被新路径以同等行为替代"。§2 里 CUT 的行满足前半，
-  但"已删除"的证明只有静态引用归零，没有 file-access trace；RESIDUE 三处（`.session-locks`、`host.ts:183`、
-  0 字节 `session-application.sqlite`）有 caller 归属但未删。Delete 门在 lane I 的 trace 之后才能关。
+**Sabotage：`scripts/governed-sabotage-yatu.mjs`（节点 [[governed-sabotage]]），一个文件，16 / 16。** 把每一行判 CUT 的旧设施种回原处并
+弄坏（畸形 pending.json / cursors.json / watchers.json、垃圾 timeline、`.revoked-senders` 标记、只读的旧锁根），然后跑真实产品：
+真实 launcher 起真实 backend、runtime HTTP 建关系与转移、真实 CLI send/dequeue、杀掉再起，全程 `strace -f -e trace=%file`。
+两个数分开记：
+- `importer_reads`（进程启动时残留检测与吸收的读）= 首启 49 / 重启 9 / CLI 各进程合计 76 —— 按契约这是 importer 的活，只报不判。
+- `runtime_reads`（settle 之后、毒物重新种回后，backend 服务阶段对任何被种路径的文件系统调用）= **首启 0、重启后 0**；
+  同一追踪器同一趟里的标定探针命中 **1**。
+回路本身：两次状态转移以两条 `[spex watch] child is …` prompt 到达 watcher、FIFO、恰两条；replay 与 events 全部来自库；畸形关系文件
+没引入任何 watcher；"被 revoke" 的发送方发出的消息照常入队、经 CLI 取到；重启后投递继续。
+第一次跑就抓到一个真缺陷并修掉（D-25）。不种"合法的冲突关系文件"，理由写在节点里：marker 之后合法的旧关系文件按契约就是迁移输入。
+
+**Delete：按 M4 同一判据关闭。** 判据"被 governed 消费且已被新路径替代的旧设施必须删除；实测目标集为空时，用 inventory + trace 归零关门"。
+§2 判 CUT 的十行：源码引用 0（§4.2）+ 服务阶段 trace 0（上）。RESIDUE 三处（`.session-locks` 旧根、`host.ts:183` 的 `session.json`
+读者、0 字节 `session-application.sqlite`）不是 M6 替代的东西，caller 归属已量清，归 M8——与 M4 "未被本 milestone 替代的 consumer
+必须点名归属，不得顺手删除"同一条纪律。
 
 ## 5. Lane 分工（文件面互不重叠）
 
 | Lane | 角色 | 独占文件面 | 明确禁止 | 门 |
 |---|---|---|---|---|
-| **G** | 证明修复 | `scripts/session-production-cutover-yatu.mjs`、`.spec/spexcode/session-runtime/self-launch-entry/self-launch-cutover/spec.md` 正文（只改被 D-19 推翻的 listener 描述，不改 M4 台账）。`m4-self-launch-yatu.mjs` **已退役**（2026-09-12，随包一起删；继任者 `self-launch-yatu.mjs` 有 owning 节点） | 不改产品代码；不改 hook 脚本 | rehearsal 脚本在 main 上绿且被节点 `code:`/`related:` 引用，或退役并记 commit |
+| **G** | 证明修复 | **完成**：`m4-self-launch-yatu.mjs` 退役（09-12，继任者 [[self-launch-yatu]]）；`session-production-cutover-yatu.mjs` 退役（09-13，人类选 (a)，理由记在 [[production-cutin-yatu]] 正文）。剩一处：`self-launch-cutover` 节点正文仍描述 D-17 的投递，未改（M4 的 owning 节点，留给 M4 台账的 owner） | — | — |
 | **H** | self-launch 地址缝 | （**已完成 2026-09-12**，见 §3.1）hook 两份拷贝、`session-inbox.ts`、`cli.ts`/`help.ts`、`sessions.ts` 的 `sendText` 裸地址分支、`session-application` 的 `readAddress` 与 storage 模块 | 未给协议加列；`sessions.ts` 只加了 `readRecord` 为空后的一个分支 | `self-launch-yatu.mjs` 26/26 · `session-inbox.cli.test.ts` 5/5 · hook-dispatch 40/40 |
-| **I** | governed sabotage + trace | 新建 `scripts/governed-sabotage/**`（形状沿 `scripts/zswarm-sabotage/`：计数 + `openat` 标定） | 不修被审路径；不降低 expected | 路线图 M6 六条负向证明各一；`legacyFileSyscallHits=0` 且标定命中 ≥1；RESIDUE 三处的 caller 归属逐条 MEASURED |
+| **I** | governed sabotage + trace | **完成（09-13）**：一个文件 `scripts/governed-sabotage-yatu.mjs`（[[governed-sabotage]]），16/16，runtime_reads 0/0，标定 1；抓到并修掉 D-25 | 例外一条：writer 与 adversary 是同一个 session（人类授权自行处理） | 见 §4.3 |
 | **J** | spec 正文对齐 | `docs/session-adopter-cutin-plan.md`（WAL 一句）、`.spec/spexcode/session-protocol/**` 的 journal 描述核对、production-cutin 节点里 marker 改写行为的说明 | 不改 M4/M5 台账 | `spex spec lint` 0 error；改动只到被 §2.4 点名的句子 |
 
 集成方在合并后的树上独立复跑每一门，不采信 lane 自述——与 M4 相同。
@@ -242,14 +257,14 @@ D-23 由此而来。
 
 ## 8. 里程碑状态：一个声音
 
-**M6 未完成。** 但未完成的部分和开工前以为的不同：
+**M6 完成（2026-09-13）。** 四步加 self-launch 地址缝逐条如下；仍 OPEN 的在 §7：
 
 | 步 | 状态 | 依据 |
 |---|---|---|
 | **Adopt** | 完成（生产上运行 3 周） | §2.1–2.3；`session-production-cutover.yatu.test.ts` 1/1；活库计数 |
 | **Inventory** | 完成 | §2：G.1 十一行 + G.2 四行逐行判定，全部 source-backed 且有活部署证据；RESIDUE 三处点名 |
-| **Sabotage** | **未做** | §4.3；归 lane I |
-| **Delete** | **未按判据关闭** | 静态引用归零已量到，file-access trace 未做；归 lane I |
+| **Sabotage** | 完成（2026-09-13） | §4.3：16/16，runtime_reads 0/0，标定 1，D-25 |
+| **Delete** | 完成（实测目标集为空，RESIDUE 三处归 M8） | §4.3：静态引用 0 + 服务阶段 trace 0；未被 M6 替代的 caller 点名归属 |
 | **self-launch 地址缝** | **完成（2026-09-12）** | §1 D-20/21/22/24 已决并施工；§3.1；`self-launch-yatu.mjs` 26/26 |
 
 两个在 main 上红着的证明脚本不是 M6 的施工，但它们是本账能否被信的前提，所以 lane G 排在最前。

@@ -929,7 +929,6 @@ export default {
     olderMention: 'an earlier mention — the live one is further down',
     pending: 'not sent yet',
     send: 'send',
-    asText: 'open as text',
     discard: 'discard',
     bodyMissing: ({ reason }) => `widget document unavailable (${reason})`,
     draftLabel: ({ name }) => `${name} · not sent`,

@@ -117,15 +117,29 @@ function WidgetFrame({ nodeRef, widget, scope }) {
     return () => { frame.removeEventListener('load', attach); observer?.disconnect() }
   }, [body, reloadKey])
 
+  // The palette's own `color-scheme` is read from the root rather than guessed from the theme's NAME: the
+  // presets are called notion, gruvbox, dracula, and which of them are light is not in their names. The theme
+  // is applied by writing an attribute on <html>, which React never sees, and it can land AFTER this frame's
+  // first render — so the attribute itself is watched, and the document is rebuilt in the palette that is
+  // actually on the page.
+  const [theme, setTheme] = useState(() => (typeof document === 'undefined' ? '' : document.documentElement.dataset.theme || ''))
+  useEffect(() => {
+    const root = document.documentElement
+    setTheme(root.dataset.theme || '')
+    if (typeof MutationObserver === 'undefined') return undefined
+    const observer = new MutationObserver(() => setTheme(root.dataset.theme || ''))
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
   const srcDoc = useMemo(() => {
     if (body == null) return null
     return widgetDocument({
       body,
       instance,
       theme: widgetThemeStyle(),
-      dark: !document.documentElement.dataset.theme?.includes('light'),
+      colorScheme: getComputedStyle(document.documentElement).colorScheme,
     })
-  }, [body, instance])
+  }, [body, instance, theme])
 
   return <span className="wg" ref={nodeRef} data-widget-name={widget.name} id={`widget-${widget.name}`}>
     <span className="wg-head">
@@ -134,7 +148,6 @@ function WidgetFrame({ nodeRef, widget, scope }) {
       {draft && <span className="wg-pending">{t('widget.pending')}</span>}
       {draft && <span className="wg-actions">
         <button type="button" className="wg-btn" onClick={() => scope.onSend?.()}>{t('widget.send')}</button>
-        <button type="button" className="wg-btn" onClick={() => scope.onOpenAsText?.(widget.name)}>{t('widget.asText')}</button>
         <button type="button" className="wg-btn" onClick={() => scope.onRemoveDraft?.(widget.name)}>{t('widget.discard')}</button>
       </span>}
     </span>

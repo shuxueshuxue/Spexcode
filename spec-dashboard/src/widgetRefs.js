@@ -32,9 +32,9 @@ export function widgetThemeStyle(root = document.documentElement) {
 // The host owns the document so that the theme, the state and the bridge exist before the widget's own
 // script runs. An author who writes a whole document anyway still renders: the parser drops the nested
 // html/head/body tags and keeps their content.
-export function widgetDocument({ body, instance, theme, dark }) {
+export function widgetDocument({ body, instance, theme, colorScheme }) {
   return `<!doctype html><html><head><meta charset="utf-8">`
-    + `<style>${theme}html{color-scheme:${dark ? 'dark' : 'light'}}`
+    + `<style>${theme}html{color-scheme:${colorScheme || 'light dark'}}`
     + `body{margin:0;padding:0;background:transparent;color:var(--fg);`
     + `font:var(--type-body,13px)/1.5 var(--ui-font-sans,system-ui);overflow:hidden}</style>`
     + `<script>window.spex=parent.__spexWidget(${JSON.stringify(instance)})<\/script>`

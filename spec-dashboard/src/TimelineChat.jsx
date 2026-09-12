@@ -118,7 +118,7 @@ const SeamElapsed = memo(function SeamElapsed({ from, skewRef }) {
 // A widget's pending contribution, sitting above the input box as an attachment rather than inside the
 // text: the send control is the one the human already uses, and the exact words that will go are readable
 // before they go. Folded when long, because a draft is read at a glance and inspected on demand.
-function WidgetDraftBlock({ entry, onAsText, onDiscard }) {
+function WidgetDraftBlock({ entry, onDiscard }) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const long = entry.text.length > 80 || entry.text.includes('\n')
@@ -129,7 +129,6 @@ function WidgetDraftBlock({ entry, onAsText, onDiscard }) {
         <span className="m-widget-draft-name">{t('widget.draftLabel', { name: entry.name })}</span>
         <span className={`m-widget-draft-text${open ? ' is-open' : ''}`}>{entry.text}</span>
       </button>
-      <button type="button" className="m-widget-draft-act" onClick={onAsText}>{t('widget.asText')}</button>
       <button type="button" className="m-widget-draft-act" onClick={onDiscard} aria-label={t('widget.discard')}>
         <Icon name="x" size={12} />
       </button>
@@ -147,7 +146,7 @@ function WidgetDraftBlock({ entry, onAsText, onDiscard }) {
 // and the paperclip, a pasted screenshot or a dropped file all go through the one resumable upload path
 // ([[file-attach]]) and leave the file's path in this draft. The only Command Box control this surface does
 // not carry is the terminal-only Alt+I opener, because this composer is already open.
-function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [], quotes = [], onRemoveQuote, widgetDrafts = [], onWidgetAsText, onWidgetDiscard }) {
+function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sending, send, sendErr, sendNote, onRestore, actionOutcome, onComposerPress, working = false, stopping = false, stop, specs = [], sessions = [], boardCommands = [], quotes = [], onRemoveQuote, widgetDrafts = [], onWidgetDiscard }) {
   const t = useT()
   const readOnly = state !== 'live'
   const restoring = actionOutcome?.phase === 'pending'
@@ -194,8 +193,7 @@ function TimelineFooter({ session, state, active, inputRef, draft, setDraft, sen
           {widgetDrafts.length > 0 && (
             <div className="m-widget-queue">
               {widgetDrafts.map((entry) => (
-                <WidgetDraftBlock key={entry.name} entry={entry}
-                  onAsText={() => onWidgetAsText?.(entry.name)} onDiscard={() => onWidgetDiscard?.(entry.name)} />
+                <WidgetDraftBlock key={entry.name} entry={entry} onDiscard={() => onWidgetDiscard?.(entry.name)} />
               ))}
             </div>
           )}
@@ -680,13 +678,6 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     setWidgetDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== name)))
     setWidgetReloads((prev) => ({ ...prev, [name]: (prev[name] || 0) + 1 }))
   }, [])
-  const openWidgetAsText = useCallback((name) => {
-    const entry = widgetDrafts[name]
-    if (!entry) return
-    setDraft((current) => (current ? `${current}\n${entry.text}` : entry.text))
-    setWidgetDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== name)))
-    inputRef.current?.focus()
-  }, [widgetDrafts])
   const widgetScope = useMemo(() => ({
     sessionId: s.id,
     widgets: s.widgets || [],
@@ -694,9 +685,8 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
     reloads: widgetReloads,
     onDraft: onWidgetDraft,
     onRemoveDraft: discardWidgetDraft,
-    onOpenAsText: openWidgetAsText,
     onSend: () => send(draft),
-  }), [s.id, s.widgets, widgetDrafts, widgetReloads, onWidgetDraft, discardWidgetDraft, openWidgetAsText, draft])
+  }), [s.id, s.widgets, widgetDrafts, widgetReloads, onWidgetDraft, discardWidgetDraft, draft])
 
   const stop = async () => {
     if (stopping) return
@@ -882,7 +872,7 @@ function TimelineChat({ s, sessions = [], active = true, footerState = 'live', o
         onComposerPress={prepareComposerPress} working={s.status === 'working'} stopping={stopping} stop={stop}
         specs={specs} sessions={sessions} boardCommands={boardCommands}
         widgetDrafts={Object.entries(widgetDrafts).map(([name, entry]) => ({ name, ...entry }))}
-        onWidgetAsText={openWidgetAsText} onWidgetDiscard={discardWidgetDraft} />
+        onWidgetDiscard={discardWidgetDraft} />
     </div>
     </DashboardTranscriptUi>
     </SessionWidgetsContext.Provider>

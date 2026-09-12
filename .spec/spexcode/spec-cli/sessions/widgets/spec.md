@@ -83,6 +83,13 @@ boundary. A widget can therefore reach the page that embeds it, and a careless s
 for whoever is looking at it; that is the same risk the project already accepts for previewing a posted
 report, taken here for the same reason, that the author is the session's own agent.
 
+A widget wears the dashboard's palette: its tokens are written into the document, and the document's
+`color-scheme` is the one the root resolves rather than a guess from the theme's name, since which of
+notion, gruvbox and dracula are light is not in their names. A theme is applied by writing an attribute on
+the root, which React never sees and which can land after a frame has already rendered, so the attribute
+itself is watched: switching theme redraws every open widget in the new palette instead of leaving one
+island in the old one.
+
 Being same-origin is also what keeps the mechanism small. The host does not need a message protocol to do
 its half of the work: it writes the dashboard's current theme tokens into the document, measures the
 document's own height to size the frame, and installs the one function below directly on its window. A
@@ -109,11 +116,8 @@ state; the reader sees an interface that agrees with the empty input box again. 
 the interface stays where the human left it, now backed by the state that send committed, until the agent
 draws its next version.
 
-An "open as text" control turns the block into ordinary text in the input box. From then on it is the
-human's sentence: editable, no longer tracking the widget.
-
-The same three controls — send, open as text, remove — also sit in the frame's own chrome, the way a copy
-button sits on a code block, and appear there only while this widget has a draft. A human who has just
+Both controls — send and discard — also sit in the frame's own chrome, the way a copy button sits on a code
+block, and appear there only while this widget has a draft. A human who has just
 finished clicking should not have to travel to the bottom of the page to act on what they clicked. Both
 places drive one send: the message that goes is whatever the input box holds, typed text and other
 widgets' blocks included, so pressing a widget's send is pressing the human's own send from a closer

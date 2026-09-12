@@ -15,9 +15,14 @@ That is the whole model, and every rule below follows from it.
 
 ## one name, one current version
 
-What the agent authors is one ordinary HTML file: a complete, self-contained document, written wherever the
-session keeps its scratch work, rewritten in place whenever the picture changes. Nothing about that file is
-special until it is put, and its path is not what is remembered.
+What the agent authors is one ordinary HTML file holding a page's CONTENT: markup, its own `<style>`, its own
+`<script>`, written wherever the session keeps its scratch work and rewritten in place whenever the picture
+changes. The document around it is the host's: the host supplies the doctype, the head, the theme, the state
+and the one bridge object, and puts the file's markup in the body. Owning the wrapper is what lets those
+things exist before the widget's own script runs, without the host having to splice text into a document
+someone else wrote. An author who writes a whole document anyway still renders, because a parser drops the
+nested `html`, `head` and `body` tags and keeps their content. Nothing about the file is special until it is
+put, and its path is not what is remembered.
 
 `spex session widget put <name> <path>` reads the file's bytes, stores them in the repository's
 content-addressed store ([[evidence-store]]), and points the name at that hash. Putting the same name
@@ -138,10 +143,11 @@ another copy of the document would be waste with no reader.
 Neither lives in a browser. A person's choice survives their refresh, their laptop, and the closing of the
 session, because it is kept where the rest of the project's record is kept.
 
-The rendered document is the body with its state handed to it, exactly the way the theme is. The widget
-reads its own state and draws itself accordingly, which is what makes "A is ticked" survive a reload without
-the agent doing anything. The state's shape is the widget's business and the host never interprets it; the
-host stores the bytes and gives them back. That is what keeps this from becoming the interface language this
+The state reaches the widget through the host's wrapper, the same way the theme does: it is there as data
+before the widget's first line of script runs, so the widget draws itself from it rather than being patched
+afterwards. That is what makes "A is ticked" survive a reload without the agent doing anything. The state's
+shape is the widget's business and the host never interprets it; the host stores the bytes and gives them
+back. That is what keeps this from becoming the interface language this
 contract refuses to invent.
 
 Sending commits both halves in one gesture: the message goes to the agent as prose, and the state the widget

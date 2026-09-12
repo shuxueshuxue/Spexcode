@@ -2,7 +2,7 @@
 title: distribution
 status: active
 hue: 30
-desc: The atlas packaged in the format of each host that installs agent add-ons — Claude Code, ZCode, gugu, PenguinHarness — one folder per host under distribution/, generated from the same preset spex init seeds and run through npx with nothing installed.
+desc: The atlas packaged in the format of each host that installs agent add-ons — Claude Code, Codex, ZCode, gugu, PenguinHarness — one folder per host under distribution/, generated from the same preset spex init seeds and run through npx with nothing installed.
 code:
   - scripts/distribution.mjs
 related:

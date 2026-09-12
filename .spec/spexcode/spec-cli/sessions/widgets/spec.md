@@ -83,6 +83,31 @@ version.
 An "open as text" control turns the block into ordinary text in the input box. From then on it is the
 human's sentence: editable, no longer tracking the widget.
 
+The same three controls — send, open as text, remove — also sit in the frame's own chrome, the way a copy
+button sits on a code block, and appear there only while this widget has a draft. A human who has just
+finished clicking should not have to travel to the bottom of the page to act on what they clicked. Both
+places drive one send: the message that goes is whatever the input box holds, typed text and other
+widgets' blocks included, so pressing a widget's send is pressing the human's own send from a closer
+place, never a second private channel out of that frame.
+
+## where a widget's numbers come from
+
+By default the agent bakes them in. It already has the whole read surface as CLI verbs — the session board,
+a session's timeline, its review — so it queries, writes the answers into the document, and puts it. The
+widget is then a picture of what the agent knew when it drew it, and it goes stale until the agent draws
+again. That is honest and costs nothing to run: no query happens when someone opens the conversation a month
+later, and the picture still renders.
+
+A widget that must show something live has the same HTTP surface the dashboard itself reads, because it runs
+on that origin with nothing taken away; the host tells it which session it belongs to and where the API is,
+rather than leaving it to guess. Fetching changes what the widget is: it stops being a record of a moment and
+starts depending on a backend that may be down, or on a session that has since been closed. Live data is
+worth that only when being current is the point, as in a supervisor's view of a running fleet.
+
+There is no widget store and no widget memory. What the human chose is in the session's messages, where every
+other decision is; the agent reads them and draws the next picture. A widget that kept its own state would
+give the same question two answers, and the one nobody can audit would be the one on screen.
+
 ## what this contract does not cover
 
 There is no shared state between viewers, no widget-to-widget communication, no way for a widget to call a

@@ -142,10 +142,12 @@
 .tx-tool-outcome { flex: none; color: var(--tx-red); font-size: var(--tx-type-caption); }
 .tx-tool-cut { color: var(--tx-muted); font-size: var(--tx-type-caption); padding: var(--tx-space-1) 0 0; }
 .tx-tool.is-failed > .tx-tool-row .tx-tool-verb, .tx-tool.is-rejected > .tx-tool-row .tx-tool-verb { color: var(--tx-red); }
-/* Measured at 0.6% of a core on a live conversation: a small transform animation is what a browser is built
-   for. What is NOT affordable is animating a property that repaints text every frame — see the seam's sweep
-   in the dashboard's own sheet. */
-.tx-spin { animation: tx-spin 1s linear infinite; }
+/* A transform animation never repaints, so this mark costs no paint at all. What it does cost is FRAMES: a
+   smooth rotation asks the compositor to draw the whole window sixty times a second for as long as any call
+   is running, measured at 25 points of a core on a 1600x1000 window that rasterizes in software. Twelve steps
+   a second read as the same turning mark and ask for a fifth of the frames (measured 34% -> 21% of a core,
+   all processes). Motion that a reader cannot distinguish is motion not worth drawing. */
+.tx-spin { animation: tx-spin 1s steps(12) infinite; }
 @keyframes tx-spin { to { transform: rotate(360deg); } }
 .tx-live { margin-top: var(--tx-space-2); min-width: 0; }
 .tx-live .tx-say-text { animation: tx-rise var(--tx-dur-rise) ease; }

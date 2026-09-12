@@ -184,15 +184,17 @@ exactly those three:
   beneath it on a hairline inset so where it came from stays in view, and it exposes the one
   keyboard-reachable disclosure (`aria-expanded`) that interval has. The tail seam of a LIVE session reads
   `working · 4m 12s` in the live green with a slow sweep of light across the words, and is the page's only
-  moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. THE SWEEP IS
-  PAINTED, NEVER ANIMATED: the light is drawn once per PHASE, one copy of the same words per position it
-  reaches, and the phases take turns with `opacity` in a step. Written the obvious way instead — one line
-  clipped to a gradient whose `background-position` animates — it cost 6-7% of a core on the main thread and
-  844 paints in seven seconds, because a paint property cannot be composited and neither `will-change`,
-  `contain: strict` nor a layer of its own changes that; all three were measured. Phased, the same trace
-  records zero paints, and because a phase simply switches on at its moment the page draws a few frames a
-  second rather than sixty. The rule generalizes to anything that moves here: the effect is affordable and the
-  implementation decides whether it is — a rotation on a small mark is composited already and measures 0.6%. Its number
+  moving thing — no dot in the gutter, nothing beside the sentence, the words themselves say it. The sweep is
+  the ordinary one: a gradient wider than the line, clipped to the glyphs, moved across them, the same three
+  lines every component library ships. It advances in STEPS, twelve over its cycle, because the property it
+  moves is a paint property: each change re-rasterizes the words, and sixty of those a second is the largest
+  bill a quiet conversation can run up (measured: 16.8% of a core against 6.7% stepped). A step every fifth of
+  a second reads as the same sweep. AND A ROW IS ITS OWN PAINTING: every row carries paint
+  containment, so what a repaint re-records is the row that changed rather than the whole window of history —
+  the same shimmering line measured 706ms of paint recording in eight seconds without it against 207ms with,
+  where an empty page pays 99ms for the identical CSS. Containment scopes the recording without skipping
+  layout, which is what keeps every Range in this conversation resolvable; `content-visibility` would skip it
+  and is refused for that reason. Its number
   COUNTS EVERY SECOND: the record only moves on a poll, so between polls the browser ticks, but the clock
   is the server's (the timeline response's own `Date` header, re-read on every poll) and every tick
   recomputes from the seam's start, so the count never drifts, agrees with the `worked` duration the record

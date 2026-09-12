@@ -71,10 +71,10 @@ export default function SideBar({ page, graphOnly = false, needsYou = 0 }) {
           disabled={graphOnly && !PUBLIC_PAGES.includes(p)}
           onNavigate={() => {
             // The sessions anchor unfolds the shared band and returns to the held session document; it
-            // pre-selects NO dock projection. The Sessions route mounts no finding dock ([[dock-modes]]),
-            // so a projection written here had exactly one observable effect: the DEPARTING document's
-            // dock flipped to a sessions projection for the frames before the route landed — a second,
-            // differently-dressed sessions sidebar flashing between the explorer and the forest.
+            // pre-selects NO dock projection. The route it lands on names its own ([[dock-modes]]), so a
+            // projection written HERE had exactly one observable effect: the DEPARTING document's panel
+            // flipped to the session forest for the frames before the route landed — the navigator
+            // changing on a document that had not changed.
             if (p === 'sessions') {
               setDock?.(true)
               return focusLatestTab((tab) => tab.page === 'sessions' && tab.param)

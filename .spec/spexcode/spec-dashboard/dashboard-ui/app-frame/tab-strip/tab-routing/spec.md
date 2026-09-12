@@ -28,7 +28,9 @@ the same tab rather than minting one. Browsing the graph still holds one Spec ta
 every document gets, not by collapsing two specs into one identity. Graph, bare Sessions, New Session, and empty
 workspace routes are not documents and never enter the strip.
 
-Opening an already-open address focuses that tab. Ordinary navigation replaces only the currently focused tab,
+Opening an already-open address focuses that tab — and, when that tab is in ANOTHER group, focuses the group
+it is in rather than opening a second copy of the document ([[tab-strip]]'s tree). Ordinary navigation lands
+in the FOCUSED group; the rules below describe what happens inside it. Ordinary navigation replaces only the currently focused tab,
 and only when the new address is of the same kind. When another kind is focused, when the focused route is not a
 document (the graph, the launch page, a cold deep link), or when a same-kind tab exists only inactive elsewhere,
 the inactive documents are preserved and the new address is appended. This protects a document the reader is

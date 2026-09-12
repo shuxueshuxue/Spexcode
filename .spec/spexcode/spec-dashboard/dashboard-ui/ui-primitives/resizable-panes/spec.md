@@ -35,6 +35,12 @@ split's own divider lit under the pointer. Two dividers with two answers to one 
 same accent now — nothing at rest, the accent on hover and for as long as a drag is live — so a seam that
 can be moved says so wherever it is, and a resting window still gains no visible handle.
 
+**The workspace's own splits are NOT on this hook, and that is the boundary.** This mechanism sizes a pane in
+PIXELS against a persisted per-pane key — a sidebar, a panel, a dock. A [[workspace-shell]] split shares its
+box between two subtrees as a RATIO carried in the workspace tree itself, on nodes that come and go as the
+reader splits and collapses; there is no fixed pane and no fixed key to hang a width on, and a grid that
+stored pixels would not survive a window resize. One mechanism per kind of seam, each owning its own state.
+
 The session board's list ([[session-console]]) was the first pane on the mechanism. The session diff's
 changed-file panel ([[diff-document]]) is on it too, so a reader with deep paths widens the panel instead of
 reading clipped names. A future pane joins by mounting the same hook + divider, not by writing its own drag

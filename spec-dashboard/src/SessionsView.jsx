@@ -11,7 +11,7 @@ export default function SessionsView({ param, query }) {
   const { specs, sessions } = useBoard()
   const { reload } = useBoardApi()
   const { palette } = useWorkspace()
-  const { openPalette, takeCompose, watchCompose } = useWorkspaceApi()
+  const { takeCompose, watchCompose } = useWorkspaceApi()
   const scope = useViewScope()
   // A new tab and a plain read differ only in what the workspace is told BEFORE the address is written:
   // the mark is [[tab-strip]]'s, the route write stays this view's ([[workspace-shell]] owns every address
@@ -56,15 +56,9 @@ export default function SessionsView({ param, query }) {
       setSel={pickSession}
       seed={seed}
       onSeedConsumed={() => setSeed(null)}
-      onClose={() => scope.open({ page: 'graph', param: null, query: null })}
       onPickSession={pickSession}
-      onOpenArchive={() => scope.open({
-        page: 'sessions', param: param && param !== 'new' ? param : null, query: { archive: '1' },
-      })}
-      onOpenSearch={() => openPalette('sessions')}
       reload={reload}
       archiveRequested={query?.archive === '1'}
-      route={{ page: 'sessions', param, query }}
     />
   )
 }

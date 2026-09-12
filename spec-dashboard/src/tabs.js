@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { scopedKey } from './project.js'
 import { navigate, parseRoute, useRoute } from './route.js'
 import { isDocument } from './viewCatalog.js'
-import { closeDestination, focusTab, moveTab, normalizeTabs, placeTab, tabKey, tabRoute } from './tabModel.js'
+import { closeDestination, focusTab, groupHolding, groupId as groupId_, groupOf, groupsOf, moveTab,
+  moveTabToGroup, normalizeLayout, placeTab, resizeSplit, splitGroup, tabKey, tabRoute, updateGroup } from './tabModel.js'
 
 export { closeDestination, focusTab, moveTab, placeTab, tabKey }
 
@@ -11,9 +12,11 @@ export { closeDestination, focusTab, moveTab, placeTab, tabKey }
 export const setTabTitle = (tabOrKey, title) => {
   const key = typeof tabOrKey === 'string' ? tabOrKey : tabKey(tabOrKey)
   const value = typeof title === 'string' ? title.trim() : ''
-  const current = getTabs().find((tab) => tabKey(tab) === key)
+  const held = getLayout()
+  const owner = groupHolding(held.root, key)
+  const current = owner?.tabs.find((tab) => tabKey(tab) === key)
   if (!current || current.page !== 'sessions' || !current.param || current.param === 'new' || !value || current.title === value) return
-  putTabs(getTabs().map((tab) => tabKey(tab) === key ? { ...tab, title: value } : tab))
+  put({ root: updateGroup(held.root, owner.id, (group) => ({ ...group, tabs: group.tabs.map((tab) => (tabKey(tab) === key ? { ...tab, title: value } : tab)) })), focus: held.focus })
 }
 
 // [[tab-strip]]: a tab IS a route, so opening several is the address grammar in the plural — not a second
@@ -35,44 +38,77 @@ export const setTabTitle = (tabOrKey, title) => {
 // A tab is an address INSIDE a project, so the working set is stored under that project's scope
 // ([[dashboard-shell]]'s `scopedKey`) — the gateway serves every project from one origin, and a bare key
 // made every project's strip one strip.
-const KEY = scopedKey('spexcode.tabs')
+const KEY = scopedKey('spexcode.layout')
+// THE RETIRED SHAPES, read once. A flat list was the workspace when there was one strip; a list plus a held
+// slot was the workspace when there were two regions. Both are valid trees with one or two groups, so they
+// migrate here and their keys go, rather than living on as a second source of truth.
+const LEGACY_TABS_KEY = scopedKey('spexcode.tabs')
+const LEGACY_HELD_KEY = scopedKey('spexcode.held')
+const LEGACY_SPLIT_KEY = scopedKey('spexcode.split')
 
-const read = () => {
+const readRaw = () => {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || '[]')
-    if (!Array.isArray(raw)) return []
-    const valid = raw
-      .filter((t) => t && typeof t.page === 'string')
-    const normalized = normalizeTabs(valid, isDocument)
-    // Persist the migration at the same boundary that reads it: old review entries disappear once and do
-    // not keep resurfacing in another tab or after the next reload.
-    if (JSON.stringify(normalized) !== JSON.stringify(valid)) localStorage.setItem(KEY, JSON.stringify(normalized))
-    return normalized
-  } catch { return [] }
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null')
+    if (saved?.root) return saved
+    const tabs = JSON.parse(localStorage.getItem(LEGACY_TABS_KEY) || '[]')
+    const held = JSON.parse(localStorage.getItem(LEGACY_HELD_KEY) || localStorage.getItem(LEGACY_SPLIT_KEY) || 'null')
+    if (!Array.isArray(tabs)) return null
+    if (held?.page) return { root: { dir: 'row', ratio: 0.5, children: [{ tabs }, { tabs: [held] }] } }
+    return { root: { tabs } }
+  } catch { return null }
 }
-const write = (tabs) => { try { localStorage.setItem(KEY, JSON.stringify(tabs)) } catch { /* private mode */ } }
+const write = () => {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(layout))
+    for (const retired of [LEGACY_TABS_KEY, LEGACY_HELD_KEY, LEGACY_SPLIT_KEY]) localStorage.removeItem(retired)
+  } catch { /* private mode */ }
+}
 
 // Which routes are worth a tab is the VIEW REGISTRY's answer, not a second list here. It was a second list
 // for one commit, and in that commit the strip could not hold the document addresses the registry had
 // already declared — two sources of truth disagreeing exactly where they were supposed to agree.
 
-// ONE working set, however many components read it. `useTabs` has more than one caller — the strip draws
-// it, the session console reads it to know which resource previews are still open — and per-component
-// state made those callers two copies of the same list that could disagree: a command routed through the
-// module (⌥⇧X, a menu action) updated whichever copy had registered last, and the strip kept
-// drawing the other. The store is the list; every caller subscribes to it.
-let store = null
+// ONE workspace, however many components read it: the strip of every group draws from this store, the shell
+// lays the tree out from it, and the session console asks it which resource previews are still open. Per
+// component state made those callers copies that could disagree — a command routed through the module
+// updated whichever copy had registered last, and the strip kept drawing the other.
+let layout = null            // { root, focus } — see [[tab-strip]]'s tree
+let hydrated = false
 const listeners = new Set()
-const getTabs = () => (store ??= read())
-const putTabs = (next) => {
-  const stable = next
-  if (stable === getTabs()) return stable
-  store = stable
-  write(stable)
-  for (const listener of [...listeners]) listener(stable)
-  return stable
+const hydrate = () => {
+  if (hydrated) return
+  hydrated = true
+  // the read boundary repairs whatever it finds: empty groups, a focus naming nothing, one document in two
+  // groups, an older release's shape. A workspace is painted only after it is valid.
+  layout = normalizeLayout(readRaw(), isDocument)
+  write()
 }
-
+const getLayout = () => { hydrate(); return layout }
+const emit = () => { for (const listener of [...listeners]) listener(layout) }
+const put = (next) => {
+  hydrate()
+  if (!next || (next.root === layout.root && next.focus === layout.focus)) return layout
+  layout = { root: next.root, focus: groupOf(next.root, next.focus) ? next.focus : groupsOf(next.root)[0]?.id || null }
+  write()
+  emit()
+  return layout
+}
+export const workspaceGroups = () => groupsOf(getLayout().root)
+export const allTabs = () => workspaceGroups().flatMap((group) => group.tabs)
+const focusedGroup = () => {
+  const current = getLayout()
+  return groupOf(current.root, current.focus) || groupsOf(current.root)[0] || null
+}
+// The group a document is drawn in owns which of its tabs is showing; the FOCUSED group additionally owns
+// the address bar, so moving focus names that group's active document rather than leaving the URL behind.
+export function focusGroup(id, { follow = true } = {}) {
+  const current = getLayout()
+  const group = groupOf(current.root, id)
+  if (!group || current.focus === id) return
+  put({ root: current.root, focus: id })
+  const tab = group.tabs.find((item) => tabKey(item) === group.active) || group.tabs[0]
+  if (follow && tab) navigate(tab.page, tab.param, { query: tab.query, replace: true })
+}
 // THE STRIP'S FOCUS HISTORY — tab keys, most recent first, in memory only. It is the reader's movement, not
 // the working set, so it is session-scoped like the browser's own history rather than persisted with the
 // list; until the reader has moved after a reload, `closeDestination` falls back to position. Keys that
@@ -87,7 +123,7 @@ let recent = []
 let focusedKey = null
 const touch = (key) => {
   if (recent[0] === key) return
-  const held = new Set(getTabs().map(tabKey))
+  const held = new Set(allTabs().map(tabKey))
   recent = [key, ...recent.filter((k) => k !== key && held.has(k))]
 }
 export const recentTabKeys = () => recent
@@ -125,7 +161,7 @@ export const isNewTabGesture = (event) => event.button === 0 && !event.shiftKey 
 // placement simply focuses it.
 export function markNewTab(page, param = null, query = null) {
   const key = tabKey(tabRoute({ page, param, query }))
-  appendKey = getTabs().some((tab) => tabKey(tab) === key) ? null : key
+  appendKey = allTabs().some((tab) => tabKey(tab) === key) ? null : key
 }
 export function openNewTab(page, param = null, query = null) {
   markNewTab(page, param, query)
@@ -158,93 +194,203 @@ export function newTabAnchor(event, href) {
 // the caller: asking for sessions when a session is already held should return the reader to it rather
 // than to a launch page they did not ask for. Returns whether anything was focused.
 export function focusLatestTab(match) {
-  const held = getTabs().filter(match)
+  const held = allTabs().filter(match)
   const last = held[held.length - 1]
   if (!last) return false
   navigate(last.page, last.param, { query: last.query })
   return true
 }
 
-export function useTabs({ onCloseStart } = {}) {
+// EVERY GROUP DRAWS ITSELF WITH THIS HOOK ([[tab-strip]]). `groupId` names the group whose strip is asking;
+// without one the caller is asking about the workspace as a whole (the session console, which needs to know
+// which resource previews are open anywhere) and the verbs act on the focused group.
+export function useTabs(groupId = null, { onCloseStart } = {}) {
   const route = useRoute()
-  const [tabs, setTabs] = useState(getTabs)
+  const [current, setCurrent] = useState(getLayout)
   const onCloseStartRef = useRef(onCloseStart)
   useEffect(() => { onCloseStartRef.current = onCloseStart }, [onCloseStart])
   useEffect(() => {
-    listeners.add(setTabs)
-    setTabs(getTabs())
-    return () => { listeners.delete(setTabs) }
+    listeners.add(setCurrent)
+    setCurrent(getLayout())
+    return () => { listeners.delete(setCurrent) }
   }, [])
 
-  // The current address is always present in the strip, because a strip that claimed to show what is open
-  // while the reader looked at something absent from it would be lying. Every caller runs this and the
-  // second one is a no-op: `placeTab` returns the list unchanged once the address is placed.
+  // THE ADDRESS IS ALWAYS SOMEWHERE IN THE WORKSPACE, because a workspace that claimed to show what is open
+  // while the reader looked at something absent from it would be lying. It lands in the FOCUSED group —
+  // unless another group already holds it, in which case that group is focused instead: one document, one
+  // place. Every caller runs this and the rest are no-ops.
   useEffect(() => {
     const key = tabKey(route)
     const priorKey = focusedKey
     focusedKey = key
     if (appendKey && appendKey !== key) appendKey = null
     if (!isDocument(route.page, route.param)) return
+    const held = getLayout()
+    const holder = groupHolding(held.root, key)
+    if (holder) {
+      const active = groupOf(held.root, holder.id).active === key
+      put({ root: active ? held.root : updateGroup(held.root, holder.id, (group) => ({ ...group, active: key })), focus: holder.id })
+      // an already-open address may still differ in the part its identity drops (a face, a board's detail)
+      put({ root: updateGroup(getLayout().root, holder.id, (group) => ({ ...group, tabs: placeTab(group.tabs, route, 'slot', key) })), focus: holder.id })
+      touch(key)
+      return
+    }
+    const target = focusedGroup()
     const mode = appendKey === key ? 'append' : 'slot'
     appendKey = null
-    putTabs(placeTab(getTabs(), route, mode, priorKey))
+    if (!target) {
+      const id = groupId_()
+      put({ root: { id, tabs: placeTab([], route, 'append'), active: key }, focus: id })
+    } else {
+      put({
+        root: updateGroup(held.root, target.id, (group) => ({ ...group, tabs: placeTab(group.tabs, route, mode, priorKey), active: key })),
+        focus: target.id,
+      })
+    }
     touch(key)
   }, [route.page, route.param, route.query])
 
-  // Resident view routes keep their detail address in the URL but focus the one top-level view tab.
-  const activeKey = tabKey(route)
+  const layoutNow = current
+  const group = (groupId && groupOf(layoutNow.root, groupId)) || (groupId ? null : focusedGroup())
+  // the whole workspace's tabs are DERIVED, so they must be derived once per layout: a fresh array on every
+  // render makes every effect that depends on it re-run, which is a render loop wearing a data shape.
+  const tabs = useMemo(() => (groupId ? (group?.tabs || []) : groupsOf(layoutNow.root).flatMap((item) => item.tabs)),
+    [groupId, group, layoutNow])
+  const focused = !groupId || layoutNow.focus === groupId
+  // Which tab a group shows is the group's own; the FOCUSED group's is also the address bar's.
+  const activeKey = groupId ? (group?.active ?? null) : tabKey(route)
+  const targetId = groupId || focusedGroup()?.id || null
 
-  const open = useCallback((tab) => navigate(tab.page, tab.param, { query: tab.query }), [])
+  const open = useCallback((tab) => {
+    if (targetId && getLayout().focus !== targetId) focusGroup(targetId, { follow: false })
+    navigate(tab.page, tab.param, { query: tab.query })
+  }, [targetId])
 
-  // Closing hands the workspace to the last-focused surviving tab across kinds (the document the reader
-  // actually came from). Resource tabs keep their owning session return contract. With no focus history,
-  // `closeDestination` falls back to nearest same-kind position, then nearest any-kind position; it is the one
-  // selector and the focus history is its only extra input.
+  // Closing removes exactly the selected tab from the group it is in. If that empties the group, the group
+  // collapses and its space returns to its sibling ([[tab-lifecycle]]); the reader lands on the sibling's
+  // own document rather than on a blank half-window.
   const close = useCallback((tab) => {
     const key = tabKey(tab)
-    const prev = getTabs()
-    const i = prev.findIndex((t) => tabKey(t) === key)
-    if (i < 0) return
+    const held = getLayout()
+    const owner = groupHolding(held.root, key)
+    if (!owner) return
+    const index = owner.tabs.findIndex((item) => tabKey(item) === key)
     onCloseStartRef.current?.(tab)
-    const next = prev.filter((_, n) => n !== i)
-    putTabs(next)
+    const remaining = owner.tabs.filter((item) => tabKey(item) !== key)
     recent = recent.filter((k) => k !== key)
-    if (key === activeKey) {
-      const destination = closeDestination(tab, next, i, recent)
-      navigate(destination.page, destination.param, { query: destination.query })
+    const root = updateGroup(held.root, owner.id, (item) => ({
+      ...item, tabs: remaining,
+      active: remaining.some((t) => tabKey(t) === item.active) ? item.active : tabKey(remaining[Math.min(index, remaining.length - 1)] || {}) || null,
+    }))
+    const next = put({ root, focus: groupOf(root, owner.id) ? owner.id : groupsOf(root)[0]?.id || null })
+    if (!next.root) { navigate('empty'); return }
+    const landing = groupOf(next.root, next.focus)
+    if (key !== tabKey(route)) return
+    if (!groupOf(next.root, owner.id)) {
+      const tabOf = landing?.tabs.find((item) => tabKey(item) === landing.active) || landing?.tabs[0]
+      if (tabOf) navigate(tabOf.page, tabOf.param, { query: tabOf.query })
+      return
     }
-  }, [activeKey])
+    const destination = closeDestination(tab, remaining, index, recent)
+    navigate(destination.page, destination.param, { query: destination.query })
+  }, [route])
 
   const closeOthers = useCallback((tab) => {
     const key = tabKey(tab)
-    const prev = getTabs()
-    prev.filter((t) => tabKey(t) !== key).forEach((closingTab) => onCloseStartRef.current?.(closingTab))
-    putTabs(prev.filter((t) => tabKey(t) === key))
-    if (key !== activeKey) navigate(tab.page, tab.param, { query: tab.query })
-  }, [activeKey])
+    const held = getLayout()
+    const owner = groupHolding(held.root, key)
+    if (!owner) return
+    owner.tabs.filter((item) => tabKey(item) !== key).forEach((closingTab) => onCloseStartRef.current?.(closingTab))
+    put({ root: updateGroup(held.root, owner.id, (item) => ({ ...item, tabs: item.tabs.filter((t) => tabKey(t) === key), active: key })), focus: owner.id })
+    if (key !== tabKey(route)) navigate(tab.page, tab.param, { query: tab.query })
+  }, [route])
 
-  // THE READER'S OWN ORDER. The strip already persists its list; reordering it is the same write, so the
-  // arrangement survives a reload for free and needs no second store. Nothing here navigates — a drag says
-  // where a document sits, never which one you are looking at.
-  const move = useCallback((key, before) => { putTabs(moveTab(getTabs(), key, before)) }, [])
+  // THE READER'S OWN ORDER, and their own arrangement. A drag inside a strip splices that group's list; a
+  // drag that ends over ANOTHER group's strip moves the document there ([[tab-layout]]). Nothing here
+  // navigates — a drag says where a document sits, never which one you are looking at — except that landing
+  // in another group makes it that group's showing document, which is what "I put it there" means.
+  const move = useCallback((key, before, intoGroup = null) => {
+    const held = getLayout()
+    const target = intoGroup || groupHolding(held.root, key)?.id
+    if (!target) return
+    const moved = moveTabToGroup(held.root, key, target, before)
+    if (moved) put(moved)
+  }, [])
+
+  // SPLITTING IS THE SAME MOVE with a new place for it: the document leaves this group for a new one beside
+  // (`row`) or below (`col`) it, and the new group takes focus — the reader pointed at that document, so
+  // that is where they are now.
+  const split = useCallback((tab, dir = 'row') => {
+    const key = tabKey(tab)
+    const held = getLayout()
+    const owner = groupHolding(held.root, key)
+    if (!owner) return
+    const next = splitGroup(held.root, owner.id, key, dir)
+    if (!next) return
+    put(next)
+    navigate(tab.page, tab.param, { query: tab.query })
+  }, [])
 
   useEffect(() => registerTabCommands({
     closeActive: () => {
-      const active = getTabs().find((tab) => tabKey(tab) === activeKey)
+      const active = focusedGroup()?.tabs.find((tab) => tabKey(tab) === focusedGroup()?.active)
       if (active) close(active)
     },
+    split: (dir) => {
+      const owner = focusedGroup()
+      const active = owner?.tabs.find((tab) => tabKey(tab) === owner.active)
+      if (active) split(active, dir)
+    },
     move: (dir) => {
-      const list = getTabs()
-      const index = list.findIndex((tab) => tabKey(tab) === activeKey)
+      const list = focusedGroup()?.tabs || []
+      const index = list.findIndex((tab) => tabKey(tab) === focusedGroup()?.active)
       if (index < 0 || list.length < 2) return
       open(list[(index + dir + list.length) % list.length])
     },
     focus: (ordinal) => {
-      const target = focusTab(getTabs(), ordinal)
+      const target = focusTab(focusedGroup()?.tabs || [], ordinal)
       if (target) open(target)
     },
-    active: () => getTabs().find((tab) => tabKey(tab) === activeKey) || null,
-  }), [activeKey, open, close])
+    active: () => focusedGroup()?.tabs.find((tab) => tabKey(tab) === focusedGroup()?.active) || null,
+  }), [close, open, split])
 
-  return useMemo(() => ({ tabs, activeKey, open, close, closeOthers, move }), [tabs, activeKey, open, close, closeOthers, move])
+  return useMemo(() => ({
+    layout: layoutNow, group, tabs, activeKey, focused, groupId: targetId,
+    open, close, closeOthers, move, split, focusGroup,
+  }), [layoutNow, group, tabs, activeKey, focused, targetId, open, close, closeOthers, move, split])
+}
+
+// The WHOLE workspace, for the shell that lays it out.
+export function useWorkspaceLayout() {
+  const [current, setCurrent] = useState(getLayout)
+  useEffect(() => {
+    listeners.add(setCurrent)
+    setCurrent(getLayout())
+    return () => { listeners.delete(setCurrent) }
+  }, [])
+  return current
+}
+
+// A divider's drag names its split and the share the first child keeps.
+export function resizeWorkspaceSplit(id, ratio) {
+  const held = getLayout()
+  put({ root: resizeSplit(held.root, id, ratio), focus: held.focus })
+}
+
+
+// The [[workspace-shell]] intent behind `scope.hold(address)`: a view names an ADDRESS, not a tab, so the
+// address joins the focused group first (appended, never replacing what the reader is on) and is then split
+// out of it into a group of its own.
+export function holdAddress(route) {
+  if (!route?.page || !isDocument(route.page, route.param ?? null)) return false
+  const entry = { page: route.page, param: route.param ?? null, query: route.query ?? null }
+  const key = tabKey(tabRoute(entry))
+  const held = getLayout()
+  if (groupHolding(held.root, key)) return true
+  const target = focusedGroup()
+  if (!target) return false
+  const seeded = put({ root: updateGroup(held.root, target.id, (group) => ({ ...group, tabs: [...group.tabs, entry] })), focus: target.id })
+  const split = splitGroup(seeded.root, target.id, key, 'row')
+  if (split) put(split)
+  return true
 }

@@ -8,14 +8,12 @@ import { boardCommandFor, expandMentions, typeTrigger, useMentionAutocomplete } 
 import { useAttachQueue } from './useAttachQueue.jsx'
 import { harnessForId } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
-import SessionContextMenu from './SessionContextMenu.jsx'
-import SessionForestPanel from './SessionForestPanel.jsx'
 import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { routeHash } from './route.js'
 import { markNewTab, useTabs } from './tabs.js'
 import { useI18n, useT } from './i18n/index.jsx'
-import { apiFetch, COMMAND_DELIVERY_TIMEOUT_MS, sendSessionCommand } from './data.js'
+import { COMMAND_DELIVERY_TIMEOUT_MS, sendSessionCommand } from './data.js'
 import { PROJECT_BASE, apiUrl } from './project.js'
 import {
   SESSION_SURFACE_CONVERSATION,
@@ -39,13 +37,9 @@ import { decodePrompt, encodePrompt } from './codeSelection.js'
 import SelectionAttachment from './SelectionAttachment.jsx'
 import { isTypingTarget, useKeyboardScope } from './KeyboardService.jsx'
 import { useDocumentAction } from './documentActions.jsx'
-import TabStrip from './TabStrip.jsx'
 import ResourcePicker from './ResourcePicker.jsx'
 import { fileName, resourceCatalog, webName } from './resourceCatalog.js'
-import DockToggle from './DockToggle.jsx'
 import { useStatusItem } from './StatusBar.jsx'
-import { useFold } from './useFold.js'
-import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { useViewScope } from './ViewScope.jsx'
 import { useSessionListState } from './sessionListState.js'
 
@@ -413,22 +407,15 @@ function LauncherPicker({ launchers, launcher, pickLauncher, onSettings }) {
   )
 }
 
-export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenArchive, onOpenSearch, reload, archiveRequested = false, surface = null, route = null }) {
+export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onPickSession, reload, archiveRequested = false, surface = null }) {
   const t = useT()
   const scope = useViewScope()
   const { notify } = useTransientNotice()
-  const { lockGraphTo } = useWorkspaceApi()
-  // The forest is this document's sidebar and folds from the rail's one panel control like the explorer
-  // does ([[side-nav]]): the same workspace open/closed boolean, read here rather than a second fold state
-  // the console would have to keep in step.
-  const { dock: forestOpen } = useWorkspace()
-  // the Sessions document's own left sidebar. It folds on the SAME workspace flag the shell's dock does, so
-  // it folds the same way ([[dock-modes]]) — it used to be the one panel in the frame that blinked out.
-  const [forestMounted, forestClosing, forestFolding] = useFold(forestOpen)
+  // THIS DOCUMENT IS THE CONSOLE, and nothing else ([[session-console]]). The session list is the frame's
+  // navigator ([[dock-modes]]) on every route, so the console neither draws a forest nor folds one — it
+  // only reads the same visible order for its own keyboard walk.
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [codeSelections, setCodeSelections] = useState([])
-  const [ctxMenu, setCtxMenu] = useState(null) // selected-session document tools menu
-  const [selectRequest, setSelectRequest] = useState(null)
   // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
@@ -529,9 +516,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // content mode: 'new' or a session id. The archive index is a transient overlay.
   const active = validIds.has(sel) || (sel !== 'new' && knownSessionIdsRef.current.has(sel)) ? sel : 'new'
   const sessionActive = active !== 'new'
-  // The console stays mounted when the dock is hidden, so its keyboard router needs the same visible
-  // forest the dock renders. The disclosure store is shared with Dock; pointer and keyboard paths therefore
-  // never drift into two competing fold states.
+  // The keyboard walk visits the rows A READER CAN SEE, so it derives the same forest the frame's navigator
+  // draws, from the same shared disclosure store — pointer and keyboard therefore cannot disagree about
+  // which sessions are collapsed.
   const { expanded, offlineOpen } = useSessionListState()
   const sessionForestRows = useMemo(() => sessionForest(sessions || [], (id) => expanded.has(id), {
     zoneFolded: (zone) => zone === 'offline' && !offlineOpen,
@@ -1177,27 +1164,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         app's main area and stays MOUNTED while other pages show so terminals keep their sockets/scroll
         warm. Visibility itself is the shell's pane boundary — the console never toggles its own display. */}
     <div className="si-page">
-      {forestMounted && <SessionForestPanel
-        closing={forestClosing}
-        folding={forestFolding}
-        sessions={sessions}
-        activeId={active}
-        // The Sessions document owns both its forest and its document chrome. Keeping these siblings
-        // makes the forest push the tabstrip/content column right instead of starting underneath a
-        // shell-level tabstrip.
-        onSelect={(id, options) => onPickSession ? onPickSession(id, options) : (id === 'new' ? setSel('new') : selectSession(id))}
-        archiveActive={archiveRequested}
-        onArchive={onOpenArchive}
-        onSearch={onOpenSearch}
-        reload={reload}
-        onContextMenu={setCtxMenu}
-        selectRequest={selectRequest}
-        onSelectRequestConsumed={() => setSelectRequest(null)}
-        onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
-      />}
       <div className="si-document">
-        {route && <TabStrip specs={specs} sessions={sessions} route={route}
-          leading={!forestOpen ? <DockToggle variant="strip" /> : null} />}
+        {/* THE BAND BELONGS TO THE REGION and the LIST BELONGS TO THE FRAME ([[workspace-shell]]): every
+            region draws one strip for the group it holds, and one navigator stands beside them all. So this
+            document draws neither — in a grid, a cell holding a session shows the session. */}
       {/* the panel-wide keepFocus blanket ([[terminal-input]] / [[focus-return]]): every pointer-down on
           console chrome is inert for focus — only the composers, the rename input, and the xterm screen
           take pointer focus, so the current sink (TUI, Command Box, or New) keeps typing focus through
@@ -1280,7 +1250,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* the posted-resource door floats over the document's top-right corner ([[resource-picker]]) */}
               {sessionActive && (
                 <ResourcePicker entries={catalog} openIds={openResourceTabIds} open={resourceMenu}
-                  onOpenChange={(next) => { if (next) setCtxMenu(null); setResourceMenu(next) }}
+                  onOpenChange={setResourceMenu}
                   onPick={openResource}
                   onDownload={(entry) => { void downloadFile(entry.sessionId, entry.value) }}
                   onCopy={(entry) => { void copyFilePath(entry.value) }} />
@@ -1420,31 +1390,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       </div>
     </div>
     {archiveIndexOpen && <ArchivePage sessions={archivedSessions} onOpenSession={(id) => { setArchiveIndexOpen(false); onPickSession?.(id); selectSession(id) }} onClose={() => { setArchiveIndexOpen(false); if (archiveRequested) scope.open({ page: 'sessions', param: active === 'new' ? null : active, query: null }) }} />}
-    <SessionContextMenu
-      menu={ctxMenu}
-      onClose={() => setCtxMenu(null)}
-      onChanged={reload}
-      onError={(message) => {
-        const id = ctxMenu?.session?.id
-        if (id && id !== active) {
-          setSel(id)
-          requestAnimationFrame(() => setActionOutcome({ owner: 'panel', phase: 'failed', message }))
-          return
-        }
-        setActionOutcome({ owner: 'panel', phase: 'failed', message })
-      }}
-      // claiming the graph is a WORKSPACE act ([[workspace-shell]]) — the same claim the finding dock's
-      // session rows make. It used to be handed to a callback that expected a session id and got a session,
-      // which is how a menu item can look wired and do nothing.
-      onLock={(s) => { lockGraphTo(s.source, { toggle: false }); onClose() }}
-      onMultiSelect={(session) => setSelectRequest(session)}
-      onDetach={(session) => {
-        void apiFetch('/api/sessions/reparent', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ children: [session.id], parent: null }),
-        }).then(() => reload?.())
-      }}
-    />
     </>
   )
 }

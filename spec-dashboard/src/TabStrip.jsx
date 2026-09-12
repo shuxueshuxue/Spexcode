@@ -4,7 +4,7 @@ import { Icon, IconButton } from './icons.jsx'
 import { elementAt, startDrag } from './dragGesture.js'
 import { moveTab, setTabTitle, tabKey, useTabs } from './tabs.js'
 import { routeHash } from './route.js'
-import { useWorkspaceApi } from './workspace.jsx'
+import { useWorkspace, useWorkspaceApi } from './workspace.jsx'
 import { STATUS } from './specMeta.js'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { isResourceSurface, resourceSurfaceKey } from './sessionSurface.js'
@@ -86,6 +86,31 @@ function TabKindIcon({ tab }) {
   return icon ? <Icon name={icon} size={13} className="tab-kind-icon" /> : null
 }
 
+// THE DOCUMENT'S OWN CONTROLS, wherever that document is drawn. The registry is keyed by ADDRESS
+// ([[document-actions]]) and a document lives in exactly one region ([[tab-strip]]'s held slot is a move,
+// not a copy), so a region asks for the actions at the address it holds and both bands render them the same
+// way. A held document keeps every control it has in the strip — that is the whole of "the region is
+// self-contained" — rather than leaving them behind in a band that no longer names it.
+export const documentActionsAt = (actions, address) => [...actions.values()]
+  .filter((action) => action.document === address)
+  .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
+
+export function renderDocumentAction(action) {
+  const label = action.disabled ? (action.disabledReason || action.label) : action.label
+  return (
+    <div key={action.key || `${action.document}:${action.id}`} className="document-action">
+      {action.node || <IconButton icon={action.icon} size={14} label={label}
+        className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
+        data-action={action.id}
+        aria-pressed={action.pressed}
+        aria-haspopup={action.haspopup ? 'menu' : undefined}
+        disabled={action.disabled}
+        onClick={action.onClick} />}
+      {action.menu}
+    </div>
+  )
+}
+
 // WHERE AM I is the same question whether or not a document is open, so the strip answers it in both cases:
 // tabs when there are tabs, the routed place's own name when there are none. Naming the place is also what
 // earns the strip its unconditional row — the shell used to wrap it in a spacer div that rendered a blank
@@ -99,7 +124,7 @@ export function placeLabel(route, ctx) {
   return ctx.t(`place.${page}`)
 }
 
-export default function TabStrip({ specs, sessions, route, leading = null, trailing = null }) {
+export default function TabStrip({ specs, sessions, route, group, leading = null, trailing = null }) {
   const t = useT()
   const [closing, setClosing] = useState([])
   // ONE ROW, AND A LIST FOR WHAT THE ROW CANNOT SHOW. Tabs shrink toward their floor and then the row
@@ -122,7 +147,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     window.setTimeout(() => setClosing((current) => current.filter((entry) => entry.key !== key)), duration)
   }, [])
   const tabsRef = useRef([])
-  const { tabs, activeKey, open, close, closeOthers, move } = useTabs({ onCloseStart: startTabClose })
+  const { tabs, activeKey, focused, open, close, closeOthers, move, split } = useTabs(group, { onCloseStart: startTabClose })
   tabsRef.current = tabs
   useEffect(() => {
     const host = tabsHostRef.current
@@ -143,7 +168,8 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   }, [activeKey, tabs.length])
   const names = useDocumentNames()
-  const { splitTo } = useWorkspaceApi()
+  const { setHeldSide } = useWorkspaceApi()
+  const { heldSide } = useWorkspace()
   const actions = useDocumentActions()
   useEffect(() => {
     for (const tab of tabs) {
@@ -189,42 +215,50 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
   // host's unoccupied right edge is that same end landing, so the reader never has to hit the last tab.
   // A landing that would not move anything is reported as none, so the marker only ever appears where a
   // move genuinely changes the order.
+  // A LANDING IS A GROUP AND A POSITION IN IT — `{ group, before }` — because a drag is how a reader
+  // rearranges the whole workspace, not just one row: dropping on ANOTHER group's strip moves the document
+  // there ([[tab-layout]]). The strip a tab is over answers both halves; the unoccupied stretch of a strip is
+  // that group's end position, so a reader never has to hit a tab to reach an empty group's row.
   const landingAt = (point, movingKey) => {
-    const currentTabs = tabsRef.current
     const el = elementAt(point.x, point.y, '.tab')
     if (el) {
-      const index = currentTabs.findIndex((tab) => tabKey(tab) === el.dataset.tabKey)
+      const host = el.closest('.tabstrip-tabs')
+      const targetGroup = host?.dataset.group
+      if (!targetGroup) return undefined
+      const siblings = [...host.querySelectorAll('.tab')].map((tab) => tab.dataset.tabKey)
+      const index = siblings.indexOf(el.dataset.tabKey)
       if (index < 0) return undefined
       const box = el.getBoundingClientRect()
       const after = point.x > box.left + box.width / 2
-      const before = after ? (currentTabs[index + 1] ? tabKey(currentTabs[index + 1]) : null) : el.dataset.tabKey
-      return moveTab(currentTabs, movingKey, before) === currentTabs ? undefined : before
+      const before = after ? (siblings[index + 1] ?? null) : el.dataset.tabKey
+      if (targetGroup === group && before === movingKey) return undefined
+      if (targetGroup === group && moveTab(tabsRef.current, movingKey, before) === tabsRef.current) return undefined
+      return { group: targetGroup, before }
     }
-
-    const host = tabsHostRef.current
-    if (!host || !currentTabs.length) return undefined
-    const hostBox = host.getBoundingClientRect()
-    if (point.x < hostBox.left || point.x > hostBox.right || point.y < hostBox.top || point.y > hostBox.bottom) return undefined
-    const rightEdge = Math.max(...[...host.querySelectorAll('.tab')].map((tab) => tab.getBoundingClientRect().right))
-    if (point.x < rightEdge) return undefined
-    return moveTab(currentTabs, movingKey, null) === currentTabs ? undefined : null
+    const host = elementAt(point.x, point.y, '.tabstrip-tabs') || elementAt(point.x, point.y, '.tabstrip')
+    const targetGroup = host?.dataset.group
+    if (!targetGroup) return undefined
+    if (targetGroup === group && moveTab(tabsRef.current, movingKey, null) === tabsRef.current) return undefined
+    return { group: targetGroup, before: null }
   }
 
   const startTabDrag = (event, tab) => {
     const key = tabKey(tab)
     const track = (point) => {
-      const before = landingAt(point, key)
-      if (before !== undefined) move(key, before)
-      setDrag((prev) => (prev && prev.key === key && prev.before === before ? prev : { key, before }))
+      const landing = landingAt(point, key)
+      // a landing inside THIS group reorders live under the pointer, as it always has; a landing in another
+      // group is committed on release, so a drag across the window does not tear the document out mid-motion
+      if (landing && landing.group === group) move(key, landing.before)
+      setDrag((prev) => (prev && prev.key === key && prev.before === landing?.before ? prev : { key, before: landing?.before ?? undefined }))
     }
     abandon.current = startDrag(event, {
       onStart: track,
       onMove: track,
       onDrop: (point) => {
-        const before = landingAt(point, key)
+        const landing = landingAt(point, key)
         setDrag(null)
         abandon.current = null
-        if (before !== undefined) move(key, before)
+        if (landing) move(key, landing.before, landing.group)
         else if (outsideViewport(point)) {
           const detached = tabsRef.current.find((item) => tabKey(item) === key)
           if (detached) {
@@ -237,9 +271,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
     })
   }
   const activeAddress = routeHash(route.page, route.param, route.query)
-  const activeActions = [...actions.values()]
-    .filter((action) => action.document === activeAddress)
-    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id))
+  const activeActions = documentActionsAt(actions, activeAddress)
   const renderedTabs = [...tabs]
   closing.filter((entry) => !tabs.some((tab) => tabKey(tab) === entry.key))
     .sort((a, b) => a.index - b.index)
@@ -248,9 +280,9 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
   // working set never grows the band; the band itself stays unclipped so a menu (an action's dropdown, the
   // tab list) can hang below it, and the action cluster keeps its own column that no tab can run under.
   return (
-    <div className="tabstrip">
+    <div className={`tabstrip${focused ? ' tabstrip-focused' : ''}`} data-group={group}>
       {leading}
-      <div ref={tabsHostRef} className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')}>
+      <div ref={tabsHostRef} className="tabstrip-tabs" role="tablist" aria-label={t('tabs.aria')} data-group={group}>
       {!tabs.length && <span className="tab-place">{placeLabel(route, { specs, sessions, names, t })}</span>}
       {renderedTabs.map((tab, index) => {
         const key = tabKey(tab)
@@ -280,7 +312,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
                 drop marks. */}
             <div className="tab-inner">
               <button type="button" className="tab-face" data-tip={tabLabel} aria-label={tabLabel}
-                onClick={(e) => { if (!isClosing) (e.altKey ? splitTo(tab) : open(tab)) }}>
+                onClick={(e) => { if (!isClosing) (e.altKey ? split(tab, heldSide === 'bottom' ? 'col' : 'row') : open(tab)) }}>
                 <TabKindIcon tab={tab} />
                 <TabDot tab={tab} specs={specs} sessions={sessions} />
                 <span className="tab-label">{tabLabel}</span>
@@ -307,21 +339,7 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
               <Icon name="chevron-down" size={14} />
             </button>
           )}
-          {activeActions.map((action) => {
-            const label = action.disabled ? (action.disabledReason || action.label) : action.label
-            return (
-              <div key={action.key || `${action.document}:${action.id}`} className="document-action">
-                {action.node || <IconButton icon={action.icon} size={14} label={label}
-                  className={`document-action-button${action.pressed ? ' on' : ''}${action.disabled ? ' disabled' : ''}`}
-                  data-action={action.id}
-                  aria-pressed={action.pressed}
-                  aria-haspopup={action.haspopup ? 'menu' : undefined}
-                  disabled={action.disabled}
-                  onClick={action.onClick} />}
-                {action.menu}
-              </div>
-            )
-          })}
+          {activeActions.map(renderDocumentAction)}
           {trailing}
         </div>
       )}
@@ -356,12 +374,51 @@ export default function TabStrip({ specs, sessions, route, leading = null, trail
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            <ContextMenuItem icon="panel-right" onClick={(e) => { e.stopPropagation(); setMenu(null); splitTo(menu.tab) }}>
-              {t('tabs.menuSplit')}
-            </ContextMenuItem>
+            {/* TWO SEAMS, ONE MOVE ([[workspace-shell]]): the verb names the side it puts the document on,
+                because "horizontal" and "vertical" name opposite things in an editor and in a terminal
+                multiplexer, and a reader should not have to know which convention this window picked. The
+                move is refused when this is the only tab — the strip would be left empty and the split
+                would collapse right back — so the verb says it is unavailable instead of doing nothing. */}
+            {[['row', 'panel-right', 'tabs.menuSplitRight'], ['col', 'panel-bottom', 'tabs.menuSplitDown']].map(([dir, icon, key]) => (
+              <ContextMenuItem key={dir} icon={icon} disabled={tabs.length < 2}
+                data-tip={tabs.length < 2 ? t('tabs.menuSplitOnly') : undefined}
+                onClick={(e) => { e.stopPropagation(); setMenu(null); setHeldSide(dir === 'col' ? 'bottom' : 'right'); split(menu.tab, dir) }}>
+                {t(key)}
+              </ContextMenuItem>
+            ))}
           </ContextMenuGroup>
         </ContextMenu>
       )}
+    </div>
+  )
+}
+
+// THE HELD REGION'S BAND ([[tab-layout]]). The second region holds exactly one document, so its band names
+// that document instead of listing a working set: the same face a tab wears (kind icon, status mark, title),
+// the document's own controls in the same action column the strip has, and one control that RETURNS it to
+// the strip. There is no second working set here, so there is no second strip — the row the reader scans for
+// "what is open" stays one row, in one place.
+export function HeldBar({ specs, sessions, tab, onRelease, trailing = null }) {
+  const t = useT()
+  const names = useDocumentNames()
+  const actions = useDocumentActions()
+  const heldActions = documentActionsAt(actions, routeHash(tab.page, tab.param, tab.query))
+  const title = label(tab, { specs, sessions, names, t })
+  return (
+    <div className="tabstrip tabstrip-held">
+      <div className="tabstrip-tabs">
+        <span className="tab-held" data-tab-key={tabKey(tab)} data-tip={title}>
+          <TabKindIcon tab={tab} />
+          <TabDot tab={tab} specs={specs} sessions={sessions} />
+          <span className="tab-label">{title}</span>
+        </span>
+      </div>
+      <div className="tabstrip-actions" role="toolbar" aria-label={t('documentActions.aria')}>
+        {heldActions.map(renderDocumentAction)}
+        <IconButton icon="corner-up-left" size={14} className="document-action-button held-return"
+          data-action="held-return" label={t('tabs.heldReturn')} onClick={onRelease} />
+        {trailing}
+      </div>
     </div>
   )
 }

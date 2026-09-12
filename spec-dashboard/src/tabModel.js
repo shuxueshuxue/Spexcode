@@ -143,3 +143,132 @@ export function closeDestination(tab, remaining, index, recent = []) {
   if (tab?.page === 'spec' || tab?.page === 'file') return { page: 'graph', param: null, query: null }
   return { page: 'empty', param: null, query: null }
 }
+
+// ---------------------------------------------------------------------------------------------------
+// THE WORKSPACE IS A TREE OF GROUPS ([[tab-strip]]). One group is the ordinary case and behaves exactly as
+// one strip always did; splitting one makes a pair, and splitting again makes a grid. The tree is two shapes:
+//
+//   · a GROUP (leaf): `{ id, tabs, active }` — its own working set and its own active tab. Its band is a
+//     tab strip, so a document moved into it lands in a list the reader can grow, not in a fixed slot.
+//   · a SPLIT (node): `{ id, dir, ratio, children: [a, b] }` — two subtrees beside (`row`) or above/below
+//     (`col`) each other, sharing the space at `ratio`.
+//
+// A document lives in exactly ONE group: every move here takes it out of the group it was in. That is the
+// invariant the whole model exists to keep, and the reason splitting is a move rather than a copy.
+
+let mint = 0
+export const groupId = () => `g${(mint += 1).toString(36)}${Math.random().toString(36).slice(2, 6)}`
+export const isGroup = (node) => !!node && Array.isArray(node.tabs)
+export const groupsOf = (node) => (isGroup(node) ? [node] : node ? node.children.flatMap(groupsOf) : [])
+export const groupOf = (root, id) => groupsOf(root).find((group) => group.id === id) || null
+// which group holds an address, so an address open elsewhere is FOCUSED rather than opened twice
+export const groupHolding = (root, key) => groupsOf(root).find((group) => group.tabs.some((tab) => tabKey(tab) === key)) || null
+
+// Structural edits are pure rewrites of the path to the node that changed; every other subtree keeps its
+// identity, so React keeps every untouched document mounted.
+const rewrite = (node, id, fn) => {
+  if (!node) return node
+  if (node.id === id) return fn(node)
+  if (isGroup(node)) return node
+  const children = node.children.map((child) => rewrite(child, id, fn))
+  return children[0] === node.children[0] && children[1] === node.children[1] ? node : { ...node, children }
+}
+// A group that lost its last tab is not a place: its parent split collapses into the surviving sibling.
+const prune = (node) => {
+  if (!node || isGroup(node)) return node?.tabs?.length ? node : null
+  const children = node.children.map(prune).filter(Boolean)
+  if (!children.length) return null
+  if (children.length === 1) return children[0]
+  return children[0] === node.children[0] && children[1] === node.children[1] ? node : { ...node, children }
+}
+
+export function updateGroup(root, id, fn) {
+  const next = rewrite(root, id, (group) => (isGroup(group) ? fn(group) : group))
+  return prune(next)
+}
+
+// SPLITTING IS A MOVE. The tab leaves its group for a new sibling one, so the pair shows two documents
+// rather than one document twice. A group's only tab cannot be split off: the source would vanish and the
+// split would collapse in the same gesture, so the caller shows the verb as unavailable instead.
+export function splitGroup(root, id, key, dir, makeId = groupId) {
+  const source = groupOf(root, id)
+  if (!source || source.tabs.length < 2) return null
+  const moving = source.tabs.find((tab) => tabKey(tab) === key)
+  if (!moving) return null
+  const rest = source.tabs.filter((tab) => tabKey(tab) !== key)
+  const opened = { id: makeId(), tabs: [moving], active: key }
+  const next = rewrite(root, id, (group) => ({
+    id: makeId(), dir, ratio: 0.5,
+    children: [
+      { ...group, tabs: rest, active: rest.some((tab) => tabKey(tab) === group.active) ? group.active : tabKey(rest[rest.length - 1]) },
+      opened,
+    ],
+  }))
+  return { root: next, focus: opened.id }
+}
+
+// MOVING A TAB BETWEEN GROUPS is the same move without the new place: it leaves one list and lands in
+// another, at the position the pointer named (`before` = the tab it lands in front of; null = the end).
+// Dropping the last tab out of a group collapses that group, so a drag can rearrange the grid too.
+export function moveTabToGroup(root, key, targetId, before = null) {
+  const source = groupHolding(root, key)
+  const target = groupOf(root, targetId)
+  if (!source || !target) return null
+  const moving = source.tabs.find((tab) => tabKey(tab) === key)
+  if (source.id === targetId) {
+    const reordered = moveTab(source.tabs, key, before)
+    return reordered === source.tabs ? null : { root: updateGroup(root, targetId, (group) => ({ ...group, tabs: reordered })), focus: targetId }
+  }
+  const withoutSource = updateGroup(root, source.id, (group) => {
+    const tabs = group.tabs.filter((tab) => tabKey(tab) !== key)
+    return { ...group, tabs, active: tabs.some((t) => tabKey(t) === group.active) ? group.active : tabKey(tabs[tabs.length - 1] || {}) || null }
+  })
+  const next = updateGroup(withoutSource, targetId, (group) => {
+    const at = before ? group.tabs.findIndex((tab) => tabKey(tab) === before) : -1
+    const tabs = at < 0 ? [...group.tabs, moving] : [...group.tabs.slice(0, at), moving, ...group.tabs.slice(at)]
+    return { ...group, tabs, active: key }
+  })
+  return { root: next, focus: targetId }
+}
+
+// The reader's own arrangement: a divider names the split it drags and the share the first child keeps.
+export function resizeSplit(root, id, ratio) {
+  const clamped = Math.max(0.15, Math.min(0.85, ratio))
+  return rewrite(root, id, (node) => (isGroup(node) ? node : { ...node, ratio: clamped }))
+}
+
+// THE READ BOUNDARY for the whole workspace, in one place: an older release's flat list, its held slot, and
+// anything a second window wrote all arrive here and leave as one valid tree — every group non-empty, every
+// active tab present, one focused group that exists, and no document in two groups at once.
+export function normalizeLayout(raw, isDocument = () => true, makeId = groupId) {
+  const seen = new Set()
+  const group = (node) => {
+    const tabs = normalizeTabs(Array.isArray(node?.tabs) ? node.tabs : [], isDocument).filter((tab) => {
+      const key = tabKey(tab)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (!tabs.length) return null
+    const active = tabs.some((tab) => tabKey(tab) === node?.active) ? node.active : tabKey(tabs[tabs.length - 1])
+    return { id: typeof node?.id === 'string' && node.id ? node.id : makeId(), tabs, active }
+  }
+  const walk = (node) => {
+    if (!node) return null
+    // an older release persisted the working set as a bare list; that IS one group's tabs
+    if (Array.isArray(node)) return group({ tabs: node })
+    if (Array.isArray(node.tabs)) return group(node)
+    if (!Array.isArray(node.children)) return null
+    const children = node.children.map(walk).filter(Boolean)
+    if (!children.length) return null
+    if (children.length === 1) return children[0]
+    const ratio = Number.isFinite(node.ratio) ? Math.max(0.15, Math.min(0.85, node.ratio)) : 0.5
+    return { id: typeof node?.id === 'string' && node.id ? node.id : makeId(), dir: node.dir === 'col' ? 'col' : 'row', ratio, children: children.slice(0, 2) }
+  }
+  // A WORKSPACE HOLDING NOTHING IS NO TREE AT ALL — not a group with no tabs. A group is a place a document
+  // is; an empty one is a region the frame would have to draw around nothing.
+  const root = walk(raw?.root ?? raw) || null
+  const groups = groupsOf(root)
+  const focus = groups.some((g) => g.id === raw?.focus) ? raw.focus : groups[0]?.id || null
+  return { root, focus }
+}

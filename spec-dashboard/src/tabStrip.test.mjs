@@ -11,6 +11,7 @@ const catalog = readFileSync(new URL('./viewCatalog.js', import.meta.url), 'utf8
 const builtInViewPlugins = readFileSync(new URL('./builtInViewPlugins.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 const tabs = readFileSync(new URL('./tabs.js', import.meta.url), 'utf8')
+const workspace = readFileSync(new URL('./workspace.jsx', import.meta.url), 'utf8')
 const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
 const dockToggleSource = readFileSync(new URL('./DockToggle.jsx', import.meta.url), 'utf8')
 const fileTree = readFileSync(new URL('./FileTree.jsx', import.meta.url), 'utf8')
@@ -23,7 +24,7 @@ const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
 test('tab right-click opens the shared context menu instead of closing silently', () => {
-  assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplit/)
+  assert.match(source, /ContextMenuGroup[\s\S]*tabs\.menuClose[\s\S]*tabs\.menuCloseOthers[\s\S]*tabs\.menuSplitRight[\s\S]*tabs\.menuSplitDown/)
   assert.match(source, /onContextMenu=\{\(e\) => \{\s*if \(isClosing\) return\s*e\.preventDefault\(\)\s*setMenu\(\{ x: e\.clientX, y: e\.clientY, tab, key \}\)\s*\}\}/)
   // every tab gets the same tab menu; a session's lifecycle verbs stay on its row, never on the strip
   assert.doesNotMatch(source, /onSessionContextMenu/)
@@ -33,14 +34,21 @@ test('tab right-click opens the shared context menu instead of closing silently'
 test('tab menu actions are explicit and use the existing workspace APIs', () => {
   assert.match(source, /close\(menu\.tab\)/)
   assert.match(source, /closeOthers\(menu\.tab\)/)
-  assert.match(source, /splitTo\(menu\.tab\)/)
+  assert.match(source, /setHeldSide\(dir === 'col' \? 'bottom' : 'right'\); split\(menu\.tab, dir\)/)
+  // the verb names the SIDE it puts the document on: "horizontal"/"vertical" name opposite things in an
+  // editor and in a terminal multiplexer, and the reader should not have to know which one this window meant
+  assert.match(source, /\['row', 'panel-right', 'tabs\.menuSplitRight'\], \['col', 'panel-bottom', 'tabs\.menuSplitDown'\]/)
+  // the move is refused when it would empty the strip, and the verb says so instead of doing nothing
+  assert.match(source, /disabled=\{tabs\.length < 2\}/)
   assert.match(source, /useEscLayer\(!!menu/)
 })
 
 test('ordinary navigation names the focused tab so an inactive tab cannot be replaced', () => {
   assert.match(tabs, /let focusedKey = null/)
   assert.match(tabs, /const priorKey = focusedKey\n    focusedKey = key/)
-  assert.match(tabs, /placeTab\(getTabs\(\), route, mode, priorKey\)/)
+  assert.match(tabs, /tabs: placeTab\(group\.tabs, route, mode, priorKey\), active: key/)
+  // an address already open in ANOTHER group focuses that group instead of opening a second copy
+  assert.match(tabs, /const holder = groupHolding\(held\.root, key\)/)
 })
 
 test('the strip is one clipping row, and the tab list is the way back to what the row cannot show', () => {
@@ -63,8 +71,12 @@ test('closing tabs retain their original visual slot while the live list updates
 })
 
 test('tab dragging reorders during motion and treats the strip tail as an end landing', () => {
-  assert.match(source, /const track = \(point\) => \{[\s\S]{0,260}if \(before !== undefined\) move\(key, before\)[\s\S]{0,180}setDrag/)
-  assert.match(source, /tabsHostRef\.current[\s\S]{0,500}getBoundingClientRect\(\)/)
+  assert.match(source, /const track = \(point\) => \{[\s\S]{0,460}if \(landing && landing\.group === group\) move\(key, landing\.before\)[\s\S]{0,220}setDrag/)
+  // a drag that ends over ANOTHER group's strip moves the document there ([[tab-layout]])
+  assert.match(source, /if \(landing\) move\(key, landing\.before, landing\.group\)/)
+  assert.match(source, /const targetGroup = host\?\.dataset\.group/)
+  // the strip a tab is over answers both halves of a landing — which group, and where in it
+  assert.match(source, /const host = el\.closest\('\.tabstrip-tabs'\)/)
 })
 
 test('tab tear-off captures the pointer so release outside the viewport reaches the gesture', () => {
@@ -146,22 +158,31 @@ test('both dock switches speak the panel vocabulary, and each names the dock it 
   assert.match(contextToggle[0], /<Icon name=\{visible \? 'panel-right-close' : 'panel-right-open'\} size=\{14\} \/>/)
   assert.match(contextToggle[0], /aria-pressed=\{visible\}/)
   assert.doesNotMatch(contextToggle[0], /panel-left|list-checks/)
-  assert.match(shell, /<ContextDock page=\{page\} param=\{param\} query=\{query\} open=\{contextOpen\} \/>/)
-  assert.match(shell, /<div className="context-toggle-slot">\{contextToggle\}<\/div>/)
-  assert.match(shell, /trailing=\{contextToggleReservation\}/)
+  // EACH REGION ANSWERS CONTEXT FOR ITS OWN DOCUMENT ([[context-dock]]): one dock per region, drawn by the
+  // region, never one shell-level dock that only the routed document can ever describe.
+  assert.match(shell, /<ContextDock page=\{route\?\.page\} param=\{route\?\.param\} query=\{route\?\.query\} open=\{hasContext && contextOpen\} \/>/)
+  assert.match(shell, /\{hasContext && <div className="context-toggle-slot"><ContextToggle visible=\{contextOpen\} onToggle=\{toggleContext\} \/><\/div>\}/)
+  assert.match(shell, /trailing=\{<span className="context-toggle-reservation" aria-hidden="true" \/>\}/)
   assert.match(css, /\.context-toggle-slot\s*\{[^}]*position:\s*absolute;[^}]*right:\s*var\(--space-2\);/s)
   assert.match(css, /\.context-toggle-reservation\s*\{[^}]*flex:\s*0 0 32px;[^}]*width:\s*32px;/s)
   assert.match(css, /\.dock-head-act\s*\{[^}]*width:\s*28px; height:\s*28px;[^}]*padding:\s*0;/s)
   assert.match(css, /\.si-pill\s*\{[^}]*height:\s*28px;/s)
 })
 
-test('new-session dock door keeps a compact icon target with a visible keyboard focus ring', () => {
-  const dock = readFileSync(new URL('./Dock.jsx', import.meta.url), 'utf8')
-  assert.match(dock, /<IconButton icon="plus" size=\{15\}[\s\S]*className="dock-head-act dock-head-act-new"/)
+test('the new-session door is the navigator\'s own pill, and the dock head keeps no second copy', () => {
+  // ONE new-session door, on the surface that lists sessions ([[session-forest]]). The explorer head used to
+  // carry a thinner copy of it for the projection it no longer renders; a door with two implementations is a
+  // door that can disagree with itself about where `sessions/new` lands.
+  assert.match(forest, /className=\{`si-pill new\$\{activeId === 'new' \? ' on' : ''\}`\}/)
+  assert.match(forest, /<Icon name="plus" size=\{14\} \/>/)
+  assert.doesNotMatch(dock, /dock-head-act-new|icon="plus"/)
+  assert.doesNotMatch(css, /dock-head-act-new/)
   // keyboard focus is the one shared ring ([[typography]]); the door hand-writes no outline of its own
   assert.match(css, /:focus-visible\s*\{[^}]*box-shadow:\s*var\(--focus-ring\);/)
-  assert.doesNotMatch(css, /\.dock-head-act(?:-new)?:focus-visible\s*\{[^}]*outline:/)
-  assert.match(css, /\.dock-head-act-new\s*\{[\s\S]*width:\s*24px; height:\s*24px;[\s\S]*background:\s*transparent;[\s\S]*border:\s*1px solid color-mix\(in srgb, var\(--blue\) 72%, var\(--line\)\);[\s\S]*border-radius:\s*var\(--radius\)/)
+  assert.doesNotMatch(css, /\.(?:dock-head-act|si-pill):focus-visible\s*\{[^}]*outline:/)
+  // and it reads as the row's widest element, the two quiet glyphs beside it ([[dock-modes]])
+  assert.match(css, /\.si-pill\.new \{ flex: 1;/)
+  assert.match(css, /\.si-pill\.archive, \.si-pill\.search \{ flex: none; width: 28px;/)
 })
 
 // The strip's law says a second tab of a kind is born from ctrl/⌘-click or a document's own explicit
@@ -172,7 +193,9 @@ test('new-session dock door keeps a compact icon target with a visible keyboard 
 test('the new-tab gesture is ONE predicate every pointer row surface asks', () => {
   assert.match(tabs, /export const isNewTabGesture = \(event\) => event\.button === 0 && !event\.shiftKey && !event\.altKey/)
   assert.match(tabs, /export function newTabAnchor\(event, href\) \{\n  if \(!isNewTabGesture\(event\)\) return false/)
-  for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest], ['SpecSearch', palette]]) {
+  // every surface that LISTS workspace objects asks it. Dock is not one of them any more: it is the frame
+  // around the explorer tree, and the tree is what owns the rows.
+  for (const [name, src] of [['FileTree', fileTree], ['SessionForestPanel', forest], ['SpecSearch', palette]]) {
     assert.match(src, /isNewTabGesture\(/, `${name} does not ask the shared new-tab predicate`)
   }
   for (const [name, src] of [['Dock', dock], ['FileTree', fileTree], ['SessionForestPanel', forest]]) {
@@ -216,9 +239,57 @@ test('the palette opens a new tab by pointer and by its keyboard twin', () => {
 
 test('there is no hold chord: nothing in the binding registry or the shell pins a tab', () => {
   assert.doesNotMatch(keymap, /tabHold/)
-  assert.doesNotMatch(shell, /tabHold|runTabCommand\('hold'\)/)
+  assert.doesNotMatch(shell, /tabHold/)
   assert.doesNotMatch(tabs, /hold: \(\) => \{/)
   for (const [name, dict] of [['en', en], ['zh', zh]]) {
     assert.doesNotMatch(dict, /tabHold: '/, `${name} still has a legend line for the retired hold chord`)
   }
+})
+
+// THE SECOND REGION ([[workspace-shell]] / [[tab-strip]]'s held slot). Sending a tab right is a MOVE inside
+// one working set, and the region that receives it is a place to read a document — not a second workspace.
+test('the workspace is a tree of groups, and every move takes a document out of the one it was in', () => {
+  // one store for the whole workspace, repaired at the read boundary and written as one tree
+  assert.match(tabs, /const KEY = scopedKey\('spexcode\.layout'\)/)
+  assert.match(tabs, /layout = normalizeLayout\(readRaw\(\), isDocument\)/)
+  // the retired shapes — a flat list, and a list beside a held slot — migrate rather than living on
+  assert.match(tabs, /const LEGACY_TABS_KEY = scopedKey\('spexcode\.tabs'\)/)
+  assert.match(tabs, /const LEGACY_HELD_KEY = scopedKey\('spexcode\.held'\)/)
+  assert.match(tabs, /if \(held\?\.page\) return \{ root: \{ dir: 'row', ratio: 0\.5, children: \[\{ tabs \}, \{ tabs: \[held\] \}\] \} \}/)
+  // splitting is a move into a new group; a drag into another group is that move without a new place
+  assert.match(tabs, /const next = splitGroup\(held\.root, owner\.id, key, dir\)/)
+  assert.match(tabs, /const moved = moveTabToGroup\(held\.root, key, target, before\)/)
+  // closing the last tab of a group collapses it; an emptied workspace lands on its explicit place
+  assert.match(tabs, /if \(!next\.root\) \{ navigate\('empty'\); return \}/)
+  // the focused group owns the address bar, so moving focus names that group's document
+  assert.match(tabs, /export function focusGroup\(id, \{ follow = true \} = \{\}\)/)
+  assert.doesNotMatch(workspace, /splitTo|closeSplit|SPLIT_KEY/)
+})
+
+test('the frame is drawn once: a region holds a document, its band and its own context', () => {
+  assert.match(shell, /function DocumentRegion\(\{ group, single, specs, sessions, dock, foldable, inactive, showing = null \}\)/)
+  assert.match(shell, /function RegionTree\(\{ node, single, specs, sessions, dock, foldable, inactive, focus = null, showing = null \}\)/)
+  // a split is two subtrees sharing one box at the reader's own ratio, with one divider between them
+  assert.match(shell, /<div className=\{`region-split region-\$\{node\.dir\}`\}>/)
+  assert.match(shell, /resizeWorkspaceSplit\(node\.id, ratio\)/)
+  assert.match(shell, /<TabStrip specs=\{specs\} sessions=\{sessions\} route=\{route \|\| \{ page: 'empty', param: null, query: null \}\} group=\{group\.id\}/)
+  // every group keeps its own mounted documents
+  assert.match(shell, /<ViewPool group=\{group\} override=\{showing\} inactive=\{inactive\} \/>/)
+  // a route that is not a document — the graph, the launch page — shows in the FOCUSED cell
+  assert.match(shell, /showing=\{isDocument\(page, param\) \? null : \{ page, param, query \}\}/)
+  // A DOCUMENT NEVER ASKS WHICH REGION IT IS IN. Frame chrome is the frame's to draw — the navigator once,
+  // a band per region — so the pane carries the two facts a mounted document cannot work out for itself and
+  // no third one. `primary` existed only for a document that drew chrome it did not own.
+  assert.match(shell, /const pane = useMemo\(\(\) => \(\{ address: entry\.address, active: showing \}\)/)
+  assert.doesNotMatch(shell, /primary: single|primary=\{/)
+  assert.doesNotMatch(workspace, /usePanePrimary|\?\.primary/)
+  assert.match(css, /\.region \{[^}]*flex-direction: column;/s)
+  assert.match(css, /\.region-body \{[^}]*display: flex;/s)
+  assert.match(css, /\.region-split \{[^}]*display: flex;/s)
+  assert.match(css, /\.region-col \{ flex-direction: column; \}/)
+  assert.match(css, /\.content-divider-h \{ cursor: row-resize; \}/)
+  assert.match(workspace, /const HELD_SIDE_KEY = scopedKey\('spexcode\.heldSide'\)/)
+  // the second region is not a second workspace: the retired copy-shaped chrome is gone for good
+  assert.doesNotMatch(shell, /className="content-split"|className="content-second"|content-close|HeldBar/)
+  assert.doesNotMatch(css, /\.content-split|\.content-second|\.content-close/)
 })

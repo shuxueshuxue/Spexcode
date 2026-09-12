@@ -31,7 +31,9 @@ Each shell-owned `ViewHost` provides its view with one read-only `ViewScope`. Th
 address and active state, plus exactly three runtime-checked intents: `open(address)` replaces the current
 route, `hold(address)` asks the workspace to place a document in the second pane, and `ownQuery(query)` updates
 the current view's query while preserving its page and selector. The scope dispatches one frozen intent object
-to the shell; views never receive the raw `navigate` or `splitTo` callbacks.
+to the shell; views never receive the raw navigation or hold callbacks. A `hold` intent names an ADDRESS, so
+it joins the working set before it is moved into the held slot — a view cannot mint a second region by
+handing the shell a route that no tab stands for.
 
 The mounted-document pool keeps one scope identity per host and updates its address/active snapshot when a
 pooled entry changes. Hidden panes are inactive and their intents are rejected without dispatch; unmounting a
@@ -65,10 +67,13 @@ whole shell hangs off, re-derived from what the product is rather than from what
   mirrored panel control at the rail top owns only dock open/closed. The dock beside it is one finding
   surface with two projections; projection styling belongs to the dock header, never the route light.
   Looking must be free: browsing a finding surface never grows any state but the camera's.
-  **The dock is a property of the focused tab** — both its projection and its existence. A node or a governed
-  file brings the explorer. The Sessions surface brings no shell dock at all: it is a complete document that owns
-  its own forest and console ([[session-console]]), so a finding dock beside it would only repeat the same list
-  under an empty header. Review surfaces and Settings have no dock anywhere in their address family — a detail
+  **The navigator is a property of the focused tab** — both its projection and its existence. A node or a
+  governed file brings the explorer; a session document brings the session forest. **It is ONE navigator for
+  the whole window, drawn here and nowhere else:** the same forest stands beside a session document, beside a
+  spec node, and beside a grid of cells, so no page carries a list of its own and no arrangement of the
+  workspace can leave the reader without one. **Historical:** the Sessions page used to bring its own forest
+  and the dock kept a thinner copy for every other route — two implementations of one list, the complete one
+  reachable from exactly one address, and neither surviving a split workspace. Review surfaces and Settings have no navigator anywhere in their address family — a detail
   route never inherits the previous Spec/Explorer projection from workspace state, which belongs to document
   routes only. Issues and Settings use the shared workspace/tab strip; Issues omits the
   activity rail while retaining the strip. Spec/file routes keep the Spec rail selection and derive the explorer
@@ -79,21 +84,20 @@ whole shell hangs off, re-derived from what the product is rather than from what
   active tab; everything held is an address — a node, a file, a session, or a resident Issues/Settings board.
   Board detail routes focus their corresponding resident tab.
   **The strip is the workspace itself**: *"应该被保留的是各个 tab，各个 tab 才相当于是工作
-  区，而不是左侧边栏。"* The rail is only a way to change destination and the dock only describes the
+  区，而不是左侧边栏。"* The rail is only a way to change destination and the navigator only describes the
   current tab; what the reader is working on stays on screen and one click away, on every route. Entering a document from a finding surface follows in place; holding it is the deliberate gesture
   ([[tab-strip]]). With no document focus after closing the last session, the center lands on the explicit
   empty workspace (`#/empty`) and names the ways back in through the explorer/palette. The graph remains an
   addressable legacy view, never a substitute for the reader's close gesture.
-- **What surrounds this thing? — CONTEXT, on the right.** The second pane (a document sent right), and
-  [[context-dock]]: a spec node's open issues and its version history, handed the routed query only so it can
-  mark which version the document shows. Context is about the current document, which is
-  why it is not a finding surface and not a tab. **The frame owns its resting state, and that state is
-  closed** — the shell reads the preference, so the default belongs here rather than inside the dock that
-  would be arguing for its own existence. It is closed because opening it costs the spec prose 383px of 575
-  at 1440: a question about the document does not get to spend the document's width until it is asked. The
-  toggle lives in one shell-owned right-edge slot and the choice persists: while closed the slot overlays the
-  tab strip; once open it overlays the context head at the same edge, so opening and folding back are one
-  stationary-pointer gesture without replacing or reflowing the button.
+- **What surrounds this thing? — CONTEXT, at each region's right edge.** A second region (a document sent
+  right), and [[context-dock]]: a spec node's open issues and its version history, handed its own region's
+  query so it can mark which version that document shows. Context is about the document beside it, which is
+  why it is not a finding surface and not a tab. **A region owns its resting state, and that state is
+  closed** — it is closed because opening it costs the spec prose 383px of 575 at 1440: a question about the
+  document does not get to spend the document's width until it is asked. The toggle lives in one right-edge
+  slot per region and the primary's choice persists: while closed the slot overlays that region's band; once
+  open it overlays the context head at the same edge, so opening and folding back are one stationary-pointer
+  gesture without replacing or reflowing the button.
 - **How is the world doing? — AMBIENT, at the bottom.** The status bar's two ordered arrays; notifications
   land above its right end, never over content. It is a full-window flow row after the app row, so rail and
   optional dock stop at its top edge and the view/context row gets the rest of the height. The bar consumes
@@ -135,7 +139,7 @@ from the shared place list, translated like every other label. Faces without an 
 projects hub, the phone, every pre-board state — keep writing the plain project title; both writing it
 would race, and a parent's effect lands last.
 
-**Which session owns the graph is workspace state**, held here beside the dock preference and the split,
+**Which session owns the graph is workspace state**, held here beside the dock preference,
 because the surface that CLAIMS a session (a row in the finding dock) is never the surface that shows the
 claim (the graph). Holding it inside the graph is what forced the graph to grow a session list of its own
 just to have somewhere to click. It is not persisted: a lock is a way of looking at the board right now,
@@ -240,8 +244,8 @@ WebSockets — belonged to closed sessions. Deciding the row count is [[session-
 contract, and it now decides it by asking for a live pane; this switch costs **0.101s**.
 
 **A crash is contained to the pane it happened in.** Each viewhost and the dock render behind their own
-error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other split
-pane rendering exactly as they were — a reader who can still navigate can still get out. The boundary
+error boundary, so a view that throws leaves the rail, the tab strip, the status bar and the other region
+rendering exactly as they were — a reader who can still navigate can still get out. The boundary
 resets on the address it is keyed by: leaving a broken document is the natural recovery and must not cost
 a reload, and the panel's retry is that same reset for when the address did not change. The console keeps
 the stack; the pane shows one line. Wrapping the whole app instead would trade a broken document for a
@@ -255,12 +259,50 @@ static graph's release facts have a real visible owner instead of a provider ent
 door that is not built is shut more firmly than a door that closes itself, which is why that face no longer
 redirects away from live addresses — it never renders one.
 
-**Two views at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second view
-is a second route and a place to put it; not one view changed to make it possible, because a view was
-already receiving its route rather than reading it. The second pane is workspace state, true of the window
-rather than of either document in it, and it survives a reload like the dock does. A reader sends a
-document right by alt-clicking its tab: they are already pointing at the document they mean, so the gesture
-asks for no new vocabulary and no new surface.
+**Two documents at once is a layout, not a rewrite** — and that is the whole return on the hinge. A second
+document is a second route and a place to put it; not one view changed to make it possible, because a view
+was already receiving its route rather than reading it. A reader sends a document right by alt-clicking its
+tab or through the tab menu: they are already pointing at the document they mean, so the gesture asks for no
+new vocabulary and no new surface.
+
+**A REGION is a place to read a document; it is never a second workspace.** Every region mounts the same
+component, which draws three things: the band naming the group it holds, that group's showing document, and
+that document's own context dock ([[context-dock]]). Everything else in the frame — the rail, the navigator
+sidebar, the status bar, the palette — belongs to the WINDOW and is drawn exactly once, beside every region.
+**No document draws frame chrome at all**, which is why no document has to ask which region it is in: there
+is deliberately no such fact on the pane. A second region that rendered a PAGE where it should render a
+DOCUMENT is what painted a second strip listing every tab, a second navigator, and two navigators folding
+together because they read one flag. The first repair let a page keep its chrome and told it whether it was in
+the one-group workspace — which fixed the symptom and kept the cause: a page still owned a list the window was
+responsible for, so the list existed in one arrangement of the workspace and vanished in another. The navigator
+is the frame's ([[dock-modes]]), unconditionally, and a document is a document in every cell.
+
+**The workspace is a TREE of regions, and the layout is that tree drawn.** A group is a region; a split is
+two subtrees sharing one box at a ratio the reader drags, with one divider between them — [[tab-strip]] owns
+the tree, this node only lays it out. Splitting again inside either side is the same box again, which is what
+makes a grid out of one rule: the shell needs no case for "two panes" and none for "nine". The ratio lives on
+the split node, so the arrangement survives a reload and a window resize together; a pixel width on a node
+that comes and goes as the reader splits and collapses would survive neither ([[resizable-panes]] keeps the
+pixel mechanism for the frame's own fixed panes).
+
+**Working in a cell is clicking in it.** Focus follows the CLICK rather than the press, so the click that
+moves focus still reaches whatever it was aimed at — a close control in an unfocused cell closes its tab on
+the first click instead of spending it on the cell. A right-click never moves focus: it is asking a tab a
+question, not choosing where to work. The focused group is the one whose document the address bar names
+([[tab-strip]]), which is also what keeps a reload landing where the reader left off.
+
+**A region sits BESIDE its sibling or UNDER it, and the verb names the side.** The tab menu offers both moves
+— split right, split down — and the window remembers which was used last, so the next split and the alt-click
+gesture land the same way. The labels name a DIRECTION rather than an axis on purpose: "horizontal" and
+"vertical" name opposite arrangements in an editor and in a terminal multiplexer, and a reader should not
+have to know which convention this window picked.
+
+
+**Each region answers context for its own document.** The dock a region draws describes the document that
+region holds — two spec nodes held side by side get two docks, each with its own node's issues and history —
+and the region owns the open/closed state its toggle flips, at its own right edge. The one-group workspace's
+choice is the persisted habit; a region born from a split starts closed, so a document sent beside another
+never spends its width until the reader asks it to.
 
 Measured with two live spec documents open: 0.02 seconds of script per 10 idle seconds.
 

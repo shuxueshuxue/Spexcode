@@ -46,10 +46,10 @@ switching live in [[status-bar]]; the rail carries no project chip or duplicate 
 - **Click is navigation plus band opening.** A plain click remains an ordinary same-document route
   navigation (modified clicks keep browser behavior). The sessions anchor also opens the shared left band
   and focuses the most recently held session document when one exists; with no held session it lands on the
-  bare sessions launch face. It pre-selects NO dock projection: its destination mounts no finding dock
-  ([[dock-modes]]), so a projection written at click time could only flip the DEPARTING document's dock to a
-  sessions projection for the frames before the route landed — a second, differently-styled sessions sidebar
-  flashing between the explorer and the forest. The spec and graph anchors still select the explorer
+  bare sessions launch face. It pre-selects NO dock projection: the route it lands on names its own
+  ([[dock-modes]]), so a projection written at click time could only flip the DEPARTING document's navigator
+  to the forest for the frames before the route landed — the navigator changing on a document that had not
+  changed. The spec and graph anchors still select the explorer
   projection their destination derives. The selection is idempotent: clicking the current
   sessions anchor again navigates only and never folds the dock. Document routes select their related
   projection through the shell's derivation. Review and settings boards keep the rail — the top-level board

@@ -51,8 +51,12 @@ test('graph and session views cannot bypass the shell ViewScope boundary', () =>
 })
 
 test('shell-owned chrome is the explicit route-writing boundary', () => {
-  for (const name of ['Shell.jsx', 'Dock.jsx', 'SideBar.jsx', 'TabStrip.jsx']) {
+  for (const name of ['Shell.jsx', 'SideBar.jsx', 'TabStrip.jsx']) {
     const source = read(name)
     assert.match(source, /from ['"]\.\/route\.js['"]/, `${name} remains an explicit shell route owner`)
   }
+  // the dock is the FRAME around a list, not a list: the explorer tree inside it owns its rows and their
+  // addresses, so the panel itself writes none and imports no writer to write one with.
+  assert.doesNotMatch(read('Dock.jsx'), /from ['"]\.\/route\.js['"]/)
+  assert.match(read('FileTree.jsx'), /from ['"]\.\/route\.js['"]/)
 })

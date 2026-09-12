@@ -274,7 +274,15 @@ try {
   await settle('.react-flow__node')
   await page.waitForTimeout(800)
   await page.keyboard.press('i')
-  await settle('.ov-panel')
+  const popup = await settle('.ov-panel')
+  if (!popup) {
+    await page.screenshot({ path: join(out, 'no-popup.png') })
+    console.log('GRAPH-ROUTE-DEBUG', JSON.stringify({
+      errors: errors.slice(0, 3),
+      hash: await hash(),
+      html: (await page.evaluate(() => document.body.innerHTML)).slice(0, 400),
+    }))
+  }
   await page.locator('.ov-tab', { hasText: 'history' }).click()
   await settle('.ov-body .ver-row')
   await page.locator('.ov-body .ver-row').nth(1).locator('.rec-toggle').click()

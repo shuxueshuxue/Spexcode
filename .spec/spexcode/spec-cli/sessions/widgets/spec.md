@@ -92,17 +92,32 @@ place, never a second private channel out of that frame.
 
 ## where a widget's numbers come from
 
-By default the agent bakes them in. It already has the whole read surface as CLI verbs — the session board,
-a session's timeline, its review — so it queries, writes the answers into the document, and puts it. The
-widget is then a picture of what the agent knew when it drew it, and it goes stale until the agent draws
-again. That is honest and costs nothing to run: no query happens when someone opens the conversation a month
-later, and the picture still renders.
+Three sources fill a widget, and which one a number comes from is decided by who is able to know it.
 
-A widget that must show something live has the same HTTP surface the dashboard itself reads, because it runs
-on that origin with nothing taken away; the host tells it which session it belongs to and where the API is,
-rather than leaving it to guess. Fetching changes what the widget is: it stops being a record of a moment and
-starts depending on a backend that may be down, or on a session that has since been closed. Live data is
-worth that only when being current is the point, as in a supervisor's view of a running fleet.
+Facts the system already holds — which sessions exist, their status, what a branch is ahead by, how many
+lint errors there are — the widget reads for itself. It runs on the dashboard's origin with nothing taken
+away, so it can call the same HTTP surface the dashboard calls; the host tells it which session it belongs
+to and where the API is rather than leaving it to guess. Nothing agentic happens in between, because nothing
+agentic is involved: a table of children and their states is a query, and routing a query through a language
+model to retype its answer into a document would be slower, more expensive and less correct. The cost of
+reading live is that the widget stops being a record of a moment: opened later it shows today's answer, or an
+error when the backend is gone.
+
+What only the agent knows, the agent draws: how far along its plan is, what it is blocked on, which question
+it needs answered, what it judges the options to be. No query produces those, and this is most of why a
+widget is worth having at all. Such a picture is baked in at put time and goes stale until the agent draws
+again, which is honest: it says what the agent knew when it said it.
+
+What the human is doing right now is held by the browser, as below. It does not need the agent to redraw for
+the interface to keep agreeing with the human's clicks; the agent redraws when the MEANING changes, not to
+repaint a checkbox.
+
+The reason the record stays prose rather than a structure the host could replay into the widget's fields is
+that a replayable structure requires every widget to declare its fields, their types and their identities.
+That is the interface language this contract deliberately does not invent: the moment it exists, a widget can
+only say what the language can express. Prose is what the agent acts on anyway. If the system later needs to
+know a chosen value as data, the narrow move is to let one sent message carry a small payload beside its
+prose — not to give every widget a schema.
 
 ## three kinds of state, three places
 

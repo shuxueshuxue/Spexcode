@@ -2,11 +2,12 @@
 title: suite-parity
 status: active
 hue: 100
-desc: The workflow's per-workspace suite list must equal the set of workspaces that ship tests, in both directions.
+desc: The workflow's per-workspace suite list and test declaration census must stay honest: every workspace suite is named, and every e2e declaration is reached by CI or has a live, concrete exemption.
 code:
   - scripts/ci-suite-parity.test.mjs
 related:
   - .github/workflows/ci.yml
+  - scripts/ci-suite-parity.exemptions.json
 ---
 # suite-parity
 
@@ -38,3 +39,12 @@ had to be updated alongside the thing it guards would reintroduce exactly the dr
 
 This proves the workflow's *coverage*, not any suite's content. What each suite asserts belongs to its own
 package's nodes.
+
+The gate also discovers every `*.e2e.mjs` file by walking the repository rather than keeping a second file list. It
+measures CI reachability from every workflow under `.github/workflows/`: direct `node`, `npx`, `tsx`, and `pnpm exec`
+file operands are opened, root and workspace `npm`/`pnpm run` scripts are expanded transitively, and local composite
+actions are included. The current ruler opens 16 directly named script files and finds 91 e2e declarations; none is
+currently reached by those CI texts. A declaration absent from that reachability set must appear in
+`scripts/ci-suite-parity.exemptions.json`, where a reason id points to a concrete explanation. The gate rejects a reason
+that is too short or unreferenced, an exemption for a file no longer in the tree, an unknown reason id, and an
+uncovered declaration. The table therefore cannot accumulate dead reasons or dead file paths while CI remains unchanged.

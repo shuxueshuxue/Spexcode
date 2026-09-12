@@ -34,20 +34,28 @@ global-store `files.json` beside its `runtime.json`; its JSON array of absolute 
 durable state. Posting, listing, and removing edit only that list. They never copy, move, stage, or upload
 the target, so a listed path remains a live reference and may point anywhere the session host can reach.
 
-## one list, three operations
+## one list, two writers and two readers
 
-The agent-facing porcelain is `spex session files add <path>`, `spex session files ls`, and
-`spex session files retract <path>`. `add` resolves a relative input against the caller's current
+The agent-facing porcelain is `spex session files add <path>`, `spex session files ls [SEL]`,
+`spex session files get <SEL> <name|path> [-o <file>]`, and `spex session files retract <path>`. `add` resolves a relative input against the caller's current
 directory and stores the resulting absolute path exactly once, but only while it names a readable regular file;
 a missing, unreadable, or non-file target is refused before the list changes. `ls` reads every registered path
 and marks a target that has since disappeared or become unreadable as invalid rather than printing it like a
 working handoff; `retract` removes that exact resolved path. The spelling follows the shared CLI vocabulary: `add` appends a record, `ls` reads a
-collection, and `retract` withdraws the author's published record. All three operate on the calling agent's
-session, so an agent needs only its artifact path to publish it.
+collection, `get` reads one record's bytes, and `retract` withdraws the author's published record. The two writers
+operate only on the calling agent's session, so an agent needs only its artifact path to publish it. The two
+readers take any session: without a selector `ls` reads the caller's own list; with one, a parent reads the list
+its child handed over, and `get <SEL> <name>` resolves a `[[file:<name>]]` tail (or a whole path) against that list
+by the same `/`-bounded-tail rule the dashboard uses, refusing an ambiguous or unknown name rather than guessing,
+and writes the bytes to stdout or `-o`. A local read never needs a backend: the list is the store file and the
+bytes are the disk. `ls|get --ssh <address> <FULL-SESSION-ID>` reads a session on a peered machine through the
+[[machine-peer]] tunnel, on the very routes below that the dashboard downloads by, so what a peer can read is
+exactly what that session's human could download.
 
-The reference is intentionally host-local. An absolute path preserves the location the posting agent meant
-even when a later CLI command has another cwd; a copied session record on another machine cannot make that
-path portable, and therefore reports a missing file rather than silently resolving a different local path.
+The path string is intentionally host-local; the bytes are not. An absolute path preserves the location the
+posting agent meant even when a later CLI command has another cwd. A copied session record on another machine
+cannot make that path resolve locally, and reports a missing file rather than silently opening a different local
+file — the far machine's backend is the one reader of its own paths, which is what the `--ssh` read goes through.
 Raw run artifacts default to a persistent directory outside the product repository. Putting them in the
 worktree makes the merge-readiness dirty-tree gate demand that generated evidence be committed as product
 source, while this repository deliberately does not accept raw run artifacts. Before review, the publisher

@@ -98,6 +98,17 @@ export function fileReference(path: string, files: readonly string[]): string {
   return `[[file:${path}]]`
 }
 
+// The inverse of fileReference: what a reader typed — a `[[file:<name>]]` tail or the whole path — back to the one
+// posted path it names. The same `/`-bounded-tail rule as the dashboard's fileRefs, so a reference that renders as a
+// link there resolves here, and a name that matches several paths (or none) is refused rather than guessed.
+export function resolveFileReference(name: string, files: readonly string[]): { path: string } | { error: string } {
+  const tail = name.replace(/^\[\[file:|\]\]$/g, '')
+  const matches = files.filter((path) => path === tail || path.endsWith(`/${tail}`))
+  if (matches.length === 1) return { path: matches[0] }
+  if (!matches.length) return { error: `no posted file named ${JSON.stringify(tail)}` }
+  return { error: `${JSON.stringify(tail)} names ${matches.length} posted files — use more of the path: ${matches.join(', ')}` }
+}
+
 export function addSessionFile(id: string, input: string, lock: SessionFileLock, cwd = process.cwd()): { path: string; added: boolean; reference: string } {
   const path = resolve(cwd, input)
   currentFile(path)

@@ -147,6 +147,36 @@ test('public session files CLI stores a live path and the backend authorizes onl
     const forbiddenMissing = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(neverPosted)}`)
     assert.deepEqual({ status: forbiddenMissing.status, body: await forbiddenMissing.json() }, { status: 403, body: { error: 'that path was not posted by this session' } })
 
+    // another session — a parent — reads this one's handoff by selector: the list, then one file's bytes by its
+    // [[file:<name>]] tail. No governed caller, no backend needed for the bytes: the store and the disk.
+    const reader: NodeJS.ProcessEnv = { ...env }
+    for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete reader[key]
+    const ownless = await runCli(project, reader, 'session', 'files', 'ls')
+    assert.equal(ownless.code, 2)
+    assert.match(ownless.err, /name the session to read \(spex session files ls <SEL>\)/)
+    const asParent = await runCli(project, reader, 'session', 'files', 'ls', id)
+    assert.equal(asParent.code, 0, asParent.err)
+    assert.deepEqual(asParent.out.trim().split('\n'), [absolute, htmlAbsolute, join(fixture, 'sub', 'artifact.txt'), resolve(project, '../diagram.svg')])
+    const gotHtml = await runCli(project, reader, 'session', 'files', 'get', id, '[[file:artifact.html]]')
+    assert.equal(gotHtml.code, 0, gotHtml.err)
+    assert.match(gotHtml.out, /<h1 id="proof">Rendered HTML<\/h1>/)
+    const gotTwin = await runCli(project, reader, 'session', 'files', 'get', id, 'sub/artifact.txt')
+    assert.deepEqual({ code: gotTwin.code, out: gotTwin.out }, { code: 0, out: 'twin\n' })
+    const ambiguous = await runCli(project, reader, 'session', 'files', 'get', id, 'artifact.txt')
+    assert.equal(ambiguous.code, 2)
+    assert.match(ambiguous.err, /"artifact.txt" names 2 posted files — use more of the path/)
+    const unknownName = await runCli(project, reader, 'session', 'files', 'get', id, 'private.txt')
+    assert.equal(unknownName.code, 2)
+    assert.match(unknownName.err, /no posted file named "private.txt"/)
+    const saved = join(fixture, 'saved.html')
+    const gotToFile = await runCli(project, reader, 'session', 'files', 'get', id, 'artifact.html', '-o', saved)
+    assert.equal(gotToFile.code, 0, gotToFile.err)
+    assert.match(gotToFile.out, new RegExp(`^wrote ${saved.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(\\d+ bytes from `))
+    assert.equal(readFileSync(saved, 'utf8'), readFileSync(htmlArtifact, 'utf8'))
+    const writerOnly = await runCli(project, reader, 'session', 'files', 'add', '../artifact.txt')
+    assert.equal(writerOnly.code, 2)
+    assert.match(writerOnly.err, /no governed caller session — run this from the agent session that produced the file/)
+
     writeFileSync(artifact, Buffer.alloc(SESSION_FILE_PREVIEW_MAX_BYTES + 1))
     const oversized = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(absolute)}&preview=1`)
     assert.deepEqual({ status: oversized.status, body: await oversized.json() }, {

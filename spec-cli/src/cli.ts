@@ -990,32 +990,87 @@ if (cmd === 'serve') {
     if (has('json')) console.log(JSON.stringify(report, null, 2))
     else console.log((await import('./host-resources.js')).formatResourceReport(report))
   } else if (sub === 'files') {
-    rejectUnknownFlags('spex session files', 4, [])
-    const [verb, path, extra] = positionals(4)
-    if (extra || !verb || (verb !== 'ls' && !path) || (verb === 'ls' && path)) {
-      console.error('usage: spex session files add <path> | ls | retract <path>')
-      process.exit(2)
+    // add/retract edit the caller's own list. ls and get READ, so they take any session: a parent reads what its
+    // child handed over by selector, or across a machine peer by --ssh + full id. Local reads go to the store and
+    // the disk (same host, no backend); a peer read rides the dashboard's own files routes through the tunnel.
+    rejectUnknownFlags('spex session files', 4, ['ssh'])
+    const outIdx = process.argv.indexOf('-o', 4)
+    const outPath = outIdx >= 0 ? process.argv[outIdx + 1] : undefined
+    if (outIdx >= 0) {
+      if (!outPath || outPath.startsWith('-')) { console.error('spex session files get: -o expects a file path'); process.exit(2) }
+      process.argv.splice(outIdx, 2)
     }
-    const { ownSessionId } = await import('./sessions.js')
-    const { withSessionRecordLockSync } = await import('./session-record.js')
-    const id = ownSessionId()
-    if (!id) {
-      console.error('spex session files: no governed caller session — run this from the agent session that produced the file')
+    const [verb, ...rest] = positionals(4)
+    const usage = () => {
+      console.error('usage: spex session files add <path> | ls [SEL] | get <SEL> <name|path> [-o <file>] | retract <path>\n       spex session files ls|get --ssh <address> <FULL-SESSION-ID> [<name|path>] [-o <file>]')
       process.exit(2)
     }
     const files = await import('./session-files.js')
-    if (verb === 'ls') {
-      for (const file of files.inspectSessionFiles(id)) console.log(file.valid ? file.path : `INVALID ${file.path} — ${file.reason}`)
-    } else if (verb === 'add') {
-      const result = files.addSessionFile(id, path!, withSessionRecordLockSync)
-      console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
-      console.log(`point at it as ${result.reference}`)
-    } else if (verb === 'retract') {
-      const result = files.retractSessionFile(id, path!, withSessionRecordLockSync)
-      if (!result.removed) { console.error(`spex session files retract: path is not posted: ${result.path}`); process.exit(2) }
-      console.log(`retracted ${result.path}`)
-    } else {
-      console.error(`spex session files: unknown verb '${verb}' — add | ls | retract  (spex help session)`)
+    if (verb === 'ls' || verb === 'get') {
+      const sshAddress = flag('ssh')
+      const wantArgs = verb === 'ls' ? 1 : 2
+      if (sshAddress !== undefined) {
+        if (!sshAddress || sshAddress.startsWith('--')) { console.error('spex session files: --ssh expects one non-empty address'); usage() }
+        if (rest.length !== wantArgs) usage()
+        if (!FULL_SESSION_ID.test(rest[0])) { console.error('spex session files: --ssh requires a full session id, not a selector'); process.exit(2) }
+      } else if (rest.length > wantArgs || (verb === 'get' && rest.length < 2)) usage()
+      if (outPath !== undefined && verb !== 'get') usage()
+      let id: string
+      if (sshAddress) id = rest[0]
+      else if (rest.length === wantArgs) {
+        // resolved against the LOCAL store, like `session wait`: files is a reads-files-only surface, so a parent
+        // reads a child's handoff with no `spex serve` running, and a backend's projection trouble cannot hide a
+        // file that is on this disk.
+        const { resolveSession } = await import('./session-selectors.js')
+        const { sessionTitle } = await import('./sessions.js')
+        const r = resolveSession(rest[0], (await import('./client.js')).localCachedSessions(true))
+        if ('none' in r) { console.error(`spex session files ${verb}: no such session: ${rest[0]}`); process.exit(2) }
+        if ('ambiguous' in r) {
+          console.error(`spex session files ${verb}: ambiguous selector "${rest[0]}" matches ${r.ambiguous.length} sessions — be more specific:`)
+          for (const s of r.ambiguous) console.error(`  ${s.id.slice(0, 8)}  ${sessionTitle(s)}`)
+          process.exit(2)
+        }
+        id = r.ok.id
+      }
+      else {
+        const own = (await import('./sessions.js')).ownSessionId()
+        if (!own) { console.error('spex session files ls: no governed caller session — name the session to read (spex session files ls <SEL>)'); process.exit(2) }
+        id = own
+      }
+      if (verb === 'ls') {
+        if (sshAddress) for (const path of await (await import('./client.js')).clientSessionFilesThroughPeer(sshAddress, id)) console.log(path)
+        else for (const file of files.inspectSessionFiles(id)) console.log(file.valid ? file.path : `INVALID ${file.path} — ${file.reason}`)
+      } else {
+        const list = sshAddress ? await (await import('./client.js')).clientSessionFilesThroughPeer(sshAddress, id) : files.listSessionFiles(id)
+        const target = files.resolveFileReference(rest[1], list)
+        if ('error' in target) { console.error(`spex session files get: ${target.error}`); process.exit(2) }
+        const bytes = sshAddress
+          ? await (await import('./client.js')).clientSessionFileThroughPeer(sshAddress, id, target.path)
+          : readFileSync(files.openSessionFile(id, target.path).path)
+        if (outPath) { writeFileSync(outPath, bytes); console.log(`wrote ${outPath} (${bytes.byteLength} bytes from ${target.path})`) }
+        else process.stdout.write(bytes)
+      }
+    } else if (verb === 'add' || verb === 'retract') {
+      if (rest.length !== 1 || flag('ssh') !== undefined || outPath !== undefined) usage()
+      const { ownSessionId } = await import('./sessions.js')
+      const { withSessionRecordLockSync } = await import('./session-record.js')
+      const id = ownSessionId()
+      if (!id) {
+        console.error('spex session files: no governed caller session — run this from the agent session that produced the file')
+        process.exit(2)
+      }
+      if (verb === 'add') {
+        const result = files.addSessionFile(id, rest[0], withSessionRecordLockSync)
+        console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
+        console.log(`point at it as ${result.reference}`)
+      } else {
+        const result = files.retractSessionFile(id, rest[0], withSessionRecordLockSync)
+        if (!result.removed) { console.error(`spex session files retract: path is not posted: ${result.path}`); process.exit(2) }
+        console.log(`retracted ${result.path}`)
+      }
+    } else if (!verb) usage()
+    else {
+      console.error(`spex session files: unknown verb '${verb}' — add | ls | get | retract  (spex help session)`)
       process.exit(2)
     }
   } else if (sub === 'widget') {

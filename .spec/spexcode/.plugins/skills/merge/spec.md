@@ -1,9 +1,9 @@
 ---
 title: merge
-surface: skill, command
+surface: skill
 status: active
 hue: 130
-desc: Land this session's completed branch into the repository's source-of-truth branch as one verified no-ff merge, preserve unrelated dirty work, push it, and settle the session honestly. Use when the user says /merge, asks to merge or land this session, or when a supervisor dispatches a merge.
+desc: Land this session's completed branch into the repository's source-of-truth branch as one verified no-ff merge, preserve unrelated dirty work, push it, and settle the session honestly. Use when the user asks to merge or land this session, or when a supervisor dispatches one with `spex session merge`.
 kind: mutating
 ---
 # merge

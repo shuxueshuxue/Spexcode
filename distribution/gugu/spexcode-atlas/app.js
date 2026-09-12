@@ -17,6 +17,8 @@ let current = null
 let truncated = false
 let pendingLoad = null
 let renderDiagram = null
+// Set when a draw was requested and no resulting write has been seen yet: the status line is an OBSERVATION.
+let awaitingFirstWrite = false
 const open = new Set()
 
 const has = (capability) => Boolean(context?.capabilities?.includes(capability))
@@ -158,7 +160,12 @@ async function drawAtlas() {
   }
   try {
     await window.gugu.spawnAgent(ATLAS_PROMPT, 'SpexCode atlas')
-    $('status').textContent = 'An agent is drawing the atlas; this tab follows its changes.'
+    // spawnAgent resolving means the HOST ACCEPTED THE REQUEST — not that an agent is drawing. An agent that
+    // dies on its first breath (no credential, a refused model) resolves this call just the same, and a tab
+    // that said "drawing" here would go on saying it forever while nothing happened. So say only what was
+    // done, and let the first write under `.spec/` be what upgrades the wording.
+    awaitingFirstWrite = true
+    $('status').textContent = 'Asked the host to start the atlas agent. Nothing written yet — this tab updates when .spec/ changes.'
   } catch (error) {
     await window.gugu.reportError(`Could not start the atlas agent: ${error?.message ?? error}`)
   }
@@ -171,6 +178,12 @@ function applyTheme() {
 function onFiles(change) {
   const touchesSpec = change.kind === 'resync' || change.changes?.some((entry) => entry.path.startsWith(`${SPEC_ROOT}/`))
   if (!touchesSpec) return
+  // The first write after a request is the earliest real evidence that an agent is alive and working; until
+  // one arrives the tab has been told nothing but "accepted".
+  if (awaitingFirstWrite) {
+    awaitingFirstWrite = false
+    $('status').textContent = 'The atlas agent is writing; this tab follows its changes.'
+  }
   // An agent writing a tree saves many files in a burst; read once it settles.
   clearTimeout(pendingLoad)
   pendingLoad = setTimeout(() => { pendingLoad = null; void load() }, 600)

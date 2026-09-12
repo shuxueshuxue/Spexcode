@@ -17,8 +17,11 @@ let current = null
 let truncated = false
 let pendingLoad = null
 let renderDiagram = null
-// Set when a draw was requested and no resulting write has been seen yet: the status line is an OBSERVATION.
-let awaitingFirstWrite = false
+// The status line is an OBSERVATION, never a hope. Two independent sources feed it: a write under `.spec/`
+// (something happened), and the agent's own status through the host (what the agent is doing). `null` from the
+// host means "cannot be told" — an agent whose panel is closed, or a terminal agent — and is never read as "no".
+let atlasAgentId = null
+let sawAtlasWrite = false
 const open = new Set()
 
 const has = (capability) => Boolean(context?.capabilities?.includes(capability))
@@ -159,15 +162,44 @@ async function drawAtlas() {
     return
   }
   try {
-    await window.gugu.spawnAgent(ATLAS_PROMPT, 'SpexCode atlas')
     // spawnAgent resolving means the HOST ACCEPTED THE REQUEST — not that an agent is drawing. An agent that
-    // dies on its first breath (no credential, a refused model) resolves this call just the same, and a tab
-    // that said "drawing" here would go on saying it forever while nothing happened. So say only what was
-    // done, and let the first write under `.spec/` be what upgrades the wording.
-    awaitingFirstWrite = true
-    $('status').textContent = 'Asked the host to start the atlas agent. Nothing written yet — this tab updates when .spec/ changes.'
+    // dies on its first breath (no credential, a refused model) resolves this call just the same. So say only
+    // what was done, and let the agent's own status and the first write say the rest.
+    const started = await window.gugu.spawnAgent(ATLAS_PROMPT, 'SpexCode atlas')
+    atlasAgentId = started?.agentId ?? null
+    sawAtlasWrite = false
+    $('status').textContent = 'Asked the host to start the atlas agent. Nothing written yet.'
+    await readAtlasAgent()
   } catch (error) {
     await window.gugu.reportError(`Could not start the atlas agent: ${error?.message ?? error}`)
+  }
+}
+
+// What the host says about OUR agent, asked for by id. `status` is the field that separates a run that ended in
+// an error from one that never started: `lastStopReason` cannot — the host projects an errored turn as `null`,
+// the same `null` it uses for "no turn has ended yet" — so keying on it would write a branch that never runs.
+async function readAtlasAgent() {
+  if (!atlasAgentId || !has('agents:read')) { paintStatus(null); return }
+  try {
+    const agents = await window.gugu.listAgents()
+    paintStatus((agents ?? []).find((a) => a.agentId === atlasAgentId) ?? null)
+  } catch { paintStatus(null) }
+}
+
+function paintStatus(agent) {
+  const status = agent?.status ?? null
+  const generating = agent?.isGenerating ?? null
+  if (sawAtlasWrite) {
+    $('status').textContent = 'The atlas agent is writing; this tab follows its changes.'
+  } else if (status === 'error') {
+    $('status').textContent = 'The atlas agent stopped with an error and wrote nothing.'
+  } else if (status === 'completed') {
+    $('status').textContent = 'The atlas agent finished without writing anything.'
+  } else if (status === 'working' || generating === true) {
+    $('status').textContent = 'The atlas agent is running; nothing written yet.'
+  } else {
+    // null / 'idle' / anything unrecognised: the host cannot tell us, so neither can this tab.
+    $('status').textContent = 'Asked the host to start the atlas agent. Nothing written yet.'
   }
 }
 
@@ -178,12 +210,8 @@ function applyTheme() {
 function onFiles(change) {
   const touchesSpec = change.kind === 'resync' || change.changes?.some((entry) => entry.path.startsWith(`${SPEC_ROOT}/`))
   if (!touchesSpec) return
-  // The first write after a request is the earliest real evidence that an agent is alive and working; until
-  // one arrives the tab has been told nothing but "accepted".
-  if (awaitingFirstWrite) {
-    awaitingFirstWrite = false
-    $('status').textContent = 'The atlas agent is writing; this tab follows its changes.'
-  }
+  // A write is a fact about files, not a guess about the agent: something under `.spec/` actually changed.
+  if (atlasAgentId && !sawAtlasWrite) { sawAtlasWrite = true; void readAtlasAgent() }
   // An agent writing a tree saves many files in a burst; read once it settles.
   clearTimeout(pendingLoad)
   pendingLoad = setTimeout(() => { pendingLoad = null; void load() }, 600)
@@ -209,6 +237,11 @@ async function start() {
   window.gugu.onContextChanged((next) => { context = next; applyTheme() })
   window.gugu.onCommand((id) => { if (id === 'draw') void drawAtlas(); if (id === 'refresh') void load() })
   if (has('workspace:read')) window.gugu.onFilesChanged(onFiles)
+  // Whether the AGENT moved is the host's to say, not something to infer from files. Ids only, by design.
+  if (has('agents:read')) window.gugu.onAgentsChanged((change) => {
+    const ids = Array.isArray(change) ? change : (change?.agentIds ?? [])
+    if (atlasAgentId && ids.includes(atlasAgentId)) void readAtlasAgent()
+  })
   await load()
 }
 

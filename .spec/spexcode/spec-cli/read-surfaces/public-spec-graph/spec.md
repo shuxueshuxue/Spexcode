@@ -51,6 +51,13 @@ addressable Graph — while the rail carries the ordinary `RAIL_PAGES` entries w
 set visible but disabled. The product shape stays legible without implying a capability the payload cannot
 answer, and without inventing an entry that exists only here.
 
+Landing on `#/spec` is a fact about the VIEW; rewriting the address to say so is cosmetics, and some
+documents refuse it. A page that travels as one file gets opened in places with no address of their own to
+restate — an `srcdoc` frame, a sandboxed preview — where the History API rejects the call outright. That
+normalization runs while the first render is computing its state, so a throw there takes the whole mount
+down and the reader gets a blank page instead of the tree. A refusal is therefore reported and dropped: the
+reader still lands on Spec, and only the address bar keeps whatever the host put there.
+
 `spex graph --public --out <path>` writes `spexcode.public-spec-graph/v1` JSON containing the producer
 repository identity, exact Git `revision`, a relocatable `sourceRoot: "."`, and deterministic node rows.
 The index retains graph-reading fields (`id`, `parent`, `path`, title/status metadata, governance paths),
@@ -68,7 +75,13 @@ that element first and fetches its relative source only when the page carries no
 serves a directory and a file. The file exists for the places a directory cannot go: a browser opening a page
 from disk refuses to fetch the file beside it, and a channel that hands over one file — a workflow's artifact
 card, an attachment — would otherwise deliver a shell with nothing to show. It is the same read-only surface,
-so the same exclusions hold; it has no archive beside it, so its About panel offers none.
+so the same exclusions hold; it has no archive beside it, so its About panel offers none. WHERE that
+element goes is a question about markup, and this file is mostly not markup: the bundle is inlined whole,
+and a bundle carries HTML as DATA — the widget runtime writes its iframe document from a template that
+spells `</head><body>`, a megabyte before the page's own head ends. The seam is the head-close a BROWSER
+would see, found by reading past every script span, never the first one in the bytes. Splicing into an
+inlined program ends it at the injected element's `</script>`: the rest of the program spills into the page
+as visible text and nothing runs at all.
 
 `npm run build:public` builds the dashboard with `VITE_PUBLIC_GRAPH_ONLY=1` and copies that snapshot plus
 the per-node documents under `specs/` beside the static assets. The published client reads the small index

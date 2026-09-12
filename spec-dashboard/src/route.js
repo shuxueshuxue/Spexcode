@@ -105,11 +105,18 @@ export const routeHash = (page, param, query = null) =>
 // Navigate by writing the hash. A page switch, a list→detail open, and a human's filter change all PUSH
 // (GitHub-measured: Back restores the previous list URL, filters intact); `replace` is for AUTOMATIC
 // state-naming only — a normalization or the session board's selected-tab echo.
+// Rewriting the URL is ADDRESS-BAR COSMETICS, and some documents refuse it: an iframe `srcdoc`, a sandboxed
+// frame, anything whose URL the History API will not let a script restate. Those contexts still deserve the
+// right VIEW, so a refusal is reported, never thrown — a published page opened in a preview pane used to take
+// the whole mount down here, and render blank, because this ran inside a render-time useState.
+function replaceHash(h) {
+  try { window.history.replaceState(null, '', h); return true } catch { return false }
+}
+
 export function navigate(page, param = null, { replace = false, query = null } = {}) {
   const h = routeHash(page, param, query)
   if (window.location.hash === h) return
-  if (replace) {
-    window.history.replaceState(null, '', h)
+  if (replace && replaceHash(h)) {
     // replaceState fires no hashchange; poke the subscribers so every useRoute converges on the URL.
     window.dispatchEvent(new HashChangeEvent('hashchange'))
   } else window.location.hash = h
@@ -125,19 +132,19 @@ const currentRoute = () => {
   if (PUBLIC_GRAPH_ONLY) {
     const face = parseRoute(window.location.hash)
     if (PUBLIC_PAGES.includes(face.page)) return face
-    window.history.replaceState(null, '', '#/spec')
+    replaceHash('#/spec')
     return parseRoute('#/spec')
   }
   const legacy = sessionSurfaceHash(window.location.hash) || legacyReviewHash(window.location.hash) || invalidReviewPageHash(window.location.hash)
   if (legacy) {
-    window.history.replaceState(null, '', legacy)
+    replaceHash(legacy)
     return parseRoute(legacy)
   }
   const parsed = parseRoute(window.location.hash)
   // Cold/unknown hashes name the daily sessions face. Normalize them so the address bar agrees with the
   // view instead of merely rendering an implicit fallback; an explicit empty route is preserved.
   if (parsed.page === 'sessions' && !/^#\/sessions(?:\/|\?|$)/.test(window.location.hash || '')) {
-    window.history.replaceState(null, '', '#/sessions')
+    replaceHash('#/sessions')
     return parseRoute('#/sessions')
   }
   return parsed

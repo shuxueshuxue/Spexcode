@@ -1,12 +1,12 @@
 ---
-title: widget
+title: draw
 surface: skill
 status: active
 hue: 165
 desc: Draw a small HTML component into the conversation with `spex session widget put <name> <file>` and point at it as `[[widget:<name>]]`, instead of describing it in prose. Use when asking the human to choose between options, when reporting progress they will read again later, when comparing several things side by side, or when supervising a fleet of sessions — and use it to redraw the picture once their answer arrives.
 ---
 
-# widget
+# draw
 
 Some answers are a paragraph and some are a picture. A question with three options, a run that is 3 of 7
 nodes in, a table of children and what each is waiting on: written as prose these are read once and then

@@ -189,6 +189,20 @@ keeps showing the version they are working in and offers the newer one; their ow
 draft, is what lets it through. Replacing a form mid-edit to show fresher numbers trades the thing being
 done for the thing being displayed.
 
+## how an agent learns it exists
+
+The always-materialized system contract carries one operational line: when a picture serves the human better
+than a paragraph would, draw it with `spex session widget put` and point at it as `[[widget:<name>]]`. The
+rest lives in `spex guide widget` — what a widget may contain, the three members of its bridge, what survives
+a reload, and when a picture is worth drawing at all — exactly as [[files]] keeps its detail in its own guide
+rather than growing the prompt.
+
+There are no shipped templates. A progress bar is twenty lines of HTML that every model writes well, and a
+library of them would be a second surface to keep in step with the theme tokens and the bridge while adding
+nothing an example in the guide does not. What an agent actually needs is the contract: that it writes content
+rather than a document, that its clicks fill a draft rather than send, and that it draws itself from
+`spex.state`. Those are sentences, so they live in a guide.
+
 ## what this contract does not cover
 
 Committed state is shared by everyone who opens the widget, but nothing here makes two people editing one

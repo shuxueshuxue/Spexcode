@@ -76,6 +76,7 @@ export default function PluginsView() {
           <p className="pg-sub">
             {t('plugins.sub', { nodes: rows.length, surfaces: rows.reduce((n, r) => n + r.surfaces.length, 0) })}
             <span className="pg-profile">
+              <span className="pg-profile-k">{t('plugins.profileLabel')}</span>
               <code>{profile.name}</code>
               {profile.disables.length === 0
                 ? t('plugins.profileAll', { n: profile.retains.length })

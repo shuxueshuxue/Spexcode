@@ -4034,7 +4034,11 @@ body.is-session-dragging .si-pill.archive:hover {
 .pg-sub { margin: 0; color: var(--muted); font-size: var(--type-meta); line-height: var(--leading-ui); }
 /* the profile is one more clause of the same sentence, not a panel: it is state to know, never a control */
 .pg-profile { display: block; margin-top: var(--space-2); }
-.pg-profile code { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink2); margin-right: var(--space-3); }
+/* the profile's NAME is a value read out of the environment, so it is set apart as one — otherwise `full`
+   runs into the sentence after it and reads as an adjective of that sentence rather than the name it is */
+.pg-profile-k { margin-right: var(--space-2); }
+.pg-profile code { font-family: var(--mono); font-size: var(--type-caption); color: var(--ink2);
+  background: var(--panel2); border-radius: var(--radius); padding: 1px var(--space-2); margin-right: var(--space-3); }
 
 .pg-section { margin: 0 0 var(--space-7); }
 .pg-h { font-size: var(--type-body); font-weight: var(--weight-semibold); color: var(--ink2); margin: 0 0 var(--space-2); }

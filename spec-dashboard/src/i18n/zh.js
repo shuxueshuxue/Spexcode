@@ -158,6 +158,7 @@ export default {
     projects: '项目',
   },
   plugins: {
+    profileLabel: '启动 profile',
     profileAll: ({ n }) => `${n} 个核心钩子全部保留`,
     profileSome: ({ kept, off }) => `保留 ${kept} 个 · 这里被禁用的：${off}`,
     disabled: '被 profile 禁用',

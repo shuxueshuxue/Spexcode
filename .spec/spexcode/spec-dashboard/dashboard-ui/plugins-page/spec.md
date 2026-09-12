@@ -89,6 +89,16 @@ off, with a disabled hook greyed in place rather than hidden. The board does not
 environment variable of the process an agent launches under, not a project setting this page owns.
 
 ## the board says what the automation IS, never how a branch is doing
+
+The rows here are declarations: which surface a node plugs into, which event it binds, whether it may
+refuse. None of that changes between one session and the next, so a number that DOES change belongs to a
+board about work, not to this one. An earlier draft carried a health bar counting live worktrees against
+declared contracts, and its denominator was wrong three times running — dormant directories, then live
+sessions, then, on inspection, branch age — because the quantity it wanted did not exist on this surface to
+be counted correctly. That is the general rule, not an anecdote about one bar: a figure this page cannot
+derive from the plugin definitions it reads is a figure this page must not draw, and the reader who wants
+the fleet's state has [[sessions-view]] for it.
+
 ## one document, no dock
 
 The board names no object, projects no navigator, and holds one full-width document. It is `resident`, so

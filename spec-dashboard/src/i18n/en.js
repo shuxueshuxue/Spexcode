@@ -163,6 +163,7 @@ export default {
     projects: 'Projects',
   },
   plugins: {
+    profileLabel: 'startup profile',
     profileAll: ({ n }) => `all ${n} core hooks retained`,
     profileSome: ({ kept, off }) => `${kept} retained · disabled here: ${off}`,
     disabled: 'disabled by the profile',

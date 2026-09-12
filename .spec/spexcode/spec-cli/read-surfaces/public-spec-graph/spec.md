@@ -92,7 +92,12 @@ or terminal transports, and normalizes every hash outside `PUBLIC_PAGES` back to
 attachments, a launcher list: each resolves from `PUBLIC_GRAPH_ONLY` at its one definition, so a surface
 that never heard of publishing is still right in both builds. A call site that has to remember to pass a
 flag is a call site that will eventually forget, and forgetting means a static page firing a request only a
-backend could answer. Where a published tree genuinely has no data — the source files under the explorer's
+backend could answer. That is not a harmless 404: a failed read is what raises the
+offline banner, so a page with no backend by design ends up telling its reader the backend is unavailable and
+offering a retry for something that was never meant to exist. Which build a page is stays legible even when
+the CHUNKING changes: a lazy chunk the directory build never fetches is inlined and live in the single-file
+page, so a surface that is merely unreachable there is mounted here, and only the guard at the one definition
+holds in both. Where a published tree genuinely has no data — the source files under the explorer's
 Files section — the surface is not rendered at all rather than rendered empty. The artifact is therefore safe to serve from an ordinary static host and never reuses the
 `spexcode.net` documentation root. Public boot reads the graph index once; static graph and document JSON use
 conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an

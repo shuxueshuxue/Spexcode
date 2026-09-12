@@ -651,6 +651,11 @@ export async function loadPlugins() {
 // is the `-L` label the private tmux server runs under, so the attach modal ([[attach-menu]]) can compose the raw
 // `tmux -L <socket> attach -t <id>` fallback without hardcoding the socket.
 export async function loadSettings() {
+  // A published tree has no backend to ask, and asking anyway is not a harmless 404: the failed read is what
+  // raises the offline banner, so a static page ends up telling its reader the backend is unavailable and
+  // offering a retry for a backend that was never supposed to exist. The answer belongs HERE, at the one
+  // definition — a consumer that has to remember the flag is a consumer that will eventually forget.
+  if (PUBLIC_GRAPH_ONLY) return { launchers: [] }
   const res = await apiFetch('/api/settings')
   return res.json()
 }

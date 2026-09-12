@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -58,6 +58,15 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
     harnesses: ['claude'],
     sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
   }, null, 2) + '\n')
+  // The dispatcher SENDS the merge skill's body ([[review-payload]]), so a fixture without that node proves
+  // nothing about the happy path — it only reproduces the loud refusal. Plant the shipped node itself rather
+  // than a stand-in, so this test breaks when the real landing workflow changes, which is the point of it.
+  const mergeSkillDir = join(project, '.spec', 'project', '.plugins', 'skills', 'merge')
+  mkdirSync(mergeSkillDir, { recursive: true })
+  const shippedMergeSkill = readFileSync(
+    join(packageRoot, 'templates', 'spec', 'project', '.plugins', 'skills', 'merge', 'spec.md'), 'utf8')
+  writeFileSync(join(mergeSkillDir, 'spec.md'), shippedMergeSkill)
+
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'merge-dispatch@example.test')
   git(project, 'config', 'user.name', 'Merge Dispatch Fixture')
@@ -117,13 +126,15 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
 
     const timeline = await waitFor(
       () => request(base, `/api/sessions/${id}/timeline`).then((reply) => reply.body.events as Array<{ kind: string; text: string }>),
-      (events) => events.some((event) => event.kind === 'sent' && event.text.startsWith('Merge your branch into main')),
+      (events) => events.some((event) => event.kind === 'sent' && event.text.includes('do not dispatch another merge request back to yourself')),
       'merge prompt timeline append',
     )
-    const prompt = timeline.find((event) => event.kind === 'sent' && event.text.startsWith('Merge your branch into main'))!.text
-    assert.match(prompt, /In your own worktree, merge the latest main into your branch\. Resolve any conflicts there and re-run the tests\./)
-    assert.match(prompt, /Atomic landing: main only receives the completed branch as one no-ff merge\. Never resolve conflicts in the shared main checkout\./)
-    assert.match(prompt, /Verify main advanced cleanly with no merge left in progress\./)
+    const prompt = timeline.find((event) => event.kind === 'sent' && event.text.includes('do not dispatch another merge request back to yourself'))!.text
+    // what arrives is the node's own body, not a paraphrase of it: the steps the skill teaches are the steps
+    // the agent receives, which is the whole reason the dispatcher reads the node instead of holding a copy.
+    const body = shippedMergeSkill.slice(shippedMergeSkill.indexOf('# merge')).trim()
+    assert.equal(prompt.trim(), body, 'the dispatched text is the merge skill body verbatim')
+    assert.match(prompt, /add a temporary detached worktree of\s+the source head/, 'the landing flow that protects dirty work survived the trip')
     assert.doesNotMatch(prompt, /REVIEWED_GENERATION|LANDING_MERGED|printf|expectedBranchHead|reviewEpoch/)
   } finally {
     if (id && backend) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})

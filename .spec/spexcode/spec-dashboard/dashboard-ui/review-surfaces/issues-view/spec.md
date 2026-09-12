@@ -108,8 +108,8 @@ theatre is invented for a model that has none. An actually empty issue store say
   Primer's 16px `issue-opened` octicon in the semantic open green; every concluded state — local
   `landed`, forge `closed` — the `issue-closed` ring+check in the one closed purple; never a CSS dot),
   then the wrapping concern and its platform label chips; under it the real issue identity, originator, and opened time; at the right
-  the comment count and store/node facts that exist. A node fact is a real `graphNodeAddress` anchor, never
-  an inert tag; label chips are their own filter controls beside the row-detail anchor. At 390px those facts join the secondary line and the
+  the comment count and store/node facts that exist. A node fact is a real `specAddress` anchor into the
+  resident Spec document, never an inert tag; label chips are their own filter controls beside the row-detail anchor. At 390px those facts join the secondary line and the
   title may wrap without horizontal overflow. **The store is metadata, never identity**: it never leads a
   row and never sits on a title.
 - **The detail page NAMES ITS OWN TAB.** An issue is the one document the board carries no projection of —
@@ -131,7 +131,7 @@ theatre is invented for a model that has none. An actually empty issue store say
   local thread's `by` is a session id — a
   live one is a click-through chip to `#/sessions/<id>`, painted by the board's STATUS_COLOR join; a
   forge login stays a plain labeled value), the platform label chips under their localized label, the spec-node refs under their localized label (real
-  `graphNodeAddress` anchors), and a forge permalink
+  `specAddress` anchors into the resident Spec document), and a forge permalink
   labeled with the store's concrete display name ("Open on GitHub"/"Open on GitLab" — canonical
   display-name data, never a URL sniff, never the word "forge"; a local issue renders none). At phone
   width the side metadata reflows ABOVE the body in the one column. A forge issue's comments render as

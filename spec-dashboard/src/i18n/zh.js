@@ -651,7 +651,7 @@ export default {
     issuesEmpty: '暂无 issue。',
     issuesNoMatch: '当前视图没有匹配的 issue。',
     issuesLoading: '正在加载 issues……',
-    issuesFocusNode: '在看板上聚焦此节点',
+    issuesFocusNode: '在 Spec 中打开此节点',
     issuesReplies: ({ n }) => `${n} 条回复`,
     issuesOpenOnStore: '在 {store} 上打开 ↗',
     // 人工写入路径（[[issues-view]]）—— 回复输入框 + 新建 issue 的独立页面（#/issues/new）。

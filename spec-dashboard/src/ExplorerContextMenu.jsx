@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator } from './ContextMenu.jsx'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
-import { copyAddress, copyText, graphNodeAddress, hashAddress, navigateAddress, specAddress } from './address.js'
+import { copyAddress, copyText, hashAddress, navigateAddress, specAddress } from './address.js'
 import { routeHash } from './route.js'
 import { openNewTab } from './tabs.js'
 import { shortcutHint } from './bindings.js'
@@ -64,7 +64,7 @@ export default function ExplorerContextMenu({ menu, onClose, owningNodeOf, onSen
             <ContextMenuItem icon="plus" hint={newTabHint} onClick={act(() => openNewTab('spec', menu.id))}>
               {t('tabs.openInNewTab')}
             </ContextMenuItem>
-            <ContextMenuItem icon="graph" onClick={act(() => navigateAddress(graphNodeAddress(menu.id)))}>
+            <ContextMenuItem icon="graph" onClick={act(() => navigateAddress(specAddress(menu.id)))}>
               {t('explorerMenu.revealOnGraph')}
             </ContextMenuItem>
           </ContextMenuGroup>

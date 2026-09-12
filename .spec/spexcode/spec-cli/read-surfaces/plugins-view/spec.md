@@ -55,8 +55,16 @@ anything is misconfigured — and the trees disagreed exactly as much after bein
 because there was nothing to repair. A tree carrying NO manifest would be a real fault, but that belongs
 with session health, not with an inventory of what the plugins are.
 
+## it also reports the profile, because the profile is what turns these off
+
+Every core hook's body opens by saying the startup `SPEX_PROFILE` list may disable it with a clean no-op.
+That list is therefore part of the answer to "what automation does this project run", and a surface that
+omitted it would be describing eight hooks without saying which of them a launched agent actually carries.
+It is resolved through the CLI's own `resolveCliProfile`, never re-parsed here, and reported as the active
+name plus which core hooks it retains and which it drops.
+
 ## what it does not do
 
-It reads. It does not materialize, repair, enable, or disable anything, and it takes no argument that
-could select a subset — a surface that could also change the thing it reports would make the two halves
-one again.
+It reads. It does not materialize, repair, enable, or disable anything, and it takes no argument that could
+select a subset. The profile especially: it belongs to the process an agent launches under, not to a project
+setting this surface could own, so reporting it is the whole of what reporting it means.

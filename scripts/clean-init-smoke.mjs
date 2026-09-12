@@ -5,11 +5,11 @@ import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { parseFrontmatter } from '@spexcode/spec-core'
-import { buildProjection, projectionDiff } from './sync-init-plugins.mjs'
+import { seedFiles, diffAgainst } from './check-init-plugins.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const CANONICAL_PLUGINS = buildProjection()
+const CANONICAL_PLUGINS = seedFiles()
 const FORBIDDEN_ADOPTER_TEXT = [
   '.spec/spexcode/',
   'deploying the fleet',
@@ -395,7 +395,7 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
 
   const hookEvents = new Set(Object.keys(JSON.parse(readFileSync(join(project, harness.shim), 'utf8')).hooks ?? {}))
   assert.deepEqual(
-    projectionDiff(projectedPluginsForEvents(hookEvents), join(project, '.spec', 'project', '.plugins')),
+    diffAgainst(projectedPluginsForEvents(hookEvents), join(project, '.spec', 'project', '.plugins')),
     [],
     `[${name}] initialized plugins equal the selected harness event-reachable canonical projection byte-for-byte and mode-for-mode`,
   )

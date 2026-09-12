@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writ
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
-import { LIVE_PLUGINS, buildProjection, projectionDiff, writeProjection } from './sync-init-plugins.mjs'
+import { LIVE_PLUGINS, INIT_PLUGINS, diffAgainst, initPluginDifferences, seedFiles } from './check-init-plugins.mjs'
 
 function write(path, content, mode = 0o644) {
   mkdirSync(dirname(path), { recursive: true })
@@ -12,55 +12,66 @@ function write(path, content, mode = 0o644) {
   chmodSync(path, mode)
 }
 
-test('init plugin projection derives content, membership, links, and helper files from one live tree', () => {
+test('the checker states the rule between the two tracked copies, and names every way they break it', () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-init-plugins-'))
-  const specRoot = join(root, '.spec')
-  const plugins = join(specRoot, 'spexcode', '.plugins')
-  const target = join(root, 'template', '.plugins')
+  const specRoot = join(root, '.spec', 'spexcode')
+  const plugins = join(specRoot, '.plugins')
+  const seed = join(root, 'template', '.plugins')
+  const check = () => initPluginDifferences({ sourceDir: plugins, targetDir: seed, specRoot })
   try {
-    write(join(specRoot, 'spexcode', 'outside', 'spec.md'), '---\ntitle: outside\n---\noutside\n')
+    // a node OUTSIDE the plugin tree: known to this repository, never shipped — so a link to it is refused
+    write(join(specRoot, 'outside', 'spec.md'), '---\ntitle: outside\n---\noutside\n')
     write(join(plugins, 'spec.md'), '---\ntitle: .plugins\n---\nroot\n')
     write(join(plugins, 'shared', 'spec.md'), [
-      '---',
-      'title: shared',
-      '---',
-      'keep [[shared]], unwrap [[held]] and [[outside]], preserve `[[outside]]`.',
-      'path: .spec/spexcode/.plugins/shared/run.sh',
-      '',
+      '---', 'title: shared', 'seed: true', '---',
+      'keep [[shared]], teach `[[outside]]`.',
+      'path: .spec/spexcode/.plugins/shared/run.sh', '',
     ].join('\n'))
     write(join(plugins, 'shared', 'run.sh'), '#!/bin/sh\n', 0o755)
     write(join(plugins, 'held', 'spec.md'), '---\ntitle: held\nseed: false\n---\nheld\n')
     write(join(plugins, 'held', 'secret.txt'), 'secret\n')
 
-    const projection = buildProjection({ sourceDir: plugins, specRoot })
-    assert.deepEqual([...projection.keys()].sort(), ['shared/run.sh', 'shared/spec.md', 'spec.md'])
-    const shared = projection.get('shared/spec.md').content.toString('utf8')
-    assert.match(shared, /keep \[\[shared\]\], unwrap held and outside, preserve `\[\[outside\]\]`/)
-    assert.match(shared, /\.spec\/project\/\.plugins\/shared\/run\.sh/)
+    // the seed a person writes by hand: the same words, its own spec root, no `seed:` line, no held-back node
+    write(join(seed, 'spec.md'), '---\ntitle: .plugins\n---\nroot\n')
+    write(join(seed, 'shared', 'spec.md'), [
+      '---', 'title: shared', '---',
+      'keep [[shared]], teach `[[outside]]`.',
+      'path: .spec/project/.plugins/shared/run.sh', '',
+    ].join('\n'))
+    write(join(seed, 'shared', 'run.sh'), '#!/bin/sh\n', 0o755)
+    assert.deepEqual(check(), [], 'the rule holds: same words, its own root, no seed: line, held-back node absent')
 
-    writeProjection(projection, target)
-    assert.deepEqual(projectionDiff(projection, target), [])
-    assert.ok(statSync(join(target, 'shared', 'run.sh')).mode & 0o111, 'helper executable mode is preserved')
+    chmodSync(join(seed, 'shared', 'run.sh'), 0o644)
+    assert.deepEqual(check(), ['mode: shared/run.sh'], 'an executable helper that lost its bit is a difference')
+    chmodSync(join(seed, 'shared', 'run.sh'), 0o755)
 
-    chmodSync(join(target, 'shared', 'run.sh'), 0o644)
-    assert.deepEqual(projectionDiff(projection, target), ['mode: shared/run.sh'])
-    chmodSync(join(target, 'shared', 'run.sh'), 0o755)
-
-    writeFileSync(join(target, 'shared', 'spec.md'), 'one-sided edit\n')
-    rmSync(join(target, 'shared', 'run.sh'))
-    write(join(target, 'extra.txt'), 'extra\n')
-    assert.deepEqual(projectionDiff(projection, target), [
-      'extra: extra.txt',
-      'missing: shared/run.sh',
+    writeFileSync(join(seed, 'shared', 'spec.md'), 'one-sided edit\n')
+    rmSync(join(seed, 'shared', 'run.sh'))
+    write(join(seed, 'extra.txt'), 'extra\n')
+    assert.deepEqual(check(), [
+      'extra in the seed: extra.txt',
+      'missing from the seed: shared/run.sh',
       'content: shared/spec.md',
     ])
+    rmSync(join(seed, 'extra.txt'))
+    write(join(seed, 'shared', 'run.sh'), '#!/bin/sh\n', 0o755)
+
+    // a link to a node the seed does not ship is REFUSED, not rewritten — an adopter would see a dangling
+    // mention in a node they never wrote. A link inside backticks is the syntax being taught, and stays.
+    const linked = ['---', 'title: shared', 'seed: true', '---',
+      'keep [[shared]], teach `[[outside]]`, but [[outside]] bare is refused.',
+      'path: .spec/spexcode/.plugins/shared/run.sh', ''].join('\n')
+    writeFileSync(join(plugins, 'shared', 'spec.md'), linked)
+    writeFileSync(join(seed, 'shared', 'spec.md'), linked.replace('.spec/spexcode/', '.spec/project/').replace('seed: true\n', ''))
+    assert.deepEqual(check().filter((d) => d.startsWith('link:')),
+      ['link: shared/spec.md names [[outside]], which the seed does not ship — write it as plain text'])
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 })
 
 test('production seed carries the high-risk measurement and Codex multi-file invariants', () => {
-  const projection = buildProjection()
+  const projection = seedFiles()
   const text = (path) => projection.get(path)?.content.toString('utf8') ?? ''
 
   const core = text('core/spec.md')
@@ -91,7 +102,7 @@ test('production seed carries the high-risk measurement and Codex multi-file inv
   assert.ok(!projection.has('skills/taste/spec.md'), 'SpexCode engineering taste is an explicit holdback')
   assert.ok(!projection.has('review/spec.md'), 'review presets remain an explicit live-only holdback')
   assert.ok(!projection.has('skills/e2e-review/spec.md'), 'retired recording review skill is absent')
-  assert.deepEqual(projectionDiff(projection), [], 'the checked-in production seed is the current projection')
+  assert.deepEqual(initPluginDifferences(), [], 'the checked-in seed still satisfies the rule')
 })
 
 test('Codex multi-file hooks consider every path in one payload', () => {

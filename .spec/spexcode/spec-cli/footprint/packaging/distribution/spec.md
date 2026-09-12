@@ -22,7 +22,7 @@ related:
   - distribution/penguin/use-spexcode/skills/atlas/SKILL.md
   - scripts/distribution.test.mjs
   - .spec/spexcode/.plugins/skills/atlas/spec.md
-  - scripts/sync-init-plugins.mjs
+  - scripts/check-init-plugins.mjs
   - package.json
   - .github/workflows/ci.yml
 ---

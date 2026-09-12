@@ -13,7 +13,6 @@ related:
   - spec-dashboard/src/sessionShortcuts.js
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/session.test.mjs
-  - spec-dashboard/test/session-tree-disclosure.e2e.mjs
 ---
 # session-nesting
 

@@ -23,7 +23,6 @@ related:
   - spec-dashboard/test/split-region.e2e.mjs
   - spec-dashboard/test/session-web.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
-  - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/session-shortcuts.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/conversation-scroll-survives-switch.e2e.mjs

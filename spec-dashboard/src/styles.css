@@ -981,23 +981,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 .brand { color: var(--ink2); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-normal); }
 
-/* Public graph disclosure is a separate static reading surface, placed away from graph stats and the
-   HUD. It is intentionally lazy: opening it is the only action that reads release metadata. */
-.public-about-shell { position: relative; display: inline-flex; }
-.public-about-trigger {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 9px;
-  border: 1px solid var(--edge); border-radius: var(--radius); background: var(--raised); color: var(--ink2);
-  cursor: pointer; font-family: var(--ui-font); font-size: var(--type-control); line-height: var(--leading-ui);
-  box-shadow: var(--shadow);
-}
-.public-about-trigger:hover, .public-about-trigger[aria-expanded="true"] { background: var(--wash-hover); color: var(--ink2); }
+/* Public graph disclosure hangs off the status bar's project identity — the one door a published tree's
+   name can lead to, since it has no hub and no catalog. It is intentionally lazy: opening it is the only
+   action that reads release metadata. */
 .public-about {
   /* A VIEWPORT overlay, not a row in the strip. Its trigger sits in a status-bar item, and every `.sb-item`
      clips its overflow so a long status string cannot spill sideways across the strip — so an absolutely
      positioned panel inside one is invisible no matter how correct its own box is: 254px of panel laid out
      inside a 31px clipped row, present in the DOM, measurable, and painting nothing. Positioning against the
      viewport is what the panel always meant; `absolute` only happened to work while its ancestor did not clip. */
-  position: fixed; right: 8px; bottom: 38px; z-index: 40; width: min(380px, calc(100vw - 84px)); padding: 14px;
+  position: fixed; left: 8px; bottom: 38px; z-index: 40; width: min(380px, calc(100vw - 84px)); padding: 14px;
   /* The panel is a viewport overlay by POSITION but still a status-bar descendant by DOM, so it inherits the
      strip's `white-space: nowrap` — correct for a one-line status, fatal for a paragraph. Prose in an overlay
      wraps. */
@@ -1029,6 +1022,11 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .public-about-link:hover { background: var(--wash-hover); color: var(--ink2); }
 .public-about-link.primary { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); color: var(--blue); }
+.public-about-credit {
+  margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--edge);
+  color: var(--muted); font-size: var(--type-caption);
+}
+.public-about-credit a { color: var(--blue); }
 
 /* lock banner — top-center hint shown while a session owns the graph. Sits between the HUD (top-left)
    and the session window (top-right); carries the locked session's colour on its spine via --ov. */

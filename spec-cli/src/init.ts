@@ -126,6 +126,33 @@ function templateSessions(nativeChosen: string[]): Record<string, any> | undefin
   return { ...sessions, launchers, ...(names.length ? { defaultLauncher: names[0] } : {}) }
 }
 
+// The root node's ID is its directory name, and a seeded tree calls that directory `project` — so every
+// adopted repository's tree is rooted at a node literally named "project", and a published page shows that
+// as the top of the graph no matter what the project is called. A name the adopter gave us is the name the
+// root should carry: `--title zgent` means the root node IS zgent. Only the ID vocabulary constrains it
+// ([[spec-lint]]'s id-format: ascii [a-z0-9-] or a non-ascii letter/number), so a title that cannot be an
+// id — "My App v2" — keeps the neutral `project` rather than minting something illegal.
+const ROOT_ID_RE = /^\.?(?:[a-z0-9-]|(?![\x00-\x7F])[\p{L}\p{N}])+$/u
+export function rootNodeId(title: string | undefined): string | null {
+  if (!title) return null
+  const id = title.trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/^-+|-+$/g, '').normalize('NFC')
+  return id && ROOT_ID_RE.test(id) ? id : null
+}
+
+// Rename the seeded root to that id and make its own body say the name — the frontmatter `title:` the graph
+// reads, and the `# heading` a reader sees first.
+function nameRoot(specDest: string, seeded: string, id: string): void {
+  if (id === seeded) return
+  const from = join(specDest, seeded)
+  const to = join(specDest, id)
+  if (!existsSync(from) || existsSync(to)) return
+  renameSync(from, to)
+  const body = join(to, 'spec.md')
+  if (!existsSync(body)) return
+  const text = readFileSync(body, 'utf8')
+  writeFileSync(body, text.replace(/^title: .*$/m, `title: ${id}`).replace(/^# .*$/m, `# ${id}`))
+}
+
 // `spex init --pure`: the spec skeleton and nothing else — the root node from templates/pure and a config
 // holding only the template's lint section. No .plugins, no git hooks, no harness artifacts, no global store:
 // every byte it writes is under .spec. A tree that already exists is left exactly as it is.
@@ -144,12 +171,17 @@ function pureInit(targetDir: string, title?: string): void {
       writeFileSync(cfgDest, JSON.stringify(title ? { dashboard: { title } } : {}, null, 2) + '\n')
       planted.push(relative(targetDir, cfgDest))
     }
+    const rootId = rootNodeId(title)
+    if (rootId) {
+      nameRoot(specDest, 'project', rootId)
+      for (let i = 0; i < planted.length; i++) planted[i] = planted[i].replace(/^(\.spec\/)project(\/|$)/, `$1${rootId}$2`)
+    }
     console.log(`✓ planted ${planted.join(', ')} — and nothing else: no .plugins, no git hooks, no agent config, no file outside .spec`)
   }
   console.log(`
 Next steps:
   1. .spec/ is project source of truth: add and commit it (\`spex spec lint\` reports an untracked tree).
-  2. Edit .spec/project/spec.md to describe YOUR project, then grow child nodes beneath it.
+  2. Edit .spec/${rootNodeId(title) ?? 'project'}/spec.md to describe YOUR project, then grow child nodes beneath it.
   3. Coverage is off: name the directories whose files each want a spec in lint.governedRoots
      (.spec/spexcode.json) when you want it. "." is the whole project.
   4. When you want SpexCode's workflow too (git hooks, sessions, agent wiring), run \`spex init --harness <id>\`:
@@ -246,7 +278,9 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
       join(TEMPLATES, 'spec'), specDest, targetDir,
       includeSeedDir,
     )
-    console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .plugins)`)
+    const seededRootId = rootNodeId(title)
+    if (seededRootId) nameRoot(specDest, 'project', seededRootId)
+    console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root '${seededRootId ?? 'project'}' node + default .plugins)`)
     // 1a. stack the selected preset's package(s) ON TOP of the default set — cumulative, so every tier from
     // just above `default` up to the selection is planted. Each lives under templates/presets/<tier>/ mirroring
     // the default layout (its `.plugins/<plugin>` lands in the seeded project node's `.plugins`). See [[init-preset]].
@@ -254,7 +288,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
       const tier = PRESET_TIERS[r]
       const pkg = join(TEMPLATES, 'presets', tier)
       if (!existsSync(pkg)) { console.warn(`• preset '${tier}' has no package at ${pkg} — skipped.`); continue }
-      const added = copyTreeNoClobber(pkg, join(specDest, 'project'), targetDir, includeSeedDir)
+      const added = copyTreeNoClobber(pkg, join(specDest, seededRootId ?? 'project'), targetDir, includeSeedDir)
       console.log(`✓ seeded preset '${tier}' (${added.length} file(s)) into .plugins`)
     }
   }

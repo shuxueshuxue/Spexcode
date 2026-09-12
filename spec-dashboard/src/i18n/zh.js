@@ -189,6 +189,7 @@ export default {
     settings: '设置',
     projectChip: '项目：{name} — 切换项目',
     projectChipLogin: '项目：{name} — 登录管理项目',
+    projectChipAbout: '项目：{name} — 关于这棵已发布的树',
     projectOnline: '在线',
     projectOffline: '离线',
     allProjects: '全部项目',

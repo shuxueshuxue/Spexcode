@@ -40,7 +40,9 @@ had to be updated alongside the thing it guards would reintroduce exactly the dr
 This proves the workflow's *coverage*, not any suite's content. What each suite asserts belongs to its own
 package's nodes.
 
-The gate also discovers every `*.e2e.mjs` file by walking the repository rather than keeping a second file list. It
+The gate also discovers every `*.e2e.mjs` file by walking the product tree rather than keeping a second file list;
+Spex-managed `.worktrees`, `.claude`, and `.spexcode` directories are excluded so a source checkout does not scan
+its own nested worktrees. It
 measures CI reachability from every workflow under `.github/workflows/`: direct `node`, `npx`, `tsx`, and `pnpm exec`
 file operands are opened, root and workspace `npm`/`pnpm run` scripts are expanded transitively, and local composite
 actions are included. The current ruler opens 16 directly named script files and finds 91 e2e declarations; none is

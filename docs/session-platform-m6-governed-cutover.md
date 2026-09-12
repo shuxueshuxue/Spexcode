@@ -49,19 +49,27 @@
 prompt 第 4 条与提交 `0cc9813ad`；hook spec `.spec/spexcode/.plugins/core/session-listen/spec.md` 已同步。
 本账接受这个决定，并把它的两处未完成后果（M4 证明脚本、M4 owning 节点正文）记为 lane G 的工作。
 
-**D-20（待决）：self-launch 登记的"采用"判据。** 现状是 env-only。候选：(a) 保持 env-only；(b) 与 resolver 一致——
-解析出的默认路径上**已存在**一个协议库即视为采用（不创建库，不猜路径）。(b) 让每个 governed 部署里的
-self-launch 会话免配置地拿到地址；代价是每个 `SessionStart` 多一次 SQLite 打开。
+**D-20（已决，2026-09-12，人类："重构吧……理顺一下"）：self-launch 登记的"采用"判据是店，不是 env。** hook 调
+`spex internal session-register <native-id>`；CLI 只在解析出的 canonical store **已存在且 `ready`** 时 initialize，
+其它 cutover 状态回 `skipped: <state>` 并退出 0，绝不为了有地方写而建库。env 变量不再参与采用判定。
 
-**D-21（待决）：调用方的 receive 动词。** D-19 说"调用方自己决定何时取"，但 governed CLI 里没有这个动词：
-`spex help session` 无 dequeue 类命令；唯一的取件是 adopter CLI `spex-session dequeue`（要 PATH 上有它、要 env）。
-候选：(a) 新增 `spex session <recv>`，只读取**调用方自己**的地址（`SPEXCODE_SESSION_ID` / 原生 id），走同一个
-`configuredSessionApplication()`；(b) 不加动词，self-launch 项目自己装 adopter CLI。
+**D-21（已决，2026-09-12，人类）：receive 是 governed CLI 的三个动词，三种形状刻意不同。** `spex session dequeue`
+（一次性：取至多一条，空队列是正常的 `null`）、`spex session wait-dequeue`（background command：阻塞到一条到达，
+取走、打印、退出——它的退出就是唤醒；超时退 1 且不消费）、`spex session stream-dequeue`（persistent monitor：每条一行，
+不自行退出，SIGINT/SIGTERM 干净结束）。三者都只读**调用方自己**的地址（或显式 `--session <FULL-ID>`），走同一个
+`configuredSessionApplication()`，每条打印出来的消息都是在那一瞬间 at-most-once 取走的。归 [[inbox]] 节点。
 
-**D-22（待决）：裸地址的 producer。** `spex session send` 的离线分支（`spec-cli/src/cli.ts:1381-1391`）已经会
-`enqueueMessage(full, …)`，但 `full` 来自 `resolveClientSession`，需要 backend 与 governed record；`sendText` 也在
-`readRecord` 为空时拒绝。候选：(a) 让 `send` 接受一个存在于 `protocol_sessions` 但无 application 行的地址，
-只入队、不推送、stderr 说明"接收方需自行取件"；(b) 维持拒绝。(a) 是 M4 D-18 明确留给 M6 的那一步。
+**D-22（已决，2026-09-12，人类）：裸地址是合法收件人。** `sendText` 在 `readRecord` 为空时改查 `application.readAddress(id)`：
+地址存在且未 retire → 入队一条 `session.text.v1`，回 `ok, delivery:"queued", recordless:true`，不 drain（没有这个 backend
+拥有的 adapter 可推）；地址不存在 → 仍拒绝，**一个打错的 id 不得铸出一个没人读的队列**。CLI 侧 `send` 对 FULL id 在
+governed 解析落空后查本地 store 的地址；backend 不可达时走原有离线入队分支。这正是 M4 D-18 留给 M6 的那一步。
+
+**D-24（已决，2026-09-12，人类："把这个包整个删了"）：`@spexcode/session-selflaunch` 退役。** 它的两块中立逻辑
+（`resolveDatabasePath` / `requireLocalDatabasePath`）搬进 `@spexcode/session-application`（`storage-path.ts` /
+`storage-locality.ts`，节点 [[storage-path]] / [[storage-locality]]，测试同迁）；spec-cli、graphCache/graphStream、
+migrate-session-json、session-live-cutover 全部改 import。零消费者的 `bindSelfLaunchRuntime` 三件与 `spex-session` 四个动词
+删除，不迁；hook 改调 `$SPEX internal session-register`。M4 D-16 那道"spec-cli 不 import 协议栈"的边界，本来就是 M6
+的接入消解的，这次只是让包的形状跟上事实。已发布包名的退役随下一次 release 记录。
 
 **D-23（本账定）：证明脚本的存活判据。** 台账引用的每一个证明脚本，要么在 `npm test` / CI 路径里，要么在台账里
 挂着**最后一次绿的 commit**；两者皆无的脚本不得被任何台账当作"已证明"引用。理由见 §4.1：两个证明脚本在 main 上
@@ -132,9 +140,27 @@ production-cutin spec 说残留吸收"runs the same migration entry point"，所
 | 投递 | producer 能给裸地址入队 | `spex session send` 离线分支已能 `enqueueMessage`，但地址解析要 governed record；`sendText` 同样拒绝 | D-22 |
 | 取件 | 接收方在自己的回合边界取 | governed CLI 无动词；adopter CLI 有 `dequeue` 但要 env + PATH | D-21 |
 
-三个决定在 §1 里，本账不替人做。做了之后，lane H 的正向 YATU 形状是固定的：**真实 `spex init` + `spex materialize`
-+ 真实 `dispatch.sh` 起一个 self-launch 会话，用 governed CLI 给它的裸地址发一条，接收方用 governed CLI 取到；
-全程无 backend、无 governed record、零常驻进程**——即 M4 YATU 的骨架换上 M6 的两个动词。
+三个决定已在 §1 由人类做出并在同一天施工完毕（§3.1）。lane H 的正向 YATU 即 `scripts/self-launch-yatu.mjs`
+（节点 [[self-launch-yatu]]）：**真实 `spex init` + `spex materialize` + 真实 `dispatch.sh`，无 store 时 SessionStart 什么都不建；
+有 ready store 后同一事件登记出一个无 application 行的地址；plain shell 的 `spex session send <裸地址>` 在 backend 不可达
+（端口由脚本自己刚关掉的 server 取得——fetch 的 bad-port 黑名单如 :9 会失败但**不带** ECONNREFUSED，M6 头一次跑就撞上）时
+入队一条；未登记地址被拒且不被铸出；三种收信形状各按各的进程形态驱动；前后残留进程为 0，且探针先看见过本次的 canary。**
+2026-09-12 实测 **26 / 26**。
+
+### 3.1 施工结果（2026-09-12，同日落地）
+
+| 件 | 位置 | 证据 |
+|---|---|---|
+| 包退役 | `packages/session-selflaunch/` 删除；path/locality 迁入 `packages/session-application/src/storage-*.ts` | `npm test --workspace=@spexcode/session-application` 40/40（含迁入的 path/locality 测试）；lockfile、CI、release 顺序、build 顺序、launcher 闭包、governedRoots、dependencyBoundary 全部去名，`check-init-plugins` 36/36 |
+| `readAddress` | `packages/session-application/src/production.ts`（只读 `protocol_sessions` 一行，不建地址） | 被 `sendText`、CLI `send`、三个收信动词共用作"已登记"判据 |
+| 登记 | `spex internal session-register`（`spec-cli/src/session-inbox.ts`）+ hook 两份拷贝 | hook-dispatch 40/40（新增 3 条：prompt 事件零调用、SessionStart 恰一次调用、CLI 失败 exit 2） |
+| 三个动词 | `spex session dequeue` / `wait-dequeue` / `stream-dequeue`（`session-inbox.ts` + `cli.ts` + `help.ts`） | `session-inbox.cli.test.ts` 5/5：一次性恰取一条、空队列 null、未登记 exit 2；wait 先阻塞后随一条到达退 0、超时退 1 不消费；stream 三条三行、不自退、SIGTERM 退 0、全部消费；离线 send 到裸地址入队、未登记拒绝且不铸址 |
+| 裸地址 producer | `sessions.ts` `sendText`；`cli.ts` `resolveSendTarget` | 同上第 5 条 + YATU |
+| **顺手修的真缺陷** | `spec-cli/bin/spex.mjs` 启动器只镜像退出码、不转发信号：`kill <spex-pid>` 会把任何长跑动词的真实进程孤儿化（YATU 第一次跑到 stream 那一步就超时——被杀的是 launcher，`stream-dequeue` 还在读队列） | 现在转发 SIGINT/SIGTERM/SIGHUP 并按子进程方式退出；`launcher-midmerge.test.ts` 新增一条实测；节点 [[merge-tooling-resilience]] 正文补一段 |
+
+**一条对 09-02 提交的更正**：`0cc9813ad` 声称给 `spex session send` 加了"够不到 backend 时退到本地 enqueue"。本次量到：
+仓库里没有任何测试走过那条分支；而且它依赖 `backendConnectionRefused` 在错误链里看到 `ECONNREFUSED`，我第一版测试用
+`127.0.0.1:9` 得到的是 undici 的 `bad port` 错误，分支根本不进。分支本身是对的，但"已交付"在 09-12 之前没有测量支撑。
 
 ## 4. 门禁与结果（2026-09-12 实测）
 
@@ -176,8 +202,8 @@ D-23 由此而来。
 
 | Lane | 角色 | 独占文件面 | 明确禁止 | 门 |
 |---|---|---|---|---|
-| **G** | 证明修复 | `scripts/m4-self-launch-yatu.mjs`、`scripts/session-production-cutover-yatu.mjs`、`.spec/spexcode/session-runtime/self-launch-entry/self-launch-cutover/spec.md` 正文（只改被 D-19 推翻的 listener 描述，不改 M4 台账） | 不改产品代码；不改 hook 脚本 | 两脚本在 main 上绿，且各自被一个 spec 节点的 `code:`/`related:` 引用；或被退役并在本账 §4.1 记退役 commit |
-| **H** | self-launch 地址缝 | `.spec/spexcode/.plugins/core/session-listen/**`、`spec-cli/templates/spec/project/.plugins/core/session-listen/**`、`spec-cli/src/cli.ts` 的 `session send` 分支与新动词、对应 help/spec 节点 | **等 D-20/21/22 决定后开工**；不碰 `sessions.ts` 的 governed 投递；不给协议加列 | §3 的正向 YATU：无 backend、无 record、零常驻进程，一发一收 |
+| **G** | 证明修复 | `scripts/session-production-cutover-yatu.mjs`、`.spec/spexcode/session-runtime/self-launch-entry/self-launch-cutover/spec.md` 正文（只改被 D-19 推翻的 listener 描述，不改 M4 台账）。`m4-self-launch-yatu.mjs` **已退役**（2026-09-12，随包一起删；继任者 `self-launch-yatu.mjs` 有 owning 节点） | 不改产品代码；不改 hook 脚本 | rehearsal 脚本在 main 上绿且被节点 `code:`/`related:` 引用，或退役并记 commit |
+| **H** | self-launch 地址缝 | （**已完成 2026-09-12**，见 §3.1）hook 两份拷贝、`session-inbox.ts`、`cli.ts`/`help.ts`、`sessions.ts` 的 `sendText` 裸地址分支、`session-application` 的 `readAddress` 与 storage 模块 | 未给协议加列；`sessions.ts` 只加了 `readRecord` 为空后的一个分支 | `self-launch-yatu.mjs` 26/26 · `session-inbox.cli.test.ts` 5/5 · hook-dispatch 40/40 |
 | **I** | governed sabotage + trace | 新建 `scripts/governed-sabotage/**`（形状沿 `scripts/zswarm-sabotage/`：计数 + `openat` 标定） | 不修被审路径；不降低 expected | 路线图 M6 六条负向证明各一；`legacyFileSyscallHits=0` 且标定命中 ≥1；RESIDUE 三处的 caller 归属逐条 MEASURED |
 | **J** | spec 正文对齐 | `docs/session-adopter-cutin-plan.md`（WAL 一句）、`.spec/spexcode/session-protocol/**` 的 journal 描述核对、production-cutin 节点里 marker 改写行为的说明 | 不改 M4/M5 台账 | `spex spec lint` 0 error；改动只到被 §2.4 点名的句子 |
 
@@ -217,7 +243,7 @@ D-23 由此而来。
 | **Inventory** | 完成 | §2：G.1 十一行 + G.2 四行逐行判定，全部 source-backed 且有活部署证据；RESIDUE 三处点名 |
 | **Sabotage** | **未做** | §4.3；归 lane I |
 | **Delete** | **未按判据关闭** | 静态引用归零已量到，file-access trace 未做；归 lane I |
-| **self-launch 地址缝** | **未开工，等三个决定** | §1 D-20/21/22；§3 |
+| **self-launch 地址缝** | **完成（2026-09-12）** | §1 D-20/21/22/24 已决并施工；§3.1；`self-launch-yatu.mjs` 26/26 |
 
 两个在 main 上红着的证明脚本不是 M6 的施工，但它们是本账能否被信的前提，所以 lane G 排在最前。
 

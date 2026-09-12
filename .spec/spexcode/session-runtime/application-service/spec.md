@@ -17,8 +17,10 @@ related:
 # session application service
 
 The application service is the adopter-owned production composition above protocol, topology, events, and runtime
-bindings. One composition is opened for one absolute database path selected by the self-launch resolver and one
-positively established local filesystem locality verdict. It opens each component once, owns a small state table,
+bindings. One composition is opened for one absolute database path selected by the package's own storage-path resolver
+([[storage-path]]) and one positively established local filesystem locality verdict ([[storage-locality]]); both
+live in this package because every Spex composition — backend, CLI verb, migration tool — must agree on where
+the store is and whether it may be opened, and an adopter-neutral placement rule has no other home. It opens each component once, owns a small state table,
 and never invents a path or a native identity. SQLite is the sole authoritative state, event, topology, and watcher
 store; there is no runtime compatibility mode or JSON read fallback.
 
@@ -62,7 +64,7 @@ or user callback runs inside the transaction. Post-commit notification is a best
 durable messages. The service never calls protocol `dequeue` for a consumer.
 
 `session-application` imports protocol and topology. Protocol and topology never import it. Topology remains usable
-without the service, and self-launch may use protocol directly without topology. The service is not a replacement for
+without the service, and an external adopter may use protocol directly without topology. The service is not a replacement for
 runtime bindings, lifecycle state, event persistence, or harness materialization.
 
 ## Proof obligations

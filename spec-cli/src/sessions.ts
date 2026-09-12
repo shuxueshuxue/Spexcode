@@ -18,6 +18,7 @@ import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { readSessionWidgets, type SessionWidget } from './session-widgets.js'
 import { acquireFreshSessionApplicationForCreate, configuredSessionApplication, initializeFreshSessionApplication, releaseFreshSessionApplicationForCreate, sessionApplicationCutoverState, setSessionApplicationCommitWake } from './session-application.js'
 import { type ProductionSessionApplication } from '@spexcode/session-application'
+import { MESSAGE_KINDS } from '@spexcode/session-protocol'
 import { decodeEventJson } from '@spexcode/session-events'
 import { withDeliveryLocks } from './delivery-lock.js'
 import { withRecordLock, withRecordLockSync, readRecord, readLiveRecord, writeRecord, fromRaw, hasValidColdProof, coldProofFor, launchReadinessPending, restoreLaunchReadinessOriginal, retirementReason, corruptReason, assertLegacyJsonWritesAllowed, type SessRec, SessionRecordUnusable, setRecordTransitionWrapper, backendLaunchAuthority, canDrainQueued } from './session-record.js'
@@ -3593,6 +3594,9 @@ export const EMPTY_PROMPT_ERROR = 'empty prompt — nothing to dispatch'
 type AcceptedDispatch = DispatchResult & {
   replayed?: boolean
   code?: DispatchAcceptCode
+  // set when the target is a registered address with no governed record: queued for the recipient's own dequeue
+  recordless?: boolean
+  messageId?: string
   // What this call MEASURED about the handover, never what it assumes. `accepted` = the adapter took the
   // message. `queued` = the adapter was asked and still owes it. `deferred` = the caller asked for the
   // handover to happen after the response, so NOTHING was measured and no transport claim may be made.
@@ -3617,7 +3621,16 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     let replayed = false
     try {
       const rec = readRecord(id)
-      if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+      if (!rec) {
+        // A registered address with no record is a self-launched harness ([[self-launch-entry]]): it has a queue but
+        // no adapter this backend owns, so acceptance is the enqueue and nothing here can hand the message over.
+        // The recipient takes it with its own inbox verb ([[inbox]]). An address that was never initialized is
+        // still refused — a typo must not mint a queue nobody reads.
+        const address = application.readAddress(id)
+        if (!address || address.retiredAtMs !== null) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+        const bare = application.enqueueMessage(id, { kind: MESSAGE_KINDS.SESSION_TEXT, body: Buffer.from(text, 'utf8'), senderSessionId: from ?? null })
+        return { ok: true, delivery: 'queued', messageId: bare.messageId, recordless: true }
+      }
       await opts.acceptGuard?.(rec)
       const prompt = await composeSessionPrompt(text, rec, {
         from, replyVia: opts.replyVia,

@@ -41,6 +41,12 @@ Two rules make the tooling survive it:
   SpexCode, then retry" - and exits **75** (EX_TEMPFAIL: transient, retry later). A published package has no
   source tree to scan and executes its shipped `dist` directly.
 
+The launcher is also the process boundary a caller can see. Its pid is what a shell, a monitor, or a harness's
+task-stop signals, while the verb runs in the compiled child; so the launcher forwards `SIGINT`, `SIGTERM`, and
+`SIGHUP` to a still-running child and exits as the child exited — its code, or 128 plus the signal number when a
+signal ended it. Mirroring only the exit code left a long-running verb (a `session stream-dequeue`, a `wait`) orphaned
+by `kill <spex-pid>`: still consuming, with no reader attached.
+
 The launcher is also the process-identity boundary for project and host control planes. For `serve` and
 `dashboard` it removes adapter-declared session identity variables before starting the compiled CLI, including the
 legacy fallback manifest when no explicit variable list is present. Ordinary session/read/write commands

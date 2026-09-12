@@ -422,6 +422,21 @@ async function resolveSelectorOrExit(selector: string): Promise<string> {
   return (await resolveSessionOrExit(selector)).id
 }
 
+// A send target is a governed session by selector, OR a registered address with no record at all — a self-launched
+// harness ([[self-launch-entry]]) — which only a FULL id can name, and which the local store answers for directly.
+async function resolveSendTarget(selector: string): Promise<string> {
+  if (!selector) { console.error('spex: missing session selector (id | id-prefix | branch | . for self)'); process.exit(2) }
+  const { resolveClientSession } = await import('./client.js')
+  const r = await resolveClientSession(selector)
+  if ('ok' in r) return r.ok.id
+  if ('none' in r && FULL_SESSION_ID.test(selector)) {
+    const { configuredSessionApplication } = await import('./session-application.js')
+    const address = configuredSessionApplication().readAddress(selector)
+    if (address && address.retiredAtMs === null) return selector
+  }
+  return (await resolveSessionOrExit(selector)).id
+}
+
 // Internal lifecycle writers use the same local record-resolution rules as worker declarations, but the
 // porcelain done/park/ask dispatch below goes straight to its named handler.
 async function stateKit() {
@@ -1166,6 +1181,40 @@ if (cmd === 'serve') {
         console.log(`watching ${result.watched.join(' ')}`)
       }
     }
+  } else if (sub === 'dequeue' || sub === 'wait-dequeue' || sub === 'stream-dequeue') {
+    // THE CALLER'S OWN INBOX, in three deliberately distinct shapes ([[inbox]]): `dequeue` is a one-shot read,
+    // `wait-dequeue` blocks for ONE message and is meant to run as a background command whose exit is the wake-up,
+    // `stream-dequeue` never exits and is meant to feed a line-oriented monitor. Every printed message is consumed
+    // at-most-once from the same canonical queue the backend's adapter drain reads.
+    rejectUnknownBackendFlags(`spex session ${sub}`, 4, ['session', 'timeout', 'interval', 'json'])
+    if (positionals(4).length) { console.error(`usage: spex session ${sub} [--session <FULL-SESSION-ID>] [--json]${sub === 'dequeue' ? '' : ' [--interval S=1]'}${sub === 'wait-dequeue' ? ' [--timeout S=1200]' : ''}`); process.exit(2) }
+    const inbox = await import('./session-inbox.js')
+    const { configuredSessionApplication } = await import('./session-application.js')
+    let address: string
+    try { address = inbox.inboxAddress(flag('session')) } catch (error) { console.error(`spex session ${sub}: ${(error as Error).message}`); process.exit(2) }
+    const application = configuredSessionApplication()
+    if (!application.readAddress(address)) { console.error(`spex session ${sub}: ${address} is not a registered address in this store — a governed session is registered at create, a self-launched one by its SessionStart hook`); process.exit(2) }
+    const json = has('json')
+    const intervalMs = (Number(flag('interval')) || 1) * 1000
+    if (sub === 'dequeue') {
+      const taken = inbox.takeOne(application, address)
+      if (!taken) { console.log(json ? 'null' : ''); process.exit(0) }
+      console.log(inbox.formatInbox(inbox.renderInbox(taken), json ? 'json' : 'block'))
+      process.exit(0)
+    }
+    if (sub === 'wait-dequeue') {
+      const timeoutSec = Number(flag('timeout')) || 1200
+      console.error(`spex session wait-dequeue: blocking until one message arrives for ${address.slice(0, 8)} (timeout ${timeoutSec}s) — run it in the BACKGROUND; its exit is your wake-up`)
+      const taken = await inbox.waitForOne(application, address, { timeoutMs: timeoutSec * 1000, intervalMs })
+      if (!taken) { console.error(`spex session wait-dequeue: timeout — no message arrived for ${address.slice(0, 8)} within ${timeoutSec}s`); process.exit(1) }
+      console.log(inbox.formatInbox(inbox.renderInbox(taken), json ? 'json' : 'block'))
+      process.exit(0)
+    }
+    const stop = { stopped: false }
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { stop.stopped = true; process.exit(0) })
+    console.error(`spex session stream-dequeue: streaming every message for ${address.slice(0, 8)}, one line each, until killed`)
+    await inbox.streamInbox(application, address, intervalMs, (message) => console.log(inbox.formatInbox(inbox.renderInbox(message), json ? 'json' : 'line')), stop)
+    process.exit(0)
   } else if (sub === 'wait') {
     const selectors = positionals(4)
     const kit = await followKit(selectors, 'spex session wait')
@@ -1335,7 +1384,7 @@ if (cmd === 'serve') {
         ? (FULL_SESSION_ID.test(id ?? '')
             ? id!
             : sessionSendUsage('--ssh requires a full session id, not a selector'))
-        : await resolveSelectorOrExit(id)
+        : await resolveSendTarget(id)
       if (sendArgs.kind === 'keys') {
         // the LAST-RESORT face of send: forward raw nav-mode keystrokes (tmux send-keys, NEVER the prompt
         // socket) — how a manager drives a worker wedged in an interactive TUI dialog the prompt channel
@@ -1442,7 +1491,7 @@ if (cmd === 'serve') {
       await assertLocalBackend()
       process.exit(await attachSession(await resolveSelectorOrExit(id)))
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | widget | show | watch | wait | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | resources | quarantine | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | widget | show | watch | wait | dequeue | wait-dequeue | stream-dequeue | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | resources | quarantine | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }
@@ -1461,6 +1510,17 @@ if (cmd === 'serve') {
     const request = sub === 'peer-accept' ? { ...body, op: 'accept' as const } : { ...body, op: 'drop' as const }
     try { console.log(JSON.stringify(await peerRpc(request as import('./machine-peer.js').PeerRpcRequest))) }
     catch (error) { console.error(`spex internal ${sub}: ${(error as Error).message}`); process.exit(1) }
+  } else if (sub === 'session-register') {
+    // SessionStart registration for a self-launched harness ([[session-listen]]): give the native session id a
+    // protocol address in the project's canonical store — only where that store already exists and is ready.
+    const id = process.argv[4]
+    if (!id) { console.error('usage: spex internal session-register <native-session-id>'); process.exit(2) }
+    const { registerSessionAddress } = await import('./session-inbox.js')
+    try {
+      const outcome = registerSessionAddress(id)
+      if (outcome.registered) console.log(`registered ${outcome.sessionId}`)
+      else console.log(`skipped: ${outcome.reason}`)
+    } catch (error) { console.error(`spex internal session-register: ${(error as Error).message}`); process.exit(1) }
   } else if (sub === 'trunk') {
     // print the resolved source-of-truth branch (layout.ts mainBranch(): config override → the main
     // checkout's current branch → 'main'). The pre-commit main-guard captures this so it blocks direct

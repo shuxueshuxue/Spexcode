@@ -16,11 +16,11 @@ export class DatabasePathError extends Error {
   }
 }
 
-export type SelfLaunchEnvironment = Readonly<Record<string, string | undefined>>
+export type StorageEnvironment = Readonly<Record<string, string | undefined>>
 
 export interface ResolveDatabasePathOptions {
   databasePath?: string
-  env?: SelfLaunchEnvironment
+  env?: StorageEnvironment
   readFile?: (path: string) => string
 }
 

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { realpathSync, statSync, statfsSync } from 'node:fs'
 import { isAbsolute, dirname } from 'node:path'
 
-import { DatabasePathError } from './path.js'
+import { DatabasePathError } from './storage-path.js'
 
 export type LocalityRefusalCode =
   | 'LOCALITY_NETWORK_FILESYSTEM'

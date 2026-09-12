@@ -14,8 +14,8 @@ related:
 ---
 # session runtime production cut-in
 
-The Spex backend always composes the production session application through the existing self-launch
-`resolveDatabasePath` precedence (`databasePath`, `SPEX_SESSION_DATABASE_PATH`, `SPEX_SESSION_CONFIG`, then the
+The Spex backend always composes the production session application through the session-application
+`resolveDatabasePath` precedence ([[storage-path]]) (`databasePath`, `SPEX_SESSION_DATABASE_PATH`, `SPEX_SESSION_CONFIG`, then the
 per-user default). Before opening SQLite it runs the adopter locality precondition; a missing, relative, or non-local
 path fails loudly. There is no `SPEXCODE_SESSION_DATABASE_PATH` opt-in and no JSON fallback.
 

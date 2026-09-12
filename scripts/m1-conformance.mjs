@@ -39,7 +39,7 @@ const npm = (args, cwd) => {
   return result.stdout
 }
 
-const PACKAGES = ['session-protocol', 'session-topology', 'session-selflaunch']
+const PACKAGES = ['session-protocol', 'session-topology']
   .filter(name => existsSync(join(repoRoot, 'packages', name, 'package.json')))
 
 say(`node ${process.version}`)

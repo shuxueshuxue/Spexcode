@@ -14,7 +14,6 @@ const packages = [
   'packages/session-runtime',
   'packages/session-events',
   'packages/session-application',
-  'packages/session-selflaunch',
   'packages/spec-core',
   'spec-forge',
   'spec-cli',

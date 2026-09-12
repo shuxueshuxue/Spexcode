@@ -10,6 +10,8 @@ related:
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
   - .spec/spexcode/session-runtime/application-service/production-cutin/spec.md
   - .spec/spexcode/session-runtime/self-launch-entry/self-launch-cutover/spec.md
+  - .spec/spexcode/session-runtime/self-launch-entry/spec.md
+  - .spec/spexcode/spec-cli/sessions/comms/inbox/spec.md
 ---
 # governed-cutover
 
@@ -21,10 +23,13 @@ the fact — which legacy readers and writers are gone from source and from the 
 purpose, which roots survive with no caller — and records the gates that never ran as open, not as passed.
 
 The second duty is direction. Self-launch reaches the message path through the protocol address it already owns, not
-through a governed record; giving it a record would make it governed, which the runtime composition forbids. What the
-seam still lacks is a producer that accepts a bare address and a receive verb the recipient runs itself. The decision
-that made receipt the caller's job is recorded as settled; the three decisions that shape the producer, the receive
-verb, and the adoption gate are recorded as open and are not made here.
+through a governed record; giving it a record would make it governed, which the runtime composition forbids. The seam
+is therefore three things the product CLI itself provides: a registration that writes only into a store that already
+exists and is ready, a producer that accepts a bare address and reports it queued rather than pushed, and receipt as an
+act the recipient performs in three shapes that match how a harness can run a command — now, in the background until
+one arrives, or as a monitor that never returns. The adopter package that once carried a parallel argv vocabulary for
+the same store was retired when this became true, and the storage placement rules it housed moved to the lowest layer
+every Spex composition shares.
 
 A proof that no longer runs green is the same as no proof. Two scripts this ledger inherited assert contracts that a
 later decision replaced, and neither sits on a path anything executes, so they stayed red unnoticed. The ledger names

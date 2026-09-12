@@ -15,7 +15,7 @@ related:
 # spec-cli
 
 The backend package is `@spexcode/spec-cli`; its declared dependencies are `@spexcode/spec-core`,
-`@spexcode/session-application`, `@spexcode/session-selflaunch`, `@spexcode/transcript`, and
+`@spexcode/session-application`, `@spexcode/transcript`, and
 `@spexcode/spec-forge`. It is the composition boundary for the session, issue, source-policy, transport,
 and content-addressed evidence implementations.
 

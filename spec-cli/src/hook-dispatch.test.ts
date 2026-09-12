@@ -377,41 +377,43 @@ for (const harness of ['claude', 'codex'] as const) {
   })
 }
 
-// A DELIVERY FAILURE MUST NOT EAT THE PERSON'S OWN PROMPT. The listener runs on UserPromptSubmit, so exiting 2
-// blocks what was just typed — for a transient queue read that consumed nothing, and again for a message that
-// had already left the at-most-once queue, where blocking cannot bring it back and only doubles the loss.
-function sessionListenRig(behaviour: 'fail-dequeue' | 'garbage-body') {
-  const dir = mkdtempSync(join(tmpdir(), `spex-session-listen-${behaviour}-`))
-  const cli = join(dir, 'spex-session')
+// THE REGISTRATION HOOK NEVER READS MAIL, AND REGISTERS THROUGH THE PRODUCT CLI. Receipt is the caller's own act
+// (`spex session dequeue | wait-dequeue | stream-dequeue`), so a prompt event must invoke nothing — the old failure
+// stories (a broken reader, a garbage body) cannot cost the person their prompt because no read happens. SessionStart
+// hands the native session id to `spex internal session-register`; there is no adopter CLI and no env-based adoption.
+function sessionListenRig(event: 'UserPromptSubmit' | 'SessionStart', spexExit = 0) {
+  const dir = mkdtempSync(join(tmpdir(), `spex-session-listen-${event}-`))
+  const spex = join(dir, 'spex')
   const calls = join(dir, 'calls')
-  // Message receipt moved to the backend/caller in the canonical cutover. Keep the old failure vectors as
-  // names for the two regression stories, but prove the current contract: UserPromptSubmit never invokes
-  // dequeue, so neither a broken reader nor an invalid body can consume the person's prompt.
-  writeFileSync(cli, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit 0\n`)
-  chmodSync(cli, 0o755)
+  writeFileSync(spex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit ${spexExit}\n`)
+  chmodSync(spex, 0o755)
   const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'session-listen', 'session-listen.sh')
   const run = spawnSync('bash', [hook], {
-    input: JSON.stringify({ session_id: 's1', hook_event_name: 'UserPromptSubmit', prompt: 'my own question' }),
+    input: JSON.stringify({ session_id: 's1', hook_event_name: event, prompt: 'my own question' }),
     encoding: 'utf8',
-    env: { ...process.env, SPEX_SESSION_DATABASE_PATH: join(dir, 'db'), SPEX_SESSION_CLI: cli, SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'), SPEXCODE_HARNESS: 'claude' },
+    env: { ...process.env, SPEX: spex, SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'), SPEXCODE_HARNESS: 'claude' },
   })
   const invoked = existsSync(calls) ? readFileSync(calls, 'utf8') : ''
   rmSync(dir, { recursive: true, force: true })
   return { ...run, invoked }
 }
 
-test('session-listen: a queue it cannot read does not cost the person their prompt', () => {
-  const run = sessionListenRig('fail-dequeue')
+test('session-listen: a prompt event invokes nothing, so no reader can cost the person their prompt', () => {
+  const run = sessionListenRig('UserPromptSubmit')
   assert.equal(run.status, 0, run.stderr)
   assert.equal(run.stdout, '', 'the registration-only hook has no prompt-bound output')
-  assert.equal(run.invoked, '', 'UserPromptSubmit never invokes the dequeue CLI')
+  assert.equal(run.invoked, '', 'UserPromptSubmit never invokes the CLI')
 })
 
-test('session-listen: a message it cannot deliver is reported with what it takes to recover it', () => {
-  const run = sessionListenRig('garbage-body')
+test('session-listen: SessionStart registers the native session id through the product CLI', () => {
+  const run = sessionListenRig('SessionStart')
   assert.equal(run.status, 0, run.stderr)
-  assert.equal(run.stdout, '', 'the registration-only hook has no prompt-bound output')
-  assert.equal(run.invoked, '', 'UserPromptSubmit never invokes dequeue, so no message can be consumed')
+  assert.equal(run.invoked, 'internal session-register s1\n', 'exactly one registration call with the payload session id')
+})
+
+test('session-listen: a CLI that fails while registering is a blocking failure, not a silent skip', () => {
+  const run = sessionListenRig('SessionStart', 1)
+  assert.equal(run.status, 2)
 })
 
 // THE GATE MUST SURVIVE ITS OWN TEXT FAILING TO LOAD. Rendering goes through the CLI, and a failure there

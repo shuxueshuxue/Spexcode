@@ -54,7 +54,7 @@ test('new renderer dependencies carry an explicit no-predecessor exemption', () 
 test('the CLI spec carries the subtraction rule and owns its no-predecessor exceptions', () => {
   assert.match(specCliSpec, /## Dependency arrival and subtraction/)
   assert.match(specCliSpec, /No package predecessor/)
-  for (const edge of ['@spexcode/spec-core', '@spexcode/spec-forge', '@spexcode/session-application', '@spexcode/session-selflaunch', '@spexcode/transcript'])
+  for (const edge of ['@spexcode/spec-core', '@spexcode/spec-forge', '@spexcode/session-application', '@spexcode/transcript'])
     assert.ok(specCliSpec.includes(`\`${edge}\``), `CLI spec omits its declared edge ${edge}`)
   assert.ok(specCliSpec.includes('`@spexcode/archify`'), 'CLI spec omits no-predecessor exception @spexcode/archify')
   for (const edge of ['@hono/node-ws', 'node-pty'])

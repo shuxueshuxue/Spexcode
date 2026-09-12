@@ -11,7 +11,7 @@ related:
 ---
 # session application composition
 
-`openProjectSessionApplication` requires the absolute database path resolved by the shared self-launch precedence and
+`openProjectSessionApplication` requires the absolute database path resolved by the package's own storage-path precedence ([[storage-path]]) and
 a locality precondition before it opens protocol. It caches one composition per path, initializes each component once,
 and closes the shared protocol handle only when that composition closes. State/topology/event/message writes share one
 synchronous transaction; post-commit callbacks are wake hints only. A lifecycle transition may accept a caller-resolved

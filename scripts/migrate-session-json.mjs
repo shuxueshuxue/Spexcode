@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { join, resolve } from 'node:path'
 import { migrateJsonSessionRecords } from '@spexcode/session-application'
-import { resolveDatabasePath, requireLocalDatabasePath } from '@spexcode/session-selflaunch'
+import { resolveDatabasePath, requireLocalDatabasePath } from '@spexcode/session-application'
 import { runtimeRoot } from '@spexcode/spec-core'
 
 const args = process.argv.slice(2)

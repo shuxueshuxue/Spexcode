@@ -41,3 +41,29 @@ test('launcher exits 75 with a clean message when the source tree is mid-merge',
     rmSync(tmp, { recursive: true, force: true })
   }
 })
+
+// @@@ signal forwarding ([[merge-tooling-resilience]]) - the launcher pid is what a caller signals; the verb lives in
+// the child. An installed-package shape (no src tree) with a fake dist/cli.js that reports the signal it received.
+test('launcher forwards SIGTERM to the running CLI child and exits as the child exited', async () => {
+  const { spawn } = await import('node:child_process')
+  const tmp = mkdtempSync(join(tmpdir(), 'spex-launcher-signal-'))
+  try {
+    mkdirSync(join(tmp, 'spec-cli', 'bin'), { recursive: true })
+    mkdirSync(join(tmp, 'spec-cli', 'dist'), { recursive: true })
+    copyFileSync(LAUNCHER, join(tmp, 'spec-cli', 'bin', 'spex.mjs'))
+    writeFileSync(join(tmp, 'spec-cli', 'dist', 'cli.js'),
+      "process.on('SIGTERM', () => { console.log('child: SIGTERM received'); process.exit(7) })\nconsole.log('child: ready')\nsetInterval(() => {}, 1000)\n")
+    const launcher = spawn(process.execPath, [join(tmp, 'spec-cli', 'bin', 'spex.mjs'), 'session', 'stream-dequeue'], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    launcher.stdout.setEncoding('utf8').on('data', (c) => { out += c })
+    const until = async (pred: () => boolean, ms: number) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await new Promise((r) => setTimeout(r, 50)) }
+    await until(() => out.includes('child: ready'), 10_000)
+    assert.ok(out.includes('child: ready'), `child never started: ${out}`)
+    launcher.kill('SIGTERM')
+    const code: number | null = await new Promise((r) => launcher.on('close', (c) => r(c)))
+    assert.ok(out.includes('child: SIGTERM received'), `the signal did not reach the child: ${out}`)
+    assert.equal(code, 7, 'the launcher exits with the child\'s exit code')
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+})

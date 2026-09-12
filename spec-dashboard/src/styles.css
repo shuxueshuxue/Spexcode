@@ -3151,18 +3151,21 @@ body.is-session-dragging .si-pill.archive:hover {
    and by a slow sweep of light across them: the page's one moving thing while the agent works. The words
    count up every second between polls (TimelineChat anchors the clock to the server's Date header), so the
    number and the light agree that something is happening now. Reduced motion keeps the green and drops the sweep. */
-/* THE SWEEP IS A LAYER THAT MOVES, NEVER A GRADIENT THAT REPAINTS TEXT. Written as a background-position
-   animation on text clipped to its own gradient, this line cost 6.5% of a core by itself: every frame
-   re-rasterized the glyphs. The same light, drawn as one promoted overlay whose only animated property is a
-   transform, measures 0.4-0.5% — the compositor moves it and nothing repaints. Same rule for anything else
-   that moves while a session works. */
-.m-seam-row.is-live .m-seam-lead { color: var(--green); position: relative; display: inline-block; isolation: isolate; }
+/* THE SWEEP IS A LAYER THAT MOVES, NEVER A GRADIENT THAT REPAINTS TEXT. Written the obvious way — a gradient
+   travelling across glyphs clipped to it — this one line repainted the WHOLE VIEWPORT 60 times a second on the
+   main thread (traced: 480 full-viewport paints in 4s), because a background-position animation cannot be
+   composited and the conversation is one layer. Promotion, containment and will-change all failed to shrink it.
+   Drawn instead as one promoted band whose only animated property is a transform, the same trace records ZERO
+   paints: the compositor moves it and nothing re-rasterizes. The band is the page's own ground colour, so it
+   is invisible where it crosses the background and fades the glyphs toward it where it crosses the words —
+   which is the effect, and it needs no blend mode, so it holds in every theme. */
+.m-seam-row.is-live .m-seam-lead { color: var(--green); position: relative; display: inline-block; }
 .m-seam-row.is-live .m-seam-lead::after {
-  content: ''; position: absolute; inset: -2px; pointer-events: none; mix-blend-mode: screen;
-  background: linear-gradient(90deg, transparent 0 35%, color-mix(in srgb, var(--green) 65%, white) 50%, transparent 65% 100%);
+  content: ''; position: absolute; top: -1px; bottom: -1px; left: 0; width: 62%; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--paper) 72%, transparent) 50%, transparent);
   transform: translateX(-110%); will-change: transform; animation: m-seam-sweep 2.4s linear infinite;
 }
-@keyframes m-seam-sweep { to { transform: translateX(110%); } }
+@keyframes m-seam-sweep { to { transform: translateX(272%); } }
 @media (prefers-reduced-motion: reduce) {
   .m-seam-row.is-live .m-seam-lead::after { display: none; }
 }

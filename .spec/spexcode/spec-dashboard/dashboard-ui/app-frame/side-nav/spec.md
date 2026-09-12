@@ -22,7 +22,8 @@ related:
 ## Anti-regression boundary
 
 The live top-level rail is governed by `RAIL_PAGES` and contains every resident board in this order: `spec`,
-`sessions`, `issues`, and `settings`; the addressable graph is deliberately excluded. `subtractive-boundaries.test.mjs`
+`sessions`, `issues`, `plugins`, and `settings`; the addressable graph is deliberately excluded. `plugins`
+([[plugins-page]]) sits before `settings` because it is a board a person reads, not a place they configure. `subtractive-boundaries.test.mjs`
 checks this contract directly so a later lane cannot silently restore the graph as a live rail destination or
 drop a resident board from top-level navigation.
 

@@ -68,6 +68,7 @@ try {
     { href: '#/spec', selected: true },
     { href: '#/sessions', selected: false },
     { href: '#/issues', selected: false },
+    { href: '#/plugins', selected: false },
     { href: '#/settings', selected: false },
   ])
   assert.deepEqual(spec.sections, ['Specs', 'Files'])

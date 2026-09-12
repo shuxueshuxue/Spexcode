@@ -53,6 +53,7 @@ const GraphView = lazyRetry(() => import('./GraphView.jsx'))
 const SpecView = lazyRetry(() => import('./SpecView.jsx'))
 const FileView = lazyRetry(() => import('./FileView.jsx'))
 const IssuesPage = lazyRetry(() => import('./IssuesPage.jsx'))
+const PluginsView = lazyRetry(() => import('./PluginsView.jsx'))
 const Settings = lazyRetry(() => import('./Settings.jsx'))
 const EmptyView = lazyRetry(() => import('./EmptyView.jsx'))
 
@@ -97,6 +98,9 @@ export const VIEWS = Object.freeze({
   // Findings share the workspace shell. `resident` makes the bare top-level address the one tab identity;
   // `tabModel.tabRoute` collapses detail selectors onto it without losing the detail route in the URL.
   issues:   { component: IssuesView,   surface: 'workspace', document: true, resident: true, icon: 'issues', className: 'view-issues' },
+  // The automation a project runs on itself. One full-width document, no dock projection: it names no
+  // object, so `resident` gives the bare address its one tab identity.
+  plugins:  { component: PluginsView,  surface: 'workspace', document: true, resident: true, icon: 'plugins', className: 'view-plugins' },
   empty:    { component: EmptyView,    surface: 'workspace', document: false, className: 'view-empty' },
 })
 

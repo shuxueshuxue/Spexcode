@@ -15,6 +15,7 @@ import { resolveLayout, mainBranch } from '@spexcode/spec-core'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
+import { pluginsView } from './plugins-view.js'
 import { cockpitReview } from './cockpit.js'
 import { EMPTY_PROMPT_ERROR, listSessions, listArchivedSessionIndex, sendText, drainSession, markHumanPromptActive, interruptSession, rawKey, stopSession, closeSession, resumeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, linkZCodeChildSession, projectCreatedSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, reconcileLaunchedRuntimes, startWorktreeTrashReaper } from './sessions.js'
 import { mergeSession, retractDiffComment, saveDiffComment, sendDiffComments, sessionDiff } from './session-review.js'
@@ -427,6 +428,12 @@ app.get('/api/slash-commands', (c) => {
   const h = HARNESSES.find((x) => x.id === c.req.query('harness')) || defaultHarness
   return c.json(h.slashCommands())
 })
+
+// EVERY surface, not just the command one `/api/plugins` above serves: what each plugin node declares, and
+// — per worktree — what is actually installed there. Read from the SAME loaders that materialize it
+// ([[plugins-view]]); one source for both halves is the point, since a second reader would let the picture
+// and the truth drift apart exactly the way the trees already do.
+app.get('/api/plugins/surfaces', (c) => c.json(pluginsView(repoRoot())))
 
 function uploadFailure(error: unknown): Response {
   if (!(error instanceof UploadError)) throw error

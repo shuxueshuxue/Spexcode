@@ -89,6 +89,11 @@ const ICONS = {
     vb: 18, sw: 1.4,
     node: <><rect x="1.5" y="2.5" width="15" height="13" rx="1.6" /><path d="M4.6 6.5 l2.6 2.3 -2.6 2.3 M9 12.4 h4" /></>,
   },
+  // three blocks on a spine: the lifecycle a hook plugs into, which is what this page draws
+  plugins: {
+    vb: 18, sw: 1.4,
+    node: <><path d="M3.2 2.6 v12.8" /><rect x="6.4" y="2.6" width="8.4" height="3.2" rx="1" /><rect x="6.4" y="7.4" width="8.4" height="3.2" rx="1" /><rect x="6.4" y="12.2" width="8.4" height="3.2" rx="1" /><path d="M3.2 4.2 h3.2 M3.2 9 h3.2 M3.2 13.8 h3.2" /></>,
+  },
   issues: {
     vb: 18, sw: 1.4,
     node: <><path d="M2.5 3.5 h13 v8.4 h-7 l-3.6 3 v-3 h-2.4 z" /><path d="M5.4 6.7 h7.2 M5.4 9.2 h4.8" /></>,

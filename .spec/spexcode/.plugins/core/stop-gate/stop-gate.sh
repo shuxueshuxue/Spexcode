@@ -2,7 +2,7 @@
 # @@@ stop-gate - a blocking Stop hook with TWO jobs, each with a HARD loop-break (never blocks more than
 # once on the same cause, never leaks a dishonest stop):
 #   (A) COMMIT GATE — a done/merge proposal (awaiting + merge; legacy nothing remains readable) is rejected while the node branch has
-#       uncommitted work or 0 commits ahead of main; the dogfood ritual commits BEFORE proposing. Clean ->
+#       uncommitted work or 0 commits ahead of main; the atomic-landing ritual commits BEFORE proposing. Clean ->
 #       allow; dirty -> block once with the reason, escape on the continuation to `asking` (needs the human).
 #   (B) DECLARE GATE — a session may not stop in an undeclared (`active`) state:
 #         declared (awaiting/parked/error/asking) . allow (the agent reported; nothing to do)
@@ -68,7 +68,7 @@ cont=$(printf '%s' "$input" | sed -n 's/.*"stop_hook_active"[[:space:]]*:[[:spac
 
 # @@@ commit gate - a declaration of done/merge (awaiting + proposal merge; legacy nothing is accepted only
 # for backward-readable records) is only honest once the
-# node branch carries the work as COMMITS: the dogfood ritual commits spec+code BEFORE any proposal, yet a
+# node branch carries the work as COMMITS: the atomic-landing ritual commits spec+code BEFORE any proposal, yet a
 # dashboard-launched agent kept proposing merge with 0 commits / a dirty tree. So before allowing such a
 # declaration we run the deterministic check (`spex internal commit-gate`, which goes through git.ts's git()
 # so the hook's GIT_DIR/GIT_INDEX_FILE can't misdirect repo discovery). Clean -> allow. Dirty/0-ahead ->

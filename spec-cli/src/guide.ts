@@ -641,14 +641,20 @@ and the bridge, so all three exist before your first line of script runs.
 
 STYLE IT WITH THE HOST'S TOKENS so it belongs to the page it lands in: var(--fg), var(--bg), var(--accent),
 and the palette (--panel, --raised, --line, --muted, --blue, --green, --red, --yellow), plus --ui-font-sans
-and --mono. Leave the background transparent. The frame is measured for you; nothing needs to report its
-height. There is no network restriction, but a widget that fetches stops being readable later, so inline what
-you can.
+and --mono. Leave the background transparent. There is no network restriction, but a widget that fetches
+stops being readable later, so inline what you can.
 
-THE BRIDGE is spex, and it has three members:
+THE FRAME MEASURES ITSELF — nothing needs to report its height — and it stops growing at 520px, scrolling
+inside after that. So a picture meant to be read at a glance has to fit in 520px, and a list that will not
+is drawn as its first few rows plus a count, not as all of it behind a scrollbar.
+
+THE BRIDGE is spex, and these are its members:
   spex.state              what the human's last send committed for this widget, or null
   spex.draft(text, state) what THIS widget would contribute to the human's next message
   spex.save(state)        the same state half, without touching the text
+  spex.api                the dashboard's own API base — where live facts come from
+  spex.session            the id of the session this widget belongs to, so it can find itself in a list
+  spex.name               this widget's own name
 
 The text and the state are two halves of the same answer, not one derived from the other: the text is the
 sentence the agent reads, the state is what the picture needs to draw itself. Say both. And take the bridge as
@@ -693,6 +699,24 @@ A question that restores itself from what was sent:
       paint()
     }
     paint()
+  </script>
+
+A view of the fleet, read live — what spex.api and spex.session are for. Nothing is baked in, so the picture
+is still right an hour later, and it says so when the backend is gone instead of showing a stale one:
+
+  <table id="fleet"><tbody></tbody></table>
+  <style>table{border-collapse:collapse;width:100%;font:var(--type-meta) var(--mono)}
+         td{padding:2px 6px;border-bottom:1px solid var(--line)}
+         .me{color:var(--accent)} .gone{color:var(--red)}</style>
+  <script>
+    const ui = window.spex || { api: null, session: null }
+    const body = document.querySelector('#fleet tbody')
+    const cell = (s) => '<tr><td class="' + (s.id === ui.session ? 'me' : '') + '">'
+      + (s.label || s.id.slice(0, 8)) + '</td><td>' + s.lifecycle + '</td></tr>'
+    fetch(ui.api + '/sessions')
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then((rows) => { body.innerHTML = rows.slice(0, 12).map(cell).join('') })
+      .catch((e) => { body.innerHTML = '<tr><td class="gone" colspan="2">' + e.message + '</td></tr>' })
   </script>
 
 see also: spex guide files (hand over a whole artifact) · spex help session`

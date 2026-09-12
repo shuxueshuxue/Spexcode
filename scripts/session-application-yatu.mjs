@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join, dirname } from 'node:path'
+import { pathToFileURL, fileURLToPath } from 'node:url'
 
 const root = await mkdtemp(join(tmpdir(), 'session-application-consumer-'))
 const consumer = join(root, 'app')
@@ -22,13 +23,10 @@ execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-runtime'
 execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-events', '--pack-destination', tarballs])
 execFileSync('npm', ['pack', '--silent', '--workspace=@spexcode/session-application', '--pack-destination', tarballs])
 await writeFile(join(consumer, 'package.json'), '{"name":"session-application-consumer","private":true,"type":"module"}\n')
-const packages = [
-  'spexcode-session-protocol-0.6.7.tgz',
-  'spexcode-session-topology-0.6.7.tgz',
-  'spexcode-session-runtime-0.6.7.tgz',
-  'spexcode-session-events-0.6.7.tgz',
-  'spexcode-session-application-0.6.7.tgz',
-]
+// the tarball names carry the workspace's current version; hardcoding it made this proof fail on every bump
+const version = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version
+const packages = ['session-protocol', 'session-topology', 'session-runtime', 'session-events', 'session-application']
+  .map(name => `spexcode-${name}-${version}.tgz`)
 execFileSync('npm', ['install', '--silent', '--no-audit', '--no-fund', ...packages.map(name => join(tarballs, name))], { cwd: consumer })
 const require = createRequire(join(consumer, 'package.json'))
 const { openProtocol } = await import(pathToFileURL(require.resolve('@spexcode/session-protocol')).href)

@@ -103,7 +103,7 @@ SIGKILL 消费者，然后断言 `listPending` 为空、下一次 `dequeue` 返�
 
 #### Storage locality precondition
 
-路径 resolver 得到绝对 `databasePath` 后、调用 `openProtocol` 之前，必须确认 database 所在 filesystem 是本地的，并支持可靠 advisory locking。非本地或 locality 无法判定时必须 fail closed（默认拒绝），退出 1，stderr 沿用 `self-launch-cli: STORAGE_LOCALITY_UNVERIFIED: message`。协议核心不做、也不假装做这个判定；它只接收已由 adopter 判定合格的绝对路径。v1 使用 rollback journal DELETE、禁用 WAL；WAL 在网络 filesystem 上会因共享内存要求 fail loud，但 DELETE 不会替 resolver 自动提供这道闸门。macOS/Windows detector 仍是实现 OPEN，detector 缺失同样拒绝；真实 NFS 本 spike 未实测。
+路径 resolver 得到绝对 `databasePath` 后、调用 `openProtocol` 之前，必须确认 database 所在 filesystem 是本地的，并支持可靠 advisory locking。非本地或 locality 无法判定时必须 fail closed（默认拒绝），退出 1，stderr 沿用 `self-launch-cli: STORAGE_LOCALITY_UNVERIFIED: message`。协议核心不做、也不假装做这个判定；它只接收已由 adopter 判定合格的绝对路径。（历史：spike 时 v1 用 rollback journal DELETE、禁用 WAL，理由是 DELETE 不会替 resolver 自动提供网络 filesystem 那道闸门。2026-09-04 起 `packages/session-protocol/src/engine.ts` 已改为 WAL（提交 `01be850d6`，随 watch 投递改由 owning backend 承担一并落地），活库 `PRAGMA journal_mode` 为 `wal`；locality 前置条件因此更不能省——它是唯一拦住网络 filesystem 的东西。`sqlite-engine` 节点正文在本句更新时仍写 rollback journal，归 session-protocol 的 owner 对齐。）macOS/Windows detector 仍是实现 OPEN，detector 缺失同样拒绝；真实 NFS 本 spike 未实测。
 
 每个命令 stdout 为单行 JSON（`initialize` 是 `{sessionId,state}`；`enqueue` 是 message；`dequeue` 是 message 或 `null`），成功退出 0。usage/argv 错误退出 2；protocol/storage 错误退出 1，stderr 为 `self-launch-cli: CODE: message`。路径优先级是显式 `--database-path`、`SPEX_SESSION_DATABASE_PATH`、`SPEX_SESSION_CONFIG` JSON 的 `databasePath`、OS 默认。spike CLI 选择 `$HOME/.spexcode/sessions.sqlite` 作为最后兜底，但这是 adopter policy 示例，不是冻结的产品默认；产品仍应保持可重定位。CLI 只做解析和调用，不是 daemon。
 

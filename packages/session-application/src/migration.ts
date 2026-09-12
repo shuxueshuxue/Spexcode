@@ -116,6 +116,8 @@ export interface JsonSessionMigrationReport {
   markerPath: string
   replayed: boolean
   residue?: JsonResidueMigrationReport
+  /** Residue directories whose legacy artifacts could not be parsed: quarantined into the backup, named here, never imported. */
+  quarantined?: string[]
 }
 
 class MigrationError extends Error {
@@ -239,6 +241,53 @@ function readLegacyTree(recordsRoot: string): LegacyDir[] {
   if (!statSync(recordsRoot).isDirectory()) fail(`recordsRoot is not a directory: ${recordsRoot}`)
   const dirs = readdirSync(recordsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
   return dirs.map(id => readLegacyDir(recordsRoot, id))
+}
+
+// After the marker, an unparseable legacy artifact is not a source to abort on: the one-time import has already
+// happened, so a partial view is not at stake, while aborting here would turn every canonical access into an error
+// until a person deletes the file. Nothing knowable is lost by refusing to import bytes that cannot be parsed, so the
+// directory is treated like any other directory nothing claims — its files are copied to the backup, it is named in
+// the report, and it is retired. Before the marker the same input still fails the import loudly.
+type UnreadableResidue = { id: string; files: string[]; reason: string }
+function readResidueTree(recordsRoot: string): { readable: LegacyDir[]; unreadable: UnreadableResidue[] } {
+  if (!isAbsolute(recordsRoot)) fail('recordsRoot must be an absolute directory')
+  if (!existsSync(recordsRoot)) return { readable: [], unreadable: [] }
+  if (!statSync(recordsRoot).isDirectory()) fail(`recordsRoot is not a directory: ${recordsRoot}`)
+  const readable: LegacyDir[] = []
+  const unreadable: UnreadableResidue[] = []
+  for (const id of readdirSync(recordsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()) {
+    try {
+      const dir = readLegacyDir(recordsRoot, id)
+      if (dir.files.length > 0) readable.push(dir)
+    } catch (error) {
+      if (!(error instanceof MigrationError)) throw error
+      const dir = join(recordsRoot, id)
+      const files = [LEGACY_ENVELOPE, ...LEGACY_ARTIFACT_FILES].map(name => join(dir, name)).filter(existsSync)
+      const timelineDir = join(dir, LEGACY_TIMELINE_DIR)
+      if (existsSync(timelineDir) && statSync(timelineDir).isDirectory()) files.push(...readdirSync(timelineDir).map(name => join(timelineDir, name)))
+      unreadable.push({ id, files, reason: error.message })
+    }
+  }
+  return { readable, unreadable }
+}
+
+function quarantineUnreadableResidue(recordsRoot: string, unreadable: UnreadableResidue[], backupRoot: string): string[] {
+  const quarantineRoot = join(backupRoot, 'residue', 'unreadable')
+  for (const entry of unreadable) {
+    for (const file of entry.files) {
+      const relative = file.slice(recordsRoot.length).replace(/^[/\\]/, '')
+      const destination = join(quarantineRoot, relative)
+      mkdirSync(dirname(destination), { recursive: true })
+      // a second copy of the same bytes is the same quarantine; different bytes under one name keep both
+      if (existsSync(destination) && readFileSync(destination).compare(readFileSync(file)) !== 0) copyFileSync(file, `${destination}.${Date.now()}`)
+      else if (!existsSync(destination)) copyFileSync(file, destination)
+      unlinkSync(file)
+    }
+    const timelineDir = join(recordsRoot, entry.id, LEGACY_TIMELINE_DIR)
+    try { rmdirSync(timelineDir) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw error }
+    console.error(`[session-application] quarantined unreadable legacy residue ${entry.id}: ${entry.reason} → ${quarantineRoot}`)
+  }
+  return unreadable.map(entry => `${entry.id} (unreadable: ${entry.reason})`)
 }
 
 /** Whether the legacy tree still holds anything the canonical store must absorb before the tree is retired. */
@@ -632,7 +681,8 @@ export function migrateJsonSessionRecords(options: JsonSessionMigrationOptions):
       markerPath,
       replayed: true,
     }
-    const residue = readLegacyTree(options.recordsRoot).filter(dir => dir.files.length > 0)
+    const { readable: residue, unreadable } = readResidueTree(options.recordsRoot)
+    if (unreadable.length > 0) report.quarantined = quarantineUnreadableResidue(options.recordsRoot, unreadable, report.backupRoot)
     if (residue.length > 0) report.residue = migrateLegacyResidue(options, residue, report.backupRoot)
     retireLegacyArtifacts(options.recordsRoot)
     if (existsSync(fencePath)) replaceFence(fencePath, 'retired', markerDigest)

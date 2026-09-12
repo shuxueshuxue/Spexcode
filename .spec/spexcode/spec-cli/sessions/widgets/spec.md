@@ -6,6 +6,8 @@ code:
   - spec-cli/src/session-widgets.ts
 related:
   - spec-cli/src/cli.ts
+  - spec-cli/src/guide.ts
+  - spec-dashboard/src/widgetGuide.test.mjs
   - spec-cli/src/help.ts
   - spec-cli/src/index.ts
   - spec-cli/src/sessions.ts
@@ -211,11 +213,25 @@ rest lives in `spex guide widget` — what a widget may contain, the three membe
 a reload, and when a picture is worth drawing at all — exactly as [[files]] keeps its detail in its own guide
 rather than growing the prompt.
 
-There are no shipped templates. A progress bar is twenty lines of HTML that every model writes well, and a
-library of them would be a second surface to keep in step with the theme tokens and the bridge while adding
-nothing an example in the guide does not. What an agent actually needs is the contract: that it writes content
-rather than a document, that its clicks fill a draft rather than send, and that it draws itself from
-`spex.state`. Those are sentences, so they live in a guide.
+There is no template library, and the guide's examples are the templates instead. A progress bar is twenty
+lines of HTML that every model writes well, and a shelf of them would be a second surface to keep in step with
+the theme tokens and the bridge while adding nothing an example does not. What an agent actually needs is the
+contract: that it writes content rather than a document, that its clicks fill a draft rather than send, and
+that it draws itself from `spex.state`. Those are sentences, so they live in a guide.
+
+THE EXAMPLES ARE CHECKED LIKE CODE, which is what makes carrying them in prose safe. The cost a template
+library would have — a second surface drifting away from the tokens and the bridge — is a cost prose pays
+too, and silently: the guide described a three-member bridge for as long as the host installed five, so the
+two members that make a live-reading widget possible were the two an author could not find. So every token
+and every bridge member the guide teaches is read back out of it and checked against the token list the host
+injects and the object it installs, the author-facing half of the bridge must appear there, and the frame's
+height bound must be stated in the number the host enforces. A guide that teaches something the host does not
+provide is a failing test, not a documentation bug someone notices later.
+
+The three examples are the three shapes, and the third is the one that needs the machine's help: a picture
+that reads live facts for itself. It is the case this contract already argues for — a table of children is a
+query, not something to retype through a model — and the case with the most ways to be wrong, because it is
+the only one with a backend that can be missing.
 
 ## what this contract does not cover
 

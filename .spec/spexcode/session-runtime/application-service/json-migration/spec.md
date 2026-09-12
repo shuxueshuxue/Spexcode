@@ -52,6 +52,14 @@ lands in one transaction keyed by its first deterministic event id, so an interr
 line twice, and every stored follow cursor on that subject advances by the number of history lines that now precede
 its position — a consumed event never becomes unread again. Before retiring the residue tree, the importer rechecks
 the complete file set and digest; a writer that ignored the migration fence therefore fails the cutover loudly.
+
+Residue the importer cannot parse — a truncated `pending.json`, a `watchers.json` of the wrong shape, a garbage
+timeline line — is not a reason to refuse: the one-time import has already happened, so no partial view is at stake,
+and an abort here would turn every canonical access into the same error until a person found and deleted the file.
+Such a directory is handled like one nothing claims: its legacy files are copied into the backup's `residue/unreadable`
+subtree, unlinked from the tree, and named in the report with the parse error, so the runtime settles and the loss —
+bytes nobody could have delivered — is visible rather than fatal. The same input before the marker still fails the
+first import loudly, because there a partial target would be the alternative.
 Cursor files themselves are positions in the retired
 projection and are backed up, not imported. Residue is backed up under the marker's backup root before anything is
 removed, and the report names what was absorbed. A tree with no residue is a no-op, so the entry point is idempotent.

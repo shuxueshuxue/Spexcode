@@ -100,6 +100,7 @@ function initializeMigratedSessionApplication(state: 'migration-required' | 'res
   const application = openConfiguredSessionApplication()
   const report = migrateJsonSessionRecords({ databasePath, recordsRoot, locality, application })
   settledResidueStores.add(`${databasePath}\0${recordsRoot}`)
+  if (report.quarantined?.length) console.error(`[session-application] ${report.quarantined.length} unreadable legacy residue dir(s) quarantined under ${recordsRoot}: ${report.quarantined.join(', ')}`)
   const residue = report.residue
   if (residue) {
     console.log(`[session-application] migrated legacy residue from ${recordsRoot}: ${residue.records} record(s), ${residue.events} event(s), ${residue.parentEdges} parent edge(s), ${residue.watchEdges} watch edge(s), ${residue.pending} pending; ${residue.unclaimed.length} unclaimed dir(s)${residue.unclaimed.length ? ` (${residue.unclaimed.join(', ')})` : ''}; backup ${residue.backupRoot}`)

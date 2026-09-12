@@ -43,3 +43,23 @@ test('a single-file page carries its whole payload inside itself, and no spec te
   assert.equal(page.replace(match[0], '</head>'), shell, 'the shell is otherwise untouched')
   assert.throws(() => publicGraphHtml('<html></html>', artifact), /no <\/head>/)
 })
+
+test('the payload lands in the real head, not in a bundle string that happens to spell one', () => {
+  const artifact = {
+    graph: { schema: PUBLIC_GRAPH_SCHEMA, payloadName: PUBLIC_GRAPH_PAYLOAD_NAME, revision: 'b'.repeat(40), sourceRoot: '.', identity: { title: 'demo', icon: 'x' }, nodes: [] },
+    documents: [],
+  } as unknown as PublicGraphArtifact
+  // the single-file shell inlines the bundle, and the bundle writes HTML as data — this is the widget
+  // runtime's iframe template, shortened: a `</head><body>` living inside a JavaScript string literal.
+  const shell = [
+    '<!doctype html><html><head><title>t</title>',
+    '<script type="module">const frame=(b)=>`<html><head><\\/script></head><body>${b}</body></html>`;window.frame=frame</script>',
+    '</head><body><div id="root"></div></body></html>',
+  ].join('')
+  const page = publicGraphHtml(shell, artifact)
+  const at = page.indexOf(`<script type="application/json" id="${PUBLIC_PAYLOAD_ELEMENT_ID}">`)
+  assert.ok(at > page.indexOf('window.frame=frame'), 'the payload goes after the inlined bundle, never inside it')
+  const real = shell.lastIndexOf('</head>')
+  assert.equal(page, `${shell.slice(0, real)}${page.slice(at, page.indexOf('</head>', at))}${shell.slice(real)}`, 'the bundle keeps both of its halves; only the real head grew')
+  assert.throws(() => publicGraphHtml('<html><script>"</head>"</script>', artifact), /no <\/head>/)
+})

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { loadPlugins, loadSettings } from './data.js'
-import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 import { apiUrl } from './project.js'
 
 const pendingSessions = new Map()
@@ -42,9 +41,6 @@ export async function createSession(prompt, launcher) {
 let launcherSettings = null
 let launcherSettingsRequest = null
 const loadLauncherSettings = () => {
-  // A published tree has no backend to ask. Answering with no profiles states that fact once, here, instead
-  // of letting every launcher consumer fire a request that can only 404.
-  if (PUBLIC_GRAPH_ONLY) return Promise.resolve({ launchers: [] })
   if (launcherSettings) return Promise.resolve(launcherSettings)
   if (!launcherSettingsRequest) {
     launcherSettingsRequest = loadSettings().then((d) => {

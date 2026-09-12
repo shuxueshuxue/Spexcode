@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @@@ spex launcher ([[release-launcher]]) - package installs execute the package's compiled CLI directly;
 // tsx remains a development tool and never enters an adopter's runtime closure.
+import os from 'node:os'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -22,7 +23,6 @@ if (existsSync(sourceRoot)) {
     ['packages/session-runtime', 'dist/index.js'],
     ['packages/session-events', 'dist/index.js'],
     ['packages/session-application', 'dist/index.js'],
-    ['packages/session-selflaunch', 'dist/index.js'],
     ['packages/spec-core', 'dist/index.js'],
     ['spec-forge', 'dist/index.js'],
     ['spec-cli', 'dist/cli.js'],
@@ -123,5 +123,12 @@ if (args[0] === 'serve' || args[0] === 'dashboard') {
     .split(',').map((key) => key.trim()).filter(Boolean)
   for (const key of identityKeys) delete env[key]
 }
-spawn(process.execPath, [cli, ...args], { stdio: 'inherit', env })
-  .on('exit', (code) => process.exit(code ?? 0))
+const child = spawn(process.execPath, [cli, ...args], { stdio: 'inherit', env })
+// @@@ signal forwarding - this launcher is the pid a shell, a monitor, or a harness's task-stop sees; the verb runs
+// in the child. Mirroring only the exit code meant `kill <spex-pid>` ended the launcher and ORPHANED a long-running
+// verb (a `session stream-dequeue` kept consuming its queue with no reader attached). Forward the stop signals to
+// the child while it lives, and exit the way it exited: its code, or 128+signal when a signal ended it.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => { if (child.exitCode === null && child.signalCode === null) child.kill(signal) })
+}
+child.on('exit', (code, signal) => process.exit(code ?? (signal ? 128 + (os.constants.signals[signal] ?? 0) : 0)))

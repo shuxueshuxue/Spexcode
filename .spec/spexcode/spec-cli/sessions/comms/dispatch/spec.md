@@ -75,6 +75,14 @@ read as intended behaviour because the contract had been rewritten to match the 
 whether a debt is settled is not ceremony; it is the only thing standing between "retry until it lands" and
 "show it again forever".
 
+**A registered address with no record** — a self-launched harness ([[self-launch-entry]]) — is accepted at its
+enqueue and never handed over: `sendText` finds no record, finds the protocol address, enqueues one `session.text.v1`
+message and answers `ok` with `delivery: "queued"` and `recordless: true`. Nothing here can push it, because no adapter
+this backend owns belongs to that harness; the recipient takes it with its own inbox verb ([[inbox]]). The same
+acceptance holds when the CLI has no backend to reach: `spex session send` resolves a full id against the local store's
+addresses and enqueues locally, saying so on stderr. An address that was never initialized is still refused — a typo
+must not mint a queue nobody reads.
+
 What remains loud is what genuinely cannot be recorded: an unknown session id, or a record the writer
 refuses. Those still return a `DispatchResult {ok,error}` that propagates — `POST …/input` answers non-2xx,
 `spex session send` prints it, `mergeSession` returns it. A **retired** session (its worktree gone) is not

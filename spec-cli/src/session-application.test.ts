@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import test from 'node:test'
 
 import { jsonMigrationFencePath, MIGRATED_STATE_EVENT, openProjectSessionApplication } from '@spexcode/session-application'
-import { resolveDatabasePath } from '@spexcode/session-selflaunch'
+import { resolveDatabasePath } from '@spexcode/session-application'
 import { runtimeRoot } from '@spexcode/spec-core'
 
 import { configuredSessionApplication, resetConfiguredSessionApplicationForTest, sessionApplicationCutoverState } from './session-application.js'

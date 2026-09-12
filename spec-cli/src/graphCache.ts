@@ -11,7 +11,7 @@ import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { residentForgeState } from '@spexcode/spec-forge/resident'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
 import { issueSourceCurrent, readReviewSnapshot, type IssueSourceRevision } from '@spexcode/spec-core'
-import { resolveDatabasePath } from '@spexcode/session-selflaunch'
+import { resolveDatabasePath } from '@spexcode/session-application'
 
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'

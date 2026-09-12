@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { DatabasePathError, resolveDatabasePath } from './path.js'
+import { DatabasePathError, resolveDatabasePath } from './storage-path.js'
 
 const pathError = (body: () => unknown): DatabasePathError => {
   try {

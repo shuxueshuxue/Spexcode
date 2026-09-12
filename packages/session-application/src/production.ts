@@ -7,6 +7,7 @@ import {
   type Message,
   type MessageInput,
   type ProtocolTransaction,
+  type SessionAddress,
   type SessionProtocol,
   payloadHash,
 } from '@spexcode/session-protocol'
@@ -141,6 +142,8 @@ export interface ProductionSessionApplication extends SessionApplication {
   readMessageHistory(sessionId: string): readonly Message[]
   dequeuePendingMessage(sessionId: string, expectedMessageId: string): Message | null
   readState(sessionId: string): SessionState | null
+  /** The protocol address row itself — present for every registered session, governed or not; null means never initialized. */
+  readAddress(sessionId: string): SessionAddress | null
   readEvents(sessionId: string, afterSequence?: number): readonly SessionEvent[]
   readWatchEvents(watcherSessionIds: readonly string[], limit?: number): readonly WatchEvent[]
   readFollowCursor(watcherSessionId: string, subjectSessionId: string): number | null
@@ -569,6 +572,22 @@ export function openProjectSessionApplication(options: ProjectSessionApplication
       requireId(sessionId, 'sessionId')
       const state = protocol.withTransaction(tx => readStateInTransaction(tx, sessionId))
       return state
+    },
+
+    readAddress(sessionId) {
+      requireId(sessionId, 'sessionId')
+      // A pure read of the protocol's own address row. The adopter needs to tell "registered but recordless"
+      // (a self-launched harness) from "unknown" without creating the address as a side effect, which is what
+      // every enqueue path would do.
+      const row = protocol.withTransaction(tx => tx.query(
+        'SELECT session_id, created_at_ms, retired_at_ms FROM protocol_sessions WHERE session_id = ?', sessionId,
+      ))[0]
+      if (!row) return null
+      return {
+        sessionId: String(row.session_id),
+        createdAtMs: Number(row.created_at_ms),
+        retiredAtMs: row.retired_at_ms === null || row.retired_at_ms === undefined ? null : Number(row.retired_at_ms),
+      }
     },
 
     readEvents(sessionId, afterSequence) {

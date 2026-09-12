@@ -12,7 +12,7 @@ import {
 } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 import { migrateJsonSessionRecords, jsonMigrationFencePath } from '@spexcode/session-application'
-import { requireLocalDatabasePath } from '@spexcode/session-selflaunch'
+import { requireLocalDatabasePath } from '@spexcode/session-application'
 
 const HELP = `Usage: node scripts/session-live-cutover.mjs --plan ABSOLUTE_JSON
 

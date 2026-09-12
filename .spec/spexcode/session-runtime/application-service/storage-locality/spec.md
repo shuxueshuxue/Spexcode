@@ -1,17 +1,17 @@
 ---
-title: self-launch storage locality
+title: storage locality
 status: active
 hue: 280
-desc: Fail-closed filesystem locality classification before the adopter opens its SQLite protocol database — one detector row per platform (Linux statfs magic, Darwin mount flags), every other platform refuses.
+desc: Fail-closed filesystem locality classification before any Spex composition opens its SQLite protocol database — one detector row per platform (Linux statfs magic, Darwin mount flags), every other platform refuses.
 code:
-  - packages/session-selflaunch/src/locality.ts
+  - packages/session-application/src/storage-locality.ts
 related:
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
   - docs/session-protocol-sqlite-engine.md
 ---
-# self-launch storage locality
+# storage locality
 
-The adopter probes the filesystem containing the database parent directory before opening the protocol. A
+The composition opening the store probes the filesystem containing the database parent directory before opening the protocol. A
 platform's answer is one detector row, and a platform without a row refuses before probing. **Linux** reads the
 statfs magic — the kernel's stable per-filesystem constant — against a small audited allow-list: recognised local
 values are admitted; known network values, unknown values including FUSE, and probe failure each refuse with a
@@ -26,7 +26,8 @@ without returning as though locality had been established (the Darwin row stats 
 `mount` cannot notice an absent directory). Every normal return therefore means that the locality precondition is
 positively established or explicitly operator-attested. This judgement never moves into the protocol package.
 
-An operator may bypass detection only with the explicit `--assume-local-storage` flag on that invocation. No
+An operator may bypass detection only with an explicit per-call `assumeLocal` option (the retired adopter CLI spelled
+it `--assume-local-storage`); no current product verb exposes it. No
 environment variable or config-file field can enable it, because inherited or persistent state would silently turn
 an exceptional assertion into a default.
 
@@ -34,7 +35,8 @@ The executable vectors cover local, network, and undetermined classification and
 through injected detectors — a statfs magic for Linux, a transcribed `mount` table for Darwin. They do **not**
 establish behaviour on a real network mount: neither host has one, so the Linux network magic values transcribed from
 `/usr/include/linux/magic.h` and the Darwin network type names have never been exercised against their corresponding
-mounted filesystems. That evidence gap remains OPEN. The Darwin row itself is measured on a real macOS host through
-the installed CLI (a session store under `~/.spexcode` on local APFS opens; before the row existed the same host
-refused every open with `LOCALITY_DETECTOR_UNAVAILABLE`). Windows has no row and must refuse unless the operator
+mounted filesystems. That evidence gap remains OPEN. The Darwin row itself was measured on a real macOS host through
+the then-installed adopter CLI (a session store under `~/.spexcode` on local APFS opened; before the row existed the
+same host refused every open with `LOCALITY_DETECTOR_UNAVAILABLE`); the fleet's two Macs now exercise the same row
+through their backends. Windows has no row and must refuse unless the operator
 supplies the explicit per-call flag.

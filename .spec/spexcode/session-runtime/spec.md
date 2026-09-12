@@ -9,7 +9,7 @@ related:
 # session-runtime
 
 A session runtime is a consumer composition, not a daemon required by [[session-protocol]]. It may be a long-lived
-Spex backend, a ZSwarm worker loop, or a short-lived self-launch listener. Its minimal loop is always the same:
+Spex backend, a ZSwarm worker loop, or a self-launched harness running one inbox verb. Its minimal loop is always the same:
 
 1. open the protocol for one explicit absolute database path, obtain one exact session id, and initialize its
    protocol address;
@@ -34,7 +34,7 @@ protocol tables.
 Harness configuration is a separate materialization adapter. It owns discovered contract files, hook bindings,
 trust, skills, commands, and other setup artifacts. One harness registry row may implement both runtime and
 materialization facets, but neither facet calls or imports the other. A self-launched harness may therefore use
-materialization plus a small protocol listener without importing the Spex managed runtime; ZSwarm may use its
+materialization plus the CLI's inbox verbs without a managed runtime owning its process; ZSwarm may use its
 runtime facet without adopting Spex materialization; Spex governed launch composes both.
 
 The three reference compositions are:
@@ -43,8 +43,10 @@ The three reference compositions are:
   message body or its own record, never a Spex lifecycle field required by the protocol. Its existing injected
   mailbox port can implement dequeue directly; a multi-workspace app-server opens the exact adopter database and
   namespaces its own workspaces instead of mutating process cwd.
-- **self-launch:** `materialize + session-protocol + explicit listener + harness runtime adapter`. There is no
-  governed lifecycle record, board row, parent, resident backend, or automatic drain requirement.
+- **self-launch:** `materialize + session-protocol + registration hook + the product CLI's own inbox verbs`. There is
+  no governed lifecycle record, board row, parent, resident backend, or automatic drain requirement; the harness the
+  person started registers its native id as an address at `SessionStart`, and receives by running `dequeue`,
+  `wait-dequeue`, or `stream-dequeue` itself ([[self-launch-entry]]).
 - **Spex governed:** `session-protocol + Spex topology policy + Spex lifecycle/governance + harness runtime adapter
   + materialize`. Its backend improves latency and owns runtime resources, but durable database state remains
   correct across backend absence or replacement.
@@ -68,7 +70,7 @@ protocol.
 1. The pure protocol operations, schema, migrations, and conformance fixtures now live under
    `@spexcode/session-protocol`; the retired `@spexcode/session-core` package has no production edge and is not
    a compatibility export. New callers must use the split package stack rather than restoring that name.
-2. Prove self-launch and ZSwarm adopters against the installed package. They exercise recordless/offline and
+2. Prove the self-launch path and the ZSwarm adopter against the installed packages. They exercise recordless/offline and
    multi-workspace/runtime-injected shapes without Spex governance.
 3. Keep relation resolution in `@spexcode/session-topology` and lifecycle/event publication in
    `@spexcode/session-application`, in the same database transaction as protocol enqueue. Replace callback drain

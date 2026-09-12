@@ -15,7 +15,6 @@ export const RELEASE_PACKAGES = Object.freeze([
   { id: 'session-runtime', dir: 'packages/session-runtime', name: '@spexcode/session-runtime', build: [['run', 'build']] },
   { id: 'session-events', dir: 'packages/session-events', name: '@spexcode/session-events', build: [['run', 'build']] },
   { id: 'session-application', dir: 'packages/session-application', name: '@spexcode/session-application', build: [['run', 'build']] },
-  { id: 'session-selflaunch', dir: 'packages/session-selflaunch', name: '@spexcode/session-selflaunch', build: [['run', 'build']] },
   { id: 'core', dir: 'packages/spec-core', name: '@spexcode/spec-core', build: [['run', 'build']] },
   { id: 'dashboard', dir: 'spec-dashboard', name: '@spexcode/spec-dashboard', build: [['run', 'prepack']] },
   { id: 'forge', dir: 'spec-forge', name: '@spexcode/spec-forge', build: [['run', 'build']] },

@@ -15,7 +15,6 @@ related:
   - packages/session-runtime/package.json
   - packages/session-events/package.json
   - packages/session-application/package.json
-  - packages/session-selflaunch/package.json
   - spec-forge/package.json
   - spec-cli/package.json
   - spec-dashboard/package.json
@@ -23,14 +22,14 @@ related:
 ---
 # release-publish
 
-The metapackage is not a release unit by itself. A release is the committed set of fourteen public packages,
+The metapackage is not a release unit by itself. A release is the committed set of thirteen public packages,
 listed here in publication order: `@spexcode/archify`, `@spexcode/transcript`, `@spexcode/transcript-ui`,
 `@spexcode/session-protocol`, `@spexcode/session-topology`, `@spexcode/session-runtime`,
-`@spexcode/session-events`, `@spexcode/session-application`, `@spexcode/session-selflaunch`,
+`@spexcode/session-events`, `@spexcode/session-application`,
 `@spexcode/spec-core`, `@spexcode/spec-dashboard`, `@spexcode/spec-forge`, `@spexcode/spec-cli`, and `spexcode`. Every public package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
 the publication order is archify, transcript (neither depends on anything), transcript-ui, session-protocol,
-session-topology, session-runtime, session-events, session-application, session-selflaunch, core, dashboard, forge,
+session-topology, session-runtime, session-events, session-application, core, dashboard, forge,
 CLI, root. archify ([[archify]]) goes first: it depends on nothing at runtime, the dashboard bundles its browser half
 and the CLI renders with it, and a package that has never been published before is the one most likely to be
 refused — first in line, a refusal leaves the registry untouched instead of half a release behind it. The session stack is published in dependency order;

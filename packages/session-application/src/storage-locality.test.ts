@@ -14,8 +14,8 @@ import {
   parseDarwinMountTable,
   requireLocalDatabasePath,
   requireLocalDatabasePathWithDetector,
-} from './locality.js'
-import { DatabasePathError } from './path.js'
+} from './storage-locality.js'
+import { DatabasePathError } from './storage-path.js'
 
 const databasePath = '/var/lib/spexcode/sessions.sqlite'
 const localityError = (body: () => unknown): LocalityError => {

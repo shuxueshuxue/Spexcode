@@ -7,7 +7,7 @@ import {
   type CommittedSessionChange,
   type ProductionSessionApplication,
 } from '@spexcode/session-application'
-import { requireLocalDatabasePath, resolveDatabasePath } from '@spexcode/session-selflaunch'
+import { requireLocalDatabasePath, resolveDatabasePath } from '@spexcode/session-application'
 import { runtimeRoot } from '@spexcode/spec-core'
 import { jsonMigrationFencePath } from '@spexcode/session-application'
 

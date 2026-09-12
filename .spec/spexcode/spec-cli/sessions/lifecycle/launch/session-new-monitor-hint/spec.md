@@ -36,7 +36,9 @@ an undescribed verb with its drawer. What is session's is the CONTENT — these 
 consulted first and win wherever they exist, because the session verbs carry blocking behaviour, destructive
 scope, and edge semantics that no projection of a drawer paragraph can be trusted to reproduce. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
-send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule (including that `--thread` is an adapter-native
+the three inbox verbs' distinct process shapes (`dequeue` returns now, `wait-dequeue` is a background command whose
+exit is the wake-up, `stream-dequeue` is a never-exiting monitor; all three read the caller's own address unless
+`--session <FULL-ID>` names another — [[inbox]]), send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule (including that `--thread` is an adapter-native
 conversation id rather than the SpexCode session id, and is omitted for Claude), selector grammar, and project-bound write warning cannot drift between a drawer
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
 projection change only. The declaration entries project [[state]]'s current vocabulary rather than inventing

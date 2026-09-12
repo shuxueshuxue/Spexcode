@@ -111,6 +111,20 @@ prompt carries a runnable reply path over that same tunnel.`, ['project-bound']]
       'Publish, list, or withdraw YOUR session’s live loopback web-service URLs. Posting records no bytes and does not contact the service; the dashboard proxies the current HTTP/WebSocket service only when the human opens its preview.'],
     watch: [['spex session watch <SEL…>', 'spex session watch list', 'spex session watch cancel <SEL…>', 'spex session watch stream [SEL…] [--as NAME] [--idle] [--interval N=1]'],
       'With a governed caller, watch registers durable send-backed state delivery and exits. list/cancel manage those relations. Without a governed caller it names the background `session wait` fallback. stream is the human-only continuous log view and blocks until killed.', ['selector']],
+    dequeue: ['spex session dequeue [--session <FULL-ID>] [--json]',
+      `ONE-SHOT inbox read: take at most one message addressed to YOU (this shell's session identity, or --session)
+from the canonical queue and print it; an empty queue prints nothing (\`null\` with --json) and exits 0. Taking is
+at-most-once — a printed message is gone from the queue, exactly as a backend handover would have removed it. The
+address must already be registered (governed sessions at create, self-launched ones by their SessionStart hook).`],
+    'wait-dequeue': ['spex session wait-dequeue [--session <FULL-ID>] [--timeout S=1200] [--interval S=1] [--json]',
+      `A BACKGROUND COMMAND: blocks until ONE message arrives for you, takes it, prints it, exits 0; exits 1 on the
+deadline with nothing consumed. Run it in the background — its exit is your wake-up, so a harness that notifies on
+command completion notifies you once per message you asked for. Distinct from \`wait\`, which watches OTHER sessions'
+state transitions and only observes your own log; this one consumes your queue.`],
+    'stream-dequeue': ['spex session stream-dequeue [--session <FULL-ID>] [--interval S=1] [--json]',
+      `A PERSISTENT MONITOR: prints one line per message as each arrives and never exits on its own (SIGINT/SIGTERM
+stop it). Feed it to a line-oriented monitor, not to a background command. Every printed line is a consumed message;
+--json emits one JSON object per line ({messageId, kind, from, enqueuedAt, text|bodyBase64}).`],
     wait: ['spex session wait [SEL…] [--timeout S=1200] [--interval S=1] [--idle]',
       `EDGE-TRIGGERED wait: follows the selected sessions' logs AND your own log, and exits 0 on
 the FIRST thing worth waking for — a followed session TRANSITIONING from a non-actionable
@@ -158,6 +172,7 @@ const SESSION_HELP_GROUPS = [
   { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge', 'reparent'] },
   { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'close', 'quarantine'] },
   { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask', 'files', 'web'] },
+  { title: 'Your inbox (receive as an act — three shapes, one queue)', verbs: ['dequeue', 'wait-dequeue', 'stream-dequeue'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 

@@ -19,7 +19,7 @@ process exits loudly, a reload never leaves the port with a gap, and an abandone
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree in the
 compiled runtime closure** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-core`, `transcript`, `session-application`, `session-selflaunch`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
+(`spec-forge`, `spec-core`, `transcript`, `session-application`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
 reads via fs or never imports (the frontend is a separate vite server with its own HMR). In a source workspace
 the supervisor rebuilds that closure before it reloads; an installed package watches only its shipped `dist`.
 Watching only its own dir was a real gap: a merge touching `spec-forge` reached disk while the running child

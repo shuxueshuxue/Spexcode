@@ -82,7 +82,11 @@ test('init success message reports the governedRoots the template ACTUALLY ships
   assert.match(projectSpec, /`system` contracts[\s\S]*`hook` handlers[\s\S]*`command` presets[\s\S]*`skill`/, 'starter project spec names the initialized plugin surfaces')
   assert.doesNotMatch(projectSpec, /seed ships `core`|seed ships `tidy`/, 'obsolete core-plus-tidy inventory is gone')
   const mergeNode = readFileSync(join(proj, '.spec', 'project', '.plugins', 'skills', 'merge', 'spec.md'), 'utf8')
-  assert.match(mergeNode, /^surface: skill, command$/m, 'merge is one present-plugin node with skill and command surfaces')
+  assert.match(mergeNode, /^surface: skill$/m, 'merge is a skill; `spex session merge` dispatches this body rather than a command preset')
+  // a folder is a shelf, not a surface: the seeded tree must still carry a node that plugs into two of them,
+  // or nothing proves the `surface:` list is what routes. distill is that node now that merge is skill-only.
+  const distillNode = readFileSync(join(proj, '.spec', 'project', '.plugins', 'skills', 'distill', 'spec.md'), 'utf8')
+  assert.match(distillNode, /^surface: skill, command$/m, 'distill is one node reached from two surfaces')
   for (const skill of [join(proj, '.claude', 'skills', 'merge', 'SKILL.md'), join(proj, '.codex', 'skills', 'merge', 'SKILL.md')]) {
     assert.match(readFileSync(skill, 'utf8'), /^name: merge$/m, `${skill} materializes the merge skill`)
     assert.match(readFileSync(skill, 'utf8'), /do not call `spex session merge \.` recursively/i, `${skill} prevents recursive self-dispatch`)

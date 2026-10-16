@@ -10,7 +10,7 @@ products load. Every package runs SpexCode through `npx`, so a user installs not
 | `claude-code/atlas` | Claude Code | a plugin with the `atlas` skill, invoked as `/atlas` | `claude plugin marketplace add shuxueshuxue/spexcode-plugins` then `claude plugin install atlas@spexcode` |
 | `codex/plugins/atlas` | Codex | a plugin with the `atlas` skill, invoked as `/atlas` | `codex plugin marketplace add shuxueshuxue/spexcode-plugins` then `codex plugin add atlas@spexcode` |
 | `zcode/atlas` | ZCode | a plugin with the `atlas` skill, plus `atlas.dwf.ts`: the whole job as one dynamic workflow | list the folder in `plugins.dirs` |
-| `gugu/spexcode-atlas` | gugu | a tab extension: the spec tree with each node's diagram drawn in the tab, and a button that starts an agent on the atlas | Settings → Extensions → Install, pick the folder |
+| `gugu/spexcode` | gugu | an App: beside a task, its working copy's spec tree with drift and each node's diagram; "Start here" / "Cite" hand a node to a gugu session; the `atlas` and `spexcode` skills for gugu's agents | the App page → install from folder, pick the folder |
 | `penguin/use-spexcode` | PenguinHarness | a library plugin with the `atlas` skill | upload `skills/atlas` as a zip, or copy it into an agent's `agent_state/skills/` |
 
 **This directory IS a marketplace root, and it is installed from a mirror.** Claude Code and Codex both resolve a
@@ -30,11 +30,13 @@ never there.
 Claude Code and Codex both expose a plugin skill as a native slash invocation, so the installed `atlas` skill is
 started by typing `/atlas`; this package does not add a second Claude `commands/` file or a Codex `prompts/` file.
 ZCode has no equivalent slash-command package surface here, so its distribution keeps the `plugins.dirs` plugin and
-the hand-written `atlas.dwf.ts` workflow. gugu is a tab extension with its own Draw button, and PenguinHarness reads
-the skill from its `agent_state/skills/` library path; neither host offers a corresponding `/atlas` entrypoint.
+the hand-written `atlas.dwf.ts` workflow. gugu gives the skill to its agents (Claude Code and Codex sessions in
+gugu list it as their own) and has a Draw button in its tab. PenguinHarness reads the skill from its
+`agent_state/skills/` library path and offers no corresponding `/atlas` entrypoint.
 
-**Generated or written by hand.** `npm run build:distribution` writes every manifest, every `SKILL.md`, the gugu tab's
-prompt and its copies of archify (`archify.js`, `focus.js`, `diagram.css`) from their sources: the atlas preset in
+**Generated or written by hand.** `npm run build:distribution` writes every manifest, every `SKILL.md`, the gugu App's
+prompt, its pinned spex command (`spex-command.js`), its icon and its copies of archify (`archify.mjs`, `focus.js`,
+`diagram.css`) from their sources: the atlas preset in
 `.spec/spexcode/.plugins/skills/atlas/`, the root version, and `packages/archify`. `npm run lint` fails while any of
 them is stale. The rest was written by hand and the generator never touches it: `zcode/atlas/skills/atlas/atlas.dwf.ts`,
-the gugu tab's `index.html`, `app.js`, `atlas-model.js` and `style.css`, and PenguinHarness's `icon.svg`.
+the gugu App's `index.html`, `app.js`, `tools.js`, `spex-in.mjs` and `style.css`, and PenguinHarness's `icon.svg`.

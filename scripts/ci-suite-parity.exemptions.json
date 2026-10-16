@@ -1,11 +1,9 @@
 {
   "reasons": {
     "dashboard-browser": "This probe drives the dashboard in a real browser with a Vite page and usually a live backend fixture; CI runs dashboard unit tests but does not launch that browser environment, so this remains a targeted check.",
-    "cli-e2e": "This probe exercises a CLI or session lifecycle through real temporary repositories and process boundaries; the CI workflow runs the CLI unit suite but does not invoke this separate end-to-end harness, so it remains targeted.",
-    "gugu-browser": "This probe launches the gugu extension from a real origin with browser APIs and a host bridge; CI checks the shipped static assets but does not launch gugu, so this remains a targeted browser check."
+    "cli-e2e": "This probe exercises a CLI or session lifecycle through real temporary repositories and process boundaries; the CI workflow runs the CLI unit suite but does not invoke this separate end-to-end harness, so it remains targeted."
   },
   "files": {
-    "scripts/gugu-tab.e2e.mjs": "gugu-browser",
     "spec-cli/test/service-cwd.e2e.mjs": "cli-e2e",
     "spec-cli/test/session-close-dirty.e2e.mjs": "cli-e2e",
     "spec-cli/test/session-close-legacy.e2e.mjs": "cli-e2e",

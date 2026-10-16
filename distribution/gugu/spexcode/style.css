@@ -1,0 +1,43 @@
+/* gugu styles the semantic HTML already (its own @layer); this file only lays the tab out, with gugu's tokens. */
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; overflow: hidden; }
+.empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--em-spacing-lg); padding: var(--em-spacing-2xl); text-align: center; }
+.empty p { max-width: 460px; margin: 0; color: var(--em-foreground-muted); white-space: pre-wrap; }
+.atlas { height: 100%; display: flex; min-height: 0; }
+.tree-pane { flex: none; width: 260px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--em-border); }
+.pane-head { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: var(--em-spacing-sm); padding: var(--em-spacing-md) var(--em-spacing-lg); }
+.pane-head small { color: var(--em-foreground-muted); white-space: nowrap; }
+.tree { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--em-spacing-sm) var(--em-spacing-lg); }
+.tree ul { list-style: none; margin: 0; padding-left: var(--em-spacing-md); }
+.tree > ul { padding-left: 0; }
+.node-row { width: 100%; display: flex; align-items: center; gap: var(--em-spacing-xs); border: 0; background: none; padding: 2px var(--em-spacing-xs); min-height: 0; text-align: left; white-space: nowrap; }
+.node-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.node-row:hover { background: var(--em-hover); }
+.node-row[aria-current="true"] { background: var(--em-selected); font-weight: 600; }
+.twisty { width: 10px; flex: none; color: var(--em-foreground-muted); }
+.mark { width: 7px; height: 7px; flex: none; border-radius: 2px; }
+.mark.drift { background: var(--em-foreground-warning); border-radius: 50%; }
+.mark.pending { background: var(--em-foreground-info); border-radius: 50%; }
+.mark.has-diagram { background: var(--em-foreground-muted); }
+.agents { flex: none; margin: 0; border-top: 1px solid var(--em-border); max-height: 40%; overflow: auto; }
+.document { flex: 1; min-width: 0; overflow: auto; padding: var(--em-spacing-xl) var(--em-spacing-2xl) 48px; }
+.document h1 { margin: 0 0 var(--em-spacing-xs); }
+.document > .muted { margin: 0 0 var(--em-spacing-sm); }
+.drift-note { margin: 0 0 var(--em-spacing-sm); padding: var(--em-spacing-sm) var(--em-spacing-md); border-radius: var(--em-radius-control); background: var(--em-background-warning); color: var(--em-foreground-warning); }
+.code { margin: 0 0 var(--em-spacing-md); font-family: ui-monospace, monospace; font-size: var(--em-font-caption); color: var(--em-foreground-muted); overflow-wrap: anywhere; }
+.act { margin: 0 0 var(--em-spacing-sm); gap: var(--em-spacing-sm); }
+.act.start input { flex: 1 1 220px; min-width: 0; }
+#act-note:empty { display: none; }
+.node-diagram { margin: var(--em-spacing-lg) 0; }
+.node-diagram .archify { border-radius: var(--em-radius-control); overflow: auto; }
+.node-diagram .archify svg { display: block; width: 100%; height: auto; }
+.diagram-error { white-space: pre-wrap; padding: var(--em-spacing-md); border-radius: var(--em-radius-control); background: var(--em-background-destructive); color: var(--em-foreground-destructive); }
+.body { max-width: 880px; }
+.error { position: fixed; left: var(--em-spacing-md); right: var(--em-spacing-md); bottom: var(--em-spacing-md); margin: 0; padding: var(--em-spacing-sm) var(--em-spacing-md); border-radius: var(--em-radius-control); background: var(--em-background-destructive); color: var(--em-foreground-destructive); white-space: pre-wrap; }
+/* A narrow pane: the tree above the document, each scrolling on its own. */
+@media (max-width: 640px) {
+  .atlas { flex-direction: column; }
+  .tree-pane { width: auto; max-height: 38%; border-right: 0; border-bottom: 1px solid var(--em-border); }
+  .document { padding: var(--em-spacing-lg); }
+}

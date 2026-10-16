@@ -11,11 +11,13 @@ related:
   - distribution/claude-code/atlas/skills/atlas/SKILL.md
   - distribution/zcode/atlas/.zcode-plugin/plugin.json
   - distribution/zcode/atlas/skills/atlas/SKILL.md
-  - distribution/gugu/spexcode-atlas/manifest.json
-  - distribution/gugu/spexcode-atlas/prompt.js
-  - distribution/gugu/spexcode-atlas/archify.mjs
-  - distribution/gugu/spexcode-atlas/focus.js
-  - distribution/gugu/spexcode-atlas/diagram.css
+  - distribution/gugu/spexcode/manifest.json
+  - distribution/gugu/spexcode/prompt.js
+  - distribution/gugu/spexcode/archify.mjs
+  - distribution/gugu/spexcode/focus.js
+  - distribution/gugu/spexcode/diagram.css
+  - distribution/gugu/spexcode/spex-command.js
+  - distribution/gugu/spexcode/skills/spexcode/SKILL.md
   - distribution/penguin/use-spexcode/plugin.json
   - distribution/penguin/use-spexcode/package.json
   - distribution/penguin/use-spexcode/icon.svg
@@ -47,20 +49,20 @@ own plugin tree (that is `.plugins`), and none of it is loaded by SpexCode.
   (dynamic workflows are not in every release yet) gets the same job turn by turn from the skill's own steps, and
   the agent says which path it took. ZCode also reads Claude Code's format, but its package says something Claude
   Code's does not, so it is its own.
-- `gugu/spexcode-atlas` — a gugu tab extension: a manifest, a page, and the tab that shows the workspace's spec
-  tree with each node's diagram and starts an agent on the atlas ([[gugu-atlas-tab]]). gugu extends its interface,
-  not its agents, so its package is a page rather than a skill.
+- `gugu/spexcode` — a gugu App: a tab beside a task showing that working copy's spec tree, drift and diagrams, a
+  program the tab reads through, and the atlas and spexcode skills for gugu's agents ([[gugu-app]]). gugu's
+  sessions are its own, so the App hands work to them rather than starting SpexCode's.
 - `penguin/use-spexcode` — a PenguinHarness library plugin: `plugin.json` with that library's dated version,
   bilingual descriptions and category, an `icon.svg`, the `package.json` its loader resolves, and the skill. The
   `use-` prefix is that library's rule for a plugin built around another product.
 
 The hosts that do not expose a native `/atlas` skill command keep their own surface: ZCode uses `plugins.dirs` and
-the shipped dynamic workflow, gugu uses its tab's Draw button, and PenguinHarness reads the skill from its library
+the shipped dynamic workflow, gugu gives the skill to its agents and draws from its tab's Draw button, and PenguinHarness reads the skill from its library
 path. The package does not invent a second command format for those hosts.
 
 **The root is the marketplace; the subfolders are packages.** Claude Code and Codex add `distribution/` as the
 marketplace root and install the named package with the commands above. ZCode lists `zcode/atlas` in
-`plugins.dirs`, gugu uses its Install picker, and PenguinHarness copies the skill into an agent's `skills/`.
+`plugins.dirs`, gugu installs the folder from its App page, and PenguinHarness copies the skill into an agent's `skills/`.
 
 **Nothing installed, nothing configured.** Every package runs SpexCode through npx, and a repository without a
 spec tree is seeded by `spex init --pure` — the skeleton verb that exists for exactly this: `.spec/spexcode.json`
@@ -108,17 +110,14 @@ SpexCode needs first and the line that hands over the page. Versions follow the 
 that version is a prerelease every command names npm's `next` tag, the only tag then carrying these verbs;
 once it is a release they name no tag at all, because `latest` is the release and `next` is by then the older
 of the two — a package still pinning `@next` hands an adopter a build older than the one they would get by
-asking for nothing. The gugu tab's
-copies of archify — the renderer bundled for a browser, the focus module, the stylesheet — are generated from
-`packages/archify` with a pinned esbuild, so they stay byte-for-byte what the dashboard draws. gugu's shelf parses
-each `.js` file as a classic script, so the generated focus helper and prompt expose globals. Archify keeps its
+asking for nothing. The gugu App's
+manifest, its pinned spex command, its two skills and its copies of archify — the renderer bundled for a browser, the focus module, the stylesheet — are generated from
+`packages/archify` with a pinned esbuild, so they stay byte-for-byte what the dashboard draws. The gugu page loads the generated focus helper and prompt as classic scripts, so they expose globals. Archify keeps its
 top-level-await ESM bundle as `archify.mjs`; the classic tab page loads it with a local dynamic import. The tab
 loads those helpers in order. `npm run lint` fails while any generated file is stale. The ZCode workflow and the
-gugu tab's own page are written by hand and the generator never touches them.
+gugu App's page and program are written by hand and the generator never touches them.
 
 **Proof is each host's own code.** `npm run test:distribution` renders every archify example and every committed
-diagram through the gugu bundle and requires the same SVG the renderer gives, reads a folder tree through the
-tab's reader, and checks that every file a package names exists. Beyond CI: the Claude Code package passes
+diagram through the gugu bundle and requires the same SVG the renderer gives, runs the gugu App's program against a working copy and an npx that records its argv, and checks that every file a package names exists. Beyond CI: the Claude Code package passes
 `claude plugin validate --strict` and loads with `--plugin-dir`; ZCode's own plugin discovery loads the ZCode
-package from `plugins.dirs` with no diagnostics and its workflow compiler accepts the script; gugu's manifest
-schema accepts the tab's manifest; PenguinHarness's skill reader parses the skill.
+package from `plugins.dirs` with no diagnostics and its workflow compiler accepts the script; gugu installs the App from its folder and the tab draws this repository's tree; PenguinHarness's skill reader parses the skill.

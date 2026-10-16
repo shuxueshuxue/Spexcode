@@ -24,7 +24,7 @@ body { margin: 0; height: 100vh; overflow: hidden; }
 .document { flex: 1; min-width: 0; overflow: auto; padding: var(--em-spacing-xl) var(--em-spacing-2xl) 48px; }
 .document h1 { margin: 0 0 var(--em-spacing-xs); }
 .document > .muted { margin: 0 0 var(--em-spacing-sm); }
-.drift { margin: 0 0 var(--em-spacing-sm); padding: var(--em-spacing-sm) var(--em-spacing-md); border-radius: var(--em-radius-control); background: var(--em-background-warning); color: var(--em-foreground-warning); }
+.drift-note { margin: 0 0 var(--em-spacing-sm); padding: var(--em-spacing-sm) var(--em-spacing-md); border-radius: var(--em-radius-control); background: var(--em-background-warning); color: var(--em-foreground-warning); }
 .code { margin: 0 0 var(--em-spacing-md); font-family: ui-monospace, monospace; font-size: var(--em-font-caption); color: var(--em-foreground-muted); overflow-wrap: anywhere; }
 .act { margin: 0 0 var(--em-spacing-sm); gap: var(--em-spacing-sm); }
 .act.start input { flex: 1 1 220px; min-width: 0; }

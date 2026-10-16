@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import * as archify from '../packages/archify/index.mjs'
@@ -81,7 +81,11 @@ test('the gugu App\'s program runs the spex its version pins, in the working cop
     for (const tool of Object.values(tools)) assert.deepEqual(tool._meta.ui.visibility, ['app'], 'the tab\'s reads are not agent tools')
     const tree = await tools.graph.run({ root: work })
     const helper = join(root, 'distribution/gugu/spexcode/spex-in.mjs')
-    assert.equal(readFileSync(join(bin, 'argv'), 'utf8').trim(), [...SPEX.args, 'node', helper, work, 'graph', '--json'].join(' '))
+    const argv = readFileSync(join(bin, 'argv'), 'utf8').trim()
+    assert.equal(argv, [...SPEX.args, 'node', 'spex-in.mjs', 'graph', '--json'].join(' '))
+    // On Windows the command line goes through a shell: it may hold constants only — no working copy, no absolute
+    // path (the App's folder has a space in it), or a path with `&` in it runs as a command.
+    assert.ok(!argv.includes(work) && !argv.split(' ').some((a) => isAbsolute(a)), argv)
     // npx runs from the App's folder — inside SpexCode's own repository npx takes the local `spexcode` package
     // for the one it was asked to fetch and finds no spex — and spex runs in the working copy.
     assert.equal(realpathSync(readFileSync(join(bin, 'npx-cwd'), 'utf8').trim()), realpathSync(dirname(helper)))

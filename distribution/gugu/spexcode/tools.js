@@ -10,7 +10,6 @@ import { SPEX } from './spex-command.js'
 
 // npx runs from this App's own folder, never from the working copy (see spex-in.mjs, which then runs spex there).
 const BUNDLE = dirname(fileURLToPath(import.meta.url))
-const SPEX_IN = join(BUNDLE, 'spex-in.mjs')
 
 const PAGE_ONLY = { ui: { visibility: ['app'] } }
 
@@ -20,10 +19,13 @@ function workingCopy(root) {
 }
 
 function spex(root, args) {
-  const argv = [...SPEX.args, 'node', SPEX_IN, root, ...args]
+  // The command line holds constants only. On Windows npx is npx.cmd, which only a shell resolves, and a shell splits
+  // and interprets what it is given: the App's folder (`咕咕 Beta` has a space) or a working copy named `a & b` would
+  // break it or run as a command. So the helper is named relative to the folder npx runs in, and the working copy
+  // travels in the environment.
+  const argv = [...SPEX.args, 'node', 'spex-in.mjs', ...args]
   return new Promise((done, fail) => {
-    // npx is npx.cmd on Windows, which only a shell resolves.
-    execFile(SPEX.command, argv, { cwd: BUNDLE, maxBuffer: 256 << 20, timeout: 180_000, shell: process.platform === 'win32' }, (error, stdout, stderr) => {
+    execFile(SPEX.command, argv, { cwd: BUNDLE, env: { ...process.env, SPEXCODE_APP_ROOT: root }, maxBuffer: 256 << 20, timeout: 180_000, shell: process.platform === 'win32' }, (error, stdout, stderr) => {
       if (!error) return done(stdout)
       const said = String(stderr || '').trim().split('\n').slice(-6).join('\n')
       if (error.code === 'ENOENT') return fail(new Error(`SpexCode runs through ${SPEX.command}, which is not on this computer's PATH. Install Node.js 22 or newer (it brings ${SPEX.command}), then refresh.`))

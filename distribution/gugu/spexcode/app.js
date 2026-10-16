@@ -101,7 +101,19 @@ function buildTree(nodes) {
   return { byId, roots }
 }
 
-async function load() {
+// One read at a time: a read takes seconds (npx + spex over git), so changes that arrive meanwhile mark the tree dirty
+// and one more read follows, instead of several running side by side.
+let loading = null
+let dirty = false
+function load() {
+  if (loading) { dirty = true; return loading }
+  loading = (async () => {
+    do { dirty = false; await read() } while (dirty)
+  })().finally(() => { loading = null })
+  return loading
+}
+
+async function read() {
   const seq = ++loadSeq
   $('error').hidden = true
   if (!place.session) return showEmpty(t.noSession)

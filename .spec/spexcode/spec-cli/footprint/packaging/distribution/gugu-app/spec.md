@@ -39,11 +39,15 @@ host, and both are page-only, so no agent sees them — an agent has a shell and
 the spex of THIS App's version through npx with the public registry named (`spex-command.js`, generated): what the
 install sheet was consented to and what runs stay one thing. npx runs from the App's own folder and `spex-in.mjs`
 then runs spex in the working copy: inside SpexCode's own repository, whose package is itself called `spexcode`, npx
-run there takes the local package for the one it was asked to fetch and finds no `spex`. `node` reads only a `spec.md` under the working copy's
+run there takes the local package for the one it was asked to fetch and finds no `spex`. The command line holds constants only — the
+helper by its name relative to the App's folder, the working copy in `SPEXCODE_APP_ROOT` — because on Windows npx is a
+`.cmd` that only a shell runs, and a shell splits a folder with a space in it (`咕咕 Beta`) and runs what follows a
+`&` in a working copy's name. `node` reads only a `spec.md` under the working copy's
 `.spec/` and the diagram beside it. A machine without npx is told so, with what to install.
 
 **It follows, it does not write.** The tab writes nothing. It re-reads the tree when gugu reports a change under
-`.spec/` in that working copy, once a burst of saves settles. Moving the tab to another task rebinds it to that
+`.spec/` in that working copy, once a burst of saves settles, one read at a time: changes that arrive during a read mark it
+dirty and one more read follows. Moving the tab to another task rebinds it to that
 task's working copy. A missing capability is said plainly, with where to grant it.
 
 **Work goes to gugu.** "Start here" takes the person's words and starts a new gugu session in the working copy's

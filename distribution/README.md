@@ -39,4 +39,4 @@ prompt, its pinned spex command (`spex-command.js`), its icon and its copies of 
 `diagram.css`) from their sources: the atlas preset in
 `.spec/spexcode/.plugins/skills/atlas/`, the root version, and `packages/archify`. `npm run lint` fails while any of
 them is stale. The rest was written by hand and the generator never touches it: `zcode/atlas/skills/atlas/atlas.dwf.ts`,
-the gugu App's `index.html`, `app.js`, `tools.js` and `style.css`, and PenguinHarness's `icon.svg`.
+the gugu App's `index.html`, `app.js`, `tools.js`, `spex-in.mjs` and `style.css`, and PenguinHarness's `icon.svg`.

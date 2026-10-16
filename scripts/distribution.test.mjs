@@ -55,7 +55,7 @@ test('the gugu App\'s program runs the spex its version pins, in the working cop
   // reaches the tab trimmed to what it draws, and a path outside `.spec/` is refused rather than read.
   const { SPEX } = await import(pathToFileURL(join(root, 'distribution/gugu/spexcode/spex-command.js')).href)
   const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
-  assert.deepEqual(SPEX.args.slice(-2), [`spexcode@${version}`, 'spex'])
+  assert.deepEqual(SPEX.args.slice(-2), ['-p', `spexcode@${version}`])
   const work = mkdtempSync(join(tmpdir(), 'gugu-app-'))
   const bin = mkdtempSync(join(tmpdir(), 'fake-npx-'))
   const before = process.env.PATH
@@ -69,15 +69,23 @@ test('the gugu App\'s program runs the spex its version pins, in the working cop
       { id: 'app', parent: null, path: '.spec/app/spec.md', title: 'app', desc: 'root', code: [], status: 'merged', drift: 0, driftFiles: [], version: 3, overlays: [], relatedEntries: [] },
       { id: 'api', parent: 'app', path: '.spec/app/api/spec.md', title: 'api', desc: '', code: ['src/api.ts'], status: 'drift', drift: 2, driftFiles: ['src/api.ts'], version: 1, overlays: [], relatedEntries: [] },
     ] }
-    writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$*" > "${join(bin, 'argv')}"\npwd > "${join(bin, 'cwd')}"\ncat <<'JSON'\n${JSON.stringify(graph)}\nJSON\n`)
+    // npx: record how it was called and from where, drop its own four options as npx does, run the rest.
+    writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$*" > "${join(bin, 'argv')}"\npwd > "${join(bin, 'npx-cwd')}"\nshift 4\nexec "$@"\n`)
+    // spex: answer as `spex graph --json` does, and record where it ran.
+    writeFileSync(join(bin, 'spex'), `#!/bin/sh\npwd > "${join(bin, 'spex-cwd')}"\ncat <<'JSON'\n${JSON.stringify(graph)}\nJSON\n`)
     chmodSync(join(bin, 'npx'), 0o755)
+    chmodSync(join(bin, 'spex'), 0o755)
     process.env.PATH = `${bin}:${before}`
     const tools = await import(pathToFileURL(join(root, 'distribution/gugu/spexcode/tools.js')).href)
     assert.deepEqual(Object.keys(tools).sort(), ['graph', 'node'])
     for (const tool of Object.values(tools)) assert.deepEqual(tool._meta.ui.visibility, ['app'], 'the tab\'s reads are not agent tools')
     const tree = await tools.graph.run({ root: work })
-    assert.equal(readFileSync(join(bin, 'argv'), 'utf8').trim(), [...SPEX.args, 'graph', '--json'].join(' '))
-    assert.equal(realpathSync(readFileSync(join(bin, 'cwd'), 'utf8').trim()), realpathSync(work))
+    const helper = join(root, 'distribution/gugu/spexcode/spex-in.mjs')
+    assert.equal(readFileSync(join(bin, 'argv'), 'utf8').trim(), [...SPEX.args, 'node', helper, work, 'graph', '--json'].join(' '))
+    // npx runs from the App's folder — inside SpexCode's own repository npx takes the local `spexcode` package
+    // for the one it was asked to fetch and finds no spex — and spex runs in the working copy.
+    assert.equal(realpathSync(readFileSync(join(bin, 'npx-cwd'), 'utf8').trim()), realpathSync(dirname(helper)))
+    assert.equal(realpathSync(readFileSync(join(bin, 'spex-cwd'), 'utf8').trim()), realpathSync(work))
     assert.equal(tree.title, 'app')
     assert.deepEqual(tree.nodes.map((n) => [n.id, n.status, n.diagram]), [['app', 'merged', false], ['api', 'drift', true]])
     assert.equal('overlays' in tree.nodes[0], false, 'the tab gets only what it draws')

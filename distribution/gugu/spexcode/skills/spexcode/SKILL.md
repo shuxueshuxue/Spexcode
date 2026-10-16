@@ -7,7 +7,9 @@ description: "Use when working in a repository that has a .spec/ tree (SpexCode)
 
 This repository's intent is written as a spec tree: every folder under `.spec/` with a `spec.md` is a node, and a
 node's `code:` line names the files or functions it governs. Run SpexCode as `npx -y --registry=https://registry.npmjs.org -p spexcode@0.7.0 spex <command>` (Node 22 or
-newer); a `spex` already on the PATH works the same.
+newer); a `spex` already on the PATH works the same. Inside SpexCode's own repository npx takes the local
+`spexcode` package for the one it was asked to fetch and says `spex: command not found`: run the npx line from
+any other directory with `-c 'cd <this repository> && spex <command>'`, or use a `spex` on the PATH.
 
 - **A message that names `[[node-id]]`** is about that node: read it first, `npx -y --registry=https://registry.npmjs.org -p spexcode@0.7.0 spex spec search <id or topic>`
   finds it, and its `spec.md` is the contract your change must keep.

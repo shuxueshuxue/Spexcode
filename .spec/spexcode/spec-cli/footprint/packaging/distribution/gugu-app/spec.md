@@ -7,6 +7,7 @@ code:
   - distribution/gugu/spexcode/app.js
 related:
   - distribution/gugu/spexcode/tools.js
+  - distribution/gugu/spexcode/spex-in.mjs
   - distribution/gugu/spexcode/index.html
   - distribution/gugu/spexcode/style.css
   - distribution/gugu/spexcode/manifest.json
@@ -36,7 +37,9 @@ network to this machine — so the tab cannot run `spex` and cannot reach `spex 
 can: it runs on this computer with the person's rights, the tab calls its two tools (`graph`, `node`) through the
 host, and both are page-only, so no agent sees them — an agent has a shell and runs `spex` itself. The program runs
 the spex of THIS App's version through npx with the public registry named (`spex-command.js`, generated): what the
-install sheet was consented to and what runs stay one thing. `node` reads only a `spec.md` under the working copy's
+install sheet was consented to and what runs stay one thing. npx runs from the App's own folder and `spex-in.mjs`
+then runs spex in the working copy: inside SpexCode's own repository, whose package is itself called `spexcode`, npx
+run there takes the local package for the one it was asked to fetch and finds no `spex`. `node` reads only a `spec.md` under the working copy's
 `.spec/` and the diagram beside it. A machine without npx is told so, with what to install.
 
 **It follows, it does not write.** The tab writes nothing. It re-reads the tree when gugu reports a change under

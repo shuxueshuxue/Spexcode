@@ -5,7 +5,12 @@
 import { execFile } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { SPEX } from './spex-command.js'
+
+// npx runs from this App's own folder, never from the working copy (see spex-in.mjs, which then runs spex there).
+const BUNDLE = dirname(fileURLToPath(import.meta.url))
+const SPEX_IN = join(BUNDLE, 'spex-in.mjs')
 
 const PAGE_ONLY = { ui: { visibility: ['app'] } }
 
@@ -15,14 +20,14 @@ function workingCopy(root) {
 }
 
 function spex(root, args) {
-  const argv = [...SPEX.args, ...args]
+  const argv = [...SPEX.args, 'node', SPEX_IN, root, ...args]
   return new Promise((done, fail) => {
     // npx is npx.cmd on Windows, which only a shell resolves.
-    execFile(SPEX.command, argv, { cwd: root, maxBuffer: 256 << 20, timeout: 180_000, shell: process.platform === 'win32' }, (error, stdout, stderr) => {
+    execFile(SPEX.command, argv, { cwd: BUNDLE, maxBuffer: 256 << 20, timeout: 180_000, shell: process.platform === 'win32' }, (error, stdout, stderr) => {
       if (!error) return done(stdout)
       const said = String(stderr || '').trim().split('\n').slice(-6).join('\n')
       if (error.code === 'ENOENT') return fail(new Error(`SpexCode runs through ${SPEX.command}, which is not on this computer's PATH. Install Node.js 22 or newer (it brings ${SPEX.command}), then refresh.`))
-      fail(new Error(`${[SPEX.command, ...argv].join(' ')} failed in ${root}:\n${said || error.message}`))
+      fail(new Error(`spex ${args.join(' ')} failed in ${root} (spexcode@${SPEX.version} through ${SPEX.command}):\n${said || error.message}`))
     })
   })
 }

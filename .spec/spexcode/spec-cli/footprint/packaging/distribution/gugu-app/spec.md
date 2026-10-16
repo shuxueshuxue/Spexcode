@@ -47,7 +47,7 @@ helper by its name relative to the App's folder, the working copy in `SPEXCODE_A
 
 **It follows, it does not write.** The tab writes nothing. It re-reads the tree when gugu reports a change under
 `.spec/` in that working copy, once a burst of saves settles, one read at a time: changes that arrive during a read mark it
-dirty and one more read follows. Moving the tab to another task rebinds it to that
+dirty and one more read follows. Moving the tab to another task drops a read still out for the old one: it is never drawn under the new task. Moving the tab to another task rebinds it to that
 task's working copy. A missing capability is said plainly, with where to grant it.
 
 **Work goes to gugu.** "Start here" takes the person's words and starts a new gugu session in the working copy's

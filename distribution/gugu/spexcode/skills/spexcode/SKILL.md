@@ -21,7 +21,7 @@ any other directory with `-c 'cd <this repository> && spex <command>'`, or use a
 - **Before you hand work back:** `spex spec lint` and fix what it reports.
 - **No guard yet?** `spex doctor` says, under "git-hook floor", whether this repository's hooks are SpexCode's
   (a worktree's `.git` is a file and its hooks live in the common git dir, so read doctor, not `.git/hooks`).
-  When they are missing, tell the person this repository has not run `spex init`, so its spec guards are off. Do not
+  When they are missing, or present but not SpexCode's (another tool's hook in their place), tell the person this repository has not run `spex init`, so its spec guards are off. Do not
   run `spex init` yourself unless they tell you to: it writes the harnesses' own configuration, `~/.codex/config.toml`
   among it.
 - **Issues** are markdown threads in `.spec/.issues/`: `spex issue ls`, `spex issue show <id>`,

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import vm from 'node:vm'
 import * as archify from '../packages/archify/index.mjs'
 import * as bundled from '../distribution/gugu/spexcode/archify.mjs'
 
@@ -240,4 +241,93 @@ test('every package names only files that exist, and the ZCode skill points at t
     const listed = JSON.parse(readFileSync(join(root, pkg, 'package.json'), 'utf8')).files
     for (const file of listed) assert.ok(existsSync(join(root, pkg, file)), `${pkg}/${file}`)
   }
+})
+
+// The gugu App's page, run in a bare stand-in for the DOM with a stand-in bridge whose program answers are held and
+// let go by the test — no clock. Two things a reading of the code does not settle: reads go out one at a time, and a
+// read still out when the tab moves to another task is dropped rather than drawn there.
+function guguPage() {
+  const byId = new Map()
+  class El {
+    constructor(tag = 'div', id = null) { Object.assign(this, { tagName: tag, id, children: [], hidden: false, className: '', dataset: {}, style: {}, value: '', placeholder: '', scrollTop: 0, attrs: {} }); this._text = '' }
+    get textContent() { return this._text + this.children.map((c) => c.textContent).join('') }
+    set textContent(v) { this._text = String(v); this.children = [] }
+    set innerHTML(v) { this._text = String(v); this.children = [] }
+    append(...nodes) { this.children.push(...nodes) }
+    replaceChildren(...nodes) { this.children = nodes; this._text = '' }
+    setAttribute(k, v) { this.attrs[k] = String(v) }
+    getAttribute(k) { return this.attrs[k] ?? null }
+    addEventListener() {}
+    querySelector() { return null }
+    focus() {}
+    walk() { return [this, ...this.children.flatMap((c) => c.walk())] }
+  }
+  const document = {
+    getElementById: (id) => { if (!byId.has(id)) byId.set(id, new El('div', id)); return byId.get(id) },
+    createElement: (tag) => new El(tag),
+    addEventListener() {},
+    documentElement: { lang: '', style: {} },
+  }
+  const asks = []
+  const reported = []
+  const hooks = {}
+  const tree = (root) => ({ title: root, spex: '0', nodes: [{ id: `${root}-top`, parent: null, path: `.spec/${root}-top/spec.md`, title: `${root} top`, desc: '', code: [], status: 'merged', drift: 0, driftFiles: [], version: 1, diagram: false }] })
+  const gugu = {
+    reportError: async (message) => void reported.push(message),
+    callProgram: (tool, args) => new Promise((resolve) => asks.push({ tool, args, answer: () => {
+      const name = args.root.slice(1)
+      if (tool === 'graph') return resolve({ content: [{ type: 'text', text: JSON.stringify(tree(name)) }] })
+      // The program refuses a spec that is not under the working copy it is handed, as tools.js does.
+      resolve(args.path.startsWith(`.spec/${name}-`) ? { content: [{ type: 'text', text: JSON.stringify({ body: 'body', diagram: null }) }] }
+        : { isError: true, content: [{ type: 'text', text: `ENOENT: ${args.root}/${args.path}` }] })
+    } })),
+    getContext: async () => ({ locale: 'en', themeMode: 'light', capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'], session: { id: 'sA', root: '/A', projectId: 'pA' } }),
+    onContextChanged: (fn) => { hooks.context = fn },
+    onCommand: (fn) => { hooks.command = fn },
+    onAgentsChanged() {},
+    listAgents: async () => [],
+    files: { onChanged: () => () => {} },
+    markdown: async () => ({ render: (element, text) => { element.textContent = text } }),
+  }
+  const context = vm.createContext({ document, setTimeout, clearTimeout, console, SpexCodeAtlasFocus: { focusDiagram() {}, scopeIds: (svg) => svg }, SpexCodeAtlasPrompt: { ATLAS_PROMPT: 'draw' } })
+  context.window = context
+  context.gugu = gugu
+  const source = readFileSync(join(root, 'distribution/gugu/spexcode/app.js'), 'utf8')
+    .replace("import('./archify.mjs')", "Promise.resolve({ renderDiagram: async () => ({ svg: '' }) })")
+  vm.runInContext(source, context)
+  const settle = async () => { for (let i = 0; i < 10; i += 1) await new Promise((r) => setImmediate(r)) }
+  const open = () => asks.filter((a) => !a.done)
+  const answer = async (tool) => { const a = open().find((x) => x.tool === tool); a.done = true; a.answer(); await settle() }
+  const drawn = () => document.getElementById('tree').walk().filter((e) => e.className === 'label').map((e) => e.textContent)
+  const graphs = () => asks.filter((a) => a.tool === 'graph')
+  return { asks, reported, hooks, settle, open, answer, drawn, graphs, error: () => document.getElementById('error') }
+}
+
+test('the gugu App reads the tree one read at a time, and once more for what changed meanwhile', async () => {
+  const p = guguPage()
+  await p.settle()
+  assert.equal(p.graphs().length, 1, 'the first read is out')
+  for (let i = 0; i < 5; i += 1) { p.hooks.command('refresh'); await p.settle() }
+  assert.equal(p.graphs().length, 1, 'five refreshes during a read start no second read beside it')
+  await p.answer('graph')
+  await p.answer('node')
+  assert.equal(p.graphs().length, 2, 'one more read follows for the refreshes that came meanwhile')
+  while (p.open().length) await p.answer(p.open()[0].tool)
+  assert.equal(p.graphs().length, 2)
+  assert.deepEqual(p.reported, [])
+})
+
+test('the gugu App drops a read that comes back after the tab moved to another task', async () => {
+  const p = guguPage()
+  await p.settle()
+  p.hooks.context({ session: { id: 'sB', root: '/B', projectId: 'pB' } })
+  await p.settle()
+  await p.answer('graph') // task A's tree, after the tab moved to B
+  assert.deepEqual(p.drawn(), [], 'A\'s tree is not drawn under B')
+  assert.ok(!p.asks.some((a) => a.tool === 'node' && a.args.root === '/B' && a.args.path.startsWith('.spec/A-')), 'no node of A is asked under B')
+  while (p.open().length) await p.answer(p.open()[0].tool)
+  assert.deepEqual(p.graphs().map((a) => a.args.root), ['/A', '/B'])
+  assert.deepEqual(p.drawn(), ['B top'])
+  assert.equal(p.error().hidden, true)
+  assert.deepEqual(p.reported, [])
 })

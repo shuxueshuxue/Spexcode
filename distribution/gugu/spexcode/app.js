@@ -321,6 +321,8 @@ function bind(next) {
   unwatch?.()
   unwatch = null
   place = { session: session?.id ?? null, root: session?.root ?? null, project: session?.projectId ?? null }
+  // A read still out was for the place left behind: when it comes back it is dropped, never drawn here.
+  loadSeq += 1
   tree = { byId: new Map(), roots: [] }
   current = null
   open.clear()

@@ -67,7 +67,7 @@ test('the gugu App\'s program runs the spex its version pins, in the working cop
     writeFileSync(join(work, 'secret.md'), 'not a spec')
     const graph = { identity: { title: 'app' }, sessions: [], nodes: [
       { id: 'app', parent: null, path: '.spec/app/spec.md', title: 'app', desc: 'root', code: [], status: 'merged', drift: 0, driftFiles: [], version: 3, overlays: [], relatedEntries: [] },
-      { id: 'api', parent: 'app', path: '.spec/app/api/spec.md', title: 'api', desc: '', code: ['src/api.ts'], status: 'drift', drift: 2, driftFiles: ['src/api.ts'], version: 1, overlays: [], relatedEntries: [] },
+      { id: 'api', parent: 'app', path: '.spec/app/api/spec.md', title: 'api', desc: '', code: ['src/api.ts'], status: 'drift', drift: 2, driftFiles: [{ file: 'src/api.ts', behind: 2 }], version: 1, overlays: [], relatedEntries: [] },
     ] }
     // npx: record how it was called and from where, drop its own four options as npx does, run the rest.
     writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$*" > "${join(bin, 'argv')}"\npwd > "${join(bin, 'npx-cwd')}"\nshift 4\nexec "$@"\n`)

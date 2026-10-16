@@ -125,6 +125,9 @@ any other directory with \`-c 'cd <this repository> && spex <command>'\`, or use
   still holds, say so: \`git commit --trailer "Spec-OK: <node-id>"\`, or afterwards
   \`spex spec ack <node-id> --reason "<why the contract still holds>"\`.
 - **Before you hand work back:** \`spex spec lint\` and fix what it reports.
+- **No guard yet?** When \`.git/hooks/pre-commit\` is missing or is not SpexCode's (it names \`spexcode-managed-hook\`),
+  tell the person this repository has not run \`spex init\`, so its spec guards are off. Do not run \`spex init\`
+  yourself unless they tell you to: it writes the harnesses' own configuration, \`~/.codex/config.toml\` among it.
 - **Issues** are markdown threads in \`.spec/.issues/\`: \`spex issue ls\`, \`spex issue show <id>\`,
   \`spex issue reply <id> …\`.
 - \`spex guide spec\` is the full file format; \`spex help <verb>\` the rest. Diagrams: the atlas skill.

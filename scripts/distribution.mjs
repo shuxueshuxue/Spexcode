@@ -105,6 +105,31 @@ ZCode build with dynamic workflows runs the same job in parallel.
 `
 const zcodeTrigger = 'Use when the user wants the atlas of a repository or its spec tree — read the codebase into a SpexCode spec tree, draw its architecture diagrams and hand over a browsable page (提取 .spec、画架构图、做成可浏览网页), draw the atlas, 画规格图, give node X a diagram, diagram this subtree. For a whole repository it runs one dynamic workflow (turn by turn where ZCode has no CreateWorkflow); for a node or subtree it draws with spex diagram scaffold and check until each passes.'
 
+// The skill gugu's agents get beside the tab: how to work in a repository SpexCode governs, through the same pinned
+// spex the tab's program runs. The governed repository's own instructions (spex init) still say the rest.
+const guguSpex = `npx -y ${REGISTRY} -p spexcode@${version} spex`
+const guguSpexTrigger = 'Use when working in a repository that has a .spec/ tree (SpexCode): find the spec that governs a file, keep specs and code in step, check drift with spex spec lint, read or file the repository\'s local issues. Also when a message names a spec node as [[node-id]].'
+const guguSpexSkill = `# spexcode
+
+This repository's intent is written as a spec tree: every folder under \`.spec/\` with a \`spec.md\` is a node, and a
+node's \`code:\` line names the files or functions it governs. Run SpexCode as \`${guguSpex} <command>\` (Node 22 or
+newer); a \`spex\` already on the PATH works the same.
+
+- **A message that names \`[[node-id]]\`** is about that node: read it first, \`${guguSpex} spec search <id or topic>\`
+  finds it, and its \`spec.md\` is the contract your change must keep.
+- **Which spec governs a file:** \`spex spec owner <path>\`. The whole tree: \`spex graph\`.
+- **Change code and spec together.** A change inside an anchored unit that leaves its spec alone is drift; with the
+  repository's hooks installed the commit is refused. Update the spec in the same change, or, when the contract
+  still holds, say so: \`git commit --trailer "Spec-OK: <node-id>"\`, or afterwards
+  \`spex spec ack <node-id> --reason "<why the contract still holds>"\`.
+- **Before you hand work back:** \`spex spec lint\` and fix what it reports.
+- **Issues** are markdown threads in \`.spec/.issues/\`: \`spex issue ls\`, \`spex issue show <id>\`,
+  \`spex issue reply <id> …\`.
+- \`spex guide spec\` is the full file format; \`spex help <verb>\` the rest. Diagrams: the atlas skill.
+
+The SpexCode tab beside this task shows the tree, each node's drift and its diagram, and follows \`.spec/\` as you write.
+`
+
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`
 const skillFile = (name, what, text) => `---\nname: ${name}\ndescription: ${JSON.stringify(what)}\n---\n\n${text}`
 // PenguinHarness reads frontmatter as bare `key: value` lines and keeps quotes as text, as its own skills show by
@@ -173,7 +198,7 @@ const codex = 'distribution/codex/plugins/atlas'
 // One directory serves both marketplaces: `distribution/` is the root an adopter adds, and each host finds its
 // own manifest under its own dotted path inside it.
 const market = 'distribution'
-const gugu = 'distribution/gugu/spexcode-atlas'
+const gugu = 'distribution/gugu/spexcode'
 const penguin = 'distribution/penguin/use-spexcode'
 // A classic script's top-level declarations land in the page's ONE global scope, so a helper publishes its
 // namespace inside a wrapper and leaks nothing else — otherwise the page's own `const { scopeIds } = …` is a
@@ -224,18 +249,41 @@ const files = new Map([
   [`${zcode}/.zcode-plugin/plugin.json`, json({ name: 'atlas', version, description, author, homepage, repository, license: 'MIT', skills: 'skills' })],
   [`${zcode}/skills/atlas/SKILL.md`, skillFile('atlas', zcodeTrigger, skill(title, zcodeWorkflow))],
   [`${gugu}/manifest.json`, json({
-    id: 'spexcode-atlas',
-    name: 'SpexCode Atlas',
-    description: 'The workspace\'s spec tree with an architecture diagram above each node that has one, drawn in the tab; one button starts an agent that extracts the tree and draws it.',
+    id: 'spexcode',
+    name: 'SpexCode',
+    description: 'The spec tree of the repository a task works in — each node\'s body, its drift from the code, its architecture diagram — beside the task. Start a new task on a node or cite it in this one; agents get SpexCode\'s skills.',
+    localized: {
+      'zh-CN': {
+        name: 'SpexCode',
+        description: '任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能。',
+        examples: ['给这个仓库画一份规格图', '哪些规格和代码漂移了?'],
+      },
+    },
+    examples: ['Draw the spec atlas of this repository', 'Which specs have drifted from the code?'],
     author: 'SpexCode',
-    categories: ['architecture'],
+    homepage,
+    repository,
+    license: 'MIT',
+    categories: ['developer'],
     // gugu versions are plain x.y.z, so a prerelease ships under its release number.
     version: version.replace(/-.*$/, ''),
-    apiVersion: 1,
+    apiVersion: 4,
+    engines: { gugu: '>=0.2.55' },
     entry: 'index.html',
-    permissions: { capabilities: ['workspace:read', 'agents:read', 'agents:control'] },
-    contributes: { tabs: [{ name: 'atlas', title: 'Spec Atlas', toolbar: [{ id: 'draw', title: 'Draw the atlas' }, { id: 'refresh', title: 'Refresh' }] }] },
+    icon: 'icon.png',
+    permissions: { capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'] },
+    contributes: {
+      tabs: [{ name: 'spec', title: 'SpexCode', entry: 'index.html', icon: 'icon.png', toolbar: [{ id: 'draw', title: 'Draw the atlas' }, { id: 'refresh', title: 'Refresh' }] }],
+      mcpServers: [{ tools: 'tools.js' }],
+      skills: 'skills',
+    },
   })],
+  // The tab's program runs the spex of THIS version, never whatever npm calls latest that day: what the install
+  // sheet was consented to and what runs stay one thing.
+  [`${gugu}/spex-command.js`, `// Generated by scripts/distribution.mjs from the root version — do not edit.\nexport const SPEX = ${JSON.stringify({ version, command: 'npx', args: ['-y', REGISTRY, '-p', `spexcode@${version}`, 'spex'] })}\n`],
+  [`${gugu}/skills/atlas/SKILL.md`, skillFile('atlas', trigger, genericSkill)],
+  [`${gugu}/skills/spexcode/SKILL.md`, skillFile('spexcode', guguSpexTrigger, guguSpexSkill)],
+  [`${gugu}/icon.png`, readFileSync(join(root, 'docs/brand/favicon/favicon-128.png'))],
   [`${gugu}/prompt.js`, `// Generated by scripts/distribution.mjs from the atlas skill — do not edit.\nglobalThis.SpexCodeAtlasPrompt = { ATLAS_PROMPT: ${JSON.stringify(`Draw the SpexCode atlas of this repository, following these instructions.\n\n${genericSkill}`)} }\n`],
   [`${gugu}/focus.js`, `// Generated by scripts/distribution.mjs from packages/archify/browser.mjs — do not edit.\n${focus}`],
   [`${gugu}/diagram.css`, readFileSync(join(root, 'packages/archify/assets/diagram.css'), 'utf8')],
@@ -259,7 +307,7 @@ const files = new Map([
 ])
 
 if (process.argv.includes('--check')) {
-  const stale = [...files].filter(([path, content]) => !existsSync(join(root, path)) || readFileSync(join(root, path), 'utf8') !== content)
+  const stale = [...files].filter(([path, content]) => !existsSync(join(root, path)) || !readFileSync(join(root, path)).equals(Buffer.from(content)))
   if (stale.length) {
     console.error(`distribution is stale (${stale.map(([path]) => path).join(', ')}) — run npm run build:distribution`)
     process.exit(1)

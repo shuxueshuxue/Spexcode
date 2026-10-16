@@ -2,20 +2,15 @@
 // cannot reach main. Freshness of the generated files is `npm run lint`'s `--check`; this proves behaviour.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, existsSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import * as archify from '../packages/archify/index.mjs'
-import * as bundled from '../distribution/gugu/spexcode-atlas/archify.mjs'
+import * as bundled from '../distribution/gugu/spexcode/archify.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const model = new Function(
-  'globalThis',
-  `${readFileSync(join(root, 'distribution/gugu/spexcode-atlas/atlas-model.js'), 'utf8')}\nreturn globalThis.SpexCodeAtlasModel`,
-)(globalThis)
-const { buildTree, parseSpec, renderMarkdown } = model
 
 function diagramFiles(dir, found = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -46,7 +41,7 @@ test('the bundle loads and draws where Node\'s globals do not exist', () => {
   const probe = `
     const ir = ${JSON.stringify(readFileSync(join(root, 'packages/archify/examples/web-app.architecture.json'), 'utf8'))}
     for (const name of ['process', 'Buffer', 'require', 'module', 'exports', '__dirname', '__filename', 'global']) delete globalThis[name]
-    const { renderDiagram } = await import(${JSON.stringify(pathToFileURL(join(root, 'distribution/gugu/spexcode-atlas/archify.mjs')).href)})
+    const { renderDiagram } = await import(${JSON.stringify(pathToFileURL(join(root, 'distribution/gugu/spexcode/archify.mjs')).href)})
     const parts = await renderDiagram('architecture', JSON.parse(ir), { evidence: false })
     console.log(parts.svg.includes('<svg ') && parts.svg.includes('data-node-id') ? 'drawn' : 'no svg')`
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', probe], { encoding: 'utf8' })
@@ -54,33 +49,49 @@ test('the bundle loads and draws where Node\'s globals do not exist', () => {
   assert.equal(run.stdout.trim(), 'drawn')
 })
 
-test('the tab reads the folder tree as the spec tree, leaving SpexCode\'s own machinery out', () => {
-  const spec = (title, extra = '') => `---\ntitle: ${title}\n${extra}---\n\n# ${title}\n\nbody of ${title}\n`
-  const { byId, roots } = buildTree([
-    { path: '.spec/app/spec.md', text: spec('app') },
-    { path: '.spec/app/api/spec.md', text: spec('api', 'code:\n  - src/api.ts\nrelated:\n  - src/a.ts\n  - src/b.ts\n') },
-    { path: '.spec/app/api/routes/spec.md', text: spec('routes') },
-    { path: '.spec/app/.plugins/skills/atlas/spec.md', text: spec('atlas') },
-  ], new Set(['.spec/app/api/diagram.json']))
-  assert.deepEqual(roots, ['app'])
-  assert.deepEqual(byId.get('app').children, ['api'])
-  assert.deepEqual(byId.get('api').children, ['routes'])
-  assert.equal(byId.get('api').diagram, '.spec/app/api/diagram.json')
-  assert.deepEqual(byId.get('api').code, ['src/api.ts'])
-  assert.deepEqual(byId.get('api').related, ['src/a.ts', 'src/b.ts'])
-  assert.equal(byId.has('atlas'), false)
-  assert.deepEqual(parseSpec('no frontmatter').fm, {})
-})
-
-test('a spec body renders escaped, with mentions linked only when they name a node', () => {
-  const html = renderMarkdown('## Parts\n\nSee [[api]] and [[gone]]: `<b>` **x**\n\n- one\n- two\n\n```\n<script>\n```', (id) => id === 'api')
-  assert.match(html, /<h2>Parts<\/h2>/)
-  assert.match(html, /<a href="#" data-node="api">api<\/a>/)
-  assert.match(html, /<span class="missing">gone<\/span>/)
-  assert.match(html, /<code>&lt;b&gt;<\/code>/)
-  assert.match(html, /<ul>\n<li>one<\/li>\n<li>two<\/li>\n<\/ul>/)
-  assert.match(html, /<pre><code>&lt;script&gt;<\/code><\/pre>/)
-  assert.doesNotMatch(html, /<script>|<b>/)
+test('the gugu App\'s program runs the spex its version pins, in the working copy it is handed, and reads only .spec', async () => {
+  // The tab cannot run git, so its two reads go through tools.js. This runs those tools against a working copy and
+  // an npx that records its argv and answers as `spex graph --json` does: the argv is the pinned one, the payload
+  // reaches the tab trimmed to what it draws, and a path outside `.spec/` is refused rather than read.
+  const { SPEX } = await import(pathToFileURL(join(root, 'distribution/gugu/spexcode/spex-command.js')).href)
+  const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+  assert.deepEqual(SPEX.args.slice(-2), [`spexcode@${version}`, 'spex'])
+  const work = mkdtempSync(join(tmpdir(), 'gugu-app-'))
+  const bin = mkdtempSync(join(tmpdir(), 'fake-npx-'))
+  const before = process.env.PATH
+  try {
+    mkdirSync(join(work, '.spec/app/api'), { recursive: true })
+    writeFileSync(join(work, '.spec/app/spec.md'), '---\ntitle: app\n---\n# app\n\nSee [[api]].\n')
+    writeFileSync(join(work, '.spec/app/api/spec.md'), '---\ntitle: api\n---\nThe API.\n')
+    writeFileSync(join(work, '.spec/app/api/diagram.json'), '{"diagram_type":"architecture"}')
+    writeFileSync(join(work, 'secret.md'), 'not a spec')
+    const graph = { identity: { title: 'app' }, sessions: [], nodes: [
+      { id: 'app', parent: null, path: '.spec/app/spec.md', title: 'app', desc: 'root', code: [], status: 'merged', drift: 0, driftFiles: [], version: 3, overlays: [], relatedEntries: [] },
+      { id: 'api', parent: 'app', path: '.spec/app/api/spec.md', title: 'api', desc: '', code: ['src/api.ts'], status: 'drift', drift: 2, driftFiles: ['src/api.ts'], version: 1, overlays: [], relatedEntries: [] },
+    ] }
+    writeFileSync(join(bin, 'npx'), `#!/bin/sh\necho "$*" > "${join(bin, 'argv')}"\npwd > "${join(bin, 'cwd')}"\ncat <<'JSON'\n${JSON.stringify(graph)}\nJSON\n`)
+    chmodSync(join(bin, 'npx'), 0o755)
+    process.env.PATH = `${bin}:${before}`
+    const tools = await import(pathToFileURL(join(root, 'distribution/gugu/spexcode/tools.js')).href)
+    assert.deepEqual(Object.keys(tools).sort(), ['graph', 'node'])
+    for (const tool of Object.values(tools)) assert.deepEqual(tool._meta.ui.visibility, ['app'], 'the tab\'s reads are not agent tools')
+    const tree = await tools.graph.run({ root: work })
+    assert.equal(readFileSync(join(bin, 'argv'), 'utf8').trim(), [...SPEX.args, 'graph', '--json'].join(' '))
+    assert.equal(realpathSync(readFileSync(join(bin, 'cwd'), 'utf8').trim()), realpathSync(work))
+    assert.equal(tree.title, 'app')
+    assert.deepEqual(tree.nodes.map((n) => [n.id, n.status, n.diagram]), [['app', 'merged', false], ['api', 'drift', true]])
+    assert.equal('overlays' in tree.nodes[0], false, 'the tab gets only what it draws')
+    const api = await tools.node.run({ root: work, path: '.spec/app/api/spec.md' })
+    assert.equal(api.body, 'The API.\n')
+    assert.equal(JSON.parse(api.diagram).diagram_type, 'architecture')
+    await assert.rejects(tools.node.run({ root: work, path: 'secret.md' }), /is not a spec\.md under/)
+    await assert.rejects(tools.node.run({ root: work, path: '.spec/../secret.md' }), /is not a spec\.md under/)
+    await assert.rejects(tools.graph.run({ root: 'relative/path' }), /absolute path/)
+  } finally {
+    process.env.PATH = before
+    rmSync(work, { recursive: true, force: true })
+    rmSync(bin, { recursive: true, force: true })
+  }
 })
 
 test('the ZCode workflow\'s lint gate runs as the command line it submits, and reads lint\'s report', () => {
@@ -117,7 +128,7 @@ test('the gugu page\'s classic scripts share one global scope without colliding'
   // a redeclaration, and the browser refuses to parse the page's script at all. Evaluating each file on its own
   // (as the helper above and gugu's shipped-example harness both do) cannot see that — the collision only exists
   // between files — so this reads the scripts in the order the page loads them and parses them as one scope.
-  const dir = join(root, 'distribution/gugu/spexcode-atlas')
+  const dir = join(root, 'distribution/gugu/spexcode')
   const html = readFileSync(join(dir, 'index.html'), 'utf8')
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(([, src]) => src)
   assert.ok(scripts.length >= 2, 'the page should load several classic scripts')
@@ -136,6 +147,7 @@ test('every package names only files that exist, and the ZCode skill points at t
     'claude-code': 'distribution/claude-code/atlas/skills/atlas/SKILL.md',
     codex: 'distribution/codex/plugins/atlas/skills/atlas/SKILL.md',
     penguin: 'distribution/penguin/use-spexcode/skills/atlas/SKILL.md',
+    gugu: 'distribution/gugu/spexcode/skills/atlas/SKILL.md',
     zcode: 'distribution/zcode/atlas/skills/atlas/SKILL.md',
   }
   for (const [name, path] of Object.entries(shippedSkills)) {
@@ -169,11 +181,18 @@ test('every package names only files that exist, and the ZCode skill points at t
   assert.doesNotMatch(dwf, /tools:\s*"readonly"|ToolProfile/, 'the workflow script names no tool profile')
   assert.match(zcodeSkill, /\$\{ZCODE_SKILL_DIR\}\/atlas\.dwf\.ts/)
   assert.ok(existsSync(join(root, 'distribution/zcode/atlas/skills/atlas/atlas.dwf.ts')))
-  const manifest = JSON.parse(readFileSync(join(root, 'distribution/gugu/spexcode-atlas/manifest.json'), 'utf8'))
-  assert.ok(existsSync(join(root, 'distribution/gugu/spexcode-atlas', manifest.entry)))
+  const manifest = JSON.parse(readFileSync(join(root, 'distribution/gugu/spexcode/manifest.json'), 'utf8'))
+  assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.entry)))
+  for (const tab of manifest.contributes.tabs) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', tab.entry)), tab.entry)
+  for (const server of manifest.contributes.mcpServers) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', server.tools)), server.tools)
+  assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.icon)))
+  for (const name of ['atlas', 'spexcode']) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.contributes.skills, name, 'SKILL.md')), name)
+  // The gugu skill tells an agent to run the same spex the tab's program runs.
+  const guguSkill = readFileSync(join(root, 'distribution/gugu/spexcode/skills/spexcode/SKILL.md'), 'utf8')
+  assert.ok(guguSkill.includes(`-p spexcode@${JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version} spex`))
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/)
-  const html = readFileSync(join(root, 'distribution/gugu/spexcode-atlas', manifest.entry), 'utf8')
-  for (const [, ref] of html.matchAll(/(?:src|href)="([^"]+)"/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode-atlas', ref)), ref)
+  const html = readFileSync(join(root, 'distribution/gugu/spexcode', manifest.entry), 'utf8')
+  for (const [, ref] of html.matchAll(/(?:src|href)="([^"]+)"/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', ref)), ref)
   // Codex reads the same shape as Claude Code under its own dotted directory; its manifest points at the folder.
   // Codex installs a plugin out of a MARKETPLACE, never a bare plugin directory: the package is a marketplace
   // root whose manifest names its plugins by relative path, so an adopter runs `codex plugin marketplace add

@@ -1,0 +1,67 @@
+{
+  "id": "spexcode",
+  "name": "SpexCode",
+  "description": "The spec tree of the repository a task works in — each node's body, its drift from the code, its architecture diagram — beside the task. Start a new task on a node or cite it in this one; agents get SpexCode's skills.",
+  "localized": {
+    "zh-CN": {
+      "name": "SpexCode",
+      "description": "任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能。",
+      "examples": [
+        "给这个仓库画一份规格图",
+        "哪些规格和代码漂移了?"
+      ]
+    }
+  },
+  "examples": [
+    "Draw the spec atlas of this repository",
+    "Which specs have drifted from the code?"
+  ],
+  "author": "SpexCode",
+  "homepage": "https://spexcode.net",
+  "repository": "https://github.com/shuxueshuxue/spexcode",
+  "license": "MIT",
+  "categories": [
+    "developer"
+  ],
+  "version": "0.7.0",
+  "apiVersion": 4,
+  "engines": {
+    "gugu": ">=0.2.55"
+  },
+  "entry": "index.html",
+  "icon": "icon.png",
+  "permissions": {
+    "capabilities": [
+      "files:read",
+      "agents:read",
+      "agents:control",
+      "agents:tools"
+    ]
+  },
+  "contributes": {
+    "tabs": [
+      {
+        "name": "spec",
+        "title": "SpexCode",
+        "entry": "index.html",
+        "icon": "icon.png",
+        "toolbar": [
+          {
+            "id": "draw",
+            "title": "Draw the atlas"
+          },
+          {
+            "id": "refresh",
+            "title": "Refresh"
+          }
+        ]
+      }
+    ],
+    "mcpServers": [
+      {
+        "tools": "tools.js"
+      }
+    ],
+    "skills": "skills"
+  }
+}

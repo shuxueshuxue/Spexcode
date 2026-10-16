@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpexCode</title>
+<link rel="stylesheet" href="diagram.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="empty" class="empty" hidden>
+    <p id="empty-text"></p>
+    <button id="empty-draw" type="button" class="primary" hidden></button>
+  </section>
+  <main id="atlas" class="atlas" hidden>
+    <nav class="tree-pane" aria-label="Spec tree">
+      <div class="pane-head">
+        <strong id="project"></strong>
+        <small id="tree-note"></small>
+      </div>
+      <div id="tree" class="tree"></div>
+      <ul id="agents" class="list agents" hidden></ul>
+    </nav>
+    <article id="document" class="document">
+      <h1 id="title"></h1>
+      <p id="desc" class="muted"></p>
+      <p id="drift" class="drift" role="status" hidden></p>
+      <p id="code" class="code"></p>
+      <div class="row act">
+        <button id="cite" type="button"></button>
+      </div>
+      <div class="row act start">
+        <input id="ask" type="text" />
+        <button id="start" type="button" class="primary"></button>
+      </div>
+      <p id="act-note" class="muted" role="status"></p>
+      <figure id="diagram" class="node-diagram" hidden>
+        <div id="diagram-box" class="archify" data-detail-level="read"></div>
+        <figcaption id="diagram-note" class="muted"></figcaption>
+      </figure>
+      <div id="body" class="body"></div>
+    </article>
+  </main>
+  <p id="error" class="error" role="alert" hidden></p>
+  <script src="focus.js"></script>
+  <script src="prompt.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,8 +1,8 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, existsSync, chmodSync, rmSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, realpathSync, existsSync, chmodSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { HookPromptCatalog } from './hook-prompts.js'
 import { compileManifest } from './hooks.js'
@@ -36,7 +36,7 @@ test('compiled hook surface has one dispatcher and two PreToolUse handlers', () 
 })
 
 test('dispatch exits 2 when a blocking handler emits decision:block JSON', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-'))
+  const dir = fixtureTempDir('spex-dispatch-')
   execFileSync('git', ['init', '-q'], { cwd: dir })
   mkdirSync(join(dir, '.spec', 'x', '.plugins'), { recursive: true })
   mkdirSync(join(dir, 'hooks'), { recursive: true })
@@ -54,7 +54,7 @@ test('dispatch exits 2 when a blocking handler emits decision:block JSON', () =>
 })
 
 test('stop-gate is silent for self-launched sessions and renders the catalog prompt for governed sessions', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-dispatch-'))
+  const dir = fixtureTempDir('spex-stop-gate-dispatch-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = 'stop-gate-dispatch'
@@ -90,7 +90,7 @@ test('stop-gate is silent for self-launched sessions and renders the catalog pro
 })
 
 test('stop-gate forced continuation writes asking through the internal lifecycle writer', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-forced-writer-'))
+  const dir = fixtureTempDir('spex-stop-gate-forced-writer-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = 'stop-gate-forced-writer'
@@ -123,7 +123,7 @@ test('stop-gate forced continuation writes asking through the internal lifecycle
 })
 
 test('idle hook delegates governance to the canonical writer instead of reading session.json', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-idle-hook-canonical-'))
+  const dir = fixtureTempDir('spex-idle-hook-canonical-')
   const sid = 'idle-hook-canonical'
   const calls = join(dir, 'calls')
   const fake = join(dir, 'fake-spex')
@@ -141,7 +141,7 @@ test('idle hook delegates governance to the canonical writer instead of reading 
 })
 
 test('session-fail hook delegates governance to the canonical writer instead of reading session.json', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-fail-hook-canonical-'))
+  const dir = fixtureTempDir('spex-fail-hook-canonical-')
   const sid = 'fail-hook-canonical'
   const calls = join(dir, 'calls')
   const fake = join(dir, 'fake-spex')
@@ -162,7 +162,7 @@ test('session-fail hook delegates governance to the canonical writer instead of 
 // discriminator a helper's dead turn would mark the session that spawned it `error`. mark-active carries the
 // same guard for the same payload shape; this is one defect class with one answer.
 test('session-fail ignores an in-process subagent turn failure', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-fail-hook-subagent-'))
+  const dir = fixtureTempDir('spex-fail-hook-subagent-')
   const sid = 'fail-hook-parent'
   const calls = join(dir, 'calls')
   const fake = join(dir, 'fake-spex')
@@ -187,7 +187,7 @@ test('session-fail ignores an in-process subagent turn failure', () => {
 // overwritten by the next handler, so a lifecycle hook that could not write left NO trace and the board simply
 // held its last state. Reporting must not promote it into a gate, so the verdict stays exit 0.
 test('a non-blocking handler failure is reported without becoming a gate', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-loud-'))
+  const dir = fixtureTempDir('spex-dispatch-loud-')
   execFileSync('git', ['init', '-q'], { cwd: dir })
   mkdirSync(join(dir, '.spec', 'x', '.plugins'), { recursive: true })
   mkdirSync(join(dir, 'hooks'), { recursive: true })
@@ -208,7 +208,7 @@ test('a non-blocking handler failure is reported without becoming a gate', () =>
 })
 
 test('dispatch migrates the historical stop-gate source before it can call porcelain delivery', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-legacy-migration-'))
+  const dir = fixtureTempDir('spex-stop-gate-legacy-migration-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = 'stop-gate-legacy-migration'
@@ -239,7 +239,7 @@ test('dispatch migrates the historical stop-gate source before it can call porce
 })
 
 test('the generated zcode Stop command reaches its manifest stop gate', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-zcode-stop-dispatch-'))
+  const dir = fixtureTempDir('spex-zcode-stop-dispatch-')
   const home = join(dir, 'home')
   const sid = 'zcode-generated-stop'
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -278,7 +278,7 @@ test('the generated zcode Stop command reaches its manifest stop gate', () => {
 type GateHarness = 'claude' | 'codex'
 
 function specFirstRig(harness: GateHarness, sequence: string) {
-  const dir = mkdtempSync(join(tmpdir(), `spex-spec-first-${harness}-${sequence}-`))
+  const dir = fixtureTempDir(`spex-spec-first-${harness}-${sequence}-`)
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = `sid-${harness}-${sequence}`
@@ -383,7 +383,7 @@ for (const harness of ['claude', 'codex'] as const) {
 // stories (a broken reader, a garbage body) cannot cost the person their prompt because no read happens. SessionStart
 // hands the native session id to `spex internal session-register`; there is no adopter CLI and no env-based adoption.
 function sessionListenRig(event: 'UserPromptSubmit' | 'SessionStart', spexExit = 0) {
-  const dir = mkdtempSync(join(tmpdir(), `spex-session-listen-${event}-`))
+  const dir = fixtureTempDir(`spex-session-listen-${event}-`)
   const spex = join(dir, 'spex')
   const calls = join(dir, 'calls')
   writeFileSync(spex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit ${spexExit}\n`)
@@ -422,7 +422,7 @@ test('session-listen: a CLI that fails while registering is a blocking failure, 
 // fails closed instead, bounded: a genuinely broken CLI would also stop the agent from declaring, so the
 // fallback blocks once and then steps aside loudly rather than trapping anyone.
 function stopGateBrokenRig() {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-broken-'))
+  const dir = fixtureTempDir('spex-stop-gate-broken-')
   const home = join(dir, 'home')
   const sid = 'sg-broken'
   const cli = join(dir, 'broken-spex')
@@ -467,7 +467,7 @@ test('stop-gate: a CLI that cannot render the reason still blocks, once, and the
 })
 
 function specOfFileRig(harness: GateHarness) {
-  const dir = mkdtempSync(join(tmpdir(), `spex-spec-of-file-${harness}-`))
+  const dir = fixtureTempDir(`spex-spec-of-file-${harness}-`)
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = `sid-${harness}-edit`
@@ -497,7 +497,7 @@ function specOfFileRig(harness: GateHarness) {
 // Two handlers bound to ONE event, both speaking the structured contract — the arrangement the plugin system
 // invites and the dispatcher used to answer with two concatenated documents.
 function twoSpeakerRig(handlers: string[]) {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-two-speakers-'))
+  const dir = fixtureTempDir('spex-two-speakers-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -576,7 +576,7 @@ test('two speakers disagreeing on an unknown key keep the first and say so', () 
 // A git shim that records every invocation, so a hook's repository work is countable from outside it.
 // Placed FIRST on PATH; it execs the real git so behaviour is unchanged.
 function gitCountingRig() {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-spec-of-file-cost-'))
+  const dir = fixtureTempDir('spex-spec-of-file-cost-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const realGit = execFileSync('bash', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
@@ -660,7 +660,7 @@ for (const harness of ['claude', 'codex'] as const) {
 }
 
 test('codex mark-active resolves by payload thread id despite contaminated SPEXCODE_SESSION_ID', () => {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'spex-dispatch-codex-')))
+  const dir = realpathSync(fixtureTempDir('spex-dispatch-codex-'))
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -713,7 +713,7 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
 })
 
 test('mark-active never trusts the runtime envelope to skip the canonical writer', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-canonical-writer-'))
+  const dir = fixtureTempDir('spex-dispatch-canonical-writer-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = 'canonical-writer'
@@ -748,7 +748,7 @@ test('mark-active never trusts the runtime envelope to skip the canonical writer
 })
 
 test('managed watch UserPromptSubmit does not forge receiver activity', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-watch-freshness-'))
+  const dir = fixtureTempDir('spex-dispatch-watch-freshness-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   const sid = 'watch-receiver'
@@ -786,7 +786,7 @@ test('managed watch UserPromptSubmit does not forge receiver activity', () => {
 // from ITS OWN tree's slot (trees/<enc(toplevel)>), derived from the dispatch cwd; a pre-slot tree (the
 // migration uses a per-tree slot; a missing slot is an installation error.
 function slotRepo() {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-slot-'))
+  const dir = fixtureTempDir('spex-dispatch-slot-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -828,7 +828,7 @@ test('slot-less dispatch fails loudly instead of using a legacy global manifest'
 // 2.1.207): agent_id sits before tool_input; an agent_id-named TOOL PARAM sits inside tool_input and must
 // NOT be mistaken for the stamp.
 test('claude mark-active skips a subagent tool call but still flips on the parent\'s own', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-subagent-'))
+  const dir = fixtureTempDir('spex-dispatch-subagent-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -891,7 +891,7 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
 // compaction/continuation mints a new conversation id while the record keeps the launched one; a blind
 // payload preference then names no record and every record-dependent hook silently no-ops.
 function identityRig() {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-hook-identity-'))
+  const dir = fixtureTempDir('spex-hook-identity-')
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })

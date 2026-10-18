@@ -1,11 +1,11 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync as fsWriteFileSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync as fsWriteFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { claudeHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { codexHarness, codexHeadlessHarness } from './codex-harness.js'
@@ -106,7 +106,7 @@ test('canonical lifecycle always wins over stale JSON status bytes', () => {
 
 test('queue projection excludes settled archive history but admits a pending archived resume', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-queue-archive-projection-'))
+  const home = fixtureTempDir('spex-queue-archive-projection-')
   const id = `queue-archive-projection-${process.pid}`
   process.env.SPEXCODE_HOME = home
   assertIsolatedResumeStore(home, id)
@@ -143,7 +143,7 @@ test('queue projection excludes settled archive history but admits a pending arc
 test('backend restart does not re-arm readiness for a witnessed active session', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalLaunchReady = (claudeHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-readiness-reload-'))
+  const home = fixtureTempDir('spex-readiness-reload-')
   const id = `readiness-reload-${process.pid}`
   process.env.SPEXCODE_HOME = home
   assertIsolatedResumeStore(home, id)
@@ -184,7 +184,7 @@ test('late launch readiness diagnostics do not overwrite a later declaration not
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const originalLaunchReady = (codexHeadlessHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-readiness-note-order-'))
+  const home = fixtureTempDir('spex-readiness-note-order-')
   const id = `readiness-note-order-${process.pid}`
   process.env.SPEXCODE_HOME = home
   assertIsolatedResumeStore(home, id)
@@ -322,7 +322,7 @@ test('Codex registration does not persist an unbound thread when exact generatio
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-registration-'))
+  const home = fixtureTempDir('spex-codex-registration-')
   const id = `codex-registration-${process.pid}`
   const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
   process.env.SPEXCODE_HOME = home
@@ -358,7 +358,7 @@ test('Codex launch retry reuses a staged native target after the first payload i
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-retry-target-'))
+  const home = fixtureTempDir('spex-codex-retry-target-')
   const id = `codex-retry-target-${process.pid}`
   const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
   const payload = 'authoritative first turn'
@@ -443,7 +443,7 @@ test('session-create accepts @parent:none as an explicit top-level parent when n
 test('session-create API refuses the retired JSON store while migration is fenced', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
-  const home = mkdtempSync(join(tmpdir(), 'spex-json-migration-fence-'))
+  const home = fixtureTempDir('spex-json-migration-fence-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   try {
@@ -474,7 +474,7 @@ test('session creation exports only the bounded transaction owner', serial, asyn
 // argument carrying spaces/quotes/`$` survives the extra `sh -c` nesting un-double-expanded ([[state]]).
 test('launchScript registers the agent pid before exec and preserves tricky quoted args', serial, async () => {
   const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-birth-'))
+  const home = fixtureTempDir('spex-birth-')
   process.env.SPEXCODE_HOME = home
   const id = `birth-pid-test-${process.pid}`
   const argsFile = join(home, 'stub-args.txt')
@@ -520,8 +520,8 @@ test('launchScript registers the agent pid before exec and preserves tricky quot
 
 test('launch transport keeps a launch.sh path with spaces and quotes as one shell argument', serial, () => {
   const previousHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-launch-home-'))
-  const spaced = mkdtempSync(join(tmpdir(), "spex launch 'path'-"))
+  const home = fixtureTempDir('spex-launch-home-')
+  const spaced = fixtureTempDir("spex launch 'path'-")
   process.env.SPEXCODE_HOME = home
   const oneShotHarness = { ...claudeHarness, launchOneShot: true, launchCmd: () => 'true' }
   try {
@@ -590,7 +590,7 @@ test('no-thread resume replays the authoritative launch payload before later dur
   const originalLaunchCmd = codexHarness.launchCmd
   const originalLaunchReady = (codexHarness as any).launchReady
   const originalDeliver = codexHarness.deliver
-  const home = mkdtempSync(join(tmpdir(), 'spex-no-thread-resume-'))
+  const home = fixtureTempDir('spex-no-thread-resume-')
   process.env.SPEXCODE_HOME = home
   const id = `no-thread-resume-${process.pid}`
   assertIsolatedResumeStore(home, id)
@@ -755,7 +755,7 @@ test('queued proof rejection releases its slot and post-proof liveness resumes o
   const originalLaunchCmd = codexHarness.launchCmd
   const originalLaunchReady = (codexHarness as any).launchReady
   const originalDeliver = codexHarness.deliver
-  const home = mkdtempSync(join(tmpdir(), 'spex-queued-launch-proof-'))
+  const home = fixtureTempDir('spex-queued-launch-proof-')
   process.env.SPEXCODE_HOME = home
   const id = `queued-launch-proof-${process.pid}`
   assertIsolatedResumeStore(home, id)
@@ -909,7 +909,7 @@ test('resume holds the launch-readiness fence after shared-runtime spawn until t
   const originalLaunchCmd = codexHeadlessHarness.launchCmd
   const originalSharedRuntimeSpawn = codexHeadlessHarness.sharedRuntimeSpawn
   const originalLaunchReady = (codexHeadlessHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-resume-ready-delay-'))
+  const home = fixtureTempDir('spex-resume-ready-delay-')
   const project = join(home, 'project'); mkdirSync(project)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   writeFileSync(join(project, 'README.md'), 'fixture\n')
@@ -1035,7 +1035,7 @@ test('successful resume publishes a capacity-queued record as idle after readine
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
   const originalLaunchReady = (codexHeadlessHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-queued-resume-state-'))
+  const home = fixtureTempDir('spex-queued-resume-state-')
   const project = join(home, 'project'); mkdirSync(project)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   writeFileSync(join(project, 'README.md'), 'fixture\n')
@@ -1096,7 +1096,7 @@ test('successful resume clears a prior terminal error instead of leaving an onli
   const previousPath = process.env.PATH
   const originalLaunchCmd = codexHeadlessHarness.launchCmd
   const originalLaunchReady = (codexHeadlessHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-error-resume-state-'))
+  const home = fixtureTempDir('spex-error-resume-state-')
   const project = join(home, 'project'); mkdirSync(project)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   writeFileSync(join(project, 'README.md'), 'fixture\n')
@@ -1153,7 +1153,7 @@ test('a stopped queued record is ineligible for automatic and repeated queue dra
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
   const originalLaunchReady = (claudeHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-stopped-queue-drain-'))
+  const home = fixtureTempDir('spex-stopped-queue-drain-')
   const project = join(home, 'project'); mkdirSync(project)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['-C', project, '-c', 'user.name=queue-fixture', '-c', 'user.email=queue@example.test', 'commit', '--allow-empty', '-qm', 'fixture'])
@@ -1216,7 +1216,7 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
     const originalLaunchCmd = codexHeadlessHarness.launchCmd
     const originalSharedRuntimeSpawn = codexHeadlessHarness.sharedRuntimeSpawn
     const originalLaunchReady = (codexHeadlessHarness as any).launchReady
-    const home = mkdtempSync(join(tmpdir(), `spex-resume-ready-${outcome}-`))
+    const home = fixtureTempDir(`spex-resume-ready-${outcome}-`)
     const project = join(home, 'project'); mkdirSync(project)
     execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
     writeFileSync(join(project, 'README.md'), 'fixture\n')
@@ -1287,7 +1287,7 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
   const originalLaunchReady = (codexHeadlessHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-resume-ready-stale-'))
+  const home = fixtureTempDir('spex-resume-ready-stale-')
   const project = join(home, 'project'); mkdirSync(project)
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   writeFileSync(join(project, 'README.md'), 'fixture\n')
@@ -1360,7 +1360,7 @@ test('resume admission and interrupted recovery preserve live owners and newer c
     const originalDescriptorKey = codexHeadlessHarness.targetDescriptorKey
     const originalLaunchReady = codexHeadlessHarness.launchReady
     const originalLaunchCmd = codexHeadlessHarness.launchCmd
-    const home = mkdtempSync(join(tmpdir(), 'spex-pending-resume-reentry-'))
+    const home = fixtureTempDir('spex-pending-resume-reentry-')
     const project = join(home, 'project')
     process.env.SPEXCODE_HOME = home
     const id = `pending-reentry-${outcome}-${process.pid}`
@@ -1460,7 +1460,7 @@ test('resume admission and interrupted recovery preserve live owners and newer c
 test('expired launch readiness residue becomes terminal error/offline during queue recovery', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
-  const home = mkdtempSync(join(tmpdir(), 'spex-launch-limbo-'))
+  const home = fixtureTempDir('spex-launch-limbo-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const id = `launch-limbo-${process.pid}`
@@ -1498,7 +1498,7 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
   const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
 
   const runCase = async (signal: 'SIGTERM' | 'SIGKILL') => {
-    const home = mkdtempSync(join(tmpdir(), `spex-leaf-${signal.toLowerCase()}-`))
+    const home = fixtureTempDir(`spex-leaf-${signal.toLowerCase()}-`)
     process.env.SPEXCODE_HOME = home
     const id = `leaf-${signal.toLowerCase()}-${process.pid}`
     let shared: { pid: number; startToken: string } | null = null
@@ -1591,7 +1591,7 @@ test('stop consumes one durable leaf receipt across unreadable, dead-pane, and c
   const originalShared = claudeHarness.sharedRuntimes
   const originalCleanup = claudeHarness.cleanupRuntime
   const originalKill = process.kill
-  const home = mkdtempSync(join(tmpdir(), 'spex-leaf-receipt-stop-'))
+  const home = fixtureTempDir('spex-leaf-receipt-stop-')
   const bin = join(home, 'bin')
   const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
   const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
@@ -1782,7 +1782,7 @@ test('public close files queued and unbound rows without entering the unrelated 
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
   let cleanupCalls = 0
-  const home = mkdtempSync(join(tmpdir(), 'spex-queued-close-'))
+  const home = fixtureTempDir('spex-queued-close-')
   const project = join(home, 'project')
   const branches: string[] = []
   const paths: string[] = []
@@ -1909,7 +1909,7 @@ test('public close files queued and unbound rows without entering the unrelated 
 
 test('launch retry log names the fast exit without guessing a daemon race', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-launch-log-'))
+  const home = fixtureTempDir('spex-launch-log-')
   process.env.SPEXCODE_HOME = home
   try {
     const script = launchScript('retry-log-test', '', claudeHarness, 'false')
@@ -1934,7 +1934,7 @@ test('launch retry log names the fast exit without guessing a daemon race', seri
 // harness would recognise. Count the attempts each actually produces by having the stub append to a file.
 test('a launch failure the harness itself called settled is attempted exactly once', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-launch-class-'))
+  const home = fixtureTempDir('spex-launch-class-')
   process.env.SPEXCODE_HOME = home
   // The classifier reads the tmux PANE, so the stub must run inside one — and the stub prints its settled
   // failure to STDOUT, the stream real reclaude uses. An earlier version of this test printed to stderr and
@@ -2017,12 +2017,14 @@ test('a launch failure the harness itself called settled is attempted exactly on
 // the transport's own settled failures, answered BEFORE a window is opened: a launch that cannot succeed is
 // refused once with its own code, never attempted and retried on a wall clock.
 test('launchPreflight refuses a launch that cannot succeed, naming which fact settled it', serial, () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-preflight-'))
+  const home = fixtureTempDir('spex-preflight-')
+  const launcher = join(home, 'fixture-launcher')
+  writeFileSync(launcher, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
   const base: SessRec = {
     session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null,
     title: null, name: null, parent: null, issues: [], issue: null, status: 'idle', proposal: null, merges: 0, note: null,
     sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, runtimeStartToken: null, stopped: false, archived: false, closedAt: null,
-    launcher: null, launchCmd: '/bin/true', launchOwner: null,
+    launcher: null, launchCmd: launcher, launchOwner: null,
   }
   try {
     assert.equal(launchPreflight(base)?.code, 'no-worktree', 'a worktree that is gone settles the launch')
@@ -2045,7 +2047,7 @@ test('launchPreflight refuses a launch that cannot succeed, naming which fact se
 
 test('one-shot headless launch does not retry a successful fast exit', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-one-shot-launch-'))
+  const home = fixtureTempDir('spex-one-shot-launch-')
   process.env.SPEXCODE_HOME = home
   try {
     const script = launchScript('one-shot-launch-test', '', codexHeadlessHarness, 'true')
@@ -2061,7 +2063,7 @@ test('one-shot headless launch does not retry a successful fast exit', serial, (
 
 test('a failed creation-time materialize is reported loud and stamped on the record note', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-materialize-fail-'))
+  const home = fixtureTempDir('spex-materialize-fail-')
   process.env.SPEXCODE_HOME = home
   const errors: string[] = []
   const prevError = console.error
@@ -2094,7 +2096,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
 test('machine turn failures share one active-only error projection', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const prevDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
-  const home = mkdtempSync(join(tmpdir(), 'spex-headless-turn-state-'))
+  const home = fixtureTempDir('spex-headless-turn-state-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const id = `headless-turn-state-${process.pid}`
@@ -2168,7 +2170,7 @@ test('machine turn failures share one active-only error projection', serial, () 
 
 test('lifecycle hook writers reject self-launched records in the canonical layer', serial, () => {
   const previousHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-unmanaged-hook-state-'))
+  const home = fixtureTempDir('spex-unmanaged-hook-state-')
   process.env.SPEXCODE_HOME = home
   const id = `unmanaged-hook-state-${process.pid}`
   const worktree = join(home, 'unmanaged-hook-state')
@@ -2231,7 +2233,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
 
 test('a launch establishes identity: inherited session ids are stripped, this session\'s is set', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-identity-'))
+  const home = fixtureTempDir('spex-identity-')
   process.env.SPEXCODE_HOME = home
   try {
     const script = readFileSync(launchScript('identity-launch-test', "'hi'", claudeHarness, 'true'), 'utf8')
@@ -2288,7 +2290,7 @@ test('the launch readiness identity stage exits on the bound identity, whoever c
   const previousPath = process.env.PATH
   const originalLaunchCmd = codexHarness.launchCmd
   const originalLaunchReady = (codexHarness as any).launchReady
-  const home = mkdtempSync(join(tmpdir(), 'spex-readiness-identity-'))
+  const home = fixtureTempDir('spex-readiness-identity-')
   process.env.SPEXCODE_HOME = home
   const id = `readiness-identity-${process.pid}`
   assertIsolatedResumeStore(home, id)

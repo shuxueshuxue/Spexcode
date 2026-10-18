@@ -1,10 +1,10 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { realpathSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tsxBin } from './tsx-bin.js'
@@ -54,8 +54,8 @@ async function waitHttp(url: string, child: ChildProcess, logs: () => string): P
 
 test('a note carrying quote/backslash/newline/unicode survives every real declaration entry', { timeout: 180_000 }, async () => {
   const port = await freePort()
-  const home = mkdtempSync(join(tmpdir(), 'spex-record-integrity-home-'))
-  const project = realpathSync(mkdtempSync(join(tmpdir(), 'spex-record-integrity-project-')))
+  const home = fixtureTempDir('spex-record-integrity-home-')
+  const project = realpathSync(fixtureTempDir('spex-record-integrity-project-'))
   mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
     harnesses: ['claude'],

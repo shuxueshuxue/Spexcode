@@ -1,8 +1,10 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
@@ -66,7 +68,7 @@ test('candidate registry entries are held until session publication', () => {
 })
 
 test('exact-directory transport reconciles directory paths idempotently and closes/reopens cleanly', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-exact-watch-'))
+  const root = fixtureTempDir('spex-exact-watch-')
   mkdirSync(join(root, 'a'))
   mkdirSync(join(root, 'b', 'c'), { recursive: true })
   writeFileSync(join(root, 'a', 'file.ts'), 'one\n')
@@ -115,7 +117,7 @@ test('exact-directory transport reconciles directory paths idempotently and clos
 // The whole point of the consolidated transport: registration is ONE per canonical root no matter how wide
 // the corpus inside it is. 300 spec-node directories must still cost exactly one registration.
 test('consolidated transport registers one watch per root regardless of corpus width', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-consolidated-watch-'))
+  const root = fixtureTempDir('spex-consolidated-watch-')
   for (let node = 0; node < 300; node++) mkdirSync(join(root, '.spec', `n${node}`), { recursive: true })
   mkdirSync(join(root, 'node_modules', 'dep'), { recursive: true })
   const { opened, factory } = fakeFactory()
@@ -158,7 +160,7 @@ test('consolidated transport registers one watch per root regardless of corpus w
 })
 
 test('a refused registration fails once, reclaims every partial handle, and retries nothing by itself', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-exact-watch-fail-'))
+  const root = fixtureTempDir('spex-exact-watch-fail-')
   mkdirSync(join(root, 'a'))
   mkdirSync(join(root, 'b'))
   mkdirSync(join(root, 'c'))
@@ -210,7 +212,7 @@ test('a refused registration fails once, reclaims every partial handle, and retr
 })
 
 test('the census counts live registrations and returns to its floor on close', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-census-'))
+  const root = fixtureTempDir('spex-census-')
   mkdirSync(join(root, 'a', 'b'), { recursive: true })
   const floor = graphWatcherCensus()
   const { factory } = fakeFactory()
@@ -257,11 +259,17 @@ async function waitFor(predicate: () => boolean, message: string): Promise<void>
   }
 }
 
+// A user edits from another process after attachment. A same-stack synchronous write can precede
+// Darwin's native observer startup; observe a real external write without a readiness sleep.
+const writeFromProcess = (path: string, text: string) => promisify(execFile)(process.execPath, [
+  '-e', 'require("node:fs").writeFileSync(process.argv[1], process.argv[2])', path, text,
+])
+
 // Whichever transport the running platform resolves to, the OBSERVATION contract is identical: a real
 // worktree delivers its dirty source, its renames, its sidecars and its staged-only index writes, and
 // never pays a registration for dependency bytes.
 test('worktree watcher observes source, rename, sidecar, and index inputs', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-graph-watch-'))
+  const root = fixtureTempDir('spex-graph-watch-')
   const gitDir = join(root, '.git-meta')
   const specDir = join(root, '.spec', 'area', 'node')
   mkdirSync(gitDir, { recursive: true })
@@ -281,7 +289,7 @@ test('worktree watcher observes source, rename, sidecar, and index inputs', asyn
       assert.deepEqual(watchers.root.paths(), [root], 'one registration covers the whole working tree')
 
     let before = inputs
-    writeFileSync(join(root, 'source.ts'), 'export const value = 1\n')
+    await writeFromProcess(join(root, 'source.ts'), 'export const value = 1\n')
     await waitFor(() => inputs > before, 'ordinary source write was not observed')
 
     before = inputs
@@ -309,18 +317,19 @@ test('worktree watcher observes source, rename, sidecar, and index inputs', asyn
 })
 
 test('refs watcher fails partial attach and survives repeated atomic ref replacement', async () => {
-  const common = mkdtempSync(join(tmpdir(), 'spex-refs-watch-'))
+  const common = fixtureTempDir('spex-refs-watch-')
   let inputs = 0
   let failures = 0
+  let watchers: ReturnType<typeof watchRefs> | undefined
   try {
     assert.throws(() => watchRefs(common, () => { inputs++ }, () => { failures++ }))
     assert.equal(failures, 0, 'the owner handles an attach throw and places the observer hold')
 
     mkdirSync(join(common, 'refs', 'heads'), { recursive: true })
-    const watchers = watchRefs(common, () => { inputs++ }, () => { failures++ })
+    watchers = watchRefs(common, () => { inputs++ }, () => { failures++ })
     for (let round = 1; round <= 3; round++) {
       const before = inputs
-      writeFileSync(join(common, 'refs', 'heads', 'main.lock'), `${round}\n`)
+      await writeFromProcess(join(common, 'refs', 'heads', 'main.lock'), `${round}\n`)
       renameSync(join(common, 'refs', 'heads', 'main.lock'), join(common, 'refs', 'heads', 'main'))
       await waitFor(() => inputs > before, `atomic ref replacement ${round} was not observed`)
     }
@@ -330,35 +339,37 @@ test('refs watcher fails partial attach and survives repeated atomic ref replace
     assert.equal(failures, 0)
     watchers.close()
   } finally {
+    watchers?.close()
     rmSync(common, { recursive: true, force: true })
   }
 })
 
 test('worktree registry watcher closes and reopens without duplicate delivery', async () => {
-  const registry = mkdtempSync(join(tmpdir(), 'spex-registry-watch-'))
+  const registry = fixtureTempDir('spex-registry-watch-')
   let inputs = 0
   let failures = 0
+  let watcher: ReturnType<typeof watchWorktreeRegistry> | undefined
   try {
-    let watcher = watchWorktreeRegistry(registry, () => { inputs++ }, () => { failures++ })
-    writeFileSync(join(registry, 'new-worktree'), 'registered\n')
+    watcher = watchWorktreeRegistry(registry, () => { inputs++ }, () => { failures++ })
+    await writeFromProcess(join(registry, 'new-worktree'), 'registered\n')
     await waitFor(() => inputs > 0, 'replacement registry watcher did not observe the next entry')
     watcher.close()
     const before = inputs
-    writeFileSync(join(registry, 'closed-worktree'), 'closed\n')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await writeFromProcess(join(registry, 'closed-worktree'), 'closed\n')
     assert.equal(inputs, before, 'a closed registry must not deliver')
     watcher = watchWorktreeRegistry(registry, () => { inputs++ }, () => { failures++ })
-    writeFileSync(join(registry, 'reopened-worktree'), 'reopened\n')
+    await writeFromProcess(join(registry, 'reopened-worktree'), 'reopened\n')
     await waitFor(() => inputs > before, 'reopened registry did not observe the next entry')
     watcher.close()
     assert.equal(failures, 0)
   } finally {
+    watcher?.close()
     rmSync(registry, { recursive: true, force: true })
   }
 })
 
 test('the project-root sweep skips linked worktrees but still sees the served tree', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-rootsweep-'))
+  const root = fixtureTempDir('spex-rootsweep-')
   for (let node = 0; node < 12; node++) mkdirSync(join(root, '.spec', `n${node}`), { recursive: true })
   // a linked worktree carries a whole second checkout: it is where nearly every watched directory came from
   for (let node = 0; node < 40; node++) {

@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -52,7 +52,7 @@ async function requestUpgrade(port: number, path: string): Promise<string> {
 }
 
 test('session web CLI records a live loopback URL and the host gateway authorizes HTTP and WebSocket at request time', { timeout: 30_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-session-web-'))
+  const fixture = fixtureTempDir('spex-session-web-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const id = 'web-session'

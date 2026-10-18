@@ -1,3 +1,4 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
@@ -6,7 +7,6 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -14,7 +14,6 @@ import {
   writeFileSync,
 } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { processStartToken } from '@spexcode/spec-core'
@@ -280,7 +279,7 @@ function prepareEmptyProject(fixture: string, name: string, commit = true): stri
 }
 
 test('a zero-commit served project starts empty and observes its first .spec tree without patrol', { timeout: 30_000 }, async (t) => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-unborn-root-'))
+  const fixture = fixtureTempDir('spex-graph-stream-unborn-root-')
   try {
     const project = prepareEmptyProject(fixture, 'project', false)
     assert.notEqual(spawnSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD']).status, 0,
@@ -296,7 +295,7 @@ test('a zero-commit served project starts empty and observes its first .spec tre
 })
 
 test('served base checkout creation and deletion converge from a warmed empty graph without delta patrol', { timeout: 30_000 }, async (t) => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-base-checkout-'))
+  const fixture = fixtureTempDir('spex-graph-stream-base-checkout-')
   try {
     const project = prepareEmptyProject(fixture, 'project')
     if (!watcherCapacityAvailable([project])) {
@@ -310,7 +309,7 @@ test('served base checkout creation and deletion converge from a warmed empty gr
 })
 
 test('a backend launched from an unrecorded linked worktree watches that served root', { timeout: 30_000 }, async (t) => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-linked-root-'))
+  const fixture = fixtureTempDir('spex-graph-stream-linked-root-')
   try {
     const main = prepareEmptyProject(fixture, 'main')
     const linked = join(fixture, 'linked')
@@ -326,7 +325,7 @@ test('a backend launched from an unrecorded linked worktree watches that served 
 })
 
 test('a backend exits when its served project root disappears', { timeout: 20_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-root-disappears-'))
+  const fixture = fixtureTempDir('spex-graph-stream-root-disappears-')
   const project = prepareEmptyProject(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const port = await freePort()
@@ -362,7 +361,7 @@ test('a backend exits when its served project root disappears', { timeout: 20_00
 // read repeatedly. A per-read reattach would re-walk every worktree per request — that is how one refused
 // registration became a storm that held gigabytes.
 test('a refused watcher source fails loud once and repairs on a bounded schedule, never per read', { timeout: 40_000 }, async (t) => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-hold-'))
+  const fixture = fixtureTempDir('spex-graph-stream-hold-')
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
@@ -462,7 +461,7 @@ test('a refused watcher source fails loud once and repairs on a bounded schedule
 // deliberately blinded, a real commit reaches no leaf watcher — the cold tick must still land it AND say
 // it repaired something, because a repair means a leaf went blind and repairs are supposed to be zero.
 test('a blinded leaf still reaches the graph through a loud patrol repair', { timeout: 120_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-patrol-'))
+  const fixture = fixtureTempDir('spex-graph-stream-patrol-')
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
@@ -696,7 +695,7 @@ exec "${realGit}" "$@"
 })
 
 test('a failed refresh keeps watcher causes through patrol recovery', { timeout: 60_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-recovery-'))
+  const fixture = fixtureTempDir('spex-graph-stream-recovery-')
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
@@ -846,7 +845,7 @@ exec "${realGit}" "$@"
 // pieces of work. This fixture holds a full-only layout revision. The graph, close mutation, GET route,
 // and SSE transport are all the real production surfaces.
 test('a closed session delta overtakes an active route-owned full cache flight', { timeout: 30_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-route-owned-flight-'))
+  const fixture = fixtureTempDir('spex-route-owned-flight-')
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
@@ -1069,7 +1068,7 @@ exec "${realGit}" "$@"
 // anyway — the injection reads as applied while the leaf still sees everything, which would quietly make
 // the patrol's accountability untestable.
 test('disabling the worktree leaf blinds it from every entry point', { timeout: 60_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-blind-'))
+  const fixture = fixtureTempDir('spex-graph-stream-blind-')
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
@@ -1146,7 +1145,7 @@ test('disabling the worktree leaf blinds it from every entry point', { timeout: 
 // that writer as a separate process; the backend must see the commit through its own leaf, with no tmux,
 // route, envelope or ref activity riding along, and never through the patrol.
 function fixtureProject(prefix: string): { fixture: string; project: string; spexHome: string } {
-  const fixture = mkdtempSync(join(tmpdir(), prefix))
+  const fixture = fixtureTempDir(prefix)
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')

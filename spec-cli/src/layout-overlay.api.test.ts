@@ -1,10 +1,10 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -83,7 +83,7 @@ function specBody(title: string): string {
 }
 
 test('cold governed overlays are one public generation, not one Git fanout per surface', { timeout: 60_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-layout-overlay-api-'))
+  const fixture = fixtureTempDir('spex-layout-overlay-api-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const argvLog = join(fixture, 'git-argv.log')

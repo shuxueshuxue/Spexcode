@@ -1,8 +1,7 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { mkdtempSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
@@ -30,7 +29,7 @@ function selectTestStore(home: string, databasePath: string): () => void {
 }
 
 test('cutover timeline projection reads conversation events from the application database', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-cutover-timeline-'))
+  const home = fixtureTempDir('spex-cutover-timeline-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   mkdirSync(home, { recursive: true })
@@ -64,7 +63,7 @@ test('cutover timeline projection reads conversation events from the application
 })
 
 test('human re-entry trusts canonical lifecycle when the legacy envelope is stale', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-human-reentry-canonical-state-'))
+  const home = fixtureTempDir('spex-human-reentry-canonical-state-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'stale-envelope-reentry-session'
@@ -96,7 +95,7 @@ test('human re-entry trusts canonical lifecycle when the legacy envelope is stal
 })
 
 test('canonical lifecycle writers resolve a Codex thread alias before transition', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-thread-writer-'))
+  const home = fixtureTempDir('spex-codex-thread-writer-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'codex-thread-writer-session'
@@ -126,7 +125,7 @@ test('canonical lifecycle writers resolve a Codex thread alias before transition
 })
 
 test('a backend start binds a running launched session, releases a closed one, and leaves the rest alone', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-cutover-legacy-dispatch-'))
+  const home = fixtureTempDir('spex-cutover-legacy-dispatch-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'legacy-claude-session'
@@ -196,7 +195,7 @@ test('a backend start binds a running launched session, releases a closed one, a
 })
 
 test('an unbound human prompt stays waiting without treating queue acceptance as activity', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-human-prompt-reentry-'))
+  const home = fixtureTempDir('spex-human-prompt-reentry-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'asking-reentry-session'
@@ -228,7 +227,7 @@ test('an unbound human prompt stays waiting without treating queue acceptance as
 })
 
 test('a transport miss stays queued and a Command Box retry reuses the same canonical message', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-cutover-queued-command-'))
+  const home = fixtureTempDir('spex-cutover-queued-command-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'queued-command-session'
@@ -284,7 +283,7 @@ test('a transport miss stays queued and a Command Box retry reuses the same cano
 })
 
 test('a delivered human prompt reopens a parked session even when another prompt remains queued', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-parked-send-reentry-'))
+  const home = fixtureTempDir('spex-parked-send-reentry-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'parked-send-reentry-session'
@@ -329,7 +328,7 @@ test('a delivered human prompt reopens a parked session even when another prompt
 })
 
 test('canonical acceptance stays successful when a runtime binding is not ready yet', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-cutover-unbound-command-'))
+  const home = fixtureTempDir('spex-cutover-unbound-command-')
   const databasePath = join(home, 'sessions.sqlite')
   const restore = selectTestStore(home, databasePath)
   const id = 'unbound-command-session'

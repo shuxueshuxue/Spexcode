@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -33,7 +33,7 @@ async function waitFor(check: () => boolean | Promise<boolean>, label: string, t
 const git = (project: string, ...args: string[]) => execFileSync('git', ['-C', project, ...args], { encoding: 'utf8' }).trim()
 
 test('public session create is bounded, rollback-clean, idempotent, and publishes exact Git state', { timeout: 70_000 }, async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-session-create-'))
+  const root = fixtureTempDir('spex-session-create-')
   const projectPath = join(root, 'project'); mkdirSync(projectPath)
   const project = realpathSync(projectPath)
   const home = join(root, 'home'), fakeBin = join(root, 'bin'), trace = join(root, 'trace.log')
@@ -73,7 +73,7 @@ case " $* " in
     fi ;;
   *)
     if [ -e "$SPEX_CREATE_MATERIALIZE_FAILURE" ]; then
-      parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
+      parent_cmd=$(ps -ww -p "$PPID" -o command= 2>/dev/null || true)
       case "$parent_cmd" in
         *"cli.ts materialize"*)
           printf '%s\\n' 'fatal: config command "sh -c [test -r "$0" && exec bash "$0" clean "$1"]" C:\\broken\\path' >&2
@@ -82,7 +82,7 @@ case " $* " in
       esac
     fi
     if [ -e "$SPEX_CREATE_KILL_AFTER_STORE" ]; then
-      parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
+      parent_cmd=$(ps -ww -p "$PPID" -o command= 2>/dev/null || true)
       case "$parent_cmd" in
         *"cli.ts materialize"*)
           backend_pid=$(ps -o ppid= -p "$PPID" | tr -d ' ')
@@ -91,7 +91,7 @@ case " $* " in
       esac
     fi
     if [ -e "$SPEX_CREATE_BLOCK_RECEIPT_RETIRE" ]; then
-      parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
+      parent_cmd=$(ps -ww -p "$PPID" -o command= 2>/dev/null || true)
       case "$parent_cmd" in *"cli.ts materialize"*) chmod 500 "$SPEX_CREATE_CANDIDATE_DIR" ;; esac
     fi
     exec ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" ;;

@@ -1,10 +1,10 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openProjectSessionApplication } from '@spexcode/session-application'
@@ -60,7 +60,7 @@ async function stop(child: ChildProcess): Promise<void> {
 }
 
 test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async () => {
-  const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'spex-timeline-api-')))
+  const fixture = realpathSync(fixtureTempDir('spex-timeline-api-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const id = 'timeline-api-session'
@@ -164,7 +164,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
 })
 
 test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate segmented events', { timeout: 120_000 }, async () => {
-  const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'spex-timeline-writers-')))
+  const fixture = realpathSync(fixtureTempDir('spex-timeline-writers-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const id = 'timeline-many-backends'
@@ -243,7 +243,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
 })
 
 test('YATU: a Conversation-launched probe worker gets note guidance, then terminal sends stay ordinary', { timeout: 90_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-delivery-'))
+  const fixture = fixtureTempDir('spex-timeline-delivery-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const launchArgs = join(fixture, 'launch-args')
@@ -329,7 +329,7 @@ exec ${JSON.stringify(fakeLauncher)} "$@"
 // Claude and pi pin their native id at launch and share the rendezvous transport, so the fake runtime serves both
 // harness rows; each one must reach the retry sweep through the binding its launch writes.
 for (const harness of ['claude', 'pi'] as const) test(`YATU: a Command Box message whose first handoff is lost reaches the ${harness} worker without a second send`, { timeout: 90_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-retry-'))
+  const fixture = fixtureTempDir('spex-timeline-retry-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const port = await freePort()
@@ -391,7 +391,7 @@ for (const harness of ['claude', 'pi'] as const) test(`YATU: a Command Box messa
 })
 
 test('YATU: a stopped session is not polled, and its owed message arrives with the resume that binds it again', { timeout: 120_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-stopped-'))
+  const fixture = fixtureTempDir('spex-timeline-stopped-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const databasePath = join(home, 'sessions.sqlite')
@@ -475,7 +475,7 @@ test('YATU: a stopped session is not polled, and its owed message arrives with t
 })
 
 test('YATU: pi-headless defaults launch and CLI send replies to durable notes', { timeout: 90_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-headless-'))
+  const fixture = fixtureTempDir('spex-timeline-headless-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const turns = join(fixture, 'turns.ndjson')

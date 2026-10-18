@@ -1,8 +1,8 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readLedger } from './hook-ledger.js'
 
@@ -11,7 +11,7 @@ const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
 
 // a project that dispatches into its own store, so the ledger under test is only what this test wrote
 function fixture(handlers: Array<{ event: string; name: string; body: string; block?: boolean }>) {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-ledger-'))
+  const dir = fixtureTempDir('spex-ledger-')
   const home = join(dir, 'home')
   execFileSync('git', ['init', '-q'], { cwd: dir })
   const manifest = join(dir, 'hooks-manifest')

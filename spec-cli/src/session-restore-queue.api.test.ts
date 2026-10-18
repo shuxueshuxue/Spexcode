@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -61,7 +61,7 @@ type SessionRow = {
 }
 
 test('YATU: archived dirty work restores by native id and corrupt queue rows cannot block healthy work', { timeout: 180_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-session-restore-queue-'))
+  const fixture = fixtureTempDir('spex-session-restore-queue-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const database = join(home, 'sessions.sqlite')

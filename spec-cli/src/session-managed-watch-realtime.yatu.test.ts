@@ -1,7 +1,7 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:net'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 
@@ -28,7 +28,7 @@ function seedRecord(home: string, id: string, parentId = ''): void {
 }
 
 test('canonical managed watch wakes the real parent transport once per state commit', { timeout: 30_000, concurrency: false }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-managed-watch-realtime-'))
+  const home = fixtureTempDir('spex-managed-watch-realtime-')
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home
@@ -113,7 +113,7 @@ test('canonical managed watch wakes the real parent transport once per state com
 })
 
 test('canonical lifecycle repairs a stale JSON snapshot without writing a second lifecycle fact', { concurrency: false }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-canonical-lifecycle-authority-'))
+  const home = fixtureTempDir('spex-canonical-lifecycle-authority-')
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home

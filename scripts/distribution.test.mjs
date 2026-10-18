@@ -50,7 +50,7 @@ test('the bundle loads and draws where Node\'s globals do not exist', () => {
   assert.equal(run.stdout.trim(), 'drawn')
 })
 
-test('the gugu App\'s program runs the spex its version pins, in the working copy it is handed, and reads only .spec', async () => {
+test('the gugu App\'s program runs the spex its version pins, in the working copy gugu stamps on the call, and reads only .spec', async () => {
   // The tab cannot run git, so its two reads go through tools.js. This runs those tools against a working copy and
   // an npx that records its argv and answers as `spex graph --json` does: the argv is the pinned one, the payload
   // reaches the tab trimmed to what it draws, and a path outside `.spec/` is refused rather than read.
@@ -78,9 +78,13 @@ test('the gugu App\'s program runs the spex its version pins, in the working cop
     chmodSync(join(bin, 'spex'), 0o755)
     process.env.PATH = `${bin}:${before}`
     const tools = await import(pathToFileURL(join(root, 'distribution/gugu/spexcode/tools.js')).href)
-    assert.deepEqual(Object.keys(tools).sort(), ['graph', 'node'])
-    for (const tool of Object.values(tools)) assert.deepEqual(tool._meta.ui.visibility, ['app'], 'the tab\'s reads are not agent tools')
-    const tree = await tools.graph.run({ root: work })
+    assert.deepEqual(Object.keys(tools).sort(), ['graph', 'node', 'share'])
+    for (const tool of [tools.graph, tools.node]) assert.deepEqual(tool._meta.ui.visibility, ['app'], 'the tab\'s reads are not agent tools')
+    assert.deepEqual(tools.share._meta.ui.visibility, ['model'], 'sharing is an agent\'s tool, never the tab\'s')
+    // The working copy is gugu's stamp (`workspaceRoot`), never an argument: a tab beside a task on another computer
+    // knows no path there, and a page must not point the program at a folder of its choosing.
+    const stamp = { workspaceRoot: work }
+    const tree = await tools.graph.run({ root: '/elsewhere' }, stamp)
     const helper = join(root, 'distribution/gugu/spexcode/spex-in.mjs')
     const argv = readFileSync(join(bin, 'argv'), 'utf8').trim()
     assert.equal(argv, [...SPEX.args, 'node', 'spex-in.mjs', 'graph', '--json'].join(' '))
@@ -94,12 +98,37 @@ test('the gugu App\'s program runs the spex its version pins, in the working cop
     assert.equal(tree.title, 'app')
     assert.deepEqual(tree.nodes.map((n) => [n.id, n.status, n.diagram]), [['app', 'merged', false], ['api', 'drift', true]])
     assert.equal('overlays' in tree.nodes[0], false, 'the tab gets only what it draws')
-    const api = await tools.node.run({ root: work, path: '.spec/app/api/spec.md' })
+    const api = await tools.node.run({ path: '.spec/app/api/spec.md' }, stamp)
     assert.equal(api.body, 'The API.\n')
     assert.equal(JSON.parse(api.diagram).diagram_type, 'architecture')
-    await assert.rejects(tools.node.run({ root: work, path: 'secret.md' }), /is not a spec\.md under/)
-    await assert.rejects(tools.node.run({ root: work, path: '.spec/../secret.md' }), /is not a spec\.md under/)
-    await assert.rejects(tools.graph.run({ root: 'relative/path' }), /absolute path/)
+    await assert.rejects(tools.node.run({ path: 'secret.md' }, stamp), /is not a spec\.md under/)
+    await assert.rejects(tools.node.run({ path: '.spec/../secret.md' }, stamp), /is not a spec\.md under/)
+    await assert.rejects(tools.graph.run({}, {}), /no working copy/)
+    await assert.rejects(tools.graph.run({}, { workspaceRoot: 'relative/path' }), /no working copy/)
+    // share: one file per project in the chat, its next version when it is there already, readable with no program.
+    const chatFiles = []
+    const calls = []
+    globalThis.gugu = { files: {
+      list: async (place) => { calls.push(['list', place]); return chatFiles },
+      upload: async (place, file) => { calls.push(['upload', place, file.name, file.type]); chatFiles.push({ id: 'f1', name: file.name, type: 'binary', version: 1, bytes: await file.text() }); return [chatFiles.at(-1)] },
+      replace: async (entry, blob, options) => { calls.push(['replace', entry.id, options]); entry.version += 1; entry.bytes = await blob.text() },
+    } }
+    try {
+      const first = await tools.share.run({ chat: 'c1' }, stamp)
+      assert.deepEqual(first, { file: 'app.spexcode', newVersion: false, nodes: 2, bytes: chatFiles[0].bytes.length })
+      assert.deepEqual(calls.slice(0, 2), [['list', { chat: 'c1', folder: '' }], ['upload', { chat: 'c1' }, 'app.spexcode', 'application/octet-stream']])
+      const snapshot = JSON.parse(chatFiles[0].bytes)
+      assert.equal(snapshot.schema, 'spexcode.gugu-snapshot/v1')
+      assert.deepEqual(snapshot.nodes.map((n) => n.id), ['app', 'api'])
+      assert.deepEqual(snapshot.documents.api, { body: 'The API.\n', diagram: '{"diagram_type":"architecture"}' })
+      assert.equal(JSON.stringify(snapshot).includes(work), false, 'no path of the sharer\'s computer goes into the chat')
+      const again = await tools.share.run({ chat: 'c1' }, stamp)
+      assert.equal(again.newVersion, true)
+      assert.deepEqual(calls.at(-1), ['replace', 'f1', { expectedVersion: 1 }])
+      assert.equal(chatFiles.length, 1)
+    } finally {
+      delete globalThis.gugu
+    }
   } finally {
     process.env.PATH = before
     rmSync(work, { recursive: true, force: true })
@@ -195,6 +224,8 @@ test('every package names only files that exist, and the ZCode skill points at t
   assert.ok(existsSync(join(root, 'distribution/zcode/atlas/skills/atlas/atlas.dwf.ts')))
   const manifest = JSON.parse(readFileSync(join(root, 'distribution/gugu/spexcode/manifest.json'), 'utf8'))
   assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.entry)))
+  // gugu refuses a manifest whose description runs over 280 characters, in any language.
+  for (const text of [manifest.description, ...Object.values(manifest.localized ?? {}).map((l) => l.description)]) assert.ok(text.length <= 280, `${text.length}: ${text}`)
   for (const tab of manifest.contributes.tabs) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', tab.entry)), tab.entry)
   for (const server of manifest.contributes.mcpServers) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', server.tools)), server.tools)
   assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.icon)))
@@ -246,7 +277,7 @@ test('every package names only files that exist, and the ZCode skill points at t
 // The gugu App's page, run in a bare stand-in for the DOM with a stand-in bridge whose program answers are held and
 // let go by the test — no clock. Two things a reading of the code does not settle: reads go out one at a time, and a
 // read still out when the tab moves to another task is dropped rather than drawn there.
-function guguPage() {
+function guguPage({ file = null } = {}) {
   const byId = new Map()
   class El {
     constructor(tag = 'div', id = null) { Object.assign(this, { tagName: tag, id, children: [], hidden: false, className: '', dataset: {}, style: {}, value: '', placeholder: '', scrollTop: 0, attrs: {} }); this._text = '' }
@@ -267,26 +298,35 @@ function guguPage() {
     createElement: (tag) => new El(tag),
     addEventListener() {},
     documentElement: { lang: '', style: {} },
+    acts: [new El('div'), new El('div')],
+    querySelectorAll: (selector) => (selector === '.act' ? document.acts : []),
   }
   const asks = []
   const reported = []
   const hooks = {}
+  // gugu stamps each call with the working copy of the task the tab sits beside AT THAT MOMENT (`workspaceRoot`).
+  let stamped = file ? null : '/A'
   const tree = (root) => ({ title: root, spex: '0', nodes: [{ id: `${root}-top`, parent: null, path: `.spec/${root}-top/spec.md`, title: `${root} top`, desc: '', code: [], status: 'merged', drift: 0, driftFiles: [], version: 1, diagram: false }] })
   const gugu = {
     reportError: async (message) => void reported.push(message),
-    callProgram: (tool, args) => new Promise((resolve) => asks.push({ tool, args, answer: () => {
-      const name = args.root.slice(1)
+    callProgram: (tool, args, root = stamped) => new Promise((resolve) => asks.push({ tool, args, root, answer: () => {
+      const name = root.slice(1)
       if (tool === 'graph') return resolve({ content: [{ type: 'text', text: JSON.stringify(tree(name)) }] })
       // The program refuses a spec that is not under the working copy it is handed, as tools.js does.
       resolve(args.path.startsWith(`.spec/${name}-`) ? { content: [{ type: 'text', text: JSON.stringify({ body: 'body', diagram: null }) }] }
-        : { isError: true, content: [{ type: 'text', text: `ENOENT: ${args.root}/${args.path}` }] })
+        : { isError: true, content: [{ type: 'text', text: `ENOENT: ${root}/${args.path}` }] })
     } })),
-    getContext: async () => ({ locale: 'en', themeMode: 'light', capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'], session: { id: 'sA', root: '/A', projectId: 'pA' } }),
-    onContextChanged: (fn) => { hooks.context = fn },
+    getContext: async () => (file
+      ? { locale: 'en', themeMode: 'light', capabilities: ['files:read'], chat: { id: 'c1' }, file }
+      : { locale: 'en', themeMode: 'light', capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'], session: { id: 'sA', root: '/A', projectId: 'pA' } }),
+    onContextChanged: (fn) => { hooks.context = (next) => { stamped = next.session?.root ?? stamped; fn(next) } },
     onCommand: (fn) => { hooks.command = fn },
     onAgentsChanged() {},
     listAgents: async () => [],
-    files: { onChanged: () => () => {} },
+    files: {
+      onChanged: () => () => {},
+      open: async (entry) => ({ entry: { ...entry, createdBy: { name: 'Kip' }, updatedAt: '2026-10-19T01:00:00Z' }, blob: async () => new Blob([JSON.stringify(entry.snapshot)]) }),
+    },
     markdown: async () => ({ render: (element, text) => { element.textContent = text } }),
   }
   const context = vm.createContext({ document, setTimeout, clearTimeout, console, SpexCodeAtlasFocus: { focusDiagram() {}, scopeIds: (svg) => svg }, SpexCodeAtlasPrompt: { ATLAS_PROMPT: 'draw' } })
@@ -300,7 +340,7 @@ function guguPage() {
   const answer = async (tool) => { const a = open().find((x) => x.tool === tool); a.done = true; a.answer(); await settle() }
   const drawn = () => document.getElementById('tree').walk().filter((e) => e.className === 'label').map((e) => e.textContent)
   const graphs = () => asks.filter((a) => a.tool === 'graph')
-  return { asks, reported, hooks, settle, open, answer, drawn, graphs, error: () => document.getElementById('error') }
+  return { asks, reported, hooks, settle, open, answer, drawn, graphs, document, error: () => document.getElementById('error') }
 }
 
 test('the gugu App reads the tree one read at a time, and once more for what changed meanwhile', async () => {
@@ -324,10 +364,24 @@ test('the gugu App drops a read that comes back after the tab moved to another t
   await p.settle()
   await p.answer('graph') // task A's tree, after the tab moved to B
   assert.deepEqual(p.drawn(), [], 'A\'s tree is not drawn under B')
-  assert.ok(!p.asks.some((a) => a.tool === 'node' && a.args.root === '/B' && a.args.path.startsWith('.spec/A-')), 'no node of A is asked under B')
+  assert.ok(!p.asks.some((a) => a.tool === 'node' && a.root === '/B' && a.args.path.startsWith('.spec/A-')), 'no node of A is asked under B')
   while (p.open().length) await p.answer(p.open()[0].tool)
-  assert.deepEqual(p.graphs().map((a) => a.args.root), ['/A', '/B'])
+  assert.deepEqual(p.graphs().map((a) => a.root), ['/A', '/B'])
   assert.deepEqual(p.drawn(), ['B top'])
   assert.equal(p.error().hidden, true)
+  assert.deepEqual(p.reported, [])
+})
+
+test('the gugu App opened for a shared snapshot draws that file, with no program and no work to hand on', async () => {
+  const snapshot = { schema: 'spexcode.gugu-snapshot/v1', title: 'app', nodes: [
+    { id: 'app', parent: null, path: '.spec/app/spec.md', title: 'app top', desc: '', code: [], status: 'drift', drift: 1, driftFiles: [], version: 1, diagram: false },
+  ], documents: { app: { body: 'from the file', diagram: null } } }
+  const p = guguPage({ file: { id: 'f1', name: 'app.spexcode', snapshot } })
+  await p.settle()
+  assert.deepEqual(p.asks, [], 'nothing asks the program: a phone has none')
+  assert.deepEqual(p.drawn(), ['app top'])
+  assert.equal(p.document.getElementById('body').textContent, 'from the file')
+  assert.match(p.document.getElementById('tree-note').textContent, /1 nodes · 1 drifted · Shared by Kip/)
+  assert.deepEqual(p.document.acts.map((a) => a.hidden), [true, true], 'cite and start need a task: hidden')
   assert.deepEqual(p.reported, [])
 })

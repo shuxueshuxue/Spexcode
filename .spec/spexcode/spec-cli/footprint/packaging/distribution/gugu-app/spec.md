@@ -2,7 +2,7 @@
 title: gugu-app
 status: active
 hue: 30
-desc: SpexCode as a gugu App — beside a task, the spec tree of that task's working copy as spex assembles it, drift included, each node's body and diagram; work on a node goes to a new gugu session or this one's composer; agents get SpexCode's skills.
+desc: SpexCode as a gugu App — beside a task, the spec tree of that task's working copy as spex assembles it, drift included, each node's body and diagram, on whichever computer the task runs; work on a node goes to a new gugu session or this one's composer; agents get SpexCode's skills and share a read-only snapshot of the tree into a group, which the App draws in the group and on phones.
 code:
   - distribution/gugu/spexcode/app.js
 related:
@@ -13,6 +13,7 @@ related:
   - distribution/gugu/spexcode/manifest.json
   - distribution/gugu/spexcode/spex-command.js
   - distribution/gugu/spexcode/skills/spexcode/SKILL.md
+  - distribution/gugu/spexcode/diagram.css
   - scripts/distribution.mjs
   - scripts/distribution.test.mjs
 ---
@@ -34,8 +35,11 @@ dashboard draws, with its focus behaviour; a diagram that cannot be drawn shows 
 
 **Why a program.** Drift is a computation over git, and a gugu tab runs in a sandbox with no process, no git and no
 network to this machine — so the tab cannot run `spex` and cannot reach `spex serve`. The App's program (`tools.js`)
-can: it runs on this computer with the person's rights, the tab calls its two tools (`graph`, `node`) through the
-host, and both are page-only, so no agent sees them — an agent has a shell and runs `spex` itself. The program runs
+can: it runs with the person's rights, the tab calls its two tools (`graph`, `node`) through the host, and both are
+page-only, so no agent sees them — an agent has a shell and runs `spex` itself. Which working copy they read is
+gugu's stamp on the call (`workspaceRoot`), never an argument: a tab beside a task on another of the person's
+computers has its call run on THAT computer, in that task's working copy, and its context names no path at all —
+the tab asks, the stamp decides, and a page cannot point the program at a folder of its choosing. The program runs
 the spex of THIS App's version through npx with the public registry named (`spex-command.js`, generated): what the
 install sheet was consented to and what runs stay one thing. npx runs from the App's own folder and `spex-in.mjs`
 then runs spex in the working copy: inside SpexCode's own repository, whose package is itself called `spexcode`, npx
@@ -46,7 +50,7 @@ helper by its name relative to the App's folder, the working copy in `SPEXCODE_A
 `.spec/` and the diagram beside it. A machine without npx is told so, with what to install.
 
 **It follows, it does not write.** The tab writes nothing. It re-reads the tree when gugu reports a change under
-`.spec/` in that working copy, once a burst of saves settles, one read at a time: changes that arrive during a read mark it
+`.spec/` in a working copy on this computer (beside a task on another computer, Refresh reads again), once a burst of saves settles, one read at a time: changes that arrive during a read mark it
 dirty and one more read follows. Moving the tab to another task drops a read still out for the old one: it is never drawn under the new task. Moving the tab to another task rebinds it to that
 task's working copy. A missing capability is said plainly, with where to grant it.
 
@@ -56,10 +60,20 @@ person sends it or not. "Draw the atlas" starts a session with the atlas instruc
 tasks the App started are listed with the status gugu reports for them, verbatim, each a click away — the tab never
 announces work it cannot observe.
 
+**A group sees a snapshot.** The people of a group have no working copy and a phone runs no program, so what reaches
+them is a file: an agent in the group calls `share` (its one tool, agent-only) with the group's chat, and the program
+puts `<project>.spexcode` in that chat's files — the tree as the tab reads it and every node's body and diagram, no
+path of the sharer's computer. Sharing again makes that file's next version, so a group keeps one snapshot per
+project, with its history. The agent must be in the group (gugu checks the chat it hands); the file is the agent's.
+The App claims the suffix in chats (its second tab, `snapshot`), and the same page, opened for such a file, draws it
+read-only — no program, no watch, no Start here or Cite, who shared it and when above the tree. The file is a stored
+file whatever its size (its own suffix and type): a `.json` would become a live document under 1 MB and a stored
+file over it, and the page would read one thing two ways.
+
 **Agents get the skills.** The App gives the agents on the computer two skills: `atlas` (the same skill every
 package ships) and `spexcode` — how to work in a repository SpexCode governs, through the same pinned spex: find the
 spec of a file, change code and spec together, `Spec-OK` or `spec ack` when the contract still holds, lint before
-handing back, and the local issues.
+handing back, the local issues, and sharing the tree with a group.
 
 The page's helpers (`focus.js`, `prompt.js`) are classic scripts sharing one global lexical scope, so each publishes
 its namespace from inside a wrapper and leaks nothing else; `app.js` is a module and the archify bundle a module it

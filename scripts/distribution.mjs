@@ -132,6 +132,10 @@ any other directory with \`-c 'cd <this repository> && spex <command>'\`, or use
   among it.
 - **Issues** are markdown threads in \`.spec/.issues/\`: \`spex issue ls\`, \`spex issue show <id>\`,
   \`spex issue reply <id> …\`.
+- **Share the tree with a group:** the \`spexcode__share\` tool (in \`catalog_list\` when it is not listed) takes the
+  group's chat and puts a read-only snapshot of this working copy's tree — drift, bodies, diagrams — into its files,
+  where the people there open it with SpexCode, phones included. Sharing again makes that file's next version. You
+  must be a member of the group; when you are not, say so rather than looking for another way in.
 - \`spex guide spec\` is the full file format; \`spex help <verb>\` the rest. Diagrams: the atlas skill.
 
 The SpexCode tab beside this task shows the tree, each node's drift and its diagram, and follows \`.spec/\` as you write.
@@ -258,11 +262,11 @@ const files = new Map([
   [`${gugu}/manifest.json`, json({
     id: 'spexcode',
     name: 'SpexCode',
-    description: 'The spec tree of the repository a task works in — each node\'s body, its drift from the code, its architecture diagram — beside the task. Start a new task on a node or cite it in this one; agents get SpexCode\'s skills.',
+    description: 'The spec tree of a task\'s repository beside the task: each node\'s body, drift from the code and diagram. Start a task on a node or cite it; agents get SpexCode\'s skills and share a snapshot of the tree into a group, readable there and on phones.',
     localized: {
       'zh-CN': {
         name: 'SpexCode',
-        description: '任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能。',
+        description: '任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能,还能把规格树的快照发进群,群里和手机上都能看。',
         examples: ['给这个仓库画一份规格图', '哪些规格和代码漂移了?'],
       },
     },
@@ -278,9 +282,14 @@ const files = new Map([
     engines: { gugu: '>=0.2.55' },
     entry: 'index.html',
     icon: 'icon.png',
-    permissions: { capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'] },
+    // files:write puts an agent's shared snapshot into its group (tools.js `share`); gugu's files:write implies no read.
+    permissions: { capabilities: ['files:read', 'files:write', 'agents:read', 'agents:control', 'agents:tools'] },
     contributes: {
-      tabs: [{ name: 'spec', title: 'SpexCode', entry: 'index.html', icon: 'icon.png', toolbar: [{ id: 'draw', title: 'Draw the atlas' }, { id: 'refresh', title: 'Refresh' }] }],
+      tabs: [
+        { name: 'spec', title: 'SpexCode', entry: 'index.html', icon: 'icon.png', toolbar: [{ id: 'draw', title: 'Draw the atlas' }, { id: 'refresh', title: 'Refresh' }] },
+        // A tab that claims files opens only for one: the snapshot a group was given, drawn by the same page.
+        { name: 'snapshot', title: 'SpexCode', entry: 'index.html', icon: 'icon.png', opensFiles: { chat: ['.spexcode'] } },
+      ],
       mcpServers: [{ tools: 'tools.js' }],
       skills: 'skills',
     },

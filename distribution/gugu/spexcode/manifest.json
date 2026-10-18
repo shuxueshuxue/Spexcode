@@ -1,11 +1,11 @@
 {
   "id": "spexcode",
   "name": "SpexCode",
-  "description": "The spec tree of the repository a task works in — each node's body, its drift from the code, its architecture diagram — beside the task. Start a new task on a node or cite it in this one; agents get SpexCode's skills.",
+  "description": "The spec tree of a task's repository beside the task: each node's body, drift from the code and diagram. Start a task on a node or cite it; agents get SpexCode's skills and share a snapshot of the tree into a group, readable there and on phones.",
   "localized": {
     "zh-CN": {
       "name": "SpexCode",
-      "description": "任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能。",
+      "description": "任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能,还能把规格树的快照发进群,群里和手机上都能看。",
       "examples": [
         "给这个仓库画一份规格图",
         "哪些规格和代码漂移了?"
@@ -33,6 +33,7 @@
   "permissions": {
     "capabilities": [
       "files:read",
+      "files:write",
       "agents:read",
       "agents:control",
       "agents:tools"
@@ -55,6 +56,17 @@
             "title": "Refresh"
           }
         ]
+      },
+      {
+        "name": "snapshot",
+        "title": "SpexCode",
+        "entry": "index.html",
+        "icon": "icon.png",
+        "opensFiles": {
+          "chat": [
+            ".spexcode"
+          ]
+        }
       }
     ],
     "mcpServers": [

@@ -3,6 +3,8 @@
 // gugu: "start here" opens a new gugu session on the node, "cite" puts the node in this session's composer. It writes
 // nothing itself. The tree comes from this App's own program (tools.js), because drift is a computation over git
 // that a sandboxed page cannot make; bodies render with gugu's own markdown, diagrams with archify's renderer.
+// Opened for a shared snapshot (a chat's `.spexcode` file, which the program's `share` made), the same page draws that
+// file instead, read-only: no session, no program, no work to hand on — in a chat's side panel and on a phone.
 const { focusDiagram, scopeIds } = globalThis.SpexCodeAtlasFocus
 const { ATLAS_PROMPT } = globalThis.SpexCodeAtlasPrompt
 const $ = (id) => document.getElementById(id)
@@ -11,7 +13,6 @@ const WORDS = {
   en: {
     noHost: 'SpexCode runs inside gugu as an App.',
     noSession: 'Put this tab beside a task: it shows the spec tree of that task\'s working copy.',
-    noRoot: 'This tab reads the task\'s working copy. Allow "read files" for SpexCode on the App page.',
     noTools: 'This tab reads the tree through SpexCode\'s own program. Allow "give agents its tools" for SpexCode on the App page.',
     noTree: 'This working copy has no spec tree yet. "Draw the atlas" starts a task that reads the repository into .spec/ and draws its pictures; this tab follows as it writes.',
     draw: 'Draw the atlas',
@@ -28,12 +29,13 @@ const WORDS = {
     drawStarted: 'Started a task that draws the atlas.',
     needControl: 'Starting a task needs "start and steer agents" for SpexCode on the App page.',
     open: 'Open',
+    shared: (who, when) => `Shared by ${who} · ${when}`,
+    notSnapshot: (name) => `${name} is not a SpexCode snapshot.`,
     diagramFailed: (path, why) => `${path} could not be drawn: ${why}`,
   },
   zh: {
     noHost: 'SpexCode 是咕咕里的 App,要在咕咕里打开。',
     noSession: '把这一格放在一条任务旁边:它显示那条任务工作副本里的规格树。',
-    noRoot: '这一格要读任务的工作副本。请在「App」页给 SpexCode 打开「读文件」。',
     noTools: '这一格经 SpexCode 自带的程序读规格树。请在「App」页给 SpexCode 打开「给 agent 用它的工具」。',
     noTree: '这个工作副本还没有规格树。点「画规格图」会起一条任务,把仓库读成 .spec/ 并画图;它写的时候这一格跟着变。',
     draw: '画规格图',
@@ -50,6 +52,8 @@ const WORDS = {
     drawStarted: '已起一条任务去画规格图。',
     needControl: '起任务要在「App」页给 SpexCode 打开「启动和操控 agent」。',
     open: '打开',
+    shared: (who, when) => `${who} 分享于 ${when}`,
+    notSnapshot: (name) => `${name} 不是 SpexCode 的快照。`,
     diagramFailed: (path, why) => `${path} 画不出来:${why}`,
   },
 }
@@ -64,6 +68,8 @@ let current = null
 let unwatch = null
 let pendingLoad = null
 let loadSeq = 0
+// The shared snapshot this page was opened for (`ctx.file`), parsed; null beside a task.
+let snapshot = null
 const open = new Set()
 
 const has = (capability) => Boolean(context?.capabilities?.includes(capability))
@@ -116,13 +122,12 @@ function load() {
 async function read() {
   const seq = ++loadSeq
   $('error').hidden = true
-  if (!place.session) return showEmpty(t.noSession)
-  if (!place.root) return showEmpty(t.noRoot)
-  if (!has('agents:tools')) return showEmpty(t.noTools)
+  if (!snapshot && !place.session) return showEmpty(t.noSession)
+  if (!snapshot && !has('agents:tools')) return showEmpty(t.noTools)
   if (!tree.byId.size) showEmpty(t.reading)
   let payload
   try {
-    payload = await call('graph', { root: place.root })
+    payload = snapshot ?? await call('graph', {})
   } catch (error) {
     if (seq !== loadSeq) return
     showEmpty(String(error?.message ?? error))
@@ -131,12 +136,12 @@ async function read() {
   }
   if (seq !== loadSeq) return
   tree = buildTree(payload.nodes)
-  if (!tree.roots.length) return showEmpty(t.noTree, true)
+  if (!tree.roots.length) return showEmpty(t.noTree, !snapshot)
   $('empty').hidden = true
   $('atlas').hidden = false
   $('project').textContent = payload.title ?? ''
   const drifted = payload.nodes.filter((n) => n.status === 'drift').length
-  $('tree-note').textContent = [t.nodes(tree.byId.size), drifted ? t.drifted(drifted) : ''].filter(Boolean).join(' · ')
+  $('tree-note').textContent = [t.nodes(tree.byId.size), drifted ? t.drifted(drifted) : '', snapshot?.shared ?? ''].filter(Boolean).join(' · ')
   renderTree()
   await select(current && tree.byId.has(current) ? current : tree.roots[0], { keepScroll: true })
 }
@@ -211,7 +216,7 @@ async function select(id, { keepScroll = false } = {}) {
   $('act-note').textContent = ''
   let read
   try {
-    read = await call('node', { root: place.root, path: node.path })
+    read = snapshot ? snapshot.documents[node.id] : await call('node', { path: node.path })
   } catch (error) {
     fail(error)
     return
@@ -326,7 +331,8 @@ function bind(next) {
   tree = { byId: new Map(), roots: [] }
   current = null
   open.clear()
-  if (place.session && has('files:read')) {
+  // Only a working copy on this computer is watched (`root`); beside a task on another computer, Refresh reads again.
+  if (place.root && has('files:read')) {
     unwatch = window.gugu.files.onChanged({ session: place.session }, (change) => {
       if (change.kind === 'resync' || change.changes?.some((c) => c.path.startsWith('.spec/'))) scheduleLoad()
     })
@@ -340,6 +346,8 @@ function applyContext(next) {
   t = String(context.locale ?? '').toLowerCase().startsWith('zh') ? WORDS.zh : WORDS.en
   document.documentElement.lang = t === WORDS.zh ? 'zh-CN' : 'en'
   document.documentElement.style.colorScheme = context.themeMode === 'dark' ? 'dark' : 'light'
+  // The diagram's palette named outright: an engine without light-dark() (Android WebView 113) cannot follow colorScheme.
+  $('diagram-box').dataset.theme = context.themeMode === 'dark' ? 'dark' : 'light'
   $('empty-draw').textContent = t.draw
   $('cite').textContent = t.cite
   $('start').textContent = t.start
@@ -358,10 +366,24 @@ $('cite').addEventListener('click', () => void cite())
 $('start').addEventListener('click', () => void startHere())
 $('ask').addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.isComposing) void startHere() })
 
+// A shared snapshot is a stored file: its bytes, whatever its size (see `share` in tools.js).
+async function openSnapshot(file) {
+  const handle = await window.gugu.files.open(file)
+  const data = JSON.parse(await (await handle.blob()).text())
+  if (data?.schema !== 'spexcode.gugu-snapshot/v1') throw new Error(t.notSnapshot(handle.entry.name))
+  const when = new Date(handle.entry.updatedAt).toLocaleString(document.documentElement.lang)
+  return { ...data, shared: t.shared(handle.entry.createdBy?.name ?? '?', when) }
+}
+
 async function main() {
   if (!window.gugu) return showEmpty(WORDS.en.noHost)
   ;[{ renderDiagram }, markdown] = await Promise.all([import('./archify.mjs'), window.gugu.markdown()])
   applyContext(await window.gugu.getContext())
+  if (context.file) {
+    snapshot = await openSnapshot(context.file)
+    for (const row of document.querySelectorAll('.act')) row.hidden = true
+    return load()
+  }
   bind(context)
   window.gugu.onContextChanged((next) => {
     applyContext(next)

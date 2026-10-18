@@ -26,6 +26,10 @@ any other directory with `-c 'cd <this repository> && spex <command>'`, or use a
   among it.
 - **Issues** are markdown threads in `.spec/.issues/`: `spex issue ls`, `spex issue show <id>`,
   `spex issue reply <id> …`.
+- **Share the tree with a group:** the `spexcode__share` tool (in `catalog_list` when it is not listed) takes the
+  group's chat and puts a read-only snapshot of this working copy's tree — drift, bodies, diagrams — into its files,
+  where the people there open it with SpexCode, phones included. Sharing again makes that file's next version. You
+  must be a member of the group; when you are not, say so rather than looking for another way in.
 - `spex guide spec` is the full file format; `spex help <verb>` the rest. Diagrams: the atlas skill.
 
 The SpexCode tab beside this task shows the tree, each node's drift and its diagram, and follows `.spec/` as you write.

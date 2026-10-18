@@ -6,8 +6,9 @@ body { margin: 0; height: 100vh; overflow: hidden; }
 .empty p { max-width: 460px; margin: 0; color: var(--em-foreground-muted); white-space: pre-wrap; }
 .atlas { height: 100%; display: flex; min-height: 0; }
 .tree-pane { flex: none; width: 260px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--em-border); }
-.pane-head { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: var(--em-spacing-sm); padding: var(--em-spacing-md) var(--em-spacing-lg); }
-.pane-head small { color: var(--em-foreground-muted); white-space: nowrap; }
+.pane-head { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--em-spacing-xs) var(--em-spacing-sm); padding: var(--em-spacing-md) var(--em-spacing-lg); }
+.pane-head strong { flex: none; }
+.pane-head small { color: var(--em-foreground-muted); }
 .tree { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--em-spacing-sm) var(--em-spacing-lg); }
 .tree ul { list-style: none; margin: 0; padding-left: var(--em-spacing-md); }
 .tree > ul { padding-left: 0; }

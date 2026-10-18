@@ -79,6 +79,10 @@ function hostReachable(scoped) {
 // differs between the two themes becomes light-dark(light, dark), so a themed host gets the matching palette with
 // no script, and data-theme on the box still pins one. A preset's variable falls back to the base theme's, as
 // the cascade does in the viewer (a preset block is more specific than the base one).
+// light-dark() is Chrome 123+: an older engine (Android WebView 113, in gugu's phone app) keeps the declaration of
+// a custom property but cannot compute the colour, so every fill went black. So the plain light palette comes first,
+// light-dark() only where @supports says the engine has it, and data-theme="dark" names the dark values outright —
+// a host that sets data-theme gets the right palette on any engine.
 const palette = new Map(); // preset ('' = base) → { light: {name: value}, dark: {name: value} }
 function addToPalette(selectors, declarations) {
   const presets = new Set(selectors.map((s) => s.match(/\[data-preset="([^"]+)"\]/)?.[1] ?? ''));
@@ -95,30 +99,34 @@ function addToPalette(selectors, declarations) {
   }
 }
 const COLOR = /^(#[0-9a-f]{3,8}|(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color-mix|color|var)\(|transparent$|[a-z]+$)/i;
-function merged(light, dark) {
+// Each variable as [name, light, dark]; a non-colour one must be the same in both themes.
+function pairs(light, dark) {
   return [...new Set([...Object.keys(light), ...Object.keys(dark)])].map((name) => {
     const l = light[name], d = dark[name];
     if (l === undefined || d === undefined) throw new Error(`${name} is defined for one theme only`);
-    if (l === d) return `${name}: ${l}`;
-    if (!COLOR.test(l) || !COLOR.test(d)) throw new Error(`${name} differs between themes but is not a colour: ${l} | ${d}`);
-    return `${name}: light-dark(${l}, ${d})`;
-  }).join('; ');
+    if (l !== d && (!COLOR.test(l) || !COLOR.test(d))) throw new Error(`${name} differs between themes but is not a colour: ${l} | ${d}`);
+    return [name, l, d];
+  });
 }
+const declare = (list, value) => list.map(([name, l, d]) => `${name}: ${value(l, d)}`).join('; ');
 function paletteRules() {
   const base = palette.get('');
   if (!base) throw new Error('the template defines no base palette');
-  const out = [
-    `.archify { ${merged(base.light, base.dark)}; }`,
-    '.archify[data-theme="light"] { color-scheme: light; }',
-    '.archify[data-theme="dark"] { color-scheme: dark; }',
-  ];
+  const blocks = [['.archify', '.archify[data-theme="dark"]', pairs(base.light, base.dark)]];
   for (const [preset, own] of palette) {
     if (!preset) continue;
     const names = new Set([...Object.keys(own.light), ...Object.keys(own.dark)]);
     const pick = (scheme) => Object.fromEntries([...names].map((n) => [n, own[scheme][n] ?? base[scheme][n]]));
-    out.push(`.archify svg[data-preset="${preset}"] { ${merged(pick('light'), pick('dark'))}; }`);
+    blocks.push([`.archify svg[data-preset="${preset}"]`, `.archify[data-theme="dark"] svg[data-preset="${preset}"]`, pairs(pick('light'), pick('dark'))]);
   }
-  return out;
+  const themed = (list) => list.filter(([, l, d]) => l !== d);
+  return [
+    ...blocks.map(([selector, , list]) => `${selector} { ${declare(list, (l) => l)}; }`),
+    '.archify[data-theme="light"] { color-scheme: light; }',
+    '.archify[data-theme="dark"] { color-scheme: dark; }',
+    `@supports (color: light-dark(#000, #fff)) {\n${blocks.map(([selector, , list]) => `  ${selector} { ${declare(themed(list), (l, d) => `light-dark(${l}, ${d})`)}; }`).join('\n')}\n}`,
+    ...blocks.map(([, dark, list]) => `${dark} { ${declare(themed(list), (l, d) => d)}; }`),
+  ];
 }
 
 const keyframes = new Set();

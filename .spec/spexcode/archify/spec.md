@@ -89,7 +89,11 @@ template sync is a re-run; the test fails when the file is stale):
   story, chapters, presentation, the ambient trace animation) could never match and are left out;
 - the palette follows the host's `color-scheme`: every variable that differs between the viewer's two themes
   becomes `light-dark(light, dark)`, a preset's variable falling back to the base theme's as it does in the
-  viewer, and `data-theme` on the box pins one;
+  viewer, and `data-theme` on the box pins one. `light-dark()` is a newer CSS function (Chrome 123): an engine
+  without it keeps a custom property set to it but cannot compute the colour, and every fill comes out black — so
+  the light values are set plainly first, the `light-dark()` ones only under `@supports`, and
+  `data-theme="dark"` sets the dark values outright: a host that sets `data-theme` gets its palette on any engine
+  (gugu's phone app runs Android WebView 113);
 - the box takes the viewer page body's typeface and canvas colour.
 
 `browser.mjs`, an import-free module, carries the two things a host does with an inline diagram.

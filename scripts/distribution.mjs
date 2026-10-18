@@ -262,7 +262,7 @@ const files = new Map([
   [`${gugu}/manifest.json`, json({
     id: 'spexcode',
     name: 'SpexCode',
-    description: 'The spec tree of a task\'s repository beside the task: each node\'s body, drift from the code and diagram. Start a task on a node or cite it; agents get SpexCode\'s skills and share a snapshot of the tree into a group, readable there and on phones.',
+    description: 'The spec tree of a task\'s repository, with drift and diagrams, beside the task. Start a task on a node or cite it; agents get SpexCode\'s skills and share a snapshot of the tree into a group, readable there and on phones.',
     localized: {
       'zh-CN': {
         name: 'SpexCode',

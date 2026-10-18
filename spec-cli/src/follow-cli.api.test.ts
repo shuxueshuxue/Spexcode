@@ -122,6 +122,47 @@ async function waitFor(check: () => boolean | Promise<boolean>, label: string, t
   }
 }
 
+function startBackend(repo: string, env: NodeJS.ProcessEnv, port: number) {
+  const child = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(port)], {
+    cwd: repo, env: { ...env, PORT: String(port) }, detached: process.platform !== 'win32',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let didClose = false
+  const closed = new Promise<void>(resolve => child.once('close', () => { didClose = true; resolve() }))
+  const ready = new Promise<void>((resolve, reject) => {
+    let announced = false, stdout = '', log = ''
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      log = (log + chunk).slice(-32_768)
+      if (announced) return
+      stdout += chunk
+      if (!new RegExp(`^spec-cli supervisor serving on http://\\S+:${port} \\(`, 'm').test(stdout)) return
+      announced = true
+      resolve()
+    })
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => { log = (log + chunk).slice(-32_768) })
+    child.once('error', reject)
+    child.once('close', (code, signal) => {
+      if (!announced) reject(new Error(`watch fixture backend closed before readiness (${code ?? signal})\n${log}`))
+    })
+  }).then(async () => {
+    const health = await fetch(`http://127.0.0.1:${port}/health`)
+    assert.equal(health.status, 200, 'the supervisor announces readiness only after its backend is healthy')
+    await health.body?.cancel()
+  })
+  return {
+    ready,
+    stop: async () => {
+      if (!didClose && child.pid) {
+        try {
+          if (process.platform === 'win32') child.kill('SIGTERM')
+          else process.kill(-child.pid, 'SIGTERM')
+        } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error }
+      }
+      await closed
+    },
+  }
+}
+
 // A follow needs NO backend and no permission — it reads a file ([[session-follow]]). Everything here runs
 // against a port with nothing listening; a `wait` that reached for the board would be visible as the client's
 // local-store fallback notice on stderr.
@@ -165,14 +206,10 @@ test('managed watch registers once, delivers child states, and cancel stops deli
   const parentEnv = { ...base, SPEXCODE_SESSION_ID: WATCHER }
   const childEnv = { ...base, SPEXCODE_SESSION_ID: ID }
   const backendPort = await refusedPort()
-  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(backendPort)], {
-    cwd: repo,
-    env: { ...base, PORT: String(backendPort), SPEXCODE_TMUX: `spex-follow-cli-backend-${backendPort}` },
-    stdio: ['ignore', 'ignore', 'ignore'],
-  })
+  const backend = startBackend(repo, { ...base, SPEXCODE_TMUX: `spex-follow-cli-backend-${backendPort}` }, backendPort)
 
   try {
-    await waitFor(() => fetch(`http://127.0.0.1:${backendPort}/health`).then((response) => response.ok).catch(() => false), 'watch fixture backend did not become healthy')
+    await backend.ready
     const installed = await runCli(['session', 'watch', ID], parentEnv, repo)
     assert.equal(installed.code, 0, installed.stderr)
     assert.equal(installed.stdout.trim(), `watching ${ID}`)
@@ -202,8 +239,7 @@ test('managed watch registers once, delivers child states, and cancel stops deli
     assert.match(unmanaged.stderr, new RegExp(`spex session wait ${ID}`))
     assert.equal(configuredSessionApplication()!.readState(ID)?.status, 'asking')
   } finally {
-    if (backend.exitCode === null) backend.kill('SIGTERM')
-    await once(backend, 'exit').catch(() => {})
+    await backend.stop()
   }
 })
 
@@ -260,11 +296,9 @@ test('a declaring CLI hands the watch delivery to the running backend and return
   const { parentDir, base } = watchPair(home, repo)
   const harness = await watcherHarness(parentDir, /parked/)
   const backendPort = await refusedPort()
-  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(backendPort)], {
-    cwd: repo, env: { ...base, PORT: String(backendPort) }, stdio: ['ignore', 'ignore', 'ignore'],
-  })
+  const backend = startBackend(repo, base, backendPort)
   try {
-    await waitFor(() => fetch(`http://127.0.0.1:${backendPort}/health`).then((response) => response.ok).catch(() => false), 'owner backend healthy', 60_000)
+    await backend.ready
     await waitFor(() => configuredSessionApplication().readPendingMessages(WATCHER).length === 0, 'the relation snapshot handed over', 15_000)
     const started = Date.now()
     const parked = await runCli(['session', 'park', '--note', 'held'], { ...base, SPEXCODE_SESSION_ID: ID, PORT: String(await refusedPort()) }, repo)
@@ -276,8 +310,7 @@ test('a declaring CLI hands the watch delivery to the running backend and return
     const misrouted = await fetch(`http://127.0.0.1:${backendPort}/api/sessions/no-such-session/push`, { method: 'POST' })
     assert.equal(misrouted.status, 404, 'a backend holding no record for the session refuses the wake instead of answering ok')
   } finally {
-    if (backend.exitCode === null) backend.kill('SIGTERM')
-    await once(backend, 'exit').catch(() => {})
+    await backend.stop()
     await harness.close()
   }
 })
@@ -291,14 +324,12 @@ test('a send to a watcher whose harness is holding a watch notice does not wait 
   const { parentDir, base } = watchPair(home, repo)
   const harness = await watcherHarness(parentDir, /parked/)
   const backendPort = await refusedPort()
-  const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(backendPort)], {
-    cwd: repo, env: { ...base, PORT: String(backendPort) }, stdio: ['ignore', 'ignore', 'ignore'],
-  })
+  const backend = startBackend(repo, base, backendPort)
   const childEnv = { ...base, SPEXCODE_SESSION_ID: ID, PORT: String(await refusedPort()) }
   const peer = 'a peer message behind the held notice'
   const owed = () => configuredSessionApplication().readPendingMessages(WATCHER).map((message) => Buffer.from(message.body).toString('utf8'))
   try {
-    await waitFor(() => fetch(`http://127.0.0.1:${backendPort}/health`).then((response) => response.ok).catch(() => false), 'owner backend healthy', 60_000)
+    await backend.ready
     await waitFor(() => owed().length === 0, 'the relation snapshot handed over', 15_000)
     const parked = await runCli(['session', 'park', '--note', 'held'], childEnv, repo)
     assert.equal(parked.code, 0, parked.stderr)
@@ -312,8 +343,7 @@ test('a send to a watcher whose harness is holding a watch notice does not wait 
     await waitFor(() => harness.received.some((text) => text.startsWith(peer)), 'the peer message reaching the parent after the held notice', 20_000)
     assert.ok(harness.received.findIndex((text) => /is parked — held/.test(text)) < harness.received.findIndex((text) => text.startsWith(peer)), 'order is kept')
   } finally {
-    if (backend.exitCode === null) backend.kill('SIGTERM')
-    await once(backend, 'exit').catch(() => {})
+    await backend.stop()
     await harness.close()
   }
 })
@@ -355,11 +385,9 @@ for (const entry of LOCAL_WATCH_COMMITS) {
     const { parentDir, base } = watchPair(home, repo)
     const harness = await watcherHarness(parentDir, entry.notice, { attach: entry.attach })
     const backendPort = await refusedPort()
-    const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(backendPort)], {
-      cwd: repo, env: { ...base, PORT: String(backendPort) }, stdio: ['ignore', 'ignore', 'ignore'],
-    })
+    const backend = startBackend(repo, base, backendPort)
     try {
-      await waitFor(() => fetch(`http://127.0.0.1:${backendPort}/health`).then((response) => response.ok).catch(() => false), 'owner backend healthy', 60_000)
+      await backend.ready
       await waitFor(() => configuredSessionApplication().readPendingMessages(WATCHER).length === 0, 'the relation snapshot handed over', 15_000)
       const started = Date.now()
       const ran = await entry.run({ ...base, PORT: String(await refusedPort()) }, repo)
@@ -370,8 +398,7 @@ for (const entry of LOCAL_WATCH_COMMITS) {
       assert.ok(elapsed < 6_000, `${entry.name} took ${elapsed}ms — it held the watcher's unanswered socket instead of handing the drain to the backend`)
       await waitFor(() => harness.received.some((text) => entry.notice.test(text)), 'the backend delivered the notice', 10_000)
     } finally {
-      if (backend.exitCode === null) backend.kill('SIGTERM')
-      await once(backend, 'exit').catch(() => {})
+      await backend.stop()
       await harness.close()
     }
   })

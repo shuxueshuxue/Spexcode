@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync, chmodSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -46,7 +46,7 @@ async function stop(process: ChildProcess): Promise<void> {
 }
 
 test('YATU: CLI-created parent/child state survives backend restart and delivers a fenced watcher notification', { timeout: 120_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-runtime-production-'))
+  const fixture = fixtureTempDir('spex-runtime-production-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const port = await freePort()
@@ -72,6 +72,7 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
     ...process.env,
     PATH: `${tmuxDir}:${process.env.PATH || ''}`,
     SPEXCODE_HOME: home,
+    SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
     PORT: String(port),
     SPEXCODE_TMUX: `runtime-production-${port}`,
     FAKE_HARNESS_INTERVAL_MS: '30',
@@ -136,9 +137,11 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
     const replay = await request(`/api/session-runtime/${encodeURIComponent(child.id)}/replay`)
     assert.equal(replay.status, 200)
     assert.equal((await replay.json() as { status: string }).status, 'active')
+    // The backend owns the real launch in spex-governed; this synthetic runtime owns a separate namespace.
+    const namespace = 'runtime-production-fixture'
     const bind = async (startToken: string, expectedGeneration?: number) => request(`/api/session-runtime/${encodeURIComponent(parent.id)}/bind`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ namespace: 'spex-governed', runtimeKind: 'fixture', nativeSessionId: 'parent-native', nativeStartToken: startToken, ...(expectedGeneration === undefined ? {} : { expectedGeneration }) }),
+      body: JSON.stringify({ namespace, runtimeKind: 'fixture', nativeSessionId: 'parent-native', nativeStartToken: startToken, ...(expectedGeneration === undefined ? {} : { expectedGeneration }) }),
     })
     const firstBinding = await bind('start-1')
     if (firstBinding.status !== 200) assert.fail(await firstBinding.text())
@@ -153,7 +156,7 @@ test('YATU: CLI-created parent/child state survives backend restart and delivers
     const deliveredKinds: string[] = []
     for (;;) {
       const delivered = await request(`/api/session-runtime/${encodeURIComponent(parent.id)}/dequeue`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ namespace: 'spex-governed', expectedGeneration: 2 }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ namespace, expectedGeneration: 2 }),
       })
       if (delivered.status !== 200) assert.fail(await delivered.text())
       const message = await delivered.json() as { kind: string } | null

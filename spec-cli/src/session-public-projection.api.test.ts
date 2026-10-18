@@ -1,11 +1,11 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -85,7 +85,7 @@ function record(id: string, project: string, pending: unknown, harness = 'claude
 
 test('all public record APIs share pending projection and malformed fail-closed semantics', { timeout: 30_000 }, async (t) => {
   const liveBefore = liveSessionsCensus()
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-public-record-projection-'))
+  const fixture = fixtureTempDir('spex-public-record-projection-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')

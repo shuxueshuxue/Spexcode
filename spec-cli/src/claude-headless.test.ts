@@ -1,11 +1,12 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ClaudeHeadlessController, claudeHeadlessColdRuntime, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { claudeHarness, claudeHeadlessHarness, HARNESSES } from './harness.js'
+import { leaveDeadSocket } from '../test/fixtures/dead-socket.js'
 
 const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
   const deadline = Date.now() + timeoutMs
@@ -38,7 +39,7 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.equal(claudeHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(claudeHeadlessHarness.launchCmd('abc', '/runtime', 'claude-custom'), /claude-headless-run.*abc.*claude-custom/)
   const cleanupId = `cleanup-${process.pid}`
-  writeFileSync(claudeHeadlessSock(cleanupId), 'stale')
+  await leaveDeadSocket(claudeHeadlessSock(cleanupId))
   await claudeHeadlessHarness.cleanupRuntime({ session: cleanupId })   // removal awaits its proof-of-death probe
   assert.equal(existsSync(claudeHeadlessSock(cleanupId)), false, 'adapter teardown removes a stale control socket')
 })
@@ -59,7 +60,7 @@ test('stopped Claude headless skips native interrupt while cold proof still refu
 })
 
 test('controller cold-resumes idle turns, steers the active child, and confirms interrupt', async (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-headless-test-'))
+  const root = fixtureTempDir('spex-headless-test-')
   const runtime = join(root, 'runtime')
   const invocations = join(root, 'invocations.ndjson')
   const emitted = join(root, 'emitted.ndjson')

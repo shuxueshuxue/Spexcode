@@ -1,6 +1,7 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync, readdirSync, renameSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync, readdirSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
@@ -13,6 +14,7 @@ import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt }
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { assertSessionStopSafe } from './host-resources.js'
 import { initializeFreshSessionApplication } from './session-application.js'
+import { leaveDeadSocket } from '../test/fixtures/dead-socket.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
 
@@ -163,7 +165,7 @@ const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void)
 test('Codex turn observer reports only failed native completions with the native timestamp', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-observer-'))
+  const home = fixtureTempDir('spex-codex-turn-observer-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -227,7 +229,7 @@ test('Codex turn observer reports only failed native completions with the native
 
 test('Codex turn observer refuses an unbound detached-v3 thread without falling back to legacy', async () => {
   const previousHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-unbound-'))
+  const home = fixtureTempDir('spex-codex-turn-unbound-')
   process.env.SPEXCODE_HOME = home
   const root = runtimeRoot()
   try {
@@ -258,7 +260,7 @@ test('Codex turn observer refuses an unbound detached-v3 thread without falling 
 
 test('Codex generation observer follows a fork successor without resuming native history', async () => {
   const previousHome = process.env.SPEXCODE_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-identity-observer-'))
+  const home = fixtureTempDir('spex-codex-identity-observer-')
   process.env.SPEXCODE_HOME = home
   const root = runtimeRoot()
   const threadId = 'identity-thread'
@@ -308,7 +310,7 @@ test('Codex generation observer follows a fork successor without resuming native
 test('Codex turn observer reconciles a pre-existing systemError after subscription', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-reconcile-'))
+  const home = fixtureTempDir('spex-codex-turn-reconcile-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -350,7 +352,7 @@ test('Codex turn observer reconciles a pre-existing systemError after subscripti
 test('Codex turn observer drops restart reconciliation when a new turn starts', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-reconcile-race-'))
+  const home = fixtureTempDir('spex-codex-turn-reconcile-race-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -426,7 +428,7 @@ const writeCodexReadinessRecord = (root: string, sessionId: string, threadId: st
 test('codex-headless launch fence joins unique governed ownership and rejects unload or generation replacement', { timeout: 10_000 }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-headless-readiness-'))
+  const home = fixtureTempDir('spex-codex-headless-readiness-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -520,7 +522,7 @@ test('codex-headless launch fence joins unique governed ownership and rejects un
 const runReplacementArchiveCase = async (response: 'success' | 'error') => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), `spex-codex-replacement-${response}-`))
+  const home = fixtureTempDir(`spex-codex-replacement-${response}-`)
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = `replacement-${response}-target`
@@ -567,7 +569,7 @@ const runReplacementArchiveCase = async (response: 'success' | 'error') => {
 test('Codex corrupt-record quarantine archives only an exact orphan native thread', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-orphan-quarantine-'))
+  const home = fixtureTempDir('spex-codex-orphan-quarantine-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -633,7 +635,7 @@ test('Codex corrupt-record quarantine archives only an exact orphan native threa
 test('Codex corrupt-record quarantine locates an orphan on its detached generation', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-orphan-detached-'))
+  const home = fixtureTempDir('spex-codex-orphan-detached-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -700,7 +702,7 @@ test('Codex corrupt-record quarantine locates an orphan on its detached generati
 test('Codex archive ignores a non-returning unrelated read when the exact target is unloaded and descendant-free', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-target-scoped-archive-'))
+  const home = fixtureTempDir('spex-codex-target-scoped-archive-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'unloaded-archive-target'
@@ -750,7 +752,7 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
 test('Codex cold preflight waits through a short app-server census refusal streak', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retry-'))
+  const home = fixtureTempDir('spex-codex-cold-retry-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const root = runtimeRoot()
@@ -817,7 +819,7 @@ async function withNativeThreads(table: NativeRow[], fault: NativeFault, body: (
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const previousCodexHome = process.env.CODEX_HOME
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-subtree-proof-'))
+  const home = fixtureTempDir('spex-codex-subtree-proof-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   // Every row is also a rollout on disk, where the real server keeps it: the dated tree while the thread is
@@ -1344,7 +1346,7 @@ test('Codex stop guard reads the target through its record cwd and refuses witho
 test('Codex archive refuses a shared generation swap during exact target guard before mutation', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-generation-fence-'))
+  const home = fixtureTempDir('spex-codex-generation-fence-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'generation-fence-target'
@@ -1411,7 +1413,7 @@ test('Codex archive never compensates an unconfirmed RPC error on a replacement 
 test('Codex archive refuses an unknown exact loaded target and an unowned archived native descendant', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-target-guard-'))
+  const home = fixtureTempDir('spex-codex-target-guard-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'guarded-archive-target'
@@ -1456,7 +1458,7 @@ test('Codex archive refuses an unknown exact loaded target and an unowned archiv
 test('Codex archive cold-tears down the exact active and archived transitive descendant closure', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-owned-subtree-'))
+  const home = fixtureTempDir('spex-codex-owned-subtree-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'owned-subtree-target'
@@ -1573,7 +1575,7 @@ test('Codex archive rejects duplicate, unowned, reassigned, and late subtree mem
   const runCase = async (mode: 'duplicate' | 'unowned' | 'reassigned' | 'late-before') => {
     const previousHome = process.env.SPEXCODE_HOME
     const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-    const home = mkdtempSync(join(tmpdir(), `spex-codex-subtree-${mode}-`))
+    const home = fixtureTempDir(`spex-codex-subtree-${mode}-`)
     process.env.SPEXCODE_HOME = home
     process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
     const target = `${mode}-target`
@@ -1795,7 +1797,7 @@ test('codex native descendant census includes subAgent sources and follows every
 test('Codex close proof waits through a busy app-server collection response', { timeout: 30_000 }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), `spex-codex-close-census-delay-${process.pid}-`))
+  const home = fixtureTempDir(`spex-codex-close-census-delay-${process.pid}-`)
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'delayed-close-target'
@@ -1831,7 +1833,7 @@ test('Codex close proof waits through a busy app-server collection response', { 
 test('Codex cold retirement proves only target collections and never thread/reads an unrelated loaded sibling', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retirement-'))
+  const home = fixtureTempDir('spex-codex-cold-retirement-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'cold-target'
@@ -1868,7 +1870,7 @@ test('Codex cold retirement proves only target collections and never thread/read
 test('Codex cold retirement rejects missing or non-detached shared owner identity', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retirement-identity-'))
+  const home = fixtureTempDir('spex-codex-cold-retirement-identity-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'cold-identity-target'
@@ -1915,7 +1917,7 @@ test('Codex cold retirement rejects missing or non-detached shared owner identit
 test('Codex cold retirement rejects a generation swap after target guard while collection lists are pending', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retirement-generation-'))
+  const home = fixtureTempDir('spex-codex-cold-retirement-generation-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'cold-generation-target'
@@ -1966,7 +1968,7 @@ test('Codex cold retirement rejects a generation swap after target guard while c
 test('Codex cold proof reads turn presence from the collection census it already performs', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-archive-turn-race-'))
+  const home = fixtureTempDir('spex-codex-archive-turn-race-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'archive-turn-race-target'
@@ -2017,7 +2019,7 @@ test('Codex cold proof reads turn presence from the collection census it already
 test('Codex native interrupt addresses the fresh active turn and waits until it settles', { skip: platform() !== 'linux' }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-interrupt-'))
+  const home = fixtureTempDir('spex-codex-interrupt-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'interrupt-target-thread'
@@ -2056,7 +2058,7 @@ test('Codex native interrupt addresses the fresh active turn and waits until it 
 test('Codex native interrupt treats an unmaterialized thread as having no turn', { skip: platform() !== 'linux' }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-interrupt-unmaterialized-'))
+  const home = fixtureTempDir('spex-codex-interrupt-unmaterialized-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'unmaterialized-interrupt-target'
@@ -2089,7 +2091,7 @@ test('Codex native interrupt treats an unmaterialized thread as having no turn',
 test('Codex cold archive accepts only an explicitly unmaterialized absent native thread', { skip: platform() !== 'linux' }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-unmaterialized-'))
+  const home = fixtureTempDir('spex-codex-cold-unmaterialized-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'unmaterialized-cold-target'
@@ -2130,7 +2132,7 @@ test('Codex cold archive accepts only an explicitly unmaterialized absent native
 test('Codex interrupt waits for an exact generation proof that is still being published', { skip: platform() !== 'linux' }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-interrupt-generation-publication-'))
+  const home = fixtureTempDir('spex-codex-interrupt-generation-publication-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'interrupt-generation-publication-thread'
@@ -2163,7 +2165,7 @@ test('Codex interrupt waits for an exact generation proof that is still being pu
 test('Codex archive re-censuses native descendants after mutation and compensates a late child', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const home = mkdtempSync(join(tmpdir(), 'spex-codex-late-descendant-'))
+  const home = fixtureTempDir('spex-codex-late-descendant-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'archive-race-target'
@@ -2213,7 +2215,7 @@ test('Codex archive re-censuses native descendants after mutation and compensate
 })
 
 test('codex shared probe treats dead PID plus stale socket files as a healthy empty root', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `spex-codex-stale-root-${process.pid}-`))
+  const dir = fixtureTempDir(`spex-codex-stale-root-${process.pid}-`)
   const socketDir = join(dir, 'socket-dir')
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   process.env.SPEXCODE_CODEX_SOCKET_DIR = socketDir
@@ -2221,7 +2223,7 @@ test('codex shared probe treats dead PID plus stale socket files as a healthy em
     const socket = codexAppServerSock(dir)
     writeFileSync(codexAppServerPid(dir), '999999999\n')
     writeFileSync(codexAppServerReceipt(dir), 'detached-v3 999999999 dead 999999999 999999999\n')
-    writeFileSync(socket, 'stale socket path, no listener\n')
+    await leaveDeadSocket(socket)
     assert.deepEqual(await codexSharedRuntimeProbe(dir), { healthy: true, references: [] })
   } finally {
     if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
@@ -2231,7 +2233,7 @@ test('codex shared probe treats dead PID plus stale socket files as a healthy em
 })
 
 test('codex shared probe reads native status without replaying loaded conversation history', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `spex-codex-light-probe-${process.pid}-`))
+  const dir = fixtureTempDir(`spex-codex-light-probe-${process.pid}-`)
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
   const target = 'light-probe-thread'
@@ -2262,7 +2264,7 @@ test('codex shared probe reads native status without replaying loaded conversati
 })
 
 test('codex resource probe reads status only for governed references', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `spex-codex-targeted-probe-${process.pid}-`))
+  const dir = fixtureTempDir(`spex-codex-targeted-probe-${process.pid}-`)
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
   const target = 'governed-thread'
@@ -2302,7 +2304,7 @@ test('codex resource probe reads status only for governed references', async () 
 })
 
 test('codex resource probe completes a draining empty target set without native reads', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `spex-codex-draining-probe-${process.pid}-`))
+  const dir = fixtureTempDir(`spex-codex-draining-probe-${process.pid}-`)
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
   const loaded = 'draining-loaded-thread'
@@ -2332,7 +2334,7 @@ test('codex resource probe completes a draining empty target set without native 
 })
 
 test('codex resource probe rejects a missing, wrong, or replaced detached receipt generation', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `spex-codex-resource-generation-${process.pid}-`))
+  const dir = fixtureTempDir(`spex-codex-resource-generation-${process.pid}-`)
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
   const socket = codexAppServerSock(dir)
@@ -2381,7 +2383,7 @@ test('codex resource probe rejects a missing, wrong, or replaced detached receip
 })
 
 test('Codex mutation guard promotes an exact v3 scope before target close proof', { skip: platform() !== 'linux' }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), `spex-codex-legacy-receipt-${process.pid}-`))
+  const dir = fixtureTempDir(`spex-codex-legacy-receipt-${process.pid}-`)
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
   const socket = codexAppServerSock(dir)
@@ -2447,7 +2449,7 @@ test('codex inject can retry a lost steer as a turn/start with id 5', () => {
 })
 
 test('Codex delivery waits for initialize, accepts a delayed turn response, and carries one native delivery marker', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-delivery-'))
+  const dir = fixtureTempDir('spex-codex-delivery-')
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const previousConfirmMs = process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
@@ -2489,7 +2491,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
 })
 
 test('Codex delivery reports a post-write transport silence as a failed poke and does not replay it', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-delivery-unknown-'))
+  const dir = fixtureTempDir('spex-codex-delivery-unknown-')
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const previousConfirmMs = process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
@@ -2598,7 +2600,7 @@ test('codex launcher autonomy flags map to the backend-owned thread policy', () 
 })
 
 test('codex thread/start sends the pinned launcher policy through the real RPC boundary', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-start-policy-'))
+  const dir = fixtureTempDir('spex-codex-start-policy-')
   const socket = join(dir, 'app-server.sock')
   let startParams: Record<string, unknown> | undefined
   const server = codexRpcFixture((message) => {
@@ -2626,7 +2628,7 @@ test('codex thread/start sends the pinned launcher policy through the real RPC b
 })
 
 test('codexRolloutExists finds a thread by id only once its rollout file lands on disk', () => {
-  const home = mkdtempSync(join(tmpdir(), 'cx-home-'))
+  const home = fixtureTempDir('cx-home-')
   const day = join(home, '2026', '07', '03')
   mkdirSync(day, { recursive: true })
   const tid = '019f2784-0794-78e0-91e9-785b6719c4a6'
@@ -2641,7 +2643,7 @@ test('codexRolloutExists finds a thread by id only once its rollout file lands o
 test('codexRolloutExists is immune to future-dated junk day-dirs above the real rollout', () => {
   // live failure shape: a test planted 2099/12/{29,30,31} in the real CODEX_HOME; those sort above every real
   // day-dir, and a newest-3 cap made the scan miss ALL real rollouts — every codex launch died "no rollout".
-  const home = mkdtempSync(join(tmpdir(), 'cx-home-'))
+  const home = fixtureTempDir('cx-home-')
   const tid = '019f70f2-6182-7a32-ac76-c85910c90fe2'
   for (const d of ['29', '30', '31']) mkdirSync(join(home, 'sessions', '2099', '12', d), { recursive: true })
   writeFileSync(join(home, 'sessions', '2099', '12', '29', 'rollout-2099-12-29-junk-e2e-1.jsonl'), '{}\n')
@@ -2701,7 +2703,7 @@ test('codex app-server socket path is short (sun_path-safe), stable per project,
   assert.match(codexLaunchCommand('s', 'codex --yolo', 'codex', deep), /codex-generation-current "\$dir"/)
   // SPEXCODE_CODEX_SOCKET_DIR relocates the socket base while keeping the per-project hashed filename.
   const prev = process.env.SPEXCODE_CODEX_SOCKET_DIR
-  const override = mkdtempSync(join(tmpdir(), 'cx-base-'))
+  const override = fixtureTempDir('cx-base-')
   try {
     process.env.SPEXCODE_CODEX_SOCKET_DIR = override
     assert.equal(codexAppServerSock(deep), join(override, `spexcode-cx-${sock.match(/spexcode-cx-([0-9a-f]{16})/)![1]}.sock`))
@@ -2730,7 +2732,7 @@ test('launchCmd cmd override wins over the ambient default (claude + codex) — 
 })
 
 test('launcherList + resolveLauncher read the named profiles from .spec/spexcode.json, fail loud on an unknown name', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-launchers-'))
+  const root = fixtureTempDir('spex-launchers-')
   // claude/codex are ORDINARY safe seeded entries (as `spex init` plants them), NOT env-derived built-ins — alongside
   // two custom profiles. harness defaults to claude when omitted; cmd is carried through verbatim.
   mkdirSync(join(root, '.spec'), { recursive: true })
@@ -2764,7 +2766,7 @@ test('launcherList + resolveLauncher read the named profiles from .spec/spexcode
 })
 
 test('no built-in ghosts: an unseeded config lists NO launchers, and claude/codex are not implicitly resolvable', () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-nolaunchers-'))
+  const root = fixtureTempDir('spex-nolaunchers-')
   mkdirSync(join(root, '.spec'), { recursive: true })
   writeFileSync(join(root, '.spec/spexcode.json'), JSON.stringify({ sessions: { maxActive: 4 } }))
   // with no seeded launchers there is nothing to list — the old env-derived built-in claude/codex are gone.
@@ -2784,7 +2786,7 @@ test('no built-in ghosts: an unseeded config lists NO launchers, and claude/code
 })
 
 test('removeManagedBlock strips ONLY the sentinel block, preserving the user bytes', () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-mb-'))
+  const proj = fixtureTempDir('spex-mb-')
   const f = join(proj, 'CLAUDE.md')
   writeFileSync(f, 'my own notes\n\n<!-- spexcode:start -->\nGENERATED CONTRACT\n<!-- spexcode:end -->\n\nmore of my notes\n')
   removeManagedBlock(f, ['<!-- ', ' -->'], true)
@@ -2799,7 +2801,7 @@ test('removeManagedBlock strips ONLY the sentinel block, preserving the user byt
 })
 
 test('managed-block write→remove is a BYTE-FAITHFUL round-trip (preserves the user\'s own whitespace) — the private⇄default cancel-out invariant', () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-mb-rt-'))
+  const proj = fixtureTempDir('spex-mb-rt-')
   const f = join(proj, '.gitignore')
   // user content carrying an INTERNAL blank-line run — the exact shape a global `\n{3,}→\n\n` collapse mangled
   const G = 'node_modules/\nartifacts/\n\n\n# section two\ndist/\n'
@@ -2816,7 +2818,7 @@ test('managed-block write→remove is a BYTE-FAITHFUL round-trip (preserves the 
 })
 
 test('claude clean SURGICALLY removes only spexcode artifacts, sparing user prose + sibling files', () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-clean-'))
+  const proj = fixtureTempDir('spex-clean-')
   // contract file: user prose + our managed block
   const claudeMd = join(proj, 'CLAUDE.md')
   writeFileSync(claudeMd, 'USER PROSE\n\n<!-- spexcode:start -->\ncontract\n<!-- spexcode:end -->\n')
@@ -2852,7 +2854,7 @@ test('claude clean SURGICALLY removes only spexcode artifacts, sparing user pros
 })
 
 test('a SHARED shim file is co-owned: our hook entries merge in and out, the user\'s config is untouched', () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-shim-'))
+  const proj = fixtureTempDir('spex-shim-')
   mkdirSync(join(proj, '.claude'), { recursive: true })
   const shim = join(proj, '.claude', 'settings.json')
   const host = {
@@ -2894,7 +2896,7 @@ test('a SHARED shim file is co-owned: our hook entries merge in and out, the use
 })
 
 test('clean leaves a foreign (non-spexcode) shim file untouched', () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-clean2-'))
+  const proj = fixtureTempDir('spex-clean2-')
   mkdirSync(join(proj, '.claude'), { recursive: true })
   const shim = join(proj, '.claude', 'settings.json')
   writeFileSync(shim, JSON.stringify({ permissions: { allow: ['Bash'] } }))     // user's own, no dispatch marker
@@ -2903,7 +2905,7 @@ test('clean leaves a foreign (non-spexcode) shim file untouched', () => {
 })
 
 test('codex liveness walks the pane descendant tree, NOT the foreground name or the shared sock', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-live-'))
+  const dir = fixtureTempDir('spex-codex-live-')
   const rec = { session: 'spex-1', harnessSessionId: 'codex-thread-1' }
   // FIELD-CONFIRMED shapes (Linux + macmini, codex 0.142.5). HEALTHY: the pane's FOREGROUND command is `bash`
   // (the launch.sh wrapper) for the TUI's whole life — the codex processes live BELOW it:
@@ -3005,7 +3007,7 @@ test('rendezvousListening: tri-state — live listener, proven-dead stale file/a
 })
 
 test('a rendezvous path is a launch-time FACT: new paths are fixed hashes, old stamped paths stay live', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-rv-stamp-'))
+  const home = fixtureTempDir('spex-rv-stamp-')
   const prev = process.env.SPEXCODE_HOME
   const prevTmp = process.env.TMPDIR
   process.env.SPEXCODE_HOME = home
@@ -3068,7 +3070,7 @@ test('cleanupRuntime sweeps a transport it PROVED dead, and never one still answ
   // nothing behind it. THAT residue is ours — close must leave zero socket behind (the acceptance matrix's
   // close row).
   const dead = `unit-cleanup-dead-${process.pid}-${Date.now()}`
-  writeFileSync(rvSock(dead), '')                  // a path nothing listens on → connect ECONNREFUSED = proven dead
+  await leaveDeadSocket(rvSock(dead))              // a real socket with no listener → ECONNREFUSED = proven dead
   await claudeHarness.cleanupRuntime({ session: dead })
   assert.equal(existsSync(rvSock(dead)), false, 'a proven-dead socket is swept')
 
@@ -3112,7 +3114,7 @@ test('paneTreeRunsCodex: codex-ish descendants read live; a bare/unrelated tree 
 // interactive trust) or an old-format sentinel block MUST be stripped before we write, else we append a second
 // key and take codex fully offline (the public-vps outage). Also idempotent, and it leaves OTHER projects alone.
 test('writeCodexTrust strips ALL prior trust for the project (bare + old-format) → no duplicate key, idempotent, other projects untouched', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-cxhome-'))
+  const home = fixtureTempDir('spex-cxhome-')
   const proj = '/tmp/spex-proj-x'
   const hooksJson = `${proj}/.codex/hooks.json`
   const orig = { ...process.env }
@@ -3243,7 +3245,7 @@ test('deliverViaRendezvous: no socket returns a failed poke after its finite ret
 })
 
 test('deliverViaClaudeRendezvous: a fork roster entry gets auth before the reply', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `unit-claude-fork-rv-${process.pid}-`))
+  const dir = fixtureTempDir(`unit-claude-fork-rv-${process.pid}-`)
   const daemon = join(dir, 'daemon')
   mkdirSync(daemon)
   const source = `source-${process.pid}-${Date.now()}`
@@ -3289,8 +3291,8 @@ test('deliverViaClaudeRendezvous: a fork roster entry gets auth before the reply
 })
 
 test('deliverViaClaudeRendezvous: a moved stamp selects its exact successor before source fallback', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `unit-claude-moved-rv-${process.pid}-`))
-  const home = mkdtempSync(join(tmpdir(), `unit-claude-moved-home-${process.pid}-`))
+  const dir = fixtureTempDir(`unit-claude-moved-rv-${process.pid}-`)
+  const home = fixtureTempDir(`unit-claude-moved-home-${process.pid}-`)
   const daemon = join(dir, 'daemon')
   mkdirSync(daemon)
   const source = `source-${process.pid}-${Date.now()}`
@@ -3342,8 +3344,8 @@ test('deliverViaClaudeRendezvous: a moved stamp selects its exact successor befo
 })
 
 test('deliverViaClaudeRendezvous: an unreachable moved successor falls back to the live source socket', async () => {
-  const dir = mkdtempSync(join(tmpdir(), `unit-claude-stale-moved-rv-${process.pid}-`))
-  const home = mkdtempSync(join(tmpdir(), `unit-claude-stale-moved-home-${process.pid}-`))
+  const dir = fixtureTempDir(`unit-claude-stale-moved-rv-${process.pid}-`)
+  const home = fixtureTempDir(`unit-claude-stale-moved-home-${process.pid}-`)
   const daemon = join(dir, 'daemon')
   mkdirSync(daemon)
   const source = `source-${process.pid}-${Date.now()}`
@@ -3427,7 +3429,7 @@ test('a codex thread is created carrying its session identity, and the visible T
 })
 
 test('writeCodexTrust refuses to persist a config.toml that codex could not load, and replaces a good one without changing its mode', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-cxhome-'))
+  const home = fixtureTempDir('spex-cxhome-')
   const file = join(home, 'config.toml')
   const proj = '/tmp/spex-proj-y'
   const orig = { ...process.env }

@@ -1,9 +1,10 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { platform, tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { platform } from 'node:os'
 import { join } from 'node:path'
 import { codexAppServerReceipt, codexAppServerPid, codexHarness, codexHeadlessHarness } from './codex-harness.js'
 import { sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
@@ -62,7 +63,7 @@ test('parseProcStat keeps PID identity separate from process name punctuation', 
 test('resource sweep keeps resolvable owners visible beside an unknown historical harness', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
-  const home = mkdtempSync(join(tmpdir(), 'spex-resource-unknown-harness-'))
+  const home = fixtureTempDir('spex-resource-unknown-harness-')
   const known = `resource-known-${process.pid}`
   const unknown = `resource-unknown-${process.pid}`
   let child: number | null = null
@@ -106,7 +107,7 @@ test('resource sweep keeps resolvable owners visible beside an unknown historica
 })
 
 test('shared runtime spawn records an observed detached process boundary', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-detached-runtime-'))
+  const root = fixtureTempDir('spex-detached-runtime-')
   const pidFile = join(root, 'runtime.pid')
   const receiptFile = join(root, 'runtime.detached.json')
   let identity: { pid: number; startToken: string } | null = null
@@ -142,7 +143,7 @@ test('session stop guard reads only the exact governed target and fails closed o
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const originalSharedRuntimes = codexHarness.sharedRuntimes
-  const home = mkdtempSync(join(tmpdir(), 'spex-target-scoped-stop-home-'))
+  const home = fixtureTempDir('spex-target-scoped-stop-home-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const application = initializeFreshSessionApplication()
@@ -297,7 +298,7 @@ test('resource report retains the full shared projection and reports its sibling
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   const originalSharedRuntimes = codexHarness.sharedRuntimes
-  const home = mkdtempSync(join(tmpdir(), 'spex-full-resource-projection-'))
+  const home = fixtureTempDir('spex-full-resource-projection-')
   process.env.SPEXCODE_HOME = home
   process.env.SPEX_SESSION_DATABASE_PATH = join(home, 'sessions.sqlite')
   const application = initializeFreshSessionApplication()
@@ -341,7 +342,7 @@ test('resource report retains the full shared projection and reports its sibling
 })
 
 test('shared-runtime projection uses live adapter refs and fail-closed process identity', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-resources-'))
+  const home = fixtureTempDir('spex-resources-')
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
   process.env.SPEXCODE_HOME = home
@@ -498,18 +499,27 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     assert.ok(unproven?.findings.includes('turn-presence-unknown'))
     const report = beforeProof
     const shared = unproven
-    assert.ok(shared?.processes.some((proc) => proc.pid === sharedRoot), 'legacy fallback session env does not steal shared-root ownership')
-    assert.ok(shared?.findings.includes('identity-leak:project-control-plane-carries-session-id'))
     const governed = report.owners.find((entry) => entry.kind === 'session' && entry.id === target)
-    assert.ok(governed?.processes.some((proc) => proc.pid === sessionLeaf), 'acting adapter thread remains charged to its session')
     assert.equal(governed?.worktreePath, worktrees.get(target))
     assert.equal(governed?.branch, `node/${target}`)
     assert.equal(governed?.proposal, 'nothing')
-    assert.equal(governed?.reclaim?.eligible, true, 'an exact terminal target stays reclaimable while unrelated unowned refs protect the shared root')
+    assert.equal(report.available, platform() === 'linux')
+    if (report.available) {
+      assert.ok(shared?.processes.some((proc) => proc.pid === sharedRoot), 'legacy fallback session env does not steal shared-root ownership')
+      assert.ok(shared?.findings.includes('identity-leak:project-control-plane-carries-session-id'))
+      assert.ok(governed?.processes.some((proc) => proc.pid === sessionLeaf), 'acting adapter thread remains charged to its session')
+      assert.equal(governed?.reclaim?.eligible, true, 'an exact terminal target stays reclaimable while unrelated unowned refs protect the shared root')
+      const owner = report.owners.find((entry) => entry.kind === 'orphan' && entry.id === orphan)
+      assert.equal(owner?.reclaim?.eligible, true, 'proven absent owner is projected as eligible without creating a mutation token')
+    } else {
+      assert.match(report.unavailableReason ?? '', /host process metrics are unavailable/)
+      assert.deepEqual(shared?.processes, [])
+      assert.deepEqual(governed?.processes, [])
+      assert.equal(governed?.reclaim?.eligible, false, 'unavailable process ownership keeps reclaim closed')
+      assert.ok(governed?.findings.includes('host-process-metrics-unavailable'))
+      assert.equal(report.host.memoryTotalMiB, null)
+    }
     writeFileSync(join(root, 'sessions', target, 'runtime.json'), `${JSON.stringify(record(target, 'thread-target'), null, 2)}\n`)
-
-    const owner = report.owners.find((entry) => entry.kind === 'orphan' && entry.id === orphan)
-    assert.equal(owner?.reclaim?.eligible, true, 'proven absent owner is projected as eligible without creating a mutation token')
 
     await killReparentedFixture(child)
     child = null
@@ -529,7 +539,10 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     registerBackendInstance('superseded-instance', staleBackend.pid!, repoRoot())
     const backendReport = await collectResourceReport({ persist: false })
     const staleOwner = backendReport.owners.find((entry) => entry.kind === 'orphan' && entry.id === 'superseded-instance')
-    assert.ok(staleOwner?.processes.some((proc) => proc.pid === staleBackend!.pid), 'superseded supervisor root stays attributable by its instance registry')
+    assert.equal(backendReport.available, platform() === 'linux')
+    if (backendReport.available)
+      assert.ok(staleOwner?.processes.some((proc) => proc.pid === staleBackend!.pid), 'superseded supervisor root stays attributable by its instance registry')
+    else assert.match(backendReport.unavailableReason ?? '', /host process metrics are unavailable/)
     unregisterBackendInstance('superseded-instance', staleBackend.pid!)
     const staleExited = once(staleBackend, 'exit')
     staleBackend.kill('SIGTERM')
@@ -553,7 +566,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
 test('resource walk does not charge a shared tmux tree to a retired instance token', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
-  const home = mkdtempSync(join(tmpdir(), 'spex-resource-tmux-boundary-'))
+  const home = fixtureTempDir('spex-resource-tmux-boundary-')
   const socket = `spex-resource-tmux-${process.pid}-${Date.now()}`
   const retiredToken = `retired-instance-${process.pid}`
   const foreignToken = `foreign-instance-${process.pid}`

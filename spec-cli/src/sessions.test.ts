@@ -1351,6 +1351,7 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
 
 test('resume admission and interrupted recovery preserve live owners and newer canonical declarations', serial, async (t) => {
   for (const outcome of ['ready', 'declared', 'already-published', 'unknown', 'invalidated', 'open-gone', 'open-live', 'open-unknown'] as const) await t.test(outcome, async () => {
+    const previousCwd = process.cwd()
     const previousHome = process.env.SPEXCODE_HOME
     const previousDatabasePath = process.env.SPEX_SESSION_DATABASE_PATH
     const originalDescriptors = codexHeadlessHarness.sharedRuntimes
@@ -1358,13 +1359,17 @@ test('resume admission and interrupted recovery preserve live owners and newer c
     const originalLaunchReady = codexHeadlessHarness.launchReady
     const originalLaunchCmd = codexHeadlessHarness.launchCmd
     const home = mkdtempSync(join(tmpdir(), 'spex-pending-resume-reentry-'))
+    const project = join(home, 'project')
     process.env.SPEXCODE_HOME = home
     const id = `pending-reentry-${outcome}-${process.pid}`
-    assertIsolatedResumeStore(home, id)
     try {
+      execFileSync('git', ['init', '-q', '-b', 'main', project])
+      execFileSync('git', ['-C', project, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--allow-empty', '-qm', 'fixture'])
+      process.chdir(project)
+      assertIsolatedResumeStore(home, id)
       const admission = outcome === 'open-live' || outcome === 'open-unknown'
       const open = outcome === 'open-gone' || admission
-      writeResumeFixtureRecord(id, process.cwd(), 'true', { status: open ? 'active' : 'archived', stopped: !open || admission, archived: !open, closed_at: open ? undefined : '2026-09-16T00:00:00.000Z' })
+      writeResumeFixtureRecord(id, project, 'true', { status: open ? 'active' : 'archived', stopped: !open || admission, archived: !open, closed_at: open ? undefined : '2026-09-16T00:00:00.000Z' })
       const original = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
       if (!admission) writeFileSync(sessionRecordPath(id), `${JSON.stringify({
         ...original, archived: false, stopped: false, closed_at: undefined,
@@ -1444,6 +1449,7 @@ test('resume admission and interrupted recovery preserve live owners and newer c
       else process.env.SPEXCODE_HOME = previousHome
       if (previousDatabasePath === undefined) delete process.env.SPEX_SESSION_DATABASE_PATH
       else process.env.SPEX_SESSION_DATABASE_PATH = previousDatabasePath
+      process.chdir(previousCwd)
       rmSync(home, { recursive: true, force: true })
     }
   })

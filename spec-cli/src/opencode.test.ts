@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { opencodePluginSource, OPENCODE_TOOL_NAMES } from './opencode.js'
 import { HARNESSES, harnessById, opencodeHarness, opencodeLaunchCommand, deliverViaRendezvous, rvSock } from './harness.js'
 import { migrateJsonSessionRecords, openProjectSessionApplication } from '@spexcode/session-application'
+import { shQuote } from './sh.js'
 
 // [[opencode-harness]] — the MECHANICAL layer: the adapter surface, the tail-branching launch script, and the
 // generated plugin's two roles (hook bridge → dispatch.sh with claude-SHAPED payloads; rendezvous daemon the
@@ -50,7 +51,7 @@ test('launch script: prompt tail → --prompt; --resume marker → --session; --
   delete (env as Record<string, string | undefined>).SPEXCODE_OPENCODE_RESUME_ID
   delete (env as Record<string, string | undefined>).SPEXCODE_OPENCODE_CONTINUE
   const run = (tail: string) =>
-    execFileSync('bash', ['-c', `${opencodeLaunchCommand('opencode --auto')} ${tail}`], { encoding: 'utf8', env })
+    execFileSync('bash', ['-c', `${opencodeLaunchCommand(`${shQuote(stub)} --auto`)} ${tail}`], { encoding: 'utf8', env })
       .split('\n').find((l) => l.startsWith('STUB:'))
   assert.equal(run(`'fix the login bug'`), 'STUB:--auto --prompt fix the login bug rid= cont=')
   assert.equal(run('--resume oc_abc'), 'STUB:--auto --session oc_abc rid=oc_abc cont=')

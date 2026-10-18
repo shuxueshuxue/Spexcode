@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -35,7 +35,11 @@ async function waitFor(check: () => Promise<boolean>, label: string, timeoutMs =
   }
 }
 async function stop(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
+  if ((child.exitCode !== null || child.signalCode !== null)
+    && (!child.stdout || child.stdout.closed) && (!child.stderr || child.stderr.closed)) return
+  // `spex serve` is a supervisor: its exit precedes the backend's graceful drain. That backend inherits
+  // these pipes and can still write the fixture until they close. Wait for the complete stdio lifetime.
+  const closed = once(child, 'close')
   const signal = (name: NodeJS.Signals) => {
     if (child.pid && process.platform !== 'win32') {
       try { process.kill(-child.pid, name); return } catch { /* parent may have already reaped the group */ }
@@ -43,15 +47,20 @@ async function stop(child: ChildProcess): Promise<void> {
     child.kill(name)
   }
   signal('SIGTERM')
-  await Promise.race([once(child, 'exit'), new Promise((resolve) => setTimeout(resolve, 3_000))])
-  if (child.exitCode === null && child.signalCode === null) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = await Promise.race([
+    closed.then(() => false),
+    new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(true), 3_000) }),
+  ])
+  clearTimeout(timer)
+  if (timedOut) {
     signal('SIGKILL')
-    await once(child, 'exit').catch(() => {})
   }
+  await closed
 }
 
 test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-api-'))
+  const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'spex-timeline-api-')))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const id = 'timeline-api-session'
@@ -68,7 +77,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'session.json'), JSON.stringify({ session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'API timeline', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true', launch_owner: '' }, null, 2) + '\n')
     const bin = join(fixture, 'bin'); mkdirSync(bin); writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nexit 1\n'); chmodSync(join(bin, 'tmux'), 0o755)
-    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], { cwd: project, env: { ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, PORT: String(port), SPEXCODE_HOME: home, SPEXCODE_TIMELINE_SEGMENT_BYTES: '1024', SPEXCODE_TMUX: `timeline-api-${port}` }, stdio: 'ignore', detached: true })
+    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], { cwd: project, env: { ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, PORT: String(port), SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'), SPEXCODE_TIMELINE_SEGMENT_BYTES: '1024', SPEXCODE_TMUX: `timeline-api-${port}` }, stdio: 'ignore', detached: true })
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((r) => r.ok).catch(() => false), 'backend health')
     const empty = await fetch(`${base}/api/sessions/${id}/input`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: ' \n\t' }) })
@@ -155,7 +164,7 @@ test('YATU: 128 real session inputs rotate timeline files and API returns the cr
 })
 
 test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate segmented events', { timeout: 120_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-writers-'))
+  const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'spex-timeline-writers-')))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const id = 'timeline-many-backends'
@@ -176,7 +185,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
     writeFileSync(join(dir, 'session.json'), JSON.stringify({ session_id: id, governed: true, worktree_path: project, branch: 'main', title: 'many backend timeline', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '', sortkey: '', createdAt: 1, harness: 'claude', harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture', launch_cmd: 'true', launch_owner: '' }, null, 2) + '\n')
     const bin = join(fixture, 'bin'); mkdirSync(bin); writeFileSync(join(bin, 'tmux'), '#!/bin/sh\n[ "$1" = "-V" ] && { echo "tmux 3.4"; exit 0; }\nexit 1\n'); chmodSync(join(bin, 'tmux'), 0o755)
     const env: NodeJS.ProcessEnv = {
-      ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, SPEXCODE_HOME: home,
+      ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, SPEXCODE_HOME: home, SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
       SPEXCODE_TIMELINE_SEGMENT_BYTES: '1024', SPEXCODE_TMUX: `timeline-writers-${process.pid}-${Date.now()}`,
     }
     delete env.SPEXCODE_API_URL
@@ -223,7 +232,7 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
     const body = await response.json() as { events: Array<{ kind: string; status?: string; proposal?: string | null; note?: string | null }> }
     const events = body.events.filter((event) => event.kind === 'status')
     assert.deepEqual(events.map((event) => [event.status, event.proposal, event.note]), [
-      ['idle', '', ''],
+      ['idle', null, ''],
       ...moves.map(([status, proposal], index) => [status, proposal ?? null, notes[index]]),
     ])
     assert.equal(existsSync(join(dir, 'timeline')), false, 'canonical SQLite events do not recreate legacy timeline files')
@@ -437,12 +446,18 @@ test('YATU: a stopped session is not polled, and its owed message arrives with t
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text: 'owed-while-stopped' }),
     })
     assert.equal(sent.status, 200, await sent.text())
-    // three sweep ticks: a stopped session has no runtime, so nothing may try to hand the message over
-    await new Promise((resolve) => setTimeout(resolve, 3_000))
-    assert.doesNotMatch(log, new RegExp(`delivery to ${id} held`), log)
+    // The unit test for sessionHasPendingDelivery proves an unbound queue is not polled. Here measure the
+    // durable debt and binding directly; elapsed sweep time and the absence of a log are not receipts.
+    assert.equal(binding()?.status, 'unbound', 'accepting a stopped prompt does not bind a runtime')
+    const application = openProjectSessionApplication({ databasePath, locality: () => {} })
+    try {
+      const pending = application.readPendingMessages(id)
+      assert.equal(pending.length, 1, 'the stopped runtime still owes this exact prompt')
+      assert.match(Buffer.from(pending[0].body).toString('utf8'), /owed-while-stopped/)
+    } finally { application.close() }
 
     const resumed = await fetch(`${base}/api/sessions/${id}/resume`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-    assert.equal(resumed.status, 200, await resumed.text())
+    assert.equal(resumed.status, 200, `${await resumed.text()}\n${log}`)
     const capture = () => fetch(`${base}/api/sessions/${id}/capture`).then((r) => r.text())
     await waitFor(() => capture().then((pane) => pane.includes('FAKE-HARNESS REPLY owed-while-stopped')), 'the owed message delivered after resume', 30_000)
     const rebound = binding()

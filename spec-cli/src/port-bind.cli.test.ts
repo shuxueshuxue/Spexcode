@@ -75,7 +75,8 @@ test('public ready lines follow bind and busy listeners publish none', { timeout
     await stop(readyDashboard)
   }
 
-  const backendPort = await occupyPort()
+  // The local backend binds IPv4 loopback. An IPv6 wildcard can coexist with it on macOS.
+  const backendPort = await occupyPort(LOOPBACK_HOST)
   try {
     const backend = await runCli(['serve', '--port', String(backendPort.port)])
     assert.equal(backend.code, 1, backend.stderr)

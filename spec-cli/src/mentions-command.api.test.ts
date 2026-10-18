@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -29,6 +29,14 @@ function capture(child: ChildProcess): () => string {
   child.stdout?.on('data', (chunk) => { output += chunk })
   child.stderr?.on('data', (chunk) => { output += chunk })
   return () => output
+}
+
+function receivedPrompt(path: string, sessionId: string, text: string): boolean {
+  if (!existsSync(path)) return false
+  return readFileSync(path, 'utf8').split('\n').filter(Boolean).some((line) => {
+    const receipt = JSON.parse(line) as { sessionId: string; text: string }
+    return receipt.sessionId === sessionId && receipt.text.includes(text)
+  })
 }
 
 async function stopBackend(child: ChildProcess): Promise<void> {
@@ -92,6 +100,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     SPEXCODE_HOME: home,
+    SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
     SPEXCODE_TMUX: `spex-passive-mention-${process.pid}-${Date.now()}`,
     FAKE_HARNESS_INTERVAL_MS: '80',
   }
@@ -146,6 +155,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
 test('a Command Box @new creates a child under the selected session, optionally with a named launcher', { timeout: 120_000 }, async () => {
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-new-mention-home-'))
+  const replies = join(home, 'replies.ndjson')
   const project = mkdtempSync(join(tmpdir(), 'spex-new-mention-project-'))
   mkdirSync(join(project, '.spec'), { recursive: true })
   writeFileSync(join(project, '.spec/spexcode.json'), JSON.stringify({
@@ -163,8 +173,10 @@ test('a Command Box @new creates a child under the selected session, optionally 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     SPEXCODE_HOME: home,
+    SPEX_SESSION_DATABASE_PATH: join(home, 'sessions.sqlite'),
     SPEXCODE_TMUX: `spex-new-mention-${process.pid}-${Date.now()}`,
     FAKE_HARNESS_INTERVAL_MS: '80',
+    FAKE_HARNESS_REPLIES: replies,
   }
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_SESSION_ID
@@ -203,7 +215,9 @@ test('a Command Box @new creates a child under the selected session, optionally 
       const childRecord = await waitFor(async () => (await request(base, `/api/sessions/${child}`)).body as { parent?: string; launcher?: string; liveness?: string },
         (session) => session.parent === source && session.liveness === 'online', `child ${child} under source`)
       assert.equal(childRecord.parent, source)
-      await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes(text), 'source prompt')
+      // Child creation can outlast the source's entire visible pane at this fixture's tick rate.
+      // Observe the native receiver's receipt rather than a transient terminal viewport.
+      await waitFor(async () => receivedPrompt(replies, source, text), Boolean, 'source prompt')
       return childRecord
     }
 
@@ -222,7 +236,7 @@ test('a Command Box @new creates a child under the selected session, optionally 
     const sent = timeline.events.filter((event) => event.kind === 'sent').at(-1)
     assert.match(sent?.text || '', /from the conversation/)
     assert.equal(sent?.replyVia, 'note', 'the record keeps the terminal-free sender mark')
-    await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes('SEND FROM NOTE FLOW'), 'the note-reply insert rides the command delivery')
+    await waitFor(async () => receivedPrompt(replies, source, 'SEND FROM NOTE FLOW'), Boolean, 'the note-reply insert rides the command delivery')
   } finally {
     for (const id of created.reverse()) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     await stopBackend(backend)

@@ -9,6 +9,7 @@ related:
   - spec-cli/hooks/dispatch.sh
   - spec-cli/src/harness.ts
   - spec-cli/src/harness.test.ts
+  - spec-cli/src/hook-code-path.test.ts
 ---
 
 # hook-shell-mirror
@@ -30,6 +31,8 @@ shell is `tool_name:"Bash"`** + `tool_input.command`. So `hp_code_path` accepts 
 detects a mutation by the `*** … File:` markers themselves (not by an `apply_patch` token), else takes the last
 path-like token (`sed -n 1p f.ts` → `f.ts`). A patch can bundle SEVERAL `*** … File:` markers (a multi-file
 edit), so `hp_code_path` emits ALL touched paths — one per line — and every consuming hook iterates them.
+Patch marker alternatives use portable extended regular expressions, so GNU and BSD `sed` resolve the same
+Add, Update, and Delete paths, including spaces and non-ASCII names.
 Its operation mode is the semantic matcher shared by every harness: `read` accepts only read-shaped payloads,
 `mutate` only edits, and `access` their union. The native shims still bind the common `PreToolUse` event
 broadly; a non-matching payload simply resolves to no path. [[inject-spec-first]] uses `access`, then advances

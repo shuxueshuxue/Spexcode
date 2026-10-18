@@ -259,7 +259,7 @@ const publicRecordInventory = (): PublicRecordInventory => {
   const application = configuredSessionApplication()
   const byId = new Map<string, PublicRecordEntry>()
   const projected = entries.map((entry): PublicRecordEntry => {
-    if (entry.kind !== 'ok' || !entry.raw.governed) return entry
+    if (entry.kind !== 'ok' || !entry.raw.governed || entry.pending) return entry
     const state = application.readState(entry.raw.session_id)
     if (!state) throw new ResourceConflict(`session ${entry.raw.session_id} has no canonical application state after JSON cutover`)
     return {
@@ -661,6 +661,22 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       const probe = probes.get(key)!
       const refs = projectReferences(entry, probe, publicRecords.byId)
       owners.push({ kind: 'shared-runtime', id: key, label: entry.descriptor.label, processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0, budget: { rssMiB: null, idleCpuPercent: null }, controlPlane: { healthy: probe.healthy, refCount: probe.healthy ? probe.references.length : null, ...(probe.error ? { error: probe.error } : {}) }, references: refs, findings: sharedFindings(refs, probe) })
+    }
+    // Missing host metrics do not erase known session identity or its frozen public lifecycle. Keep the
+    // unavailable evidence explicit and reclaim closed; no process, liveness, or budget use is inferred.
+    for (const entry of publicRecords.entries) if (entry.kind === 'ok'
+      && entry.raw.governed && !entry.raw.archived && !unresolvableHarness(entry.raw)) {
+      const rec = entry.raw
+      owners.push({
+        kind: 'session', id: rec.session_id, label: `session ${rec.session_id.slice(0, 8)}`,
+        status: rec.status, liveness: entry.liveness ?? (rec.stopped ? 'offline' : 'unknown'),
+        proposal: rec.proposal, note: rec.note, worktreePath: rec.worktree_path, branch: rec.branch,
+        stopped: rec.stopped, archived: rec.archived,
+        processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0,
+        budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
+        findings: ['host-process-metrics-unavailable'],
+        reclaim: { eligible: false, reason: 'host process metrics are unavailable; exact process ownership cannot be proven' },
+      })
     }
     for (const entry of publicRecords.entries) if (entry.kind === 'corrupt') owners.push({
       kind: 'session', id: entry.sessionId, label: `session ${entry.sessionId.slice(0, 8)}`, status: 'corrupt', liveness: 'unknown',

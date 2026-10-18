@@ -281,7 +281,7 @@ _hp_codex_cmd_path() {
   case "$cmd" in
     *apply_patch*|*applypatch*|*'*** Add File:'*|*'*** Update File:'*|*'*** Delete File:'*)
       [ "$mode" = read ] && return 0
-      printf '%s\n' "$cmd" | sed -n 's/^\*\*\* \(Add\|Update\|Delete\) File: \(.*\)$/\2/p' | sed 's/[[:space:]]*$//'
+      printf '%s\n' "$cmd" | sed -nE 's/^\*\*\* (Add|Update|Delete) File: (.*)$/\2/p' | sed 's/[[:space:]]*$//'
       return 0 ;;
   esac
   local is_mutate=0

@@ -610,7 +610,6 @@ test('no-thread resume replays the authoritative launch payload before later dur
 set -eu
 printf '%s\n' "$$" >> ${JSON.stringify(helperPids)}
 n=0; [ ! -f ${JSON.stringify(invocationCount)} ] || n=$(cat ${JSON.stringify(invocationCount)})
-printf '%s' "$((n + 1))" > ${JSON.stringify(invocationCount)}
 if [ "\${1-}" != "--resume" ]; then
   f=0; [ ! -f ${JSON.stringify(firstTurnCount)} ] || f=$(cat ${JSON.stringify(firstTurnCount)})
   printf '%s' "$((f + 1))" > ${JSON.stringify(firstTurnCount)}
@@ -618,6 +617,9 @@ fi
 printf '%s' "$#" > ${JSON.stringify(invocationArgc)}
 printf '%s' "\${1-}" > ${JSON.stringify(invocationPayload)}
 printf '%s' "\${2-}" > ${JSON.stringify(invocationThread)}
+# The counter is the reader's completion signal, so publish it after the payload.
+printf '%s' "$((n + 1))" > ${JSON.stringify(`${invocationCount}.tmp`)}
+mv ${JSON.stringify(`${invocationCount}.tmp`)} ${JSON.stringify(invocationCount)}
 exec sleep 30
 `)
   chmodSync(helper, 0o755)
@@ -673,7 +675,7 @@ exec sleep 30
 
     rejectPostProofReadiness = true
     pending = resumeSession(id, { force: true })
-    await waitUntil(() => existsSync(invocationPayload), 'adapter first-turn acceptance')
+    await waitUntil(() => existsSync(invocationCount) && readFileSync(invocationCount, 'utf8') === '1', 'adapter first-turn acceptance')
     assert.throws(() => stageHarnessLaunchProof(id, 'thread-recovered', `${resolvedLaunch}\nchanged`),
       /differs from the authoritative resolved launch payload/)
     assert.equal(existsSync(sessionArtifactPath(id, 'launch')), true, 'a mismatched proof consumes nothing')

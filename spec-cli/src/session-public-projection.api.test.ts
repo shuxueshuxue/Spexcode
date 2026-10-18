@@ -296,6 +296,16 @@ test('all public record APIs share pending projection and malformed fail-closed 
       assertLivePending(settings.layout.worktrees.find((row) => row.session === livePendingId), '/api/settings live candidate')
     })
 
+    await t.test('a newer canonical declaration cannot replace the frozen resource owner', async () => {
+      const changed = await fetch(`${base}/api/session-runtime/${pendingId}/state`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'asking', proposal: null, note: 'new declaration held behind the pending fence' }),
+      })
+      assert.equal(changed.status, 200, await changed.text())
+      const refreshed = await (await fetch(`${base}/api/resources`)).json() as { owners: any[] }
+      assertPending(refreshed.owners.find((row) => row.kind === 'session' && row.id === pendingId), '/api/resources newer canonical declaration')
+    })
+
     const assertMalformed = (row: any, surface: string) => {
       assert.ok(row, `${surface} keeps the malformed row`)
       assert.equal(row.status, 'corrupt', `${surface} marks malformed pending as corrupt`)

@@ -155,6 +155,9 @@ outside this session-specific guarantee and remains unattributed rather than bei
 One process is counted once in host totals. Owner totals use proportional set size when the host exposes it,
 falling back loudly to RSS rather than pretending RSS sums are unique memory. Unsupported hosts return an
 explicit unavailable report; platform details stay behind one host-process adapter.
+Unavailable metrics do not remove known governed session owners: their public lifecycle fields remain
+visible, pending owners remain frozen/offline, and reclaim stays ineligible without exact process evidence.
+The pending public projection also wins over a newer canonical declaration until readiness publication.
 
 ### Eligibility and stop guard
 

@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -149,7 +149,7 @@ function codexRpcFixture(threads: Map<string, CodexFixtureThread>, options: { fa
 }
 
 test('close refuses active native turns and missing evidence while retaining records', { timeout: 30_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-codex-rollout-close-'))
+  const fixture = fixtureTempDir('spex-codex-rollout-close-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const codexHome = join(fixture, 'codex-home')

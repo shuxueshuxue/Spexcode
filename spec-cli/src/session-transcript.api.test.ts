@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -64,7 +64,7 @@ async function nextFrame(reader: ReadableStreamDefaultReader<Uint8Array>): Promi
 }
 
 test('YATU: the transcript GET and stream read one native thread through the adapter, and the stream follows appends', { timeout: 90_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-transcript-api-'))
+  const fixture = fixtureTempDir('spex-transcript-api-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const codexHome = join(fixture, 'codex')
@@ -171,7 +171,7 @@ test('YATU: the transcript GET and stream read one native thread through the ada
 })
 
 test('YATU: a launcher-declared config dir routes the transcript read — pinned dir first, launcher name as the fleet-heal fallback, default root otherwise', { timeout: 90_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-transcript-configdir-'))
+  const fixture = fixtureTempDir('spex-transcript-configdir-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const defaultClaudeDir = join(fixture, 'claude-default')   // where the backend's own CLAUDE_CONFIG_DIR points — and where NONE of the threads live

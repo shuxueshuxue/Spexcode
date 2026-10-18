@@ -1,17 +1,16 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   readdirSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 
@@ -48,7 +47,7 @@ const CASES: HarnessCase[] = [
 ]
 
 function gitRepo(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix))
+  const dir = fixtureTempDir(prefix)
   execFileSync('git', ['-C', dir, 'init', '-q', '-b', 'main'])
   execFileSync('git', ['-C', dir, 'config', 'user.email', 'test@example.com'])
   execFileSync('git', ['-C', dir, 'config', 'user.name', 'Test User'])
@@ -97,7 +96,7 @@ test('init → materialize → uninstall forgets every derived artifact for Clau
 
   for (const row of CASES) {
     const proj = gitRepo(`spex-uninstall-${row.id}-`)
-    const userHome = mkdtempSync(join(tmpdir(), `spex-user-${row.id}-`))
+    const userHome = fixtureTempDir(`spex-user-${row.id}-`)
     const spexHome = join(userHome, '.spexcode')
     const codexHome = join(userHome, '.codex-global')
     const piHome = join(userHome, '.pi-agent')

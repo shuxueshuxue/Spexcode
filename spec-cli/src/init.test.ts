@@ -1,8 +1,8 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
@@ -48,10 +48,10 @@ const freePort = () => new Promise<number>((resolvePort, reject) => {
 })
 
 function freshRepo(opts: { trackedContract?: boolean } = {}) {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-init-'))
-  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
-  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const proj = fixtureTempDir('spex-init-')
+  const home = fixtureTempDir('spex-home-')
+  const codex = fixtureTempDir('spex-codex-')
+  const piAgent = fixtureTempDir('spex-pi-')
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
@@ -280,7 +280,7 @@ test('a fresh selected-harness default drives no-choice session creation and pin
 
   // Make the liveness snapshot time out so the real create path leaves the session queued instead of starting
   // an installed Codex. This exercises CLI → bounded create owner → persisted record without replacing the launcher.
-  const fakeBin = mkdtempSync(join(tmpdir(), 'spex-init-bin-'))
+  const fakeBin = fixtureTempDir('spex-init-bin-')
   const fakeTmux = join(fakeBin, 'tmux')
   writeFileSync(fakeTmux, '#!/usr/bin/env node\nsetTimeout(() => {}, 10000)\n')
   chmodSync(fakeTmux, 0o755)
@@ -316,7 +316,7 @@ test('post-checkout defers only the session-owned refresh', { skip: !gitAvailabl
   spex('init', '.', '--harness', 'codex')
   assert.match(readFileSync(join(proj, '.git', 'hooks', 'post-checkout'), 'utf8'), /^#!\/usr\/bin\/env bash\n# spexcode-managed-hook-v1\n/,
     'fresh post-checkout installs a managed snapshot so a later init can refresh it')
-  const bin = mkdtempSync(join(tmpdir(), 'spex-post-checkout-bin-'))
+  const bin = fixtureTempDir('spex-post-checkout-bin-')
   const trace = join(proj, 'post-checkout.trace')
   const fakeSpex = join(bin, 'spex')
   writeFileSync(fakeSpex, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$SPEX_POST_CHECKOUT_TRACE"\n')
@@ -410,7 +410,7 @@ function gitFootprint(proj: string) {
 
 function createSessionWithDefaultLauncher(proj: string, home: string, env: NodeJS.ProcessEnv, refusedPort: number) {
   // the liveness snapshot times out, so the real create path leaves the session queued instead of starting a CLI
-  const fakeBin = mkdtempSync(join(tmpdir(), 'spex-init-bin-'))
+  const fakeBin = fixtureTempDir('spex-init-bin-')
   writeFileSync(join(fakeBin, 'tmux'), '#!/usr/bin/env node\nsetTimeout(() => {}, 10000)\n')
   chmodSync(join(fakeBin, 'tmux'), 0o755)
   return spawnSync(process.execPath, [TSX, CLI, 'session', 'new', 'default launcher probe'], {

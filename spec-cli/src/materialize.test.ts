@@ -1,8 +1,8 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync, statSync, rmSync, readdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync, statSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { seedWorktreeHostState } from './worktree-sources.js'
@@ -31,10 +31,10 @@ function gitAvailable(): boolean {
 // a fresh host repo that tracks its own contract files + .gitignore (internal blank-line run included —
 // the shape whose bytes every round-trip must preserve), adopted via the real `spex init`, data committed.
 function makeHost() {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-rp-'))
-  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
-  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const proj = fixtureTempDir('spex-rp-')
+  const home = fixtureTempDir('spex-home-')
+  const codex = fixtureTempDir('spex-codex-')
+  const piAgent = fixtureTempDir('spex-pi-')
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
@@ -192,9 +192,9 @@ test('content-filter keeps a tracked file\'s exact tail: no final newline or a t
     ['no final newline', 'node_modules\n._*', '# notes\nkeep me'],
     ['trailing blank line', 'node_modules\n\n', '# notes\nkeep me\n\n'],
   ] as const) {
-    const proj = mkdtempSync(join(tmpdir(), 'spex-tail-'))
-    const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
-    const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: mkdtempSync(join(tmpdir(), 'spex-codex-')), SPEXCODE_PI_AGENT_DIR: mkdtempSync(join(tmpdir(), 'spex-pi-')) }
+    const proj = fixtureTempDir('spex-tail-')
+    const home = fixtureTempDir('spex-home-')
+    const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: fixtureTempDir('spex-codex-'), SPEXCODE_PI_AGENT_DIR: fixtureTempDir('spex-pi-') }
     const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
     const spex = (...args: string[]) => execFileSync(process.execPath, [TSX, CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
     g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
@@ -292,10 +292,10 @@ test('content-filter invariant: a host file that BEGINS with blank lines round-t
 // shaped), the clean filter is pre-armed, and the user's own `git add` — the one tracking act, always
 // theirs — stages pristine prose with the block stripped automatically.
 test('contract kind transition: user prose entering a wholly-ours CLAUDE.md un-hides it and arms clean for their add', { skip: !gitAvailable() && 'git not available' }, () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-kind-'))
-  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
-  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const proj = fixtureTempDir('spex-kind-')
+  const home = fixtureTempDir('spex-home-')
+  const codex = fixtureTempDir('spex-codex-')
+  const piAgent = fixtureTempDir('spex-pi-')
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
@@ -383,10 +383,10 @@ test('commit surgery honors GIT_INDEX_FILE: a temporary index (pathspec/-a commi
 // when the worktree (a) ANCHORS a project config layer and (b) that project is TRUSTED and (c) each hook is
 // HASHED. materialize must satisfy all three at the worktree so a fresh-init codex worker's hooks fire.
 test('codex worktree materialize plants the .codex anchor + unconditional project trust + per-hook hashes', { skip: !gitAvailable() && 'git not available' }, () => {
-  const proj = mkdtempSync(join(tmpdir(), 'spex-cxwt-'))
-  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
-  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const proj = fixtureTempDir('spex-cxwt-')
+  const home = fixtureTempDir('spex-home-')
+  const codex = fixtureTempDir('spex-codex-')
+  const piAgent = fixtureTempDir('spex-pi-')
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (cwd: string, ...args: string[]) => execFileSync(process.execPath, [TSX, CLI, ...args], { cwd, encoding: 'utf8', env })
@@ -437,7 +437,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
 // materialized artifacts by re-materialize, and the ONE thing git cannot deliver — the machine-local .spec/spexcode.local.json —
 // is COPIED as a snapshot whose writes die with the worktree. What it seeds it hides.
 test('worktree seeding: tracked data via checkout (never a link), host state copied with write isolation, seeded entry hidden', { skip: !gitAvailable() && 'git not available' }, () => {
-  const main = mkdtempSync(join(tmpdir(), 'spex-seed-'))
+  const main = fixtureTempDir('spex-seed-')
   const g = (...args: string[]) => execFileSync('git', ['-C', main, ...args], { encoding: 'utf8' })
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
@@ -478,10 +478,10 @@ test('worktree seeding: tracked data via checkout (never a link), host state cop
 const DISPATCH = join(SRC, '..', 'hooks', 'dispatch.sh')
 
 function makeBareRepo(prefix: string) {
-  const proj = mkdtempSync(join(tmpdir(), prefix))
-  const home = mkdtempSync(join(tmpdir(), 'spex-home-'))
-  const codex = mkdtempSync(join(tmpdir(), 'spex-codex-'))
-  const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
+  const proj = fixtureTempDir(prefix)
+  const home = fixtureTempDir('spex-home-')
+  const codex = fixtureTempDir('spex-codex-')
+  const piAgent = fixtureTempDir('spex-pi-')
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (cwd: string, ...args: string[]) =>

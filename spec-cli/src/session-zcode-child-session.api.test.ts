@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -46,7 +46,7 @@ async function stop(child: ChildProcess | null): Promise<void> {
 }
 
 test('ZCode child identity is durable, exact, and collision-safe in the graph projection', { timeout: 30_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-zcode-child-link-'))
+  const fixture = fixtureTempDir('spex-zcode-child-link-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const bin = join(fixture, 'bin')

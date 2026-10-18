@@ -1,9 +1,9 @@
+import { fixtureTempDir } from '../test/fixtures/temp-dir.js'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
-import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
@@ -52,7 +52,7 @@ test('interrupt reads the lifecycle and sends the pane key under one record lock
 })
 
 test('YATU: interrupt reaches a pane-backed TUI as its own key, and refuses where no keyboard or turn exists', { timeout: 90_000 }, async () => {
-  const fixture = mkdtempSync(join(tmpdir(), 'spex-interrupt-api-'))
+  const fixture = fixtureTempDir('spex-interrupt-api-')
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const port = await freePort()

@@ -97,9 +97,11 @@ export const share = {
     const documents = Object.fromEntries(await Promise.all(tree.nodes.map(async (n) => [n.id, await readNode(dir, n.path)])))
     const name = `${tree.title ?? basename(dir)}.spexcode`
     const content = new Blob([JSON.stringify({ schema: 'spexcode.gugu-snapshot/v1', ...tree, documents })], { type: 'application/octet-stream' })
-    const earlier = (await gugu.files.list({ chat, folder: '' })).find((entry) => entry.type !== 'folder' && entry.name === name)
-    if (earlier) await gugu.files.replace(earlier, content, { expectedVersion: earlier.version })
-    else await gugu.files.upload({ chat }, new File([content], name, { type: content.type }))
+    // gugu hands a program on `node` the page's `gugu` as a global; this is the one call that uses it.
+    const { files } = globalThis.gugu
+    const earlier = (await files.list({ chat, folder: '' })).find((entry) => entry.type !== 'folder' && entry.name === name)
+    if (earlier) await files.replace(earlier, content, { expectedVersion: earlier.version })
+    else await files.upload({ chat }, new File([content], name, { type: content.type }))
     return { file: name, newVersion: Boolean(earlier), nodes: tree.nodes.length, bytes: content.size }
   },
 }

@@ -14,6 +14,8 @@ related:
   - distribution/gugu/spexcode/spex-command.js
   - distribution/gugu/spexcode/skills/spexcode/SKILL.md
   - distribution/gugu/spexcode/diagram.css
+  - distribution/gugu/spexcode/README.md
+  - distribution/gugu/spexcode/CHANGELOG.md
   - scripts/distribution.mjs
   - scripts/distribution.test.mjs
 ---
@@ -74,6 +76,10 @@ file over it, and the page would read one thing two ways.
 package ships) and `spexcode` — how to work in a repository SpexCode governs, through the same pinned spex: find the
 spec of a file, change code and spec together, `Spec-OK` or `spec ack` when the contract still holds, lint before
 handing back, the local issues, and sharing the tree with a group.
+
+**On the market.** gugu's market (`nmhjklnm/gugu-apps`) lists a version of this folder at a commit of this
+repository: `README.md` (with the pictures in `screenshots/`) is its card's page, and `CHANGELOG.md` must have a
+section for the manifest's version, which is the package's own.
 
 The page's helpers (`focus.js`, `prompt.js`) are classic scripts sharing one global lexical scope, so each publishes
 its namespace from inside a wrapper and leaks nothing else; `app.js` is a module and the archify bundle a module it

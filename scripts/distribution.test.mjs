@@ -224,6 +224,9 @@ test('every package names only files that exist, and the ZCode skill points at t
   assert.ok(existsSync(join(root, 'distribution/zcode/atlas/skills/atlas/atlas.dwf.ts')))
   const manifest = JSON.parse(readFileSync(join(root, 'distribution/gugu/spexcode/manifest.json'), 'utf8'))
   assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.entry)))
+  // The market (gugu-apps) lists a version only when the App's CHANGELOG has a section for it.
+  assert.match(readFileSync(join(root, 'distribution/gugu/spexcode/CHANGELOG.md'), 'utf8'), new RegExp(`^## ${manifest.version.replace(/\./g, '\\.')}$`, 'm'))
+  for (const [, ref] of readFileSync(join(root, 'distribution/gugu/spexcode/README.md'), 'utf8').matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', ref)), ref)
   // gugu refuses a manifest whose description runs over 280 characters, in any language.
   for (const text of [manifest.description, ...Object.values(manifest.localized ?? {}).map((l) => l.description)]) assert.ok(text.length <= 280, `${text.length}: ${text}`)
   for (const tab of manifest.contributes.tabs) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', tab.entry)), tab.entry)

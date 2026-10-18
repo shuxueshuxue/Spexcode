@@ -1,17 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, existsSync, chmodSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { HookPromptCatalog } from './hook-prompts.js'
 import { compileManifest } from './hooks.js'
 import { openProjectSessionApplication } from '@spexcode/session-application'
+import type { SessionLifecycle, SessionProposal } from '@spexcode/spec-core'
 
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
 
-function seedCanonicalSessions(home: string, rows: Array<{ id: string; status: string; proposal?: string | null; note?: string | null }>) {
+function seedCanonicalSessions(home: string, rows: Array<{ id: string; status: SessionLifecycle; proposal?: SessionProposal | null; note?: string | null }>) {
   const databasePath = join(home, 'sessions.sqlite')
   mkdirSync(home, { recursive: true })
   writeFileSync(`${databasePath}.json-migration.json`, '{"version":1}\n')
@@ -659,7 +660,7 @@ for (const harness of ['claude', 'codex'] as const) {
 }
 
 test('codex mark-active resolves by payload thread id despite contaminated SPEXCODE_SESSION_ID', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-codex-'))
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'spex-dispatch-codex-')))
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
   execFileSync('git', ['init', '-q'], { cwd: dir })
@@ -680,8 +681,8 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
     harness_session_id: 'thread_B',
   }, null, 2))
   const databasePath = seedCanonicalSessions(home, [
-    { id: 'id_A', status: 'asking', proposal: 'old', note: 'wrong' },
-    { id: 'id_B', status: 'asking', proposal: 'old', note: 'right' },
+    { id: 'id_A', status: 'awaiting', proposal: 'close', note: 'wrong' },
+    { id: 'id_B', status: 'awaiting', proposal: 'merge', note: 'right' },
   ])
   const r = spawnSync('bash', [dispatch, 'codex', 'PreToolUse'], {
     cwd: dir,
@@ -702,6 +703,9 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
   assert.match(b, /"status": "asking"/, 'runtime metadata remains a stale envelope, never lifecycle authority')
   const canonical = openProjectSessionApplication({ databasePath, locality: () => {} })
   try {
+    assert.equal(canonical.readState('id_A')?.status, 'awaiting', 'the inherited session is untouched')
+    assert.equal(canonical.readState('id_A')?.proposal, 'close')
+    assert.equal(canonical.readState('id_A')?.note, 'wrong')
     assert.equal(canonical.readState('id_B')?.status, 'active')
     assert.equal(canonical.readState('id_B')?.proposal, null)
     assert.equal(canonical.readState('id_B')?.note, null)

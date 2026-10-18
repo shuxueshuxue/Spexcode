@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, opencodeHeadlessWakeCommand } from './opencode-headless.js'
 import { HARNESSES, opencodeHarness, opencodeHeadlessHarness, rvSock } from './harness.js'
+import { shQuote } from './sh.js'
 
 const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
   const deadline = Date.now() + timeoutMs
@@ -68,12 +69,14 @@ test('launch and wake commands preserve the native id capture/resume markers and
   chmodSync(loginShell, 0o755)
   const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, SHELL: loginShell }
   const run = (command: string, tail = '') => execFileSync('bash', ['-c', `${command} ${tail}`], { env })
+  // Login shells may replace PATH. The fixture owns the executable, even on a host with OpenCode installed.
+  const command = `${shQuote(stub)} --auto`
 
-  run(opencodeHeadlessLaunchCommand('opencode --auto'), "'first prompt'")
-  run(opencodeHeadlessLaunchCommand('opencode --auto'), '--resume oc_abc')
-  run(opencodeHeadlessLaunchCommand('opencode --auto'), '--continue')
-  run(opencodeHeadlessWakeCommand('opencode --auto', 'oc_abc', 'wake with spaces'))
-  run(opencodeHeadlessWakeCommand('opencode --auto', null, 'wake by continue'))
+  run(opencodeHeadlessLaunchCommand(command), "'first prompt'")
+  run(opencodeHeadlessLaunchCommand(command), '--resume oc_abc')
+  run(opencodeHeadlessLaunchCommand(command), '--continue')
+  run(opencodeHeadlessWakeCommand(command, 'oc_abc', 'wake with spaces'))
+  run(opencodeHeadlessWakeCommand(command, null, 'wake by continue'))
 
   const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
   assert.deepEqual(calls, [

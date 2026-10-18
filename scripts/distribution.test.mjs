@@ -227,6 +227,10 @@ test('every package names only files that exist, and the ZCode skill points at t
   // The market (gugu-apps) lists a version only when the App's CHANGELOG has a section for it.
   assert.match(readFileSync(join(root, 'distribution/gugu/spexcode/CHANGELOG.md'), 'utf8'), new RegExp(`^## ${manifest.version.replace(/\./g, '\\.')}$`, 'm'))
   for (const [, ref] of readFileSync(join(root, 'distribution/gugu/spexcode/README.md'), 'utf8').matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', ref)), ref)
+  // The market gives agents one line per App, `- <name> (<id>): <first sentence>`, cut at 120 characters (gugu-apps'
+  // GUGU_APPS_LINE_MAX_CHARS; it refuses a version whose line is longer).
+  const first = /^[\s\S]*?(?:\.(?=\s|$)|。)/.exec(manifest.description)?.[0] ?? manifest.description
+  assert.ok([...`- ${manifest.name} (${manifest.id}): ${first}`].length <= 120, first)
   // gugu refuses a manifest whose description runs over 280 characters, in any language.
   for (const text of [manifest.description, ...Object.values(manifest.localized ?? {}).map((l) => l.description)]) assert.ok(text.length <= 280, `${text.length}: ${text}`)
   for (const tab of manifest.contributes.tabs) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', tab.entry)), tab.entry)

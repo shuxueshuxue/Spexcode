@@ -73,7 +73,7 @@ case " $* " in
     fi ;;
   *)
     if [ -e "$SPEX_CREATE_MATERIALIZE_FAILURE" ]; then
-      parent_cmd=$(ps -p "$PPID" -o command= 2>/dev/null || true)
+      parent_cmd=$(ps -ww -p "$PPID" -o command= 2>/dev/null || true)
       case "$parent_cmd" in
         *"cli.ts materialize"*)
           printf '%s\\n' 'fatal: config command "sh -c [test -r "$0" && exec bash "$0" clean "$1"]" C:\\broken\\path' >&2
@@ -82,7 +82,7 @@ case " $* " in
       esac
     fi
     if [ -e "$SPEX_CREATE_KILL_AFTER_STORE" ]; then
-      parent_cmd=$(ps -p "$PPID" -o command= 2>/dev/null || true)
+      parent_cmd=$(ps -ww -p "$PPID" -o command= 2>/dev/null || true)
       case "$parent_cmd" in
         *"cli.ts materialize"*)
           backend_pid=$(ps -o ppid= -p "$PPID" | tr -d ' ')
@@ -91,7 +91,7 @@ case " $* " in
       esac
     fi
     if [ -e "$SPEX_CREATE_BLOCK_RECEIPT_RETIRE" ]; then
-      parent_cmd=$(ps -p "$PPID" -o command= 2>/dev/null || true)
+      parent_cmd=$(ps -ww -p "$PPID" -o command= 2>/dev/null || true)
       case "$parent_cmd" in *"cli.ts materialize"*) chmod 500 "$SPEX_CREATE_CANDIDATE_DIR" ;; esac
     fi
     exec ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" ;;

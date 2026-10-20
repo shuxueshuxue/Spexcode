@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+- A subtitle under the name in gugu's App market, and three screenshots of the App in use on its page.
+- Declares gugu's App API 8 (gugu 0.2.57 or newer): a gugu that does not know subtitles keeps 0.7.0.
+- The App's version is now its own; it still runs spexcode 0.7.0.
+
 ## 0.7.0
 
 - The spec tree of a task's working copy beside the task, with drift, each node's body and diagram.

@@ -106,7 +106,7 @@ job left for them.
 **Generated from one source, written by hand where a person decides.** `npm run build:distribution` writes every
 manifest and every `SKILL.md` from the atlas preset in `.plugins`, read through the same projection that writes
 the init templates, so each package says what adopters are seeded; it adds only the lines a repository without
-SpexCode needs first and the line that hands over the page. Versions follow the repository's version, and the TAG follows from it: while
+SpexCode needs first and the line that hands over the page. Versions follow the repository's version (the PenguinHarness plugin's is dated and the gugu App's is its own, [[gugu-app]]; the spex both run is still this one), and the TAG follows from it: while
 that version is a prerelease every command names npm's `next` tag, the only tag then carrying these verbs;
 once it is a release they name no tag at all, because `latest` is the release and `next` is by then the older
 of the two — a package still pinning `@next` hands an adopter a build older than the one they would get by

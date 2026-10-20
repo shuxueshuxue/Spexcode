@@ -42,7 +42,7 @@ page-only, so no agent sees them — an agent has a shell and runs `spex` itself
 gugu's stamp on the call (`workspaceRoot`), never an argument: a tab beside a task on another of the person's
 computers has its call run on THAT computer, in that task's working copy, and its context names no path at all —
 the tab asks, the stamp decides, and a page cannot point the program at a folder of its choosing. The program runs
-the spex of THIS App's version through npx with the public registry named (`spex-command.js`, generated): what the
+the one spexcode release this App pins (the root version) through npx with the public registry named (`spex-command.js`, generated): what the
 install sheet was consented to and what runs stay one thing. npx runs from the App's own folder and `spex-in.mjs`
 then runs spex in the working copy: inside SpexCode's own repository, whose package is itself called `spexcode`, npx
 run there takes the local package for the one it was asked to fetch and finds no `spex`. The command line holds constants only — the
@@ -79,7 +79,11 @@ handing back, the local issues, and sharing the tree with a group.
 
 **On the market.** gugu's market (`nmhjklnm/gugu-apps`) lists a version of this folder at a commit of this
 repository: `README.md` (with the pictures in `screenshots/`) is its card's page, and `CHANGELOG.md` must have a
-section for the manifest's version, which is the package's own.
+section for the manifest's version. That version is the App's own (`GUGU_APP_VERSION` in the generator), not
+spexcode's: a change to the App alone (its manifest, its page, its pictures) ships as a new App version with no
+spexcode release, and a release that changes the spex the App runs bumps it too — the market refuses a version it
+already has. The manifest declares gugu's App API 8, which its `subtitle` (the market's line under the name) needs: a
+gugu that knows only 7 is handed the App's version before.
 
 The page's helpers (`focus.js`, `prompt.js`) are classic scripts sharing one global lexical scope, so each publishes
 its namespace from inside a wrapper and leaks nothing else; `app.js` is a module and the archify bundle a module it

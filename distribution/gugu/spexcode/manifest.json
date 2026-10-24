@@ -25,8 +25,12 @@
   "categories": [
     "developer"
   ],
-  "version": "0.7.2",
-  "apiVersion": 8,
+  "version": "0.7.3",
+  "apiVersion": 11,
+  "platforms": [
+    "desktop",
+    "phone"
+  ],
   "engines": {
     "gugu": ">=0.2.57"
   },

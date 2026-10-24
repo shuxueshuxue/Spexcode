@@ -25,7 +25,7 @@
   "categories": [
     "developer"
   ],
-  "version": "0.7.1",
+  "version": "0.7.2",
   "apiVersion": 8,
   "engines": {
     "gugu": ">=0.2.57"

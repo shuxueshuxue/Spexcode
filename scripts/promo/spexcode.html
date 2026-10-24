@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1600, initial-scale=1" />
+  <title>SpexCode · 市场推广图</title>
+  <style>
+    :root {
+      --canvas-width: 1600px;
+      --canvas-height: 900px;
+      --brand-dark: #33223d;
+      --brand-light: #6d4d7d;
+      --ink: #faf7ed;
+      --muted: #d5dfd0;
+      --accent: #e9dc9e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: var(--canvas-width); height: var(--canvas-height); overflow: hidden; }
+    body { font-family: "Noto Sans CJK SC", "PingFang SC", sans-serif; color: var(--ink); }
+    .promo {
+      position: relative;
+      width: var(--canvas-width);
+      height: var(--canvas-height);
+      overflow: hidden;
+      background: linear-gradient(120deg, var(--brand-light), var(--brand-dark) 72%);
+    }
+    .brand { position: absolute; left: 96px; top: 100px; }
+    .icon { display: block; width: 112px; height: 112px; }
+    h1 { margin: 60px 0 24px; font-size: 92px; line-height: 1.14; font-weight: 700; letter-spacing: -0.045em; }
+    .message { margin: 0; max-width: 490px; font-size: 44px; line-height: 1.6; font-weight: 500; color: var(--muted); }
+    .name-en { position: absolute; left: 100px; bottom: 96px; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.18em; color: var(--accent); }
+    .product {
+      position: absolute;
+      left: 632px;
+      top: 166px;
+      width: 888px;
+      height: 568px;
+      margin: 0;
+      padding: 18px;
+      overflow: hidden;
+      border: 1px solid rgb(255 255 255 / 0.2);
+      border-radius: 24px;
+      background: rgb(255 255 255 / 0.1);
+      box-shadow: 0 30px 70px rgb(0 0 0 / 0.2);
+    }
+    .screen { height: 530px; overflow: hidden; border-radius: 9px; background: white; }
+    .screen img { display: block; width: 100%; height: auto; }
+  </style>
+  <main class="promo" aria-label="SpexCode：查看规格树追踪代码漂移">
+    <div class="brand">
+      <img class="icon" src="../../distribution/gugu/spexcode/icon.png" alt="" />
+      <h1>SpexCode</h1>
+      <p class="message">查看规格树<br />追踪代码漂移</p>
+    </div>
+    <figure class="product" aria-label="SpexCode真实界面截图">
+      <div class="screen"><img src="../../distribution/gugu/spexcode/screenshots/1.jpg" alt="SpexCode已发布的真实产品画面" /></div>
+    </figure>
+    <p class="name-en">SPEXCODE</p>
+  </main>
+</html>

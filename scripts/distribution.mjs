@@ -27,7 +27,7 @@ const PENGUIN_VERSION = '2026.09.10.1'
 // The gugu App's version is its own: gugu's market lists the App by it, so a change to the App alone (its manifest, its
 // page) ships as a new App version with no spexcode release. The spex it runs is still the root version
 // (spex-command.js): when a release changes that, bump this too — the market refuses a version it already has.
-const GUGU_APP_VERSION = '0.7.1'
+const GUGU_APP_VERSION = '0.7.2'
 
 const preset = seedFiles().get(join('skills', 'atlas', 'spec.md'))
 if (!preset) throw new Error('.spec/spexcode/.plugins/skills/atlas/spec.md is missing')

@@ -1,3 +1,5 @@
+![SpexCode：查看规格树追踪代码漂移](screenshots/promo.png)
+
 # SpexCode for gugu
 
 ![The spec tree beside a task: every node, the drifted ones marked, and the selected node's diagram](screenshots/1.jpg)

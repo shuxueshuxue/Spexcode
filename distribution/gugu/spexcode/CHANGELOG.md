@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- Add promotional artwork as the first market image; preserve the existing screenshots.
+
 ## 0.7.1
 
 - A subtitle under the name in gugu's App market, and three screenshots of the App in use on its page.

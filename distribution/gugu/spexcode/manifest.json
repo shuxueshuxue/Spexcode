@@ -26,7 +26,7 @@
     "developer"
   ],
   "version": "0.7.3",
-  "apiVersion": 11,
+  "apiVersion": 12,
   "platforms": [
     "desktop",
     "phone"

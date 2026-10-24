@@ -284,7 +284,7 @@ const files = new Map([
     categories: ['developer'],
     version: GUGU_APP_VERSION,
     // 11: platforms describes the human UI; earlier strict clients keep the previous App version.
-    apiVersion: 11,
+    apiVersion: 12,
     platforms: ['desktop', 'phone'],
     engines: { gugu: '>=0.2.57' },
     entry: 'index.html',

@@ -224,15 +224,16 @@ test('every package names only files that exist, and the ZCode skill points at t
   assert.ok(existsSync(join(root, 'distribution/zcode/atlas/skills/atlas/atlas.dwf.ts')))
   const manifest = JSON.parse(readFileSync(join(root, 'distribution/gugu/spexcode/manifest.json'), 'utf8'))
   assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.entry)))
-  // The market (gugu-apps) lists a version only when the App's CHANGELOG has a section for it.
-  assert.match(readFileSync(join(root, 'distribution/gugu/spexcode/CHANGELOG.md'), 'utf8'), new RegExp(`^## ${manifest.version.replace(/\./g, '\\.')}$`, 'm'))
-  for (const [, ref] of readFileSync(join(root, 'distribution/gugu/spexcode/README.md'), 'utf8').matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', ref)), ref)
-  // The market gives agents one line per App, `- <name> (<id>): <first sentence>`, cut at 120 characters (gugu-apps'
-  // GUGU_APPS_LINE_MAX_CHARS; it refuses a version whose line is longer).
-  const first = /^[\s\S]*?(?:\.(?=\s|$)|。)/.exec(manifest.description)?.[0] ?? manifest.description
-  assert.ok([...`- ${manifest.name} (${manifest.id}): ${first}`].length <= 120, first)
-  // gugu refuses a manifest whose description runs over 280 characters, in any language.
-  for (const text of [manifest.description, ...Object.values(manifest.localized ?? {}).map((l) => l.description)]) assert.ok(text.length <= 280, `${text.length}: ${text}`)
+  // gugu App model v2: the market lists a version from store/ (about in each language, screenshots, whats-new), never
+  // from README or CHANGELOG; agents read contributes.instructions whole (gugu caps it at 160 characters).
+  const store = join(root, 'distribution/gugu/spexcode/store')
+  for (const tag of [manifest.defaultLocale, ...Object.keys(manifest.localized ?? {})]) {
+    assert.ok(existsSync(join(store, tag === manifest.defaultLocale ? 'about.md' : `about.${tag}.md`)), tag)
+  }
+  assert.ok(existsSync(join(store, 'whats-new.md')))
+  assert.ok(readdirSync(join(store, 'screenshots')).filter((name) => /\.(png|jpe?g)$/.test(name)).length >= 1)
+  assert.equal('description' in manifest, false)
+  assert.ok([...manifest.contributes.instructions].length <= 160, manifest.contributes.instructions)
   for (const tab of manifest.contributes.tabs) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', tab.entry)), tab.entry)
   for (const server of manifest.contributes.mcpServers) assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', server.tools)), server.tools)
   assert.ok(existsSync(join(root, 'distribution/gugu/spexcode', manifest.icon)))

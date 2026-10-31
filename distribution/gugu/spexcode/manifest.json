@@ -1,13 +1,12 @@
 {
   "id": "spexcode",
   "name": "SpexCode",
-  "description": "The spec tree of a task's repository, with drift and diagrams, beside the task. Start a task on a node or cite it; agents get SpexCode's skills and share a snapshot of the tree into a group, readable there and on phones.",
+  "defaultLocale": "en",
   "subtitle": "Spec tree, drift and diagrams",
   "localized": {
     "zh-CN": {
       "name": "SpexCode",
       "subtitle": "规格树、代码漂移与架构图",
-      "description": "任务旁边一格:它所在仓库的规格树——每个节点的正文、和代码的漂移、架构图。在节点上开一条新任务,或者把节点引用进这条任务;agent 拿到 SpexCode 的技能,还能把规格树的快照发进群,群里和手机上都能看。",
       "examples": [
         "给这个仓库画一份规格图",
         "哪些规格和代码漂移了?"
@@ -25,14 +24,14 @@
   "categories": [
     "developer"
   ],
-  "version": "0.7.3",
-  "apiVersion": 12,
+  "version": "0.8.0",
+  "apiVersion": 24,
   "platforms": [
     "desktop",
     "phone"
   ],
   "engines": {
-    "gugu": ">=0.2.57"
+    "gugu": ">=0.3.1"
   },
   "entry": "index.html",
   "icon": "icon.png",
@@ -80,6 +79,7 @@
         "tools": "tools.js"
       }
     ],
-    "skills": "skills"
+    "skills": "skills",
+    "instructions": "Read skill spexcode in a repository with a .spec/ tree; skill atlas draws its diagrams. spexcode__share puts the tree into a group."
   }
 }

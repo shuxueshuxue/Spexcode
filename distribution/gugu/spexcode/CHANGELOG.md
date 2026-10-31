@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+
+- gugu App model v2 (App interface 24): `description` gives way to `subtitle` and `contributes.instructions`; the market page reads `store/` (about, screenshots, whats-new).
+
 ## 0.7.3
 
 - Declare desktop and phone support for the human interface (App API 12).

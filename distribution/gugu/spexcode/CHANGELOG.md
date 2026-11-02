@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+
+- App interface 25: the tab reads its session's working copy from `ctx.workspace` and watches `.spec/` with `files.onChanged({ workspace, folder: '.spec' })`.
+
 ## 0.8.0
 
 - gugu App model v2 (App interface 24): `description` gives way to `subtitle` and `contributes.instructions`; the market page reads `store/` (about, screenshots, whats-new).

@@ -326,8 +326,8 @@ function guguPage({ file = null } = {}) {
     } })),
     getContext: async () => (file
       ? { locale: 'en', themeMode: 'light', capabilities: ['files:read'], chat: { id: 'c1' }, file }
-      : { locale: 'en', themeMode: 'light', capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'], session: { id: 'sA', root: '/A', projectId: 'pA' } }),
-    onContextChanged: (fn) => { hooks.context = (next) => { stamped = next.session?.root ?? stamped; fn(next) } },
+      : { locale: 'en', themeMode: 'light', capabilities: ['files:read', 'agents:read', 'agents:control', 'agents:tools'], workspace: { id: 'session:sA', sessionId: 'sA', root: '/A', projectId: 'pA' } }),
+    onContextChanged: (fn) => { hooks.context = (next) => { stamped = next.workspace?.root ?? stamped; fn(next) } },
     onCommand: (fn) => { hooks.command = fn },
     onAgentsChanged() {},
     listAgents: async () => [],
@@ -368,7 +368,7 @@ test('the gugu App reads the tree one read at a time, and once more for what cha
 test('the gugu App drops a read that comes back after the tab moved to another task', async () => {
   const p = guguPage()
   await p.settle()
-  p.hooks.context({ session: { id: 'sB', root: '/B', projectId: 'pB' } })
+  p.hooks.context({ workspace: { id: 'session:sB', sessionId: 'sB', root: '/B', projectId: 'pB' } })
   await p.settle()
   await p.answer('graph') // task A's tree, after the tab moved to B
   assert.deepEqual(p.drawn(), [], 'A\'s tree is not drawn under B')

@@ -62,7 +62,7 @@ let t = WORDS.en
 let context = null
 let renderDiagram = null
 let markdown = null
-let place = { session: null, root: null, project: null }
+let place = { session: null, workspace: null, root: null, project: null }
 let tree = { byId: new Map(), roots: [] }
 let current = null
 let unwatch = null
@@ -321,11 +321,12 @@ function scheduleLoad() {
 
 // The session this tab sits beside: its working copy, its project, and the watch on that working copy's `.spec/`.
 function bind(next) {
-  const session = next.session ?? null
-  if (session?.id === place.session && (session?.root ?? null) === place.root) return false
+  // A session's working copy (ctx.workspace with a sessionId); a page opened on a project's file has no session here.
+  const work = next.workspace?.sessionId ? next.workspace : null
+  if ((work?.sessionId ?? null) === place.session && (work?.root ?? null) === place.root) return false
   unwatch?.()
   unwatch = null
-  place = { session: session?.id ?? null, root: session?.root ?? null, project: session?.projectId ?? null }
+  place = { session: work?.sessionId ?? null, workspace: work?.id ?? null, root: work?.root ?? null, project: work?.projectId ?? null }
   // A read still out was for the place left behind: when it comes back it is dropped, never drawn here.
   loadSeq += 1
   tree = { byId: new Map(), roots: [] }
@@ -333,8 +334,8 @@ function bind(next) {
   open.clear()
   // Only a working copy on this computer is watched (`root`); beside a task on another computer, Refresh reads again.
   if (place.root && has('files:read')) {
-    unwatch = window.gugu.files.onChanged({ session: place.session }, (change) => {
-      if (change.kind === 'resync' || change.changes?.some((c) => c.path.startsWith('.spec/'))) scheduleLoad()
+    unwatch = window.gugu.files.onChanged({ workspace: place.workspace, folder: '.spec' }, (change) => {
+      if (change.kind === 'resync' || change.changes?.length) scheduleLoad()
     })
   }
   return true

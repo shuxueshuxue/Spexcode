@@ -1,1 +1,1 @@
-A new product page in gugu: screenshots, an About you can expand in place, and what is new in this version; agents read one line SpexCode writes for them. Needs a gugu with App interface 24.
+Follows the working copy of the task it sits beside and refreshes when anything under .spec/ changes. Needs a gugu with App interface 25.

@@ -12,7 +12,7 @@ import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, defaultL
 import { materialize } from './materialize.js'
 import { parseParentDirective, stripRefSigil } from './mentions.js'
 import { resolveSession } from './session-selectors.js'
-import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, isSessionWorkLifecycle, parseSessionLifecycle, parseSessionProposal, resumedSessionLifecycle, type PublicRecordEntry, type SessionLifecycle, type SessionWorkLifecycle, type SessionProposal } from '@spexcode/spec-core'
+import { mainBranch, mainRoot, mainCheckout, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionArtifactPath, listSessionIds, readRecordEntry, readPublicRecordEntry, envSessionId, isSessionWorkLifecycle, parseSessionLifecycle, parseSessionProposal, resumedSessionLifecycle, type PublicRecordEntry, type SessionLifecycle, type SessionWorkLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles, sessionUploads, type SessionUpload } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { readSessionWidgets, type SessionWidget } from './session-widgets.js'
@@ -2479,7 +2479,7 @@ async function prepareSession(prompt: string, parentage: CreateParentage, launch
           throw new SessionCreateError('session_create_failed', phase, `session-create base does not name a commit: ${base}`, 400)
         }
       }
-      const branch = `${readConfig(dirname(gitCommonDir())).branchPrefix ?? 'node/'}${slug}`
+      const branch = `${readConfig(mainCheckout()).branchPrefix ?? 'node/'}${slug}`
       const path = join(root, '.worktrees', slug)
       const spec = ref ? launchSpecs?.find((node) => node.id === ref) : undefined
       const suffix = (spec ? `\n\nThe spec node \`${ref}\` is your ground truth — read its spec at ${join(path, spec.path)}.` : '')

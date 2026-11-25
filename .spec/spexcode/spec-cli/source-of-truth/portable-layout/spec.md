@@ -102,7 +102,12 @@ first NUL-delimited primary entry from `git worktree list --porcelain -z`. A met
 to be inside the working tree. The answer is identical from the primary checkout and its linked worktrees,
 which a harness keying a per-PROJECT artifact to the root checkout uses — e.g.
 Codex's hook shim + trust materialize at `mainCheckout(proj)`, not the worktree (see [[harness-adapter]]).
-The common-dir and toplevel queries are memoized by their resolved input path for the process lifetime: the
+Layout/graph overlays, host project browsing and registration, adoption branch detection, and session
+branch-prefix policy all use this same primary checkout. A submodule is its own project: its superproject's
+metadata directory and branch cannot supply its configuration or project identity. Shell hook runtime paths
+and configuration fingerprints resolve the same checkout, including when invoked from a linked worktree.
+Primary-checkout resolution is memoized by common directory, so reading each session artifact does not
+repeat Git discovery. The common-dir and toplevel queries are memoized by their resolved input path for the process lifetime: the
 no-argument common-dir query keys itself by the current working directory, so one process can deliberately
 move between isolated repositories without inheriting another checkout's identity. Git's answer for a live
 checkout is stable while that checkout exists, and one render must not fork the same identity probe once per

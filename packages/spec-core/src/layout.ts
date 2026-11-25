@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { git, repoRoot, gitA, gitAbortError, currentGitBuildAbortSignal, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, withGitAbortSignal, type NodeOp } from './git.js'
+import { git, primaryCheckout, repoRoot, gitA, gitAbortError, currentGitBuildAbortSignal, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, withGitAbortSignal, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
 import { encodeProject, projectRuntimeRoot } from './project-store.js'
@@ -251,20 +251,7 @@ export function mainBranch(): string {
 // materialize here while AGENTS.md/skills stay per-worktree — see [[harness-adapter]] (harness.ts).
 export function mainCheckout(proj?: string): string {
   const gcd = proj ? commonDirFor(proj) : gitCommonDir()
-  // Submodules record their worktree relative to the common dir; their worktree-list primary
-  // entry can name the metadata directory instead. Read that explicit mapping first.
-  let worktree: string
-  try {
-    worktree = git(['config', '--file', join(gcd, 'config'), '--get', 'core.worktree']).trim()
-  } catch (error) {
-    if ((error as { status?: number }).status !== 1) throw error
-    worktree = ''
-  }
-  if (worktree) return resolve(gcd, worktree)
-  const primary = git(['-C', proj ?? process.cwd(), 'worktree', 'list', '--porcelain', '-z'])
-    .split('\0')[0]
-  if (!primary.startsWith('worktree ')) throw new Error('cannot resolve the primary Git checkout')
-  return primary.slice('worktree '.length)
+  return primaryCheckout(proj ?? process.cwd(), gcd)
 }
 
 // @@@ main root - identity checks need creation's configured-main answer without the record/overlay work in resolveLayout.
@@ -297,8 +284,7 @@ export function mainRoot(proj?: string): string {
 // proj-aware for `spex init <dir>` / materialize(proj); cwd-based default for the hooks/board. The shell
 // hooks mirror this as hp_runtime_dir.
 export function runtimeRoot(proj?: string): string {
-  const gcd = proj ? commonDirFor(proj) : gitCommonDir()
-  return projectRuntimeRoot(gcd)
+  return projectRuntimeRoot(mainCheckout(proj))
 }
 // the per-WORKTREE materialize slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
 // products that are a pure function of ONE tree's .plugins (hooks-manifest, content-hash, plugin-folders).
@@ -641,7 +627,7 @@ async function layoutDeltas(paths: string[], main: string, mainRef: string, main
 
 export async function resolveLayout(options: { activeSessionIds?: readonly string[] } = {}): Promise<Layout> {
   const root = repoRoot()
-  const main = dirname(gitCommonDir())   // the main checkout — same answer from main OR any linked worktree
+  const main = mainCheckout()
   const cfg = readConfig(main)
   const base = mainBranch()
   const convention: Convention = {

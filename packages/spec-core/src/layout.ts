@@ -246,12 +246,25 @@ export function mainBranch(): string {
 }
 
 // the MAIN checkout (the root working tree) for a project — the SAME answer from main OR any linked worktree
-// (dirname of the shared git common dir). Codex reads a LINKED worktree's PROJECT hooks from the root checkout's
+// (including gitfile checkouts). Codex reads a LINKED worktree's PROJECT hooks from the root checkout's
 // `.codex` (codex-rs hooks_config_folder override), NOT the worktree's, so the codex hooks shim + trust
 // materialize here while AGENTS.md/skills stay per-worktree — see [[harness-adapter]] (harness.ts).
 export function mainCheckout(proj?: string): string {
   const gcd = proj ? commonDirFor(proj) : gitCommonDir()
-  return dirname(gcd)
+  // Submodules record their worktree relative to the common dir; their worktree-list primary
+  // entry can name the metadata directory instead. Read that explicit mapping first.
+  let worktree: string
+  try {
+    worktree = git(['config', '--file', join(gcd, 'config'), '--get', 'core.worktree']).trim()
+  } catch (error) {
+    if ((error as { status?: number }).status !== 1) throw error
+    worktree = ''
+  }
+  if (worktree) return resolve(gcd, worktree)
+  const primary = git(['-C', proj ?? process.cwd(), 'worktree', 'list', '--porcelain', '-z'])
+    .split('\0')[0]
+  if (!primary.startsWith('worktree ')) throw new Error('cannot resolve the primary Git checkout')
+  return primary.slice('worktree '.length)
 }
 
 // @@@ main root - identity checks need creation's configured-main answer without the record/overlay work in resolveLayout.

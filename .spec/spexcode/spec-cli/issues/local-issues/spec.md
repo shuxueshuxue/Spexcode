@@ -7,6 +7,7 @@ code:
   - spec-cli/src/localIssues.ts
 related:
   - spec-cli/templates/hooks/post-merge
+  - spec-cli/src/localIssues-git.test.ts
 ---
 
 # local-issues
@@ -114,7 +115,7 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   land durably — the author's own branch has
   already merged, so an issue opened then could never ride it; committed to the trunk directly, it persists.
 - **Only the trunk checkout may commit that write — a linked-worktree backend must not fabricate commits on a
-  main it doesn't own.** Because *every* backend resolves the store to `dirname(git-common-dir)` (the shared main),
+  main it doesn't own.** Because *every* backend resolves the store to `mainCheckout()` (the shared main),
   a backend serving a linked worktree — a dev worktree's `spex serve`, a dispatched **e2e** rig — would otherwise
   `git commit` a stray issue onto the **real, live** main working tree: advancing it under whoever is there and
   racing its `index.lock`. Trunk-scoping is right and stays (issues are not code-bound, so they belong on the one
@@ -122,7 +123,8 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   write is gated by one deterministic predicate — `repoRoot() === mainCheckout()`, i.e. this process's own root
   IS the trunk checkout. True for the primary backend and for a throwaway **clone** (its own `.git`, its own
   disposable main — never the real one); **false only for a linked-worktree backend**, exactly the footgun. When
-  false the commit is **refused, loud, with the repair** — never a silent write onto someone else's main. The
+  false the commit is **refused before acquiring the store lock or preparing a mutation, loud, with the repair** — never a silent write onto someone else's main. A submodule's primary checkout satisfies the same predicate;
+  its `.git` pointer file is not a linked-worktree identity. The
   post-merge nudge does NOT satisfy the predicate, and assuming it did was a real defect. Landing is one
   `--no-ff` merge made in a **temporary detached worktree** of the source branch, which is then fast-forwarded
   into the trunk, so the `merge node/<id>:` commit — the only subject the hook reacts to — is authored from a
@@ -143,7 +145,9 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
   working tree showing phantom deletions, and a dedicated non-branch ref would forfeit working-tree visibility and
   normal push/pull sync, so it is a redesign of the read side too, not this node's mechanism patch.)
 - **Writes are serialized + fast, so a burst can't corrupt the local issue store.** The whole read-mutate-write-commit of
-  one thread runs under a single cross-process **store lock** (an atomic `.git` dir-lock, stale-stolen), so
+  one thread runs under a single cross-process **store lock** (an atomic `spexcode-forum.lock` directory in the
+  Git common directory, stale-stolen). Resolve this directory through Git, including when `.git` is a pointer
+  file; preserve the lock name so old and new writers in ordinary repositories still exclude one another. Thus
   concurrent writers can neither collide on the repo index nor lose a racing reply (last-writer-wins is
   impossible — each read is under the lock). The commit itself is **`--no-verify`**: the file is data,
   structurally invisible to lint, and the commit is provably a single `.spec/.issues/` path, so running the

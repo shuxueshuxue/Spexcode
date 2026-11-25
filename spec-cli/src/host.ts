@@ -17,7 +17,7 @@ import { dirname, join, basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fetchBypassingLoopbackProxy } from './loopback-transport.js'
 import { spexcodeHome, encodeProject, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
-import { git } from '@spexcode/spec-core'
+import { git, mainCheckout } from '@spexcode/spec-core'
 import { serveStatic, resolveDistDir } from './gateway.js'
 import { endpointRecordPath, readEndpointRecord, type EndpointRecord } from './endpoint-record.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
@@ -86,7 +86,7 @@ function existingDirectory(dir: string): string {
 }
 
 function gitProjectRoot(dir: string): string | null {
-  try { return dirname(git(['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()) }
+  try { return mainCheckout(dir) }
   catch { return null }
 }
 

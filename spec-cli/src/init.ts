@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameS
 import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { gitBinary, parseFrontmatter, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
+import { gitBinary, mainCheckout, parseFrontmatter, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
 import { resolveHarnessTargets, partitionHarnesses, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
@@ -88,8 +88,7 @@ function resolveHooksDir(dir: string): string | null {
 // turn that feature branch into trunk).
 function adoptionMainBranch(dir: string): string {
   try {
-    const common = execFileSync(gitBinary(process.env), ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
-    const branch = execFileSync(gitBinary(process.env), ['-C', dirname(common), 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
+    const branch = execFileSync(gitBinary(process.env), ['-C', mainCheckout(dir), 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
     if (branch) return branch
   } catch { /* render the one product-level repair below */ }
   const error = new Error('cannot determine the source-of-truth branch at adoption — check out the trunk in the root checkout, or set "mainBranch" in .spec/spexcode.json before re-running `spex init`')

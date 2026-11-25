@@ -16,7 +16,7 @@
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join, dirname, resolve as resolvePath } from 'node:path'
 import { git, repoRoot } from '@spexcode/spec-core'
-import { mainCheckout, envSessionId, readConfig } from '@spexcode/spec-core'
+import { mainCheckout, gitCommonDir, envSessionId, readConfig } from '@spexcode/spec-core'
 import { dispatchNewMentions, parseMentions, type DispatchOutcome } from './mentions.js'
 import type { Issue, IssueRelation, IssueRelationType, Reply } from './issues.js'
 
@@ -39,7 +39,7 @@ const list = (v: string | undefined): string[] =>
   v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []
 
 // @@@ where a store write lands — ONE deterministic rule ([[local-issues]] "only the trunk checkout may
-// commit"). Every backend resolves the store to `mainCheckout()` (dirname of the shared git-common-dir), so a
+// commit"). Every backend resolves the store to `mainCheckout()`, so a
 // backend serving a LINKED WORKTREE would git-commit a stray issue onto the REAL, live main — dirtying it and
 // racing its index.lock. The rule:
 //   1. SPEXCODE_ISSUES_DIR override → a DISPOSABLE store of plain files (no git, no shared main); the e2e/test
@@ -200,10 +200,10 @@ function uniqueId(concern: string): string {
 // the migration race the lock exists to close.
 let lockHeld = false   // re-entrancy guard so ensureStoreMigrated() no-ops when reached from inside a hold
 function withStoreLock<T>(fn: () => T): T {
-  // the disposable store locks inside its own dir; the trunk store locks in the shared `.git` (one lock name
+  // the disposable store locks inside its own dir; the trunk store locks in the shared Git common dir (one lock name
   // across every worktree of the clone, so all writers of the SAME real store mutually exclude).
   const override = overrideStoreDir()
-  const lock = override ? join(override, '.spexcode-issues.lock') : join(mainCheckout(), '.git', 'spexcode-forum.lock')
+  const lock = override ? join(override, '.spexcode-issues.lock') : join(gitCommonDir(), 'spexcode-forum.lock')
   mkdirSync(dirname(lock), { recursive: true })   // parent must exist for the atomic mkdir-acquire (a no-op for .git)
   for (let i = 0; ; i++) {
     try { mkdirSync(lock); break }                                   // atomic acquire
@@ -278,7 +278,6 @@ function writeStoreBytes(p: Issue, message: string): boolean {
     writeFileSync(f, data)
     return true
   }
-  requirePrimaryStore('write a local issue')              // a linked-worktree backend must NOT commit onto the real main
   const root = mainCheckout()
   const rel = `${LOCAL_STORE_REL}/${p.id}.md`
   mkdirSync(join(root, LOCAL_STORE_REL), { recursive: true })
@@ -313,6 +312,7 @@ export function commitTrunkData(relPath: string, message: string): 'committed' |
 // current thread, never a stale copy. A pre-rename store migrates first (before the lock — ensure takes it).
 // `changed: false` = the store already held exactly this state (see writeStoreFile) — success, nothing committed.
 function commitStore(message: string, prepare: () => Issue): { issue: Issue; changed: boolean } {
+  if (!overrideStoreDir()) requirePrimaryStore('write a local issue')
   ensureStoreMigrated()
   return withStoreLock(() => {
     const p = prepare()

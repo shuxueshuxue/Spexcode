@@ -9,6 +9,7 @@ code:
   - packages/spec-core/src/layout.ts#layoutDeltas
   - packages/spec-core/src/layout.ts#mainRoot
   - packages/spec-core/src/layout.ts#mainBranch
+  - packages/spec-core/src/layout.ts#mainCheckout
   - packages/spec-core/src/layout.ts#readJsonConfig
   - packages/spec-core/src/layout.ts#readUploadPolicy
   - packages/spec-core/src/layout.ts#isAdopted
@@ -95,10 +96,18 @@ branch as trunk. This single resolution is surfaced two ways downstream — `GET
 for the dashboard and `spex internal trunk` (one line, for shell consumers like the [[main-guard]] pre-commit hook,
 which asks "is HEAD the trunk?" instead of hardcoding `main`). Both resolve via the shared git **common**
 dir, so they answer identically from the main checkout, a linked worktree, or a commit hook:
-`mainCheckout()` exposes the root working tree itself
-(`dirname` of the common dir), which a harness keying a per-PROJECT artifact to the root checkout uses — e.g.
+`mainCheckout()` exposes the root working tree itself. It resolves an explicit `core.worktree` relative to
+the common directory (including submodule gitfiles and configured separate gitdirs); otherwise it uses the
+first NUL-delimited primary entry from `git worktree list --porcelain -z`. A metadata directory is not assumed
+to be inside the working tree. The answer is identical from the primary checkout and its linked worktrees,
+which a harness keying a per-PROJECT artifact to the root checkout uses — e.g.
 Codex's hook shim + trust materialize at `mainCheckout(proj)`, not the worktree (see [[harness-adapter]]).
-The common-dir and toplevel queries are memoized by their resolved input path for the process lifetime: the
+Layout/graph overlays, host project browsing and registration, adoption branch detection, and session
+branch-prefix policy all use this same primary checkout. A submodule is its own project: its superproject's
+metadata directory and branch cannot supply its configuration or project identity. Shell hook runtime paths
+and configuration fingerprints resolve the same checkout, including when invoked from a linked worktree.
+Primary-checkout resolution is memoized by common directory, so reading each session artifact does not
+repeat Git discovery. The common-dir and toplevel queries are memoized by their resolved input path for the process lifetime: the
 no-argument common-dir query keys itself by the current working directory, so one process can deliberately
 move between isolated repositories without inheriting another checkout's identity. Git's answer for a live
 checkout is stable while that checkout exists, and one render must not fork the same identity probe once per

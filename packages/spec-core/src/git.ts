@@ -9,6 +9,29 @@ import { processStartToken } from './process-identity.js'
 
 const US = '\x1f', RS = '\x1e'
 
+// Common metadata can live outside the checkout (submodules and separate gitdirs).
+const primaryCheckoutsByCommon = new Map<string, string>()
+export function primaryCheckout(root: string, common: string): string {
+  const known = primaryCheckoutsByCommon.get(common)
+  if (known) return known
+  let worktree: string
+  try {
+    worktree = git(['config', '--file', join(common, 'config'), '--get', 'core.worktree']).trim()
+  } catch (error) {
+    if ((error as { status?: number }).status !== 1) throw error
+    worktree = ''
+  }
+  let checkout: string
+  if (worktree) checkout = resolve(common, worktree)
+  else {
+    const primary = git(['-C', root, 'worktree', 'list', '--porcelain', '-z']).split('\0')[0]
+    if (!primary.startsWith('worktree ')) throw new Error('cannot resolve the primary Git checkout')
+    checkout = primary.slice('worktree '.length)
+  }
+  primaryCheckoutsByCommon.set(common, checkout)
+  return checkout
+}
+
 // @@@ bounded graph git children - a git child that never exits (wedged fs, a hijacked PATH git, a dead
 // network mount) must not pin its awaiter forever: [[graph-cache]]'s settle guarantee starts at this seam.
 // Every shared helper passes a generous timeout with SIGKILL. A graph build additionally carries one fixed
@@ -535,10 +558,8 @@ function eventCacheLocation(root: string): EventCacheLocation {
     .update(`${EVENT_CACHE_SCHEMA}\0${objectFormat}\0${shallow}\0${grafts}\0${replacements}`)
     .digest('hex')
   const identity = interpretation.slice(0, 16)
-  // projectRuntimeRoot derives checkout identity from dirname(common). A bare repository is its own common
-  // dir, so a synthetic `.git` suffix preserves the repository path instead of collapsing sibling bares.
   const gitDir = gitDirOf(root)
-  const storeIdentity = gitDir === root && common === root ? join(common, '.git') : common
+  const storeIdentity = gitDir === root && common === root ? root : primaryCheckout(root, common)
   const path = join(projectRuntimeRoot(storeIdentity), `${EVENT_CACHE_SCHEMA}-${identity}.ndjson`)
   eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacementStorage, replacements, path, identity, interpretation, objectFormat })
   return { path, identity, interpretation, objectFormat }

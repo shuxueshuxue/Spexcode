@@ -34,8 +34,12 @@ The store mirrors Claude's `~/.claude/projects/<enc>/` shape: a per-session dir 
 ```
 
 `<enc>` encodes the **project root** with Claude's scheme (path separators → `-`); the project root is the
-MAIN checkout — `dirname` of the shared git **common** dir — which resolves identically from main or any linked
-worktree, so the board (at main) and a hook (in a worktree) land on the same dir. Every per-session artifact is
+MAIN checkout resolved by [[portable-layout]] from Git's explicit worktree mapping or primary worktree entry.
+It resolves identically from main or any linked worktree, so the board and hooks land on the same dir.
+Sibling submodules own distinct stores even when their metadata shares a `.git/modules` parent. Ordinary
+checkout keys retain their existing names. Runtime directories previously keyed to metadata parents remain
+untouched; they are not automatically merged into a project's store because ownership may be ambiguous.
+Every per-session artifact is
 a file in that dir:
 
 | file | written by |
@@ -68,7 +72,8 @@ applied to the worktree's `rev-parse --show-toplevel` — the sessions pattern (
 by identity) applied to trees, so two worktrees with divergent `.plugins` never trade hook sets. The
 project tier also carries the Codex app-server socket/pid/log/lock and private versioned detached-launch receipt
 when Codex is launched through SpexCode, plus [[code-anchor]]'s versioned immutable history-event ledgers. `project-store.ts` owns the pure
-home/path encoding shared by `layout.ts` and the Git indexer, while `layout.ts` adds Git common-dir discovery;
+home/path encoding shared by `layout.ts` and the Git indexer; its `projectRuntimeRoot` accepts the resolved
+primary checkout. Both callers use `git.ts`'s primary-checkout resolver after common-dir discovery;
 this keeps one project identity without introducing a `git.ts` ↔ `layout.ts` import cycle. The tier also carries
 a `backend-instances/` registry: every supervisor generation atomically records its instance id, PID,
 operating-system start token, and project root before serving; it removes only its own

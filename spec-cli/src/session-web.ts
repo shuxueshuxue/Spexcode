@@ -15,11 +15,11 @@ type SessionWebLock = <T>(id: string, body: () => T) => T
 export type SessionWeb = { url: string; key: string }
 
 const webPath = (id: string, projectRoot?: string): string => projectRoot
-  ? join(projectRuntimeRoot(join(projectRoot, '.git')), 'sessions', id, 'web.json')
+  ? join(projectRuntimeRoot(projectRoot), 'sessions', id, 'web.json')
   : sessionArtifactPath(id, 'web.json')
 
 const recordPath = (id: string, projectRoot?: string): string => projectRoot
-  ? join(projectRuntimeRoot(join(projectRoot, '.git')), 'sessions', id, 'runtime.json')
+  ? join(projectRuntimeRoot(projectRoot), 'sessions', id, 'runtime.json')
   : sessionRecordPath(id)
 
 function validSessionId(id: string): boolean {

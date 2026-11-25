@@ -131,15 +131,30 @@ hp_is_subagent() {
   printf '%s' "${1%%\"tool_input\"*}" | grep -q '"agent_id"[[:space:]]*:' && printf 1
 }
 
-# the per-PROJECT GLOBAL runtime dir (mirrors packages/spec-core/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
-# keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
-# worktree). The per-session dirs and the per-tree materialize slots (hp_tree_dir) live under it.
+# Mirrors git.ts primaryCheckout; gitfiles do not place metadata inside the checkout.
+hp_main_checkout() {
+  local gcd configured primary
+  gcd=$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  configured=$(env -u GIT_DIR -u GIT_INDEX_FILE git config --file "$gcd/config" --get core.worktree)
+  local status=$?
+  if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then return "$status"; fi
+  if [ -n "$configured" ]; then
+    case "$configured" in
+      /*|[A-Za-z]:[\\/]*) printf '%s' "$configured" ;;
+      *) (cd "$gcd/$configured" && pwd -P) ;;
+    esac
+    return
+  fi
+  IFS= read -r -d '' primary < <(env -u GIT_DIR -u GIT_INDEX_FILE git worktree list --porcelain -z 2>/dev/null) || return 1
+  case "$primary" in 'worktree '*) printf '%s' "${primary#worktree }" ;; *) return 1 ;; esac
+}
+
+# The per-PROJECT runtime dir mirrors layout.ts runtimeRoot, keyed by the primary checkout.
 # Echoes the dir; returns non-zero (echoing nothing) when git can't resolve, so a caller can `|| exit 0`.
 hp_runtime_dir() {
-  local gcd
-  gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || gcd=$(realpath "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
-  [ -n "$gcd" ] || return 1
-  printf '%s/projects/%s' "${SPEXCODE_HOME:-$HOME/.spexcode}" "$(printf '%s' "$(dirname "$gcd")" | sed 's#[/.]#-#g')"
+  local checkout
+  checkout=$(hp_main_checkout) || return 1
+  printf '%s/projects/%s' "${SPEXCODE_HOME:-$HOME/.spexcode}" "$(printf '%s' "$checkout" | sed 's#[/\\:.]#-#g')"
 }
 
 # the per-WORKTREE materialize slot (mirrors layout.ts `treeSlotDir`): <runtime>/trees/<enc(worktree-toplevel)> —
@@ -200,13 +215,12 @@ hp_toolchain_version() {
 # (is the last materialize current?) rather than a trigger. Run with cwd = the project. ONE definition:
 # materialize.ts shells to it. env-stripped git, same rule as hp_toolchain_version.
 hp_config_hash() {
-  local gcd
-  gcd=$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
-    || gcd=$(realpath "$(env -u GIT_DIR -u GIT_INDEX_FILE git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null)
+  local checkout
+  checkout=$(hp_main_checkout) || return 1
   { hp_toolchain_version
     find .spec/*/.plugins .spec/*/plugin-system \( -name '*.md' -o -name '*.sh' \) -type f -print0 2>/dev/null \
       | sort -z | xargs -0 cat 2>/dev/null
-    [ -n "$gcd" ] && cat "$(dirname "$gcd")/.spec/spexcode.json" "$(dirname "$gcd")/.spec/spexcode.local.json" 2>/dev/null
+    cat "$checkout/.spec/spexcode.json" "$checkout/.spec/spexcode.local.json" 2>/dev/null
   } | sha256sum | cut -d' ' -f1
 }
 
